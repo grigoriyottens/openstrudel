@@ -1,6 +1,6 @@
 # App Review: подготовка повторной подачи
 
-Статус: подготовлено локально для согласования. Сборка 1.0 (34) подписана и упакована. Ничего не загружено и не отправлено Apple; карточка приложения пока не изменена.
+Статус на 11 октября 2026 года: сборка 1.0 (34) загружена в App Store Connect, обработана Apple (`VALID`) и выбрана в черновике версии вместо 28. Новый подзаголовок, описание, ключевые слова и приватная инструкция ревьюера сохранены и прочитаны обратно. Ответ Apple подготовлен, но не отправлен; повторная заявка на ревью не подана. Материалы готовы к финальному согласованию.
 
 ## Что отклонила Apple
 
@@ -12,19 +12,31 @@
 
 [Сообщение Apple в App Store Connect](https://appstoreconnect.apple.com/apps/6817090087/distribution/reviewsubmissions/details/4008720e-04bd-4ba4-8b0a-7c20a43ed6ed).
 
+## Позиционирование после уточнения
+
+**OpenStrudel — бесплатное приложение с AI-помощниками для всех.** Любой человек может скачать его для личных или рабочих задач, установить на собственный Mac или сервер и подключить iPhone/iPad. Принадлежность к компании, договор, одобрение разработчика и регистрация в WaiWai не требуются.
+
+«Сотрудник» в интерфейсе означает AI-помощника. Ссылка подключения связывает устройства пользователя; это не приглашение в закрытую организацию. Частная страница для App Review существует только для удобства проверки: Apple получает готовый сервер и AI-аккаунт, а обычный пользователь самостоятельно подключает свои устройства.
+
+OpenStrudel и его функции бесплатны со стороны WaiWai. Это не обещание бесплатного доступа к стороннему AI или бесплатного хостинга: условия этих услуг определяют отдельные провайдеры. Зависимость мобильного приложения от включённого Mac или сервера и подходящего AI-аккаунта раскрываем прямо.
+
+Желаемый способ распространения — публичный App Store. Тестирование через TestFlight — этап подготовки этой публичной версии. По правилу Apple 2.2 бета-версии распространяются через TestFlight; описание App Store не должно представлять незавершённую beta/demo как готовый продукт. Переход на Custom Apps, Enterprise или закрытое распространение не нужен.
+
+11 октября повторно проверены публичная страница установки и скачивание Mac-приложения: файл доступен без входа, HTTP 200. Это подтверждает самостоятельный вход пользователя, но не заменяет проверку установленного приложения. Точная причина, почему Apple сделала вывод о корпоративной аудитории, в отзыве не указана.
+
 ## Предложение по карточке приложения
 
 - Название: **OpenStrudel**.
 - Подзаголовок: **AI-помощники для ваших дел**.
-- Промотекст: «Помощники для повседневных дел, текстов и идей. Продолжайте разговор со своего Mac на iPhone и iPad.»
+- Промотекст: «Бесплатное приложение с AI-помощниками для личных и рабочих задач. Начните на своём Mac и продолжайте разговор на iPhone и iPad.»
 - Ключевые слова: `AI,ассистент,помощник,заметки,файлы,задачи,планирование,идеи,тексты,чаты`.
-- Описание должно начинаться с личных задач и прямо объяснять самостоятельную установку на свой Mac. Условия доступа к стороннему AI остаются раскрыты в описании; его бренд не используется в названии, подзаголовке или ключевых словах.
+- Описание начинается с бесплатности и повседневных задач. Оно прямо объясняет самостоятельную установку и требование собственного Mac или сервера. Условия доступа к стороннему AI остаются раскрыты в описании; его бренд не используется в названии, подзаголовке или ключевых словах.
 
-## Описание для App Store — черновик
+## Описание для App Store — сохранено в черновике версии
 
-OpenStrudel — ваши AI-помощники для повседневных дел, текстов и идей. Создайте редактора, исследователя или личного помощника на своём Mac и продолжайте разговор на iPhone и iPad.
+OpenStrudel — бесплатное приложение с AI-помощниками для всех. Создайте редактора, исследователя или личного помощника для повседневных дел, текстов и идей. Начните на своём Mac или сервере и продолжайте разговор на iPhone и iPad.
 
-У каждого помощника свои задачи, переписка и файлы. В приложении они называются сотрудниками: это AI, которому вы задаёте роль и правила работы.
+У каждого помощника свои задачи, переписка и файлы. В приложении они называются сотрудниками: это AI, которому вы задаёте роль и правила работы. Пользоваться приложением можно самостоятельно, без регистрации в OpenStrudel и корпоративного аккаунта.
 
 • Общайтесь с помощниками в привычном чате.
 • Отправляйте фотографии и файлы, диктуйте сообщения.
@@ -36,7 +48,7 @@ OpenStrudel — ваши AI-помощники для повседневных �
 КАК НАЧАТЬ
 Установите бесплатный OpenStrudel на свой Mac с waiwai.is/openstrudel. Войдите в свой аккаунт OpenAI и создайте помощника. Затем в «Настройках» → «Устройства» откройте свой Mac и нажмите «Получить ссылку подключения». Откройте ссылку на iPhone или iPad либо отсканируйте QR-код в приложении.
 
-Вместо Mac можно подключить свой сервер с настроенным OpenStrudel. Можно добавить несколько устройств. Связь создаёте вы сами: корпоративный аккаунт или приглашение от разработчика не нужны.
+Вместо Mac можно подключить свой сервер с настроенным OpenStrudel. Можно добавить несколько устройств. Ссылку подключения создаёте вы сами на своём устройстве; приглашение от разработчика не нужно.
 
 ДЛЯ РАБОТЫ
 Нужен включённый Mac или сервер с OpenStrudel и вашим аккаунтом OpenAI, имеющим доступ к Codex. Доступ к AI и лимиты зависят от условий вашего аккаунта у провайдера. На iPhone и iPad повторный вход в OpenAI не нужен; отдельный API-ключ не требуется.
@@ -45,47 +57,47 @@ OpenStrudel — ваши AI-помощники для повседневных �
 
 История хранится на устройстве помощника. Для ответа сообщения, выбранные файлы и нужный контекст передаются в OpenAI с вашего разрешения. Сервисы используются после их отдельного подключения.
 
-OpenStrudel бесплатен. Подписок, покупок и рекламы в приложении нет. Услуги AI и выбранный вами хостинг могут оплачиваться отдельно соответствующим провайдерам.
+OpenStrudel и все его функции бесплатны. Подписок, покупок и рекламы в приложении нет. Услуги AI и выбранный вами хостинг могут оплачиваться отдельно соответствующим провайдерам.
 
 ## Ответ Apple — черновик на английском
 
-Текст ниже предназначен для отправки вместе со сборкой 34 после согласования, загрузки сборки и сохранения новых метаданных. Сейчас эти действия не выполнены.
+Текст ниже предназначен для отправки после финального согласования. Сборка 34 уже загружена и выбрана, метаданные и инструкция доступа сохранены. Сам ответ ещё не отправлен.
 
-Thank you for reviewing OpenStrudel. We have prepared build 34 and clarified the app's purpose and connection instructions.
+Thank you for reviewing OpenStrudel. It is a free consumer app for anyone, for personal or work tasks. We request public App Store distribution. It is not restricted to a business, its clients or employees. TestFlight is used for prerelease testing, not to limit the intended audience.
 
-**Guideline 2.1 — connection flow**
-
-We reproduced a failure when the HTTPS connection-page URL from the review notes was pasted into the app. Earlier builds accepted only the direct device link generated by that page. Build 34 recognizes HTTPS pages, labels the action “Открыть страницу” (Open page), shows the website and opens Safari. Tap “Открыть OpenStrudel” there and confirm device pairing. Direct device links still work. Invalid input displays an inline error and recovery instruction.
-
-We tested the actual review page and live server on iPad Air 11-inch (M3)/iPadOS 27.0 and iPhone 17/iOS 26.2 simulators. Connection, a real AI reply, chat persistence after relaunch, invalid/expired/reused links and connection recovery passed. The rejection contains no entered value or screenshot, so we cannot confirm that the reviewer's exact input matched our reproduced case.
-
-The App Review notes provide access steps in English. The isolated server includes an authenticated AI account and synthetic assistants. Review needs no Mac, AI account, registration or purchase.
-
-**Guideline 4.1(c) — subtitle**
-
-The replacement subtitle is “AI-помощники для ваших дел” (AI assistants for your everyday tasks). It contains no third-party brand. We have also removed third-party brands from the keywords. The description retains factual information about the external AI account required for normal use.
-
-**Guideline 3.2 — intended audience and access**
+**Guideline 3.2 — audience, access and payment**
 
 **1. Is the app restricted to users of a single company or organization?**
 
-No. OpenStrudel is a consumer productivity app available to individuals. It does not check a corporate email domain, employer, organization membership or invitation from our company. The “employees” described in the app are user-created AI assistants, not human employees of a business.
+No. Individuals can use OpenStrudel independently, without an employer, corporate email, contract or organization membership. “Employees” in the interface are AI assistants created by the user, not human employees of a company.
 
 **2. Is the app designed for a limited group of companies or organizations?**
 
-No. Any individual or organization can independently install OpenStrudel on their own Mac or server. There is no sales contract, approved customer list or manual enrollment by WaiWai. The Mac application is publicly downloadable at https://waiwai.is/openstrudel.
+No. Any individual or organization can use it. There is no approved customer list, sales process or manual enrollment by WaiWai. The Mac app is publicly downloadable, free and without registration, at https://waiwai.is/openstrudel.
 
 **3. Which features are intended for the general public?**
 
-Users create AI assistants for everyday planning, writing, research and their own files. The iPhone/iPad app provides native conversations, attachments, dictation, assistant settings and access to assistants running on their own connected devices. It is a companion app and requires an existing OpenStrudel installation on a Mac or server. Users create the connection link themselves on that device; it is device pairing, not approval to join a company.
+All features: AI conversations for planning, writing and research; attachments, dictation, assistant instructions and scheduled tasks. Users create assistants on their own Mac or server and use the same assistants from iPhone/iPad. The mobile app requires that connected device to be running. A connection link pairs the user's own devices; it is not an invitation from us or approval to join a company.
 
 **4. How do users obtain an account?**
 
-OpenStrudel does not require registration for a WaiWai account. A user installs the public Mac app, signs in to their own eligible OpenAI account on the Mac, creates an AI assistant, and connects their iPhone/iPad using a link or QR code generated by their Mac. They may instead use their own configured server. No separate OpenAI login is required in the iPhone/iPad app. Reviewers receive a private connection page for a running, isolated server with a configured AI account, so they do not need their own Mac or AI account.
+No WaiWai or OpenStrudel account is required. Anyone can install the free Mac app, sign in to their own eligible OpenAI account there, create an AI assistant and generate a link or QR code to connect their iPhone/iPad. They can instead use their own configured server. No separate OpenAI sign-in is needed on iPhone/iPad. The description and in-app help explain this self-service setup.
+
+For App Review only, our private connection page provides an isolated, running server with a configured AI account and synthetic assistants. This removes the need for your own Mac, AI account, registration or payment. It is not the public signup process or a restricted customer group.
 
 **5. Is there any paid content, and who pays?**
 
-OpenStrudel and its iPhone/iPad features are free. We do not sell accounts, content, feature unlocks or subscriptions in this app. AI access depends on the user's separate account with OpenAI and may require a plan paid directly to that provider. Users who choose to run their own server may separately pay their hosting provider. Neither payment is collected by OpenStrudel, and there is no purchase or checkout flow in the iPhone/iPad app. The review server and AI account are supplied at no cost to App Review.
+OpenStrudel and all its features are free of charge from WaiWai. We do not sell accounts, content, unlocks or subscriptions. Users may separately pay their AI provider and, if they choose their own server, a hosting provider. Those are external services, not payments to us. There is no purchase or checkout flow in the iPhone/iPad app. Review access is supplied free of charge.
+
+**Guideline 2.1 — connection flow**
+
+We reproduced a failure when the review HTTPS page was pasted into the app; older builds accepted only its generated device link. Build 34 recognizes HTTPS pages and opens Safari via “Открыть страницу” (Open page). Tap “Открыть OpenStrudel” there and confirm pairing. Invalid input shows an inline error. Direct device links still work.
+
+The live review page, real AI replies and persistence after relaunch passed on iPad Air 11-inch (M3)/iPadOS 27.0 and iPhone 17/iOS 26.2 simulators. Eleven UI tests passed, including invalid, expired and reused links and connection recovery. The exact input from your review was not supplied, so we cannot confirm it was this case. Updated review notes contain the complete access steps.
+
+**Guideline 4.1(c) — metadata**
+
+The new subtitle is “AI-помощники для ваших дел” (AI assistants for your everyday tasks). The subtitle and keywords contain no third-party brand. The description accurately discloses the external AI account required for normal use.
 
 ## Проверка перед согласованием
 
@@ -111,19 +123,22 @@ OpenStrudel and its iPhone/iPad features are free. We do not sell accounts, cont
 
 Итоговые четыре набора UI-проверок: **11 успешных, 0 ошибок, 0 пропусков**. Ответ Apple укладывается в лимит 4000 символов. Отдельно подготовлена приватная инструкция подключения на английском с правильными названиями кнопок.
 
-Контрольное чтение App Store Connect после подготовки: версия остаётся `REJECTED`, заявка — `UNRESOLVED_ISSUES`, выбранная сборка — 28, подзаголовок — прежний. Новая сборка и материалы остаются локальными до согласования.
+Контрольное чтение App Store Connect после сохранения: версия — `PREPARE_FOR_SUBMISSION`, прежняя заявка — `UNRESOLVED_ISSUES`, выбранная сборка — **34**, её обработка — `VALID`. Build ID и квитанция загрузки: `e3acde55-e8ef-43a4-a9ee-b21ab65e3e7a`. Подзаголовок — **AI-помощники для ваших дел**. Описание, промотекст, ключевые слова и приватная инструкция совпали с подготовленными JSON при повторном чтении API; описание и выбор сборки также проверены в интерфейсе. Это подготовленный черновик, не новая отправленная заявка и не опубликованная версия.
+
+Перед согласованием повторно проверен сервер App Review: health успешен, один подключённый AI-аккаунт, два тестовых помощника. Страница подключения доступна. Эта проверка доступности не заменяет проведённые ранее UI-тесты с настоящим AI-ответом.
 
 Приватная ссылка ревьюера, оригинал сообщения Apple, снимки и журналы хранятся вне Git в `.data/app-review-rejection-2026-10-11/`. Ссылку нельзя включать в публичный PR или эту документацию.
 
 ## Что согласовать перед отправкой
 
-Сборку 1.0 (34), новый подзаголовок и описание выше, полный ответ Apple и обновлённую инструкцию доступа. Локально подготовлены точные JSON-изменения для App Store Connect, текст ответа и снимки без ключей доступа.
+Сборку 1.0 (34), сохранённые подзаголовок и описание выше, полный ответ Apple и обновлённую инструкцию доступа. Текст ответа — 3558 символов, описание — 2167, приватная инструкция — 3169; все укладываются в ограничения App Store Connect. Снимки для подтверждения проверок подготовлены без ключей доступа.
 
-После согласования: загрузить IPA, дождаться обработки Apple, выбрать сборку 34 вместо 28, сохранить и прочитать обратно метаданные и инструкцию. Затем отправить согласованный ответ, обновить отклонённый элемент и повторно подать заявку. Сейчас эти действия не выполняются.
+После согласования: отправить подготовленный ответ Apple, обновить отклонённый элемент через Update Review и повторно подать заявку. Загрузка, обработка, выбор сборки и сохранение метаданных уже завершены. Запрет пользователя на отправку до согласования сохраняется. Текущий способ выпуска в App Store Connect — автоматический после одобрения Apple; он не изменялся.
 
 ## Основания
 
-- [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/): 2.1 — работоспособность и доступ ревьюера; 2.3 — точные метаданные; 3.1.3(f) — бесплатные приложения-компаньоны.
+- [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/): 2.1 — работоспособность и доступ ревьюера; 2.2 — бета-тестирование через TestFlight; 2.3 — точные метаданные; 3.1.3(f) — бесплатные приложения-компаньоны.
+- [Публичная установка OpenStrudel](https://waiwai.is/openstrudel): бесплатное скачивание Mac-приложения и самостоятельное подключение устройств.
 - [Apple: preventing copycat and impersonation rejections](https://developer.apple.com/help/app-review/guideline-reference/4-1-prevent-copycat-rejection): собственное имя и оформление, точные метаданные.
 - [Apple: test compatible devices](https://developer.apple.com/help/app-review/before-submitting-for-review/test-compatible-devices).
 - [Apple: unresolved submissions](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/manage-a-submission-with-unresolved-issues/) и [ответ на сообщения ревью](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/reply-to-app-review-messages/).
