@@ -1,4 +1,4 @@
-import { parseModelSelection, readModelSelection, resolveModelSelection, saveModelSelection, validateModelSelection } from "./model-settings.js";
+import { parseModelSelection, readModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, validateModelSelection } from "./model-settings.js";
 import { deleteEmployee } from "./employee-delete.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -209,10 +209,10 @@ export class HttpApi {
         if (request.method === "POST") {
           const selection = parseModelSelection(await this.body(request),Boolean(agent));
           if (agent) assertAgentWritable(this.store,agent);
-          validateModelSelection(selection.model ? selection : readModelSelection(this.store),models);
+          validateModelSelection(agent && !selection.model ? readModelSelection(this.store) : selection,models);
           saveModelSelection(this.store,selection,agent);
         }
-        this.send(response,200,{models,selection:readModelSelection(this.store,agent),defaults:readModelSelection(this.store),effective:resolveModelSelection(this.store,agent),canManage:canManageAccount}); return;
+        this.send(response,200,{models,recommended:recommendedModel(models),selection:readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,undefined,models),effective:resolveModelSelection(this.store,agent,models),canManage:canManageAccount}); return;
       }
       if (path === "/v1/accounts" && request.method === "GET") {
         this.send(response, 200, { accounts: await this.accounts?.list(url.searchParams.get("refresh") === "true") ?? [], canManage: canManageAccount }); return;

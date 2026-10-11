@@ -4,6 +4,8 @@
 
 Settings → Application selects the default model and speed for the selected device. An employee's settings, including the main OpenStrudel assistant, can keep “Как на устройстве” or override both. Changing this affects the next queued turn; an already running turn keeps its settings and conversation history is retained.
 
+Fresh installations use “Автоматически”: Codex's `isDefault` model and its `defaultReasoningEffort` for the selected account. Without an account recommendation, the fallback is `gpt-6.1-sol` with Medium reasoning. A user's explicit device or employee choice is preserved. The automatic choice is resolved again for subsequent turns and delegated employees. The live account currently recommends `gpt-6-astra` / Medium; an actual automatic-model reply was verified. Empty and unmarked catalogs, explicit overrides, reasoning changes on a retained thread and returning to automatic are covered by regression tests.
+
 The catalog comes from the selected account's official Codex `model/list`, with managed restrictions from `configRequirements/read`. Fast and Ultra Fast are offered only when advertised. The real account tested on 11 October advertises Fast (`priority`) and does not advertise Ultra Fast. “Обычная” explicitly sends the `default` tier, including when a thread previously used Fast. The synthetic UI fixture includes Ultra Fast to exercise capability-dependent controls.
 
 The device stores defaults and optional per-employee overrides. HTTP, native clients, web, Telegram, schedules and delegated employees resolve the same choices. Each remote request routes to the employee's device and account. Loading, unavailable model/speed, retry, owner-only writes and save feedback are explicit.
@@ -19,9 +21,13 @@ Live verification used an isolated OpenStrudel runtime and an actual managed acc
 ## Validation
 
 - Backend tests cover catalog restrictions, persistence and inheritance, queued turns, explicit Fast → normal transitions on the same thread, remote routing, owner checks, archive preservation, delegated employee settings, connector rollback and scoped permissions.
+- Final complete backend run: 329 tests in 52 files passed. A cleanup race in the real-Codex extension test was fixed with bounded retries while the test subprocess exits.
 - Real macOS UI: model changes, speed selection, inheritance and saved feedback.
 - iPhone simulator UI: device Astra/Fast, employee Sol/Ultra Fast in a synthetic catalog, then return to device defaults; server state checked after changes. Screenshots inspected.
+- The automatic account recommendation and Medium reasoning were checked in native iPhone UI; the GPT-6.1 Sol / Medium fallback was checked in the web UI with the recommendation deliberately absent.
 - Web UI: capability-dependent speed choices, default and individual selections, inheritance, errors/retry and saved feedback. No console errors during the checked flows.
+- Narrow web layout inspected at 390 × 844. The model dialog fits without horizontal overflow.
+- Fresh iPhone app data: the actual private reviewer page in Safari opens the app, pairs the device, presents AI consent, receives a real reply and retains it after relaunch. This used build 33 on an iOS 26.2 simulator; physical-device coverage and the queued build 28 were not repeated in this run.
 - TypeScript typecheck and macOS/iOS builds passed. Real-account Computer Use and review-server responses are separate from synthetic UI coverage.
 
 Private logs, screenshots, test fixture details and reviewer credentials are retained outside Git under `.data/model-computer-review-2026-10-11/`.
@@ -32,8 +38,8 @@ The queued App Store version is 1.0, build 28. New TestFlight releases must not 
 
 App Store Connect's published privacy label was inspected after account sign-in: six linked data categories (audio, user ID, email address, messages, other user content, photos/videos), each for app functionality. The privacy URL is correct. The app requests consent before sending relevant chat context/files to OpenAI. The iOS app is a free companion and has no hosting purchase flow or account creation.
 
-A private, persistent connection page supplies short-lived invitations to a dedicated live server with an already authenticated AI account and synthetic employees. A real AI reply was verified. The review does not require the reviewer's own Mac or OpenAI account. Credentials and the private link must stay out of this document and source control.
+A private, persistent connection page supplies short-lived invitations to a dedicated live server with an already authenticated AI account and synthetic employees. The server was upgraded to runtime 33 after a database-volume backup and a real-response test on a separate candidate. The previous container and volume remain available for rollback. A real AI reply was verified again after cutover and through the native iPhone app. The review does not require the reviewer's own Mac or OpenAI account. Credentials and the private link must stay out of this document and source control.
 
-The audit found stale “Build 12” review notes and store text referring to a main device and old connection steps. Revised instructions are prepared in the private evidence directory. Submission acceptance is Apple's decision; a successful technical check does not mean App Review approval.
+The audit found stale “Build 12” review notes and store text referring to a main device and old connection steps. Corrected review instructions and the Russian store description were saved to App Store Connect and independently read back. The submission remained `WAITING_FOR_REVIEW` with build 28. Submission acceptance is Apple's decision; a successful technical check does not mean App Review approval.
 
 Primary references: [Codex app-server](https://developers.openai.com/codex/app-server), [Computer Use setup](https://learn.chatgpt.com/docs/computer-use), [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) (2.1 access/completeness, 3.1.3(f) free companions, 4.2.7 remote desktop distinction, 5.1 privacy).

@@ -10,11 +10,35 @@ vi.mock("../src/rpc.js", () => ({ CodexRpc: class {
 import { CodexEngineAdapter } from "../src/codex.js";
 afterEach(() => wire.request.mockReset());
 
+it("uses the account default and refreshes it without changing explicit choices",async()=>{
+  let catalog:any[]=[{model:'recommended',isDefault:true,defaultReasoningEffort:'high'},{model:'explicit',defaultReasoningEffort:'low'}];
+  wire.request.mockImplementation(async(method:string,params:any)=>{
+    if(method==='configRequirements/read')return {requirements:null};
+    if(method==='model/list')return {data:catalog};
+    if(method==='thread/start'||method==='thread/resume')return {thread:{id:'recommended-thread'}};
+    if(method==='thread/unsubscribe')return {};
+    if(method==='turn/start') {queueMicrotask(()=>wire.notify?.({method:'turn/completed',params:{threadId:params.threadId,turn:{status:'completed'}}}));return {turn:{id:'turn'}};}
+    throw new Error(method);
+  });
+  const engine=new CodexEngineAdapter();
+  try {
+    await engine.run('Automatic',{model:null,serviceTier:'default'});
+    expect(wire.request.mock.calls.filter(([m])=>m==='turn/start').at(-1)?.[1]).toMatchObject({model:'recommended',effort:'high'});
+    await engine.run('Explicit',{threadId:'recommended-thread',model:'explicit',serviceTier:'default'});
+    expect(wire.request.mock.calls.filter(([m])=>m==='turn/start').at(-1)?.[1]).toMatchObject({model:'explicit',effort:'low'});
+    catalog=[]; await engine.models(true);
+    await engine.run('Fallback',{threadId:'recommended-thread',model:null,serviceTier:'default'});
+    expect(wire.request.mock.calls.filter(([m])=>m==='turn/start').at(-1)?.[1]).toMatchObject({model:'gpt-6.1-sol',effort:'medium'});
+  } finally {engine.close();}
+});
+
 it("steers the current native turn with its expected id and does not start another turn", async () => {
   wire.request.mockImplementation(async (method: string) => {
     if (method === "thread/start") return { thread: { id: "steer-thread" } };
     if (method === "turn/start") return { turn: { id: "running-turn" } };
     if (method === "turn/steer") return { turnId: "running-turn" };
+    if (method === "configRequirements/read") return {requirements:null};
+    if (method === "model/list") return {data:[]};
     throw new Error(method);
   });
   const engine = new CodexEngineAdapter();
@@ -37,6 +61,8 @@ it("changes approval policy on resume without replaying identity or silently app
       queueMicrotask(()=>wire.notify?.({method:"turn/completed",params:{threadId:params.threadId,turn:{status:"completed"}}}));
       return {turn:{id:"turn"}};
     }
+    if (method === "configRequirements/read") return {requirements:null};
+    if (method === "model/list") return {data:[]};
     throw new Error(method);
   });
   const engine=new CodexEngineAdapter({config:{mcp_servers:{fixture:{command:"test",enabled:false}}}});
@@ -66,6 +92,8 @@ it("sends identity as developer instructions and refreshes it when the employee 
       });
       return {turn:{id:"turn"}};
     }
+    if (method === "configRequirements/read") return {requirements:null};
+    if (method === "model/list") return {data:[]};
     throw new Error(method);
   });
   const engine = new CodexEngineAdapter();
@@ -92,6 +120,8 @@ it("refreshes native MCP credentials for each group delivery without rewriting p
    queueMicrotask(()=>wire.notify?.({method:"turn/completed",params:{threadId:params.threadId,turn:{status:"completed"}}}));
    return {turn:{id:"turn"}};
   }
+  if (method === "configRequirements/read") return {requirements:null};
+  if (method === "model/list") return {data:[]};
   throw new Error(method);
  });
  const engine=new CodexEngineAdapter({telegramServers:{company:{url:"https://example.test/mcp",http_headers:{Authorization:"Bearer fixture"}}}});

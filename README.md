@@ -44,7 +44,7 @@ node dist/cli.js message "Привет"
 
 Home listens on `127.0.0.1:7788`. Set `OPENSTRUDEL_API_TOKEN` to require a bearer token. The database defaults to `.data/openstrudel.sqlite` and uses SQLite WAL. Native clients keep transport details out of the chat surface.
 
-The checked-in Codex default is `gpt-6-astra`; set `OPENSTRUDEL_CODEX_MODEL` to another model available in your installed Codex CLI. Set `OPENSTRUDEL_CODEX_MODE=mock` for an offline run. Codex is the only execution engine.
+The default follows the account's recommended model and reasoning effort from Codex. If no model is recommended, OpenStrudel uses `gpt-6.1-sol` with Medium reasoning. Device and employee settings can select another available model; `OPENSTRUDEL_CODEX_MODEL` remains an explicit deployment override. Set `OPENSTRUDEL_CODEX_MODE=mock` for an offline run. Codex is the only execution engine.
 
 ## Channels and employees
 

@@ -8,13 +8,14 @@ import { normalizeModels, readModelSelection } from '../../src/model-settings.js
 
 const root = await mkdtemp(join(tmpdir(),'strudel-model-ui-'));
 let unavailable = false;
+let recommended = true;
 const catalog = normalizeModels([
   {model:'gpt-6-astra',displayName:'GPT-6 Astra',isDefault:true,serviceTiers:[{id:'priority',name:'Fast'}]},
   {model:'gpt-6-sol',displayName:'GPT-6 Sol',serviceTiers:[{id:'priority',name:'Fast'},{id:'ultra',name:'Ultra Fast'}]},
   {model:'gpt-6-luna',displayName:'GPT-6 Luna',serviceTiers:[]},
 ],null);
 const runtime = new OpenStrudelRuntime({rootDirectory:root,dbPath:join(root,'home.db'),startTelegram:false,mobilePort:0,apiToken:'model-ui-owner',engine:{
-  async models() { if(unavailable)throw new Error('Не удалось получить модели. Повторите попытку.');return catalog; },
+  async models() { if(unavailable)throw new Error('Не удалось получить модели. Повторите попытку.');return catalog.map(m=>({...m,isDefault:recommended && m.isDefault})); },
   async run(_input,options) {return {threadId:'model-ui-thread',response:`Модель: ${options?.model}. Скорость: ${options?.serviceTier}.`,events:[]};},
 }});
 runtime.api.home.save({...runtime.api.home.state,name:'Mac · Проверка моделей'});
@@ -28,6 +29,7 @@ const controller=createServer(async(req,res)=>{
   if(req.url==='/invite'){res.end(JSON.stringify(await runtime.api.mobile.invite(true)));return;}
   if(req.url==='/web'){res.end(JSON.stringify({url:url+'/#invite='+runtime.api.web.invite(true).key}));return;}
   if(req.url?.startsWith('/unavailable'))unavailable=req.url.includes('value=1');
+  if(req.url?.startsWith('/recommendation'))recommended=req.url.includes('value=1');
   res.end(JSON.stringify({profile:runtime.store.getProfile(profile.id),defaults:readModelSelection(runtime.store),main:readModelSelection(runtime.store,'main')}));
 });
 await new Promise<void>(done=>controller.listen(0,'127.0.0.1',done));

@@ -9,7 +9,7 @@ export const routingInstructions = `You are the single point of contact for this
 Delegate only the necessary task and context from THIS conversation. Prefer one suitable employee; do not build a chain of managers. Start a fresh helper for each user request; never resume helpers from earlier requests, whose sender permissions may have changed. Helpers must obey this conversation's rules and permissions, cannot access another conversation's private history or connections, and cannot change the employee's identity. Wait for completion before reporting a result. The application handles native subscription cleanup; do not discuss that internal lifecycle in the answer. An unavailable employee or denied tool is not permission to broaden access or repeat a possibly completed action.`;
 
 /** Adapt existing employees to native Codex roles. No second agent loop. */
-export function employeeRoleConfig(home: string, employees: EmployeeProfile[], parentRules?: string | null): Record<string, unknown> {
+export function employeeRoleConfig(home: string, employees: Array<EmployeeProfile & {reasoningEffort?: string}>, parentRules?: string | null): Record<string, unknown> {
   const roles: Record<string, unknown> = { max_threads: 2 };
   for (const employee of employees) {
     const name = "employee_" + createHash("sha256").update(employee.id).digest("hex").slice(0, 20);
@@ -18,7 +18,7 @@ export function employeeRoleConfig(home: string, employees: EmployeeProfile[], p
       "Your specialty and character:\n" + employee.name + "\n" + employee.instructions,
       parentRules ? "Rules of the originating conversation take precedence over conflicting specialty instructions:\n" + parentRules : "",
     ].filter(Boolean).join("\n\n");
-    const content = stringify({ developer_instructions: instructions, ...(employee.model ? {model:employee.model,service_tier:employee.serviceTier ?? "default"} : {}) });
+    const content = stringify({ developer_instructions: instructions, ...(employee.model ? {model:employee.model,service_tier:employee.serviceTier ?? "default",model_reasoning_effort:employee.reasoningEffort ?? "medium"} : {}) });
     // Roles can be spawned after another chat starts: immutable content paths
     // prevent that chat's rules from replacing the active request's snapshot.
     const file = resolve(home, "openstrudel-employees", name + "-" + createHash("sha256").update(content).digest("hex").slice(0, 20) + ".toml");

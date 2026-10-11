@@ -15,7 +15,8 @@ import XCTest
         safari.open(page)
         let open = safari.links["Открыть OpenStrudel"]
         XCTAssertTrue(open.waitForExistence(timeout: 30), safari.debugDescription)
-        open.tap()
+        capture("review-private-connection-page", safari)
+        open.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let confirmation = safari.buttons.matching(NSPredicate(format: "label IN %@", ["Open", "Открыть"])).firstMatch
         if confirmation.waitForExistence(timeout: 5) { confirmation.tap() }
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -32,12 +33,12 @@ import XCTest
         let expected = "Review ready " + UUID().uuidString.prefix(6)
         input.tap()
         input.typeText("Reply exactly: " + expected)
-        capture("review-composer-ready", app)
         let send = app.buttons["sendMessage"]
-        XCTAssertTrue(send.isEnabled && send.isHittable)
-        send.tap()
-        let sent = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", ""), object: input)
-        XCTAssertEqual(XCTWaiter.wait(for: [sent], timeout: 10), .completed, app.debugDescription)
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true AND hittable == true"), object: send)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 30), .completed, app.debugDescription)
+        capture("review-composer-ready", app)
+        send.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["Reply exactly: " + expected].waitForExistence(timeout: 10), app.debugDescription)
         XCTAssertTrue(app.staticTexts[expected].waitForExistence(timeout: 120), app.debugDescription)
         capture("review-page-real-reply", app)
         app.terminate(); app.launch()

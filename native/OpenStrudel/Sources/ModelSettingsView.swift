@@ -10,6 +10,7 @@ struct ModelChoice: Decodable, Identifiable {
     let name: String
     let description: String
     let isDefault: Bool
+    let defaultReasoningEffort: String?
     let speeds: [Speed]
 }
 struct ModelSettings: Decodable {
@@ -17,6 +18,7 @@ struct ModelSettings: Decodable {
     let selection: ModelSelection
     let defaults: ModelSelection
     let effective: ModelSelection
+    let recommended: ModelChoice?
     let canManage: Bool
 }
 
@@ -32,8 +34,13 @@ struct ModelSettingsView: View {
     @State private var error: String?
     @State private var saved = false
     private var path: String { "/v1/settings/models" + (agentID.map { "?agentId=" + $0 } ?? "") }
-    private var selected: ModelChoice? { settings?.models.first { $0.id == (model.isEmpty ? settings?.defaults.model : model) } }
-    private var selection: ModelSelection { ModelSelection(model: model.isEmpty ? nil : model, serviceTier: model.isEmpty ? nil : speed) }
+    private var selected: ModelChoice? {
+        guard let settings else { return nil }
+        if model.isEmpty && agentID == nil { return settings.recommended }
+        let id = model.isEmpty ? settings.defaults.model : model
+        return settings.models.first { $0.id == id } ?? (settings.recommended?.id == id ? settings.recommended : nil)
+    }
+    private var selection: ModelSelection { ModelSelection(model: model.isEmpty ? nil : model, serviceTier: model.isEmpty && agentID != nil ? nil : speed) }
     private var changed: Bool { selection != settings?.selection }
 
     var body: some View {
@@ -46,6 +53,8 @@ struct ModelSettingsView: View {
                 Picker("Модель", selection: $model) {
                     if agentID != nil {
                         Text("Как на устройстве · \(settings.models.first { $0.id == settings.defaults.model }?.name ?? settings.defaults.model ?? "")").tag("")
+                    } else if let recommended = settings.recommended {
+                        Text("Автоматически · \(recommended.name)").tag("")
                     }
                     if !model.isEmpty && !settings.models.contains(where: { $0.id == model }) { Text(model + " · недоступна").tag(model) }
                     ForEach(settings.models) { Text($0.name).tag($0.id) }
@@ -53,7 +62,11 @@ struct ModelSettingsView: View {
                 Picker("Скорость", selection: $speed) {
                     ForEach(selected?.speeds ?? []) { Text($0.name).tag($0.id) }
                     if let selected, !selected.speeds.contains(where: { $0.id == speed }) { Text(speed + " · недоступна").tag(speed) }
-                }.accessibilityIdentifier("modelSpeed").disabled(model.isEmpty || saving || !settings.canManage)
+                }.accessibilityIdentifier("modelSpeed").disabled((model.isEmpty && agentID != nil) || saving || !settings.canManage)
+                if model.isEmpty && agentID == nil, let recommended = settings.recommended {
+                    Text((recommended.isDefault ? "Рекомендует OpenAI" : "Модель по умолчанию") + " · " + (recommended.defaultReasoningEffort ?? "medium").capitalized)
+                        .font(.caption).foregroundStyle(AppTheme.secondaryText)
+                }
                 if speed != "default" {
                     Text("Ускоренный режим может расходовать больше лимита аккаунта.")
                         .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
@@ -62,7 +75,7 @@ struct ModelSettingsView: View {
                     Text("Настройки меняет владелец устройства.").font(.caption).foregroundStyle(AppTheme.secondaryText)
                 } else if changed {
                     Button(saving ? "Сохраняем…" : "Применить") { Task { await save() } }
-                        .buttonStyle(.borderedProminent).disabled(saving || selected == nil || (!model.isEmpty && selected?.speeds.contains(where: { $0.id == speed }) != true))
+                        .buttonStyle(.borderedProminent).disabled(saving || selected == nil || ((agentID == nil || !model.isEmpty) && selected?.speeds.contains(where: { $0.id == speed }) != true))
                         .accessibilityIdentifier("saveModelSelection")
                 }
                 Text(saved && !changed ? "Сохранено. Применится со следующего поручения." : "Начатая работа продолжится с прежними настройками.")
@@ -77,7 +90,7 @@ struct ModelSettingsView: View {
         .onChange(of: model) { _, value in
             guard let settings else { return }
             saved = false
-            if value.isEmpty { speed = settings.defaults.serviceTier ?? "default" }
+            if value.isEmpty && agentID != nil { speed = settings.defaults.serviceTier ?? "default" }
             else if selected?.speeds.contains(where: { $0.id == speed }) != true { speed = "default" }
         }
     }

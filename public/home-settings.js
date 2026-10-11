@@ -368,13 +368,15 @@ async function openModelSettings(agent, deviceId) {
     const data=await api(path);status.textContent='';
     const modelLabel=element('label','Модель'), model=element('select','','field');model.id='model-choice';model.setAttribute('aria-label','Модель');modelLabel.append(model);page.content.append(modelLabel);
     if(agent) { const o=element('option','Как на устройстве · '+(data.models.find(m=>m.id===data.defaults.model)?.name||data.defaults.model));o.value='';model.append(o); }
+    else if(data.recommended) { const o=element('option','Автоматически · '+data.recommended.name);o.value='';model.append(o); }
     for(const m of data.models) { const o=element('option',m.name);o.value=m.id;model.append(o); }
     if(data.selection.model&&!data.models.some(m=>m.id===data.selection.model)) {const o=element('option',data.selection.model+' · недоступна');o.value=data.selection.model;model.append(o);}
     model.value=data.selection.model||'';
     const speedLabel=element('label','Скорость'), speed=element('select','','field');speed.id='model-speed';speed.setAttribute('aria-label','Скорость');speedLabel.append(speed);page.content.append(speedLabel);
-    const note=element('p');page.content.append(note);
+    const recommendation=element('p'),note=element('p');page.content.append(recommendation,note);
     let pending=false;
-    const value=()=>({model:model.value||null,serviceTier:model.value?speed.value:null});
+    const value=()=>({model:model.value||null,serviceTier:!model.value&&agent?null:speed.value});
+    const chosenModel=()=>!model.value&&!agent?data.recommended:(data.models.find(m=>m.id===(model.value||data.defaults.model))||(data.recommended?.id===(model.value||data.defaults.model)?data.recommended:null));
     const save=element('button','Применить','primary');page.actions.prepend(save);
     save.onclick=async()=>{
       pending=true;save.disabled=true;page.error.textContent='';model.disabled=speed.disabled=true;status.textContent='Сохраняем…';
@@ -383,19 +385,20 @@ async function openModelSettings(agent, deviceId) {
       finally {pending=false;model.disabled=!data.canManage;update();}
     };
     function update(){
-      speed.disabled=!model.value||!data.canManage||pending;
+      speed.disabled=(!model.value&&Boolean(agent))||!data.canManage||pending;
+      recommendation.textContent=!model.value&&!agent&&data.recommended?(data.recommended.isDefault?'Рекомендует OpenAI':'Модель по умолчанию')+' · '+(data.recommended.defaultReasoningEffort||'medium').replace(/^./,c=>c.toUpperCase()):'';
       note.textContent=speed.value&&speed.value!=='default'?'Ускоренный режим может расходовать больше лимита аккаунта.':'';
-      const chosen=data.models.find(m=>m.id===(model.value||data.defaults.model));
-      save.disabled=!data.canManage||pending||JSON.stringify(value())===JSON.stringify(data.selection)||!chosen||(!model.value?false:!chosen.speeds.some(s=>s.id===speed.value));
+      const chosen=chosenModel();
+      save.disabled=!data.canManage||pending||JSON.stringify(value())===JSON.stringify(data.selection)||!chosen||(!model.value&&agent?false:!chosen.speeds.some(s=>s.id===speed.value));
     }
     function speeds(preferred,preserve=false){
-      const chosen=data.models.find(m=>m.id===(model.value||data.defaults.model));speed.replaceChildren();
+      const chosen=chosenModel();speed.replaceChildren();
       for(const s of chosen?.speeds||[]){const o=element('option',s.name);o.value=s.id;speed.append(o);}
       if(preserve&&preferred&&!(chosen?.speeds||[]).some(s=>s.id===preferred)){const o=element('option',preferred+' · недоступна');o.value=preferred;speed.append(o);}
       speed.value=preserve&&preferred?preferred:(chosen?.speeds||[]).some(s=>s.id===preferred)?preferred:'default';update();
     }
     speeds(data.selection.serviceTier||data.defaults.serviceTier,true);model.disabled=!data.canManage;
-    model.onchange=()=>{status.textContent='';speeds(model.value?speed.value:data.defaults.serviceTier);};speed.onchange=()=>{status.textContent='';update();};
+    model.onchange=()=>{status.textContent='';speeds(!model.value&&agent?data.defaults.serviceTier:speed.value);};speed.onchange=()=>{status.textContent='';update();};
   }catch(e){status.textContent='';page.report(e);action(page,'Повторить',()=>openModelSettings(agent,deviceId));}
 }
 

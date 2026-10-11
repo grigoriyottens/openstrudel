@@ -2289,7 +2289,7 @@ private struct ConnectionsView: View {
     @State private var refreshID = UUID()
     private var scope: ExtensionContext? { contexts.first { $0.id == scopeID } }
     private var results: [ServiceConnection] {
-        availableConnections.filter { !$0.isAvailableToAdd && (query.isEmpty || $0.name.localizedCaseInsensitiveContains(query)) }
+        availableConnections.filter { $0.id != "mcp:cua_repl" && !$0.isAvailableToAdd && (query.isEmpty || $0.name.localizedCaseInsensitiveContains(query)) }
             .sorted { $0.connected != $1.connected ? $0.connected : $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
     var body: some View {
@@ -2305,7 +2305,7 @@ private struct ConnectionsView: View {
     private var servicesList: some View {
             ServiceList {
                 connectionHeader
-                if availableConnections.filter({ !$0.isAvailableToAdd }).count > 6 {
+                if availableConnections.filter({ $0.id != "mcp:cua_repl" && !$0.isAvailableToAdd }).count > 6 {
                     TextField("Найти подключение", text: $query)
                         .textFieldStyle(.roundedBorder).accessibilityLabel("Найти подключение")
                 }
@@ -2407,7 +2407,7 @@ private struct ConnectionsView: View {
                 }
                 if results.isEmpty && !query.isEmpty { SearchEmptyState(query: query) { query = "" } }
                 else if results.isEmpty && !loading && error == nil {
-                    Text(extensions.isEmpty ? "Пока без подключений. Нажмите «Добавить», чтобы сотрудник мог работать с вашими сервисами." : "Другие сервисы можно подключить через «Добавить».")
+                    Text(extensions.isEmpty && !availableConnections.contains(where: { $0.id == "mcp:cua_repl" }) ? "Пока без подключений. Нажмите «Добавить», чтобы сотрудник мог работать с вашими сервисами." : "Другие сервисы можно подключить через «Добавить».")
                         .foregroundStyle(AppTheme.secondaryText)
                 }
 

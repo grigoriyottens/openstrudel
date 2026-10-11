@@ -41,7 +41,7 @@ async function main(): Promise<void> {
       node: process.version,
       database: process.env.OPENSTRUDEL_DB ?? ".data/openstrudel.sqlite",
       codexMode: process.env.OPENSTRUDEL_CODEX_MODE ?? "codex",
-      codexModel: process.env.OPENSTRUDEL_CODEX_MODEL ?? "gpt-6-astra",
+      codexModel: process.env.OPENSTRUDEL_CODEX_MODEL ?? "automatic",
       telegram: runtime.telegram.status(),
       employees: runtime.store.listProfiles().map((profile) => ({ id: profile.id, name: profile.name })),
     }, null, 2));

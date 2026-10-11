@@ -8,7 +8,7 @@ import { CodexRpc } from "../src/rpc.js";
 import { ScopedCodexEngine } from "../src/scopes.js";
 
 const roots:string[]=[];
-afterEach(()=>{for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true});});
+afterEach(()=>{for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true,maxRetries:5,retryDelay:50});});
 const file=(path:string,text:string):ExtensionFile=>({path,contentBase64:Buffer.from(text).toString("base64")});
 const skill=[file("SKILL.md","---\nname: concise-replies\ndescription: >-\n  Short, clear replies.\n  Keep facts exact.\n---\nAnswer briefly.\n")];
 function fixture() {

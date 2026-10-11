@@ -1,12 +1,29 @@
 import { expect, it, vi } from 'vitest';
 import { Store } from '../src/store.js';
 import { MessageService } from '../src/messages.js';
-import { normalizeModels, readModelSelection, saveModelSelection, resolveModelSelection, validateModelSelection } from '../src/model-settings.js';
+import { normalizeModels, readModelSelection, saveModelSelection, resolveModelSelection, validateModelSelection, recommendedModel, parseModelSelection } from '../src/model-settings.js';
 const catalog = normalizeModels([
  {model:'m1',displayName:'Model One',isDefault:true,serviceTiers:[{id:'priority',name:'Fast',description:'Increased usage'}]},
  {model:'m2',displayName:'Model Two',serviceTiers:[{id:'priority',name:'Fast'},{id:'ultra',name:'Ultra Fast'}]},
  {model:'hidden',hidden:true},
 ],null);
+it('follows the account recommendation and falls back to GPT-6.1 Sol with Medium reasoning',()=>{
+ const recommended=normalizeModels([{model:'preferred',isDefault:true,defaultReasoningEffort:'high'}],null);
+ expect(recommendedModel(recommended)).toMatchObject({id:'preferred',defaultReasoningEffort:'high'});
+ const unmarked=normalizeModels([{model:'other'},{model:'gpt-6.1-sol',defaultReasoningEffort:'low'}],null);
+ expect(recommendedModel(unmarked)).toMatchObject({id:'gpt-6.1-sol',defaultReasoningEffort:'medium',isDefault:false});
+ expect(recommendedModel([])).toMatchObject({id:'gpt-6.1-sol',defaultReasoningEffort:'medium'});
+ const store=new Store(':memory:');
+ try {
+  expect(readModelSelection(store)).toEqual({model:null,serviceTier:'default'});
+  expect(resolveModelSelection(store,undefined,recommended)).toEqual({model:'preferred',serviceTier:'default'});
+  saveModelSelection(store,{model:'chosen',serviceTier:'default'});
+  expect(resolveModelSelection(store,undefined,recommended).model).toBe('chosen');
+  expect(parseModelSelection({model:null,serviceTier:'default'},false)).toEqual({model:null,serviceTier:'default'});
+  saveModelSelection(store,{model:null,serviceTier:'default'});
+  expect(resolveModelSelection(store,undefined,[]).model).toBe('gpt-6.1-sol');
+ } finally {store.close();}
+});
 it('uses the live catalog and managed speed restrictions, without inventing Ultra Fast',()=>{
  expect(catalog.map(m=>m.id)).toEqual(['m1','m2']);
  expect(catalog[0].speeds.map(s=>s.id)).toEqual(['default','priority']);
@@ -68,7 +85,10 @@ it('serves account capabilities, validates writes and denies members before chan
  try{
  const employee=runtime.store.createProfile({name:'QA'});
  const defaults='/v1/settings/models',override=defaults+'?agentId='+employee.id;
- expect((await (await call(defaults)).json()).models).toEqual(catalog);
+ const initial=await (await call(defaults)).json();
+ expect(initial.models).toEqual(catalog);
+ expect(initial.selection).toEqual({model:null,serviceTier:'default'});
+ expect(initial.effective).toEqual({model:'m1',serviceTier:'default'});
  expect((await call(defaults,'POST',{model:'m1',serviceTier:'ultra'})).status).toBe(409);
  expect((await call(defaults,'POST',{model:'m1',serviceTier:'priority'})).status).toBe(200);
  expect((await (await call(override)).json()).effective).toEqual({model:'m1',serviceTier:'priority'});
@@ -80,5 +100,8 @@ it('serves account capabilities, validates writes and denies members before chan
  expect((await call(override,'POST',{model:null,serviceTier:null})).status).toBe(200);
  expect((await (await call(override)).json()).effective).toEqual({model:'m1',serviceTier:'priority'});
  expect((await call(defaults+'?agentId=missing')).status).toBe(404);
+ expect((await call(defaults,'POST',{model:null,serviceTier:'priority'})).status).toBe(200);
+ expect((await (await call(override)).json()).effective).toEqual({model:'m1',serviceTier:'priority'});
+ expect((await call(defaults,'POST',{model:null,serviceTier:'ultra'})).status).toBe(409);
  }finally{await runtime.stop();}
 });
