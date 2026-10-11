@@ -78,6 +78,8 @@ struct SettingsView: View {
                                     ForEach(library.visibleClients) { Text($0.displayName).tag($0.id) }
                                 }
                             }
+                            ModelSettingsView().environmentObject(selected).id("models-" + selected.id)
+                            Divider()
                             ApprovalSettingsView().environmentObject(selected).id("approvals-" + selected.id)
                             Divider()
                             DictationSettings()

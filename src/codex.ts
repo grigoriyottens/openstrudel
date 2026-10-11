@@ -1,3 +1,4 @@
+import { normalizeModels, validateModelSelection, type ModelChoice } from "./model-settings.js";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { CodexRpc, type RpcMessage } from "./rpc.js";
@@ -24,6 +25,8 @@ export interface CodexEngineOptions { model?: string; workingDirectory?: string;
 
 /** One long-lived official app-server; no model loop in OpenStrudel. */
 export class CodexEngineAdapter implements CodexEngine {
+  private modelCache?: { until: number; value: ModelChoice[] };
+  private modelReading?: Promise<ModelChoice[]>;
   private rpc?: CodexRpc;
   private initializing?: Promise<CodexRpc>;
   private readonly loaded = new Map<string, string>();
@@ -74,6 +77,23 @@ export class CodexEngineAdapter implements CodexEngine {
     try {return await this.initializing;}catch(error){this.initializing=undefined;throw error;}
   }
 
+  async models(refresh = false): Promise<ModelChoice[]> {
+    if (!refresh && this.modelCache && this.modelCache.until > Date.now()) return this.modelCache.value;
+    if (!this.modelReading) this.modelReading = (async () => {
+      const rpc = await this.client();
+      const { requirements } = await rpc.request("configRequirements/read",{},15_000);
+      const rows: any[] = []; let cursor: string | undefined;
+      do {
+        const page = await rpc.request("model/list",{includeHidden:false,limit:100,...(cursor ? {cursor} : {})},15_000);
+        rows.push(...(page.data ?? [])); cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      const value = normalizeModels(rows,requirements);
+      if (!value.length) throw new Error("Аккаунт пока не вернул список моделей. Попробуйте обновить его.");
+      this.modelCache = {until:Date.now()+60_000,value}; return value;
+    })().finally(()=>{this.modelReading=undefined;});
+    return this.modelReading;
+  }
+
   async run(input: string, options: RunOptions = {}): Promise<CodexRunResult> {
     if (this.extensionManager?.updating) throw new Error("Обновляем сервисы и навыки. Повторите сообщение через несколько секунд.");
     const finish = beginExtensionRun(this.options.sharedExtensionsPath);
@@ -96,6 +116,8 @@ export class CodexEngineAdapter implements CodexEngine {
   private async performRun(input: string, options: RunOptions): Promise<CodexRunResult> {
     const rpc = await this.client();
     const model = options.model ?? this.options.model ?? process.env.OPENSTRUDEL_CODEX_MODEL ?? "gpt-6-astra";
+    if (options?.serviceTier) validateModelSelection({model,serviceTier:options.serviceTier},await this.models());
+    const tier = {serviceTier:options?.serviceTier ?? "default"};
     const cwd = this.options.workingDirectory ?? resolve(".data/workspace");
     mkdirSync(cwd, { recursive: true });
     const mode = options.approvalMode ?? "ask";
@@ -120,7 +142,7 @@ export class CodexEngineAdapter implements CodexEngine {
       if (threadId && this.loadedConfig.has(threadId) && this.loadedConfig.get(threadId) !== configKey) {
         await rpc.request("thread/unsubscribe",{threadId});
       }
-      const common = { model, cwd, ...policy, ...(this.options.scoped ? {} : { sandbox: "workspace-write" }), developerInstructions: instructions, config };
+      const common = { model, ...tier, cwd, ...policy, ...(this.options.scoped ? {} : { sandbox: "workspace-write" }), developerInstructions: instructions, config };
       const result = threadId
         ? await rpc.request("thread/resume", { ...common, threadId, excludeTurns: true })
         : await rpc.request("thread/start", { ...common, ...(employees.length ? { multiAgentMode: "proactive" } : {}), dynamicTools: options.tools?.definitions ?? [], serviceName: "openstrudel" });
@@ -142,7 +164,7 @@ export class CodexEngineAdapter implements CodexEngine {
     const abort = () => { if (active.turnId) void rpc.request("turn/interrupt", { threadId, turnId: active.turnId }).catch(() => undefined); };
     options.signal?.addEventListener("abort", abort, { once: true });
     try {
-      const result = await rpc.request("turn/start", { threadId, model, ...policy, ...(employees.length ? { multiAgentMode: "proactive" } : {}), input: [{ type: "text", text: input }, ...(options.images ?? []).map(path=>({type:"localImage",path}))] });
+      const result = await rpc.request("turn/start", { threadId, model, ...tier, ...policy, ...(employees.length ? { multiAgentMode: "proactive" } : {}), input: [{ type: "text", text: input }, ...(options.images ?? []).map(path=>({type:"localImage",path}))] });
       active.turnId = result.turn.id;
       if (options.signal?.aborted) abort();
       return await completion;

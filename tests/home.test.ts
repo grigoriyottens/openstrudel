@@ -57,6 +57,22 @@ describe("user-owned primary Home", () => {
       expect((await changed.json()).profiles.some((p: any) => p.id === employee.id)).toBe(false);
     }
   });
+  it("routes employee models to their device and keeps device defaults independent",async()=>{
+    const laptop=await node("Laptop"),mini=await node("Mini");
+    const models=[{id:"model",name:"Model",description:"",isDefault:true,speeds:[{id:"default",name:"Обычная",description:""},{id:"priority",name:"Fast",description:""}]}];
+    laptop.runtime.engine.models=async()=>models; mini.runtime.engine.models=async()=>models;
+    const profile=mini.runtime.store.createProfile({name:"Remote editor"});
+    await connect(laptop,mini);
+    await eventually(()=>expect(laptop.home.nodeFor("profile",profile.id)).toBe(mini.home.state.nodeId));
+    const remote="/v1/settings/models?agentId="+profile.id;
+    expect((await laptop.api(remote,"POST",{model:"model",serviceTier:"priority"})).status).toBe(200);
+    expect(mini.runtime.store.getProfile(profile.id)?.serviceTier).toBe("priority");
+    expect(laptop.runtime.store.getProfile(profile.id)).toBeNull();
+    expect((await laptop.api("/v1/settings/models?deviceId="+mini.home.state.nodeId,"POST",{model:"model",serviceTier:"default"})).status).toBe(200);
+    expect(mini.runtime.store.getSetting("models.defaults")).toContain("model");
+    expect(laptop.runtime.store.getSetting("models.defaults")).toBeNull();
+    expect((await laptop.api(remote)).value.effective).toEqual({model:"model",serviceTier:"priority"});
+  });
   it("routes extension reads and writes to the employee's device and reports legacy shared workspaces", async () => {
     const primary = await node("Laptop"), worker = await node("Mac mini");
     const profile = worker.runtime.store.createProfile({name:"Writer",instructions:""});

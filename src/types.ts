@@ -40,6 +40,7 @@ export interface EmployeeProfile {
   instructions: string;
   capabilities: string[];
   model: string | null;
+  serviceTier?: string | null;
   tokenLimit: number | null;
   createdAt: string;
   preview?: string | null;
@@ -72,6 +73,7 @@ export interface CodexEngine {
       onEvent?: (event: EngineEvent) => void;
       profile?: string | null;
       model?: string | null;
+    serviceTier?: string | null;
       /** Permanent employees offered as native Codex roles on this device. */
       employees?: EmployeeProfile[];
       images?: string[];
@@ -85,6 +87,7 @@ export interface CodexEngine {
     },
   ): Promise<CodexRunResult>;
   close?(): void;
+  models?(refresh?: boolean): Promise<import("./model-settings.js").ModelChoice[]>;
   connections?(refresh?: boolean): Promise<Connection[]>;
   connectionNotice?: string;
   isConnected?(id: string): Promise<boolean>;

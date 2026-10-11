@@ -1,3 +1,4 @@
+import { findComputerUse, computerUseReadPaths } from "./computer-use.js";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, rmSync, lstatSync, readdirSync } from "node:fs";
 import { dirname, resolve, relative, isAbsolute } from "node:path";
 import { createRequire } from "node:module";
@@ -185,6 +186,24 @@ export class CodexExtensions {
     return !isAbsolute(local) && !local.startsWith("..") && local.split(/[\\/]/).length === 2 && local.endsWith("/SKILL.md")
       && existsSync(resolve(dirname(path),".openstrudel-package.json"));
   }
+  computerUse() {
+    const configured = readToml(this.configPath).mcp_servers?.cua_repl?.enabled === true;
+    return { available:Boolean(findComputerUse()), configured, platform:process.platform };
+  }
+  async connectComputerUse() {
+    const server = findComputerUse();
+    if (!server) throw new HomeError("На Mac сотрудника откройте ChatGPT → плагины и включите Computer Use. Затем вернитесь сюда и повторите.",409);
+    await this.options.client();
+    return this.mutate(async()=>{
+      const config = readToml(this.configPath);
+      if (config.mcp_servers?.cua_repl) throw new HomeError("Computer Use уже добавлен. Обновите список подключений.",409);
+      config.mcp_servers = {...config.mcp_servers,cua_repl:server};
+      const filesystem = config.permissions?.openstrudel?.filesystem;
+      if (filesystem) for (const path of computerUseReadPaths(server)) filesystem[path] = "read";
+      atomicText(this.configPath,stringify(config));
+      return {available:true,configured:true,platform:process.platform};
+    });
+  }
   async addMcp(input: Record<string, any>) {
     const name = slug(input.name);
     if (this.options.reservedServers?.includes(name)) throw new HomeError("Это подключение управляется настройками устройства. Выберите другое название.");
@@ -217,7 +236,9 @@ export class CodexExtensions {
     slug(name); await this.options.client();
     return this.mutate(async()=>{
       if (!extensionConfig(this.options.home).mcp_servers?.[name]) throw new HomeError("Это подключение не было добавлено здесь.");
-      const config=readToml(this.configPath); delete config.mcp_servers[name]; atomicText(this.configPath,stringify(config)); return {removed:true};
+      const config=readToml(this.configPath);
+      if (name === "cua_repl" && config.permissions?.openstrudel?.filesystem) for (const path of computerUseReadPaths(config.mcp_servers[name])) delete config.permissions.openstrudel.filesystem[path];
+      delete config.mcp_servers[name]; atomicText(this.configPath,stringify(config)); return {removed:true};
     });
   }
   private async pluginCLI(args: string[]) {

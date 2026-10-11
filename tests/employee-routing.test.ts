@@ -34,7 +34,7 @@ function complete(threadId = 'parent') {
   wire.notify({ method: 'item/completed', params: { threadId, item: { type: 'agentMessage', text: 'Result here' } } });
   wire.notify({ method: 'turn/completed', params: { threadId, turn: { status: 'completed' } } });
 }
-it('keeps an immutable specialist and originating rules, without inheriting personal credentials or model overrides', () => {
+it('keeps an immutable specialist and originating rules, with the chosen model and without personal credentials', () => {
   const dir = home();
   const first = employeeRoleConfig(dir, [employee], 'Group A requires explicit confirmation.').agents as any;
   const role = Object.values(first).find((r: any) => r?.config_file) as any;
@@ -42,9 +42,9 @@ it('keeps an immutable specialist and originating rules, without inheriting pers
   const second = employeeRoleConfig(dir, [employee], 'Group B rules.').agents as any;
   expect(readFileSync(role.config_file, 'utf8')).toBe(content);
   expect(JSON.stringify(second)).not.toContain(role.config_file);
-  expect(Object.keys(parse(content))).toEqual(['developer_instructions']);
+  expect(Object.keys(parse(content))).toEqual(['developer_instructions','model','service_tier']);
+  expect(parse(content)).toMatchObject({model:'other-model',service_tier:'default'});
   expect(content).toContain('Group A requires explicit confirmation.');
-  expect(content).not.toContain('other-model');
   expect(first.max_threads).toBe(2);
 });
 it('resolves a native helper approval to its actual active parent and denies unrelated or late requests', async () => {

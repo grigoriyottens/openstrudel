@@ -266,6 +266,7 @@ struct EmployeeProfile: Codable, Identifiable, Hashable {
     let instructions: String
     let capabilities: [String]
     let model: String?
+    var serviceTier: String? = nil
     let tokenLimit: Int?
     let createdAt: String
     var preview: String? = nil

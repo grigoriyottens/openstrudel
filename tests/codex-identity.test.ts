@@ -106,3 +106,23 @@ it("refreshes native MCP credentials for each group delivery without rewriting p
   expect(wire.request.mock.calls.filter(([method])=>method==="thread/resume").at(-1)![1].config["mcp_servers.company"].enabled).toBe(false);
  }finally{engine.close();}
 });
+
+
+it("switches native model and speed on the same thread and explicitly clears Fast",async()=>{
+  wire.request.mockImplementation(async(method:string,params:any)=>{
+    if(method==="configRequirements/read")return {requirements:null};
+    if(method==="model/list")return {data:[{model:"m",serviceTiers:[{id:"priority",name:"Fast"}]}]};
+    if(method==="thread/start")return {thread:{id:"model-thread"}};
+    if(method==="turn/start") { queueMicrotask(()=>wire.notify?.({method:"turn/completed",params:{threadId:params.threadId,turn:{status:"completed"}}})); return {turn:{id:"turn"}}; }
+    throw new Error(method);
+  });
+  const engine=new CodexEngineAdapter();
+  try{
+    const first=await engine.run("First",{model:"m",serviceTier:"priority"});
+    await engine.run("Second",{threadId:first.threadId,model:"m",serviceTier:"default"});
+    expect(wire.request.mock.calls.filter(([m])=>m==="thread/start")).toHaveLength(1);
+    expect(wire.request.mock.calls.filter(([m])=>m==="turn/start").map(([,p])=>p.serviceTier)).toEqual(["priority","default"]);
+    expect(wire.request.mock.calls.filter(([m])=>m==="model/list")).toHaveLength(1);
+    await expect(engine.run("Bad",{model:"m",serviceTier:"ultra"})).rejects.toThrow(/скорость/);
+  }finally{engine.close();}
+});

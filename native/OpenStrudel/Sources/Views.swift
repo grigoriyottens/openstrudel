@@ -690,6 +690,21 @@ private struct ConversationView: View {
             if client.activeTelegramChat != nil { TelegramChatsView() }
             else if let profile = client.activeProfile {
                 BotDetailsView(profile: profile).environmentObject(client)
+            } else {
+                NavigationStack {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 20) {
+                            ModelSettingsView(agentID: "main")
+                            Divider()
+                            NavigationLink { ConnectionsView(embedded: true) } label: { Label("Сервисы и навыки", systemImage: "link") }
+                        }.padding(24)
+                    }
+                        .navigationTitle("OpenStrudel")
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { showBotDetails = false } } }
+                }
+                #if os(macOS)
+                .frame(width: 500, height: 400)
+                #endif
             }
         }
     }
@@ -795,7 +810,7 @@ private struct ConversationTitle: View {
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     }.frame(minHeight: controlTarget).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityLabel("Telegram · " + group.title)
-            } else if client.activeProfile != nil {
+            } else if !client.isEmployeeDraft {
                 Button(action: openEmployee) {
                     HStack(spacing: 7) {
                         identity
@@ -1713,11 +1728,12 @@ private struct BotDetailsView: View {
                         .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
                         .accessibilityLabel("Описание сотрудника")
                 }
+                ModelSettingsView(agentID: profile.id)
+                if client.health?.homeProtocol == 1 { AgentAccountPreference(profile: profile) }
                 if !client.schedules.isEmpty {
                     Divider()
                     Text("Расписание").font(.subheadline.weight(.medium))
                 }
-                if client.health?.homeProtocol == 1 { AgentAccountPreference(profile: profile) }
                 ForEach(client.schedules.filter(\.enabled)) { schedule in
                     Toggle(isOn: Binding(get: { schedule.enabled }, set: { value in Task { await client.setSchedule(schedule, enabled: value) } })) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -2292,6 +2308,9 @@ private struct ConnectionsView: View {
                 if availableConnections.filter({ !$0.isAvailableToAdd }).count > 6 {
                     TextField("Найти подключение", text: $query)
                         .textFieldStyle(.roundedBorder).accessibilityLabel("Найти подключение")
+                }
+                if !scopeID.isEmpty {
+                    Section { ComputerUseSettingsView(conversationID: scopeID, isGroup: scope?.isGroup == true).id(scopeID) }
                 }
                 extensionRows
                 connectionRows

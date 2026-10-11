@@ -18,7 +18,7 @@ export function employeeRoleConfig(home: string, employees: EmployeeProfile[], p
       "Your specialty and character:\n" + employee.name + "\n" + employee.instructions,
       parentRules ? "Rules of the originating conversation take precedence over conflicting specialty instructions:\n" + parentRules : "",
     ].filter(Boolean).join("\n\n");
-    const content = stringify({ developer_instructions: instructions });
+    const content = stringify({ developer_instructions: instructions, ...(employee.model ? {model:employee.model,service_tier:employee.serviceTier ?? "default"} : {}) });
     // Roles can be spawned after another chat starts: immutable content paths
     // prevent that chat's rules from replacing the active request's snapshot.
     const file = resolve(home, "openstrudel-employees", name + "-" + createHash("sha256").update(content).digest("hex").slice(0, 20) + ".toml");
