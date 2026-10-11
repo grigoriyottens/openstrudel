@@ -146,12 +146,12 @@ struct MobileWelcomeView: View {
                     Spacer(minLength: 48)
                     OpenStrudelMark(size: 100)
                         .accessibilityHidden(true).padding(.bottom, 30)
-                    Text(client.connectionNeedsPairing ? "Подключитесь снова." : client.isConfigured ? "Нет связи с OpenStrudel" : client.isSignedOut ? "Устройство отключено" : "Подключите устройство")
+                    Text(client.connectionNeedsPairing ? "Подключитесь снова." : client.isConfigured ? "Нет связи с OpenStrudel" : client.isSignedOut ? "Устройство отключено" : "Ваши AI-помощники")
                         .font(.system(.largeTitle, design: .serif, weight: .medium))
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                     Text(client.connectionNeedsPairing ? "Подключение отозвано. Получите новую ссылку на устройстве с сотрудниками." : client.isConfigured
                          ? "«\(client.connectionName)» пока не на связи. Подключимся автоматически."
-                         : "Откройте сотрудников вашего Mac или сервера по ссылке подключения. Здесь будут те же чаты.")
+                         : "Пишите, планируйте и обсуждайте идеи. Подключите свой Mac или сервер с OpenStrudel, чтобы продолжить те же чаты здесь.")
                         .font(.body).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true).padding(.top, 14)
                     if client.isConfigured && !client.connectionNeedsPairing {
@@ -183,7 +183,7 @@ struct MobileWelcomeView: View {
                                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         }
                         Button { showingHelp = true } label: {
-                            Text("Где получить ссылку?")
+                            Text("Как начать?")
                                 .font(.callout).multilineTextAlignment(.center)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -252,7 +252,12 @@ struct MobileConnectionHelpView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Где получить ссылку").font(.title2.weight(.semibold)).foregroundStyle(Color.primary)
+                        Text("Начните на своём Mac").font(.title2.weight(.semibold)).foregroundStyle(Color.primary)
+                        Text("Установите бесплатный OpenStrudel с waiwai.is/openstrudel. Войдите в свой аккаунт OpenAI и создайте AI-помощника для личных или рабочих задач.")
+                        Text("Регистрация в OpenStrudel не нужна. Ссылку для своего iPhone или iPad вы создаёте сами.")
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Где получить ссылку").font(.headline).foregroundStyle(Color.primary)
                         Text("На Mac с сотрудниками откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения».")
                         Text("Для сервера откройте его веб-интерфейс → Настройки → Устройства.")
                     }
@@ -319,11 +324,20 @@ private struct QRScanner: UIViewControllerRepresentable {
 
 struct ConnectionInvitationView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var textSize
     let onConfirm: (MacPairing) -> Void
     @State private var invitation = ""
     @State private var error: String?
+    @State private var openingPage = false
     @FocusState private var focused: Bool
+
+    private var connectionPage: URL? {
+        guard let url = URL(string: invitation.trimmingCharacters(in: .whitespacesAndNewlines)),
+              url.scheme?.lowercased() == "https", let host = url.host, !host.isEmpty,
+              url.user == nil, url.password == nil else { return nil }
+        return url
+    }
 
     var body: some View {
         NavigationStack {
@@ -353,12 +367,19 @@ struct ConnectionInvitationView: View {
                     }.labelStyle(.titleOnly).buttonStyle(.glass).controlSize(.large)
                     }
                     if let error {
-                        Text(UserFacingError.text(error)).font(.callout).foregroundStyle(AppTheme.secondaryText)
+                        Text(UserFacingError.text(error)).font(.callout).foregroundStyle(AppTheme.destructive)
+                            .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("invitationError")
                     }
-                    Button(action: confirm) { SetupActionLabel(title: "Продолжить") }
+                    if let page = connectionPage {
+                        Text("Откроется \(page.host ?? "страница подключения") в браузере. На странице нажмите «Открыть OpenStrudel».")
+                            .font(.callout).foregroundStyle(AppTheme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Button(action: confirm) { SetupActionLabel(title: openingPage ? "Открываем…" : connectionPage == nil ? "Продолжить" : "Открыть страницу") }
                         .buttonStyle(.glassProminent).controlSize(.large)
-                        .disabled(invitation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(openingPage || invitation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityIdentifier("continueConnection")
                         .keyboardShortcut(.defaultAction)
                 }.padding(32).frame(maxWidth: 480).frame(maxWidth: .infinity)
             }
@@ -381,6 +402,17 @@ struct ConnectionInvitationView: View {
     }
 
     private func confirm() {
+        guard !openingPage else { return }
+        focused = false
+        if let page = connectionPage {
+            openingPage = true
+            openURL(page) { accepted in
+                openingPage = false
+                if accepted { dismiss() }
+                else { error = "Не удалось открыть браузер. Откройте ссылку в браузере на этом устройстве и нажмите «Открыть OpenStrudel»." }
+            }
+            return
+        }
         do {
             guard let url = URL(string: invitation.trimmingCharacters(in: .whitespacesAndNewlines)) else { throw HomeClientError.invalidURL }
             let pairing = try MacPairing(url: url)

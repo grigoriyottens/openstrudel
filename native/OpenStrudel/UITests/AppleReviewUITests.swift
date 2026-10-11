@@ -2,6 +2,14 @@ import XCTest
 
 @MainActor final class AppleReviewUITests: XCTestCase {
     func testPrivateReviewPageConnectsAndAnswers() async throws {
+        try await connectAndAnswer(pastingPage: false)
+    }
+
+    func testPastedConnectionPageConnectsAndAnswers() async throws {
+        try await connectAndAnswer(pastingPage: true)
+    }
+
+    private func connectAndAnswer(pastingPage: Bool) async throws {
         continueAfterFailure = false
         guard let fixture = ProcessInfo.processInfo.environment["OPENSTRUDEL_REVIEW_PAGE_FIXTURE"],
               let endpoint = URL(string: fixture) else { throw XCTSkip("Provide the private review page fixture.") }
@@ -12,9 +20,29 @@ import XCTest
         let app = XCUIApplication()
         app.launch()
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
-        safari.open(page)
+        if pastingPage {
+            let paste = app.buttons["pasteInvitation"]
+            XCTAssertTrue(paste.waitForExistence(timeout: 15), app.debugDescription)
+            paste.tap()
+            let input = app.secureTextFields["connectionInvitation"]
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            input.tap(); input.typeText(page.absoluteString)
+            let openPage = app.buttons["continueConnection"]
+            XCTAssertEqual(openPage.label, "Открыть страницу")
+            capture("review-pasted-page-ready", app)
+            openPage.tap()
+        } else {
+            safari.open(page)
+        }
         let open = safari.links["Открыть OpenStrudel"]
         XCTAssertTrue(open.waitForExistence(timeout: 30), safari.debugDescription)
+        // A clean iOS 26 simulator shows Safari's toolbar tutorial. Its overlay
+        // consumes the first page tap, even when the link itself is visible.
+        if safari.staticTexts["View Bookmarks, Share Menu, and Open Tabs"].exists {
+            let closeTip = safari.buttons.matching(NSPredicate(format: "label IN %@", ["Close", "Закрыть"])).firstMatch
+            XCTAssertTrue(closeTip.exists, safari.debugDescription)
+            closeTip.tap()
+        }
         capture("review-private-connection-page", safari)
         open.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let confirmation = safari.buttons.matching(NSPredicate(format: "label IN %@", ["Open", "Открыть"])).firstMatch

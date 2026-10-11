@@ -36,10 +36,12 @@ Private logs, screenshots, test fixture details and reviewer credentials are ret
 
 The queued App Store version is 1.0, build 28. New TestFlight releases must not replace or cancel this submission without a deliberate release decision.
 
+Later on 11 October, Apple rejected build 28. The reasons and the unsubmitted replacement are tracked in [the resubmission preparation](app-review-resubmission-2026-10-11.md). The user requires approval before another submission or response to App Review.
+
 App Store Connect's published privacy label was inspected after account sign-in: six linked data categories (audio, user ID, email address, messages, other user content, photos/videos), each for app functionality. The privacy URL is correct. The app requests consent before sending relevant chat context/files to OpenAI. The iOS app is a free companion and has no hosting purchase flow or account creation.
 
 A private, persistent connection page supplies short-lived invitations to a dedicated live server with an already authenticated AI account and synthetic employees. The server was upgraded to runtime 33 after a database-volume backup and a real-response test on a separate candidate. The previous container and volume remain available for rollback. A real AI reply was verified again after cutover and through the native iPhone app. The review does not require the reviewer's own Mac or OpenAI account. Credentials and the private link must stay out of this document and source control.
 
-The audit found stale “Build 12” review notes and store text referring to a main device and old connection steps. Corrected review instructions and the Russian store description were saved to App Store Connect and independently read back. The submission remained `WAITING_FOR_REVIEW` with build 28. Submission acceptance is Apple's decision; a successful technical check does not mean App Review approval.
+The earlier audit found stale “Build 12” review notes and store text referring to a main device and old connection steps. Corrected review instructions and the Russian store description were saved to App Store Connect and independently read back. At that point, the submission was `WAITING_FOR_REVIEW` with build 28; the later rejection is tracked above. Submission acceptance is Apple's decision; a successful technical check does not mean App Review approval.
 
 Primary references: [Codex app-server](https://developers.openai.com/codex/app-server), [Computer Use setup](https://learn.chatgpt.com/docs/computer-use), [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) (2.1 access/completeness, 3.1.3(f) free companions, 4.2.7 remote desktop distinction, 5.1 privacy).

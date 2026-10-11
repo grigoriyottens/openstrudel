@@ -2,18 +2,40 @@ import XCTest
 
 final class MobilePairingUITests: XCTestCase {
     @MainActor
+    func testInvalidLinkFeedbackIsVisibleAfterKeyboardContinue() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+        let paste = app.buttons["pasteInvitation"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 15))
+        paste.tap()
+        let input = app.secureTextFields["connectionInvitation"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap()
+        input.typeText("not-a-connection-link\n")
+        let error = app.staticTexts["invitationError"]
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        capture("invalid-link-keyboard-continue", app)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5),
+                      "Continue must reveal its result instead of leaving it behind the keyboard")
+        XCTAssertTrue(error.isHittable, app.debugDescription)
+    }
+
+    @MainActor
     func testCompanionOnboardingExplainsInvitationsWithoutCheckout() throws {
         let app = XCUIApplication()
         app.launch()
         let help = app.buttons["invitationHelp"]
         XCTAssertTrue(help.waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["Подключите устройство"].exists)
+        XCTAssertTrue(app.staticTexts["Ваши AI-помощники"].exists)
         XCTAssertFalse(app.buttons["setupCloud"].exists)
         XCTAssertFalse(app.buttons["cloudSignIn"].exists)
         XCTAssertFalse(app.buttons["cloudConfirmCost"].exists)
         XCTAssertFalse(app.links["Управлять облаком"].exists)
         for _ in 0..<4 where !help.isHittable { app.swipeUp() }
         help.tap()
+        XCTAssertTrue(app.staticTexts["Начните на своём Mac"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Регистрация в OpenStrudel не нужна. Ссылку для своего iPhone или iPad вы создаёте сами."].exists)
         XCTAssertTrue(app.staticTexts["Где получить ссылку"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.links.count, 0, "Connection help must not lead to signup or payment")
         capture("12-connection-help", app)
