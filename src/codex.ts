@@ -1,3 +1,4 @@
+import { normalizeModels, recommendedModel, validateModelSelection, type ModelChoice } from "./model-settings.js";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { CodexRpc, type RpcMessage } from "./rpc.js";
@@ -24,6 +25,8 @@ export interface CodexEngineOptions { model?: string; workingDirectory?: string;
 
 /** One long-lived official app-server; no model loop in OpenStrudel. */
 export class CodexEngineAdapter implements CodexEngine {
+  private modelCache?: { until: number; value: ModelChoice[] };
+  private modelReading?: Promise<ModelChoice[]>;
   private rpc?: CodexRpc;
   private initializing?: Promise<CodexRpc>;
   private readonly loaded = new Map<string, string>();
@@ -54,7 +57,7 @@ export class CodexEngineAdapter implements CodexEngine {
   }
 
   setCodexHome(home?: string): void { this.close(); this.codexHome = home; }
-  close(): void { this.rpc?.close(); this.rpc = undefined; this.initializing = undefined; this.loaded.clear(); this.loadedConfig.clear(); this.parents.clear(); this.connectionCache = undefined; this.connectionLoading = undefined; this.appCatalog = undefined; }
+  close(): void { this.rpc?.close(); this.rpc = undefined; this.initializing = undefined; this.loaded.clear(); this.loadedConfig.clear(); this.parents.clear(); this.connectionCache = undefined; this.connectionLoading = undefined; this.appCatalog = undefined; this.modelCache = undefined; this.modelReading = undefined; }
 
   private async client(): Promise<CodexRpc> {
     if (this.rpc && !this.rpc.closed) return this.rpc;
@@ -72,6 +75,22 @@ export class CodexEngineAdapter implements CodexEngine {
       catch (error) { rpc.close(); throw error; }
     })();
     try {return await this.initializing;}catch(error){this.initializing=undefined;throw error;}
+  }
+
+  async models(refresh = false): Promise<ModelChoice[]> {
+    if (!refresh && this.modelCache && this.modelCache.until > Date.now()) return this.modelCache.value;
+    if (!this.modelReading) this.modelReading = (async () => {
+      const rpc = await this.client();
+      const { requirements } = await rpc.request("configRequirements/read",{},15_000);
+      const rows: any[] = []; let cursor: string | undefined;
+      do {
+        const page = await rpc.request("model/list",{includeHidden:false,limit:100,...(cursor ? {cursor} : {})},15_000);
+        rows.push(...(page.data ?? [])); cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      const value = normalizeModels(rows,requirements);
+      this.modelCache = {until:Date.now()+60_000,value}; return value;
+    })().finally(()=>{this.modelReading=undefined;});
+    return this.modelReading;
   }
 
   async run(input: string, options: RunOptions = {}): Promise<CodexRunResult> {
@@ -95,18 +114,27 @@ export class CodexEngineAdapter implements CodexEngine {
 
   private async performRun(input: string, options: RunOptions): Promise<CodexRunResult> {
     const rpc = await this.client();
-    const model = options.model ?? this.options.model ?? process.env.OPENSTRUDEL_CODEX_MODEL ?? "gpt-6-astra";
+    const models = await this.models();
+    const selected = options.model ?? this.options.model ?? process.env.OPENSTRUDEL_CODEX_MODEL ?? null;
+    const recommended = recommendedModel(models);
+    const model = selected ?? recommended.id;
+    const effort = (selected ? models.find(m=>m.id === selected) : recommended)?.defaultReasoningEffort ?? "medium";
+    if (options?.serviceTier) validateModelSelection({model:selected,serviceTier:options.serviceTier},models);
+    const tier = {serviceTier:options?.serviceTier ?? "default"};
     const cwd = this.options.workingDirectory ?? resolve(".data/workspace");
     mkdirSync(cwd, { recursive: true });
     const mode = options.approvalMode ?? "ask";
     const policy = nativeApprovalPolicy(mode, options.groupContext);
     const overrides = { "features.apps": true, "features.default_mode_request_user_input": true, web_search: process.env.OPENSTRUDEL_WEB_SEARCH_MODE ?? "live", ...this.options.config, ...telegramMcpConfig(this.options.telegramServers,options.telegramActor,options.conversationId) };
     const settings = { ...(this.codexHome ? readToml(resolve(this.codexHome,"config.toml")) : {}), ...overrides };
-    const employees = options.employees ?? [];
+    const employees = (options.employees ?? []).map(employee => ({...employee,
+      model:employee.model ?? recommended.id,
+      reasoningEffort:(employee.model ? models.find(m=>m.id === employee.model) : recommended)?.defaultReasoningEffort ?? "medium",
+    }));
     const roles = options.employees === undefined ? {} : this.codexHome && employees.length
       ? employeeRoleConfig(this.codexHome, employees, options.profile)
       : { "features.multi_agent": false };
-    const config = { ...overrides, ...roles, ...nativeApprovalConfig(mode,settings,this.extensionManager?.pluginServers()), approval_policy: policy.approvalPolicy, approvals_reviewer: policy.approvalsReviewer };
+    const config = { ...overrides, ...roles, model_reasoning_effort:effort, ...nativeApprovalConfig(mode,settings,this.extensionManager?.pluginServers()), approval_policy: policy.approvalPolicy, approvals_reviewer: policy.approvalsReviewer };
     const configKey = createHash("sha256").update(JSON.stringify([config, employees])).digest("hex");
     let threadId = options.threadId ?? "";
     if (threadId && this.active.has(threadId)) throw new Error("В этом чате ещё идёт ответ. Сообщение нужно поставить в очередь.");
@@ -120,7 +148,7 @@ export class CodexEngineAdapter implements CodexEngine {
       if (threadId && this.loadedConfig.has(threadId) && this.loadedConfig.get(threadId) !== configKey) {
         await rpc.request("thread/unsubscribe",{threadId});
       }
-      const common = { model, cwd, ...policy, ...(this.options.scoped ? {} : { sandbox: "workspace-write" }), developerInstructions: instructions, config };
+      const common = { model, ...tier, cwd, ...policy, ...(this.options.scoped ? {} : { sandbox: "workspace-write" }), developerInstructions: instructions, config };
       const result = threadId
         ? await rpc.request("thread/resume", { ...common, threadId, excludeTurns: true })
         : await rpc.request("thread/start", { ...common, ...(employees.length ? { multiAgentMode: "proactive" } : {}), dynamicTools: options.tools?.definitions ?? [], serviceName: "openstrudel" });
@@ -142,7 +170,7 @@ export class CodexEngineAdapter implements CodexEngine {
     const abort = () => { if (active.turnId) void rpc.request("turn/interrupt", { threadId, turnId: active.turnId }).catch(() => undefined); };
     options.signal?.addEventListener("abort", abort, { once: true });
     try {
-      const result = await rpc.request("turn/start", { threadId, model, ...policy, ...(employees.length ? { multiAgentMode: "proactive" } : {}), input: [{ type: "text", text: input }, ...(options.images ?? []).map(path=>({type:"localImage",path}))] });
+      const result = await rpc.request("turn/start", { threadId, model, effort, ...tier, ...policy, ...(employees.length ? { multiAgentMode: "proactive" } : {}), input: [{ type: "text", text: input }, ...(options.images ?? []).map(path=>({type:"localImage",path}))] });
       active.turnId = result.turn.id;
       if (options.signal?.aborted) abort();
       return await completion;

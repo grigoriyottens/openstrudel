@@ -140,6 +140,11 @@ export class HomeApi {
     }
     if (path === "/v1/conversation") nodeId ??= this.home.state.mainNodeId;
     if (path === "/v1/account" || path.startsWith("/v1/account/")) nodeId ??= url.searchParams.get("agentId") && url.searchParams.get("agentId") !== "main" ? this.home.nodeFor("profile", url.searchParams.get("agentId")!) : this.home.state.mainNodeId;
+    if (path === "/v1/settings/models" && url.searchParams.has("agentId")) {
+      if (mainAgent && url.searchParams.get("agentId") === "main") url.searchParams.set("agentId",mainAgent);
+      const id = url.searchParams.get("agentId")!;
+      nodeId ??= id === "main" ? this.home.state.mainNodeId : this.home.nodeFor("profile",id);
+    }
     const agent = path.match(/^\/v1\/(?:agents|profiles)\/([^/]+)(?:\/|$)/);
     if (agent && agent[1] !== "archive") nodeId ??= agent[1] === "main" ? this.home.state.mainNodeId : this.home.nodeFor("profile", decodeURIComponent(agent[1]!));
     const conversation = path.match(/^\/v1\/conversations\/([^/]+)(?:\/|$)/);

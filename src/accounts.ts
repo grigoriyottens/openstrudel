@@ -145,6 +145,7 @@ export class AccountEngines implements CodexEngine {
         finally { locked = undefined; runningEngine = undefined; this.accounts.active.set(id, Math.max(0, (this.accounts.active.get(id) ?? 1) - 1)); }
       },
       get connectionNotice() { return connectionEngine?.connectionNotice; },
+      models: async refresh => { const selected = await selection(); return this.scoped(selected.id, selected.service).forContext(context).models!(refresh); },
       connections: async refresh => { const selected = await selection(); connectionEngine = this.scoped(selected.id, selected.service).forContext(context); return connectionEngine.connections?.(refresh) ?? []; },
       connect: async name => { const selected = await selection(); return this.scoped(selected.id, selected.service).forContext(context).connect!(name); },
       isConnected: async name => { const selected = await selection(); return this.scoped(selected.id, selected.service).forContext(context).isConnected!(name); },

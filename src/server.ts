@@ -1,3 +1,4 @@
+import { parseModelSelection, readModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, validateModelSelection } from "./model-settings.js";
 import { deleteEmployee } from "./employee-delete.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -154,7 +155,7 @@ export class HttpApi {
       const localExecution = request.headers["x-openstrudel-executor"] === this.executorKey && ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress ?? "");
       const canManageAccount = localExecution ? request.headers["x-openstrudel-owner"] === "1" : webSession ? webSession.owner : !paired || owner;
       if (path.startsWith("/v1/extensions") && request.method !== "GET" && !canManageAccount) throw new HomeError("Расширения подключает владелец устройства.",403);
-      if (path === "/v1/settings/approvals" && request.method !== "GET" && !canManageAccount) throw new HomeError("Режим действий меняет владелец устройства.",403);
+      if (["/v1/settings/approvals", "/v1/settings/models"].includes(path) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
       if (!localExecution && request.method !== "GET" && path !== "/v1/home/transfer" && path !== "/v1/home/poll") {
         if (this.home.state.role === "primary" && this.store.getSetting("home.transfer")) throw new HomeError("Передаём управление. Изменения будут доступны после завершения.", 409);
         this.activeWrites++; counted = true;
@@ -197,6 +198,21 @@ export class HttpApi {
           this.store.setSetting(approvalSetting, input.mode);
         }
         this.send(response,200,{mode:readApprovalMode(this.store.getSetting(approvalSetting)),canManage:canManageAccount}); return;
+      }
+      if (path === "/v1/settings/models" && ["GET", "POST"].includes(request.method ?? "")) {
+        const agent = url.searchParams.get("agentId") ?? undefined;
+        if (agent && agent !== "main" && !this.store.getProfile(agent)) throw new HomeError("Сотрудник не найден.",404);
+        const context = agent && agent !== "main" ? this.store.getSetting("employee.context." + agent) ?? this.store.getProfile(agent)?.domain ?? "personal" : "personal";
+        const engine = this.engine?.forAgent?.(agent ?? "main",context) ?? this.engine?.forContext?.(context) ?? this.engine;
+        if (!engine?.models) throw new HomeError("Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.",501);
+        const models = await engine.models(url.searchParams.get("refresh") === "true");
+        if (request.method === "POST") {
+          const selection = parseModelSelection(await this.body(request),Boolean(agent));
+          if (agent) assertAgentWritable(this.store,agent);
+          validateModelSelection(agent && !selection.model ? readModelSelection(this.store) : selection,models);
+          saveModelSelection(this.store,selection,agent);
+        }
+        this.send(response,200,{models,recommended:recommendedModel(models),selection:readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,undefined,models),effective:resolveModelSelection(this.store,agent,models),canManage:canManageAccount}); return;
       }
       if (path === "/v1/accounts" && request.method === "GET") {
         this.send(response, 200, { accounts: await this.accounts?.list(url.searchParams.get("refresh") === "true") ?? [], canManage: canManageAccount }); return;
@@ -480,7 +496,10 @@ export class HttpApi {
         const engine = this.engine?.forAgent?.(conversation.profileId ?? "main",this.messages.contextFor(conversationId)) ?? this.engine?.forContext?.(this.messages.contextFor(conversationId)) ?? this.engine;
         const extensions = await engine?.extensions?.();
         if (!extensions) throw new HomeError("Обновите OpenStrudel на устройстве сотрудника, чтобы добавлять расширения.",501);
-        if (request.method === "GET" && path === "/v1/extensions") this.send(response,200,await extensions.list());
+        if (request.method === "GET" && path === "/v1/extensions/computer") this.send(response,200,extensions.computerUse());
+        else if (request.method === "POST" && path === "/v1/extensions/computer") this.send(response,200,await extensions.connectComputerUse());
+        else if (request.method === "DELETE" && path === "/v1/extensions/computer") this.send(response,200,await extensions.removeMcp("cua_repl"));
+        else if (request.method === "GET" && path === "/v1/extensions") this.send(response,200,await extensions.list());
         else if (request.method === "POST" && path === "/v1/extensions/install") this.send(response,200,await extensions.install(body.files,String(body.digest ?? "")));
         else if (request.method === "POST" && path === "/v1/extensions/mcp") this.send(response,200,await extensions.addMcp(body));
         else if (request.method === "POST" && path === "/v1/extensions/mcp/remove") this.send(response,200,await extensions.removeMcp(String(body.name ?? "")));

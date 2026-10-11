@@ -27,6 +27,8 @@ function fixture() {
     if (method === 'thread/read') return { thread: { parentThreadId: params.threadId === child || params.threadId === '00000000-0000-7000-8000-000000000001' ? 'parent' : null } };
     if (method === 'thread/unsubscribe' || method === 'thread/inject_items') return {};
     if (method === 'turn/start') return { turn: { id: 'turn' } };
+    if (method === "configRequirements/read") return {requirements:null};
+    if (method === "model/list") return {data:[]};
     throw new Error(method);
   });
 }
@@ -34,7 +36,7 @@ function complete(threadId = 'parent') {
   wire.notify({ method: 'item/completed', params: { threadId, item: { type: 'agentMessage', text: 'Result here' } } });
   wire.notify({ method: 'turn/completed', params: { threadId, turn: { status: 'completed' } } });
 }
-it('keeps an immutable specialist and originating rules, without inheriting personal credentials or model overrides', () => {
+it('keeps an immutable specialist and originating rules, with the chosen model and without personal credentials', () => {
   const dir = home();
   const first = employeeRoleConfig(dir, [employee], 'Group A requires explicit confirmation.').agents as any;
   const role = Object.values(first).find((r: any) => r?.config_file) as any;
@@ -42,9 +44,9 @@ it('keeps an immutable specialist and originating rules, without inheriting pers
   const second = employeeRoleConfig(dir, [employee], 'Group B rules.').agents as any;
   expect(readFileSync(role.config_file, 'utf8')).toBe(content);
   expect(JSON.stringify(second)).not.toContain(role.config_file);
-  expect(Object.keys(parse(content))).toEqual(['developer_instructions']);
+  expect(Object.keys(parse(content))).toEqual(['developer_instructions','model','service_tier','model_reasoning_effort']);
+  expect(parse(content)).toMatchObject({model:'other-model',service_tier:'default',model_reasoning_effort:'medium'});
   expect(content).toContain('Group A requires explicit confirmation.');
-  expect(content).not.toContain('other-model');
   expect(first.max_threads).toBe(2);
 });
 it('resolves a native helper approval to its actual active parent and denies unrelated or late requests', async () => {
@@ -62,6 +64,16 @@ it('resolves a native helper approval to its actual active parent and denies unr
   await expect(wire.incoming('mcpServer/elicitation/request', { threadId: child })).rejects.toThrow('No user');
   expect(onRequest).toHaveBeenCalledTimes(1);
   engine.close();
+});
+it('resolves an automatic employee independently of an explicitly selected parent model',async()=>{
+  fixture(); const engine=new CodexEngineAdapter({codexHome:home()});
+  const run=engine.run('Review',{model:'parent-model',employees:[{...employee,model:null}]});
+  await vi.waitFor(()=>expect(wire.request.mock.calls.some(([m])=>m==='turn/start')).toBe(true));
+  const start=wire.request.mock.calls.find(([m])=>m==='thread/start')![1];
+  const role=Object.values(start.config.agents).find((r:any)=>r?.config_file) as any;
+  expect(parse(readFileSync(role.config_file,'utf8'))).toMatchObject({model:'gpt-6.1-sol',model_reasoning_effort:'medium',service_tier:'default'});
+  expect(start.model).toBe('parent-model');
+  complete(); await run; engine.close();
 });
 it('releases a helper announced by native activity even when it needed no approvals', async () => {
   fixture(); const engine = new CodexEngineAdapter({ codexHome: home() });

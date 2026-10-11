@@ -112,7 +112,7 @@ async function bootstrapWeb() {
 window.addEventListener('hashchange',()=>{ if(new URLSearchParams(location.hash.slice(1)).has('invite')) void bootstrapWeb(); });
 async function openHomeSettings() {
   const page=modalPage('Настройки','Сотрудники и переписка находятся на этом устройстве.');
-    const entries=state.owner ? [['Устройства',openDevices],['Настройки сотрудника',openCurrentAgent],['Аккаунты и лимиты',openAccounts],['Резервная копия',openSettings],['Telegram',openTelegramSettings]] : [['Аккаунты и лимиты',openAccounts]];
+    const entries=state.owner ? [['Устройства',openDevices],['Настройки сотрудника',openCurrentAgent],['Аккаунты и лимиты',openAccounts],['Модель и скорость',()=>openModelSettings()],['Резервная копия',openSettings],['Telegram',openTelegramSettings]] : [['Аккаунты и лимиты',openAccounts]];
   for(const [label,fn] of entries) { const button=element('button',label,'secondary'); button.style.cssText='display:block;width:100%;text-align:left;margin:6px 0'; button.onclick=()=>void fn(); page.content.append(button); }
   if(state.hostingOrigin) {
     const link=element('a','Серверы: создание и продление','secondary');
@@ -148,6 +148,8 @@ async function openDevices() {
 async function openCurrentAgent() {
   const agent=state.selected||'main', profile=state.profiles.find(p=>p.id===agent), name=profile?.name||'OpenStrudel';
   const page=modalPage(name,'Настройки изменят новые поручения. Уже начатая работа продолжится с прежним аккаунтом.');
+  action(page,'Модель и скорость',()=>openModelSettings(agent));
+  action(page,'Управление компьютером',openComputerSettings);
   if(profile && state.appearanceVersion===1) {
     const editor=appearanceEditor(agentAppearance(profile)); page.content.append(editor.root);
     action(page,'Сохранить образ',async()=>{
@@ -348,4 +350,75 @@ async function openDeviceSignOut() {
   if($('draft').value.trim()) page.content.append(element('p','Черновик останется в этом браузере для повторного подключения к этой команде.'));
   const leave=action(page,'Выйти',async()=>{ saveDraft(); await api('/auth/logout',{method:'POST'}); clearInterval(state.refreshTimer); location.reload(); });
   if(state.owner && state.archiveVersion===1) action(page,'Сначала сохранить копию…',openSettings);
+}
+
+async function openModelSettings(agent, deviceId) {
+  const page=modalPage('Модель и скорость',agent?'Для этого сотрудника. Начатая работа продолжится с прежними настройками.':'По умолчанию для сотрудников устройства. Можно выбрать другую модель в настройках сотрудника.');
+  const status=element('p','Получаем доступные модели…');status.setAttribute('role','status');page.content.append(status);
+  try {
+    const control=await api('/v1/home');
+    if(!agent) {
+      const label=element('label','Устройство'), device=element('select','','field');label.append(device);
+      for(const item of control.devices) { const o=element('option',item.name+(item.online?'':' · нет связи'));o.value=item.id;device.append(o); }
+      deviceId ||= control.home.nodeId; device.value=deviceId;
+      device.onchange=()=>void openModelSettings(undefined,device.value);page.content.prepend(label);
+    }
+    const query=new URLSearchParams();if(agent)query.set('agentId',agent);if(deviceId)query.set('deviceId',deviceId);
+    const path='/v1/settings/models?'+query;
+    const data=await api(path);status.textContent='';
+    const modelLabel=element('label','Модель'), model=element('select','','field');model.id='model-choice';model.setAttribute('aria-label','Модель');modelLabel.append(model);page.content.append(modelLabel);
+    if(agent) { const o=element('option','Как на устройстве · '+(data.models.find(m=>m.id===data.defaults.model)?.name||data.defaults.model));o.value='';model.append(o); }
+    else if(data.recommended) { const o=element('option','Автоматически · '+data.recommended.name);o.value='';model.append(o); }
+    for(const m of data.models) { const o=element('option',m.name);o.value=m.id;model.append(o); }
+    if(data.selection.model&&!data.models.some(m=>m.id===data.selection.model)) {const o=element('option',data.selection.model+' · недоступна');o.value=data.selection.model;model.append(o);}
+    model.value=data.selection.model||'';
+    const speedLabel=element('label','Скорость'), speed=element('select','','field');speed.id='model-speed';speed.setAttribute('aria-label','Скорость');speedLabel.append(speed);page.content.append(speedLabel);
+    const recommendation=element('p'),note=element('p');page.content.append(recommendation,note);
+    let pending=false;
+    const value=()=>({model:model.value||null,serviceTier:!model.value&&agent?null:speed.value});
+    const chosenModel=()=>!model.value&&!agent?data.recommended:(data.models.find(m=>m.id===(model.value||data.defaults.model))||(data.recommended?.id===(model.value||data.defaults.model)?data.recommended:null));
+    const save=element('button','Применить','primary');page.actions.prepend(save);
+    save.onclick=async()=>{
+      pending=true;save.disabled=true;page.error.textContent='';model.disabled=speed.disabled=true;status.textContent='Сохраняем…';
+      try {const result=await api(path,{method:'POST',body:JSON.stringify(value())});data.selection=result.selection;status.textContent='Сохранено. Применится со следующего поручения.';}
+      catch(e){status.textContent='Не удалось сохранить.';page.report(e);}
+      finally {pending=false;model.disabled=!data.canManage;update();}
+    };
+    function update(){
+      speed.disabled=(!model.value&&Boolean(agent))||!data.canManage||pending;
+      recommendation.textContent=!model.value&&!agent&&data.recommended?(data.recommended.isDefault?'Рекомендует OpenAI':'Модель по умолчанию')+' · '+(data.recommended.defaultReasoningEffort||'medium').replace(/^./,c=>c.toUpperCase()):'';
+      note.textContent=speed.value&&speed.value!=='default'?'Ускоренный режим может расходовать больше лимита аккаунта.':'';
+      const chosen=chosenModel();
+      save.disabled=!data.canManage||pending||JSON.stringify(value())===JSON.stringify(data.selection)||!chosen||(!model.value&&agent?false:!chosen.speeds.some(s=>s.id===speed.value));
+    }
+    function speeds(preferred,preserve=false){
+      const chosen=chosenModel();speed.replaceChildren();
+      for(const s of chosen?.speeds||[]){const o=element('option',s.name);o.value=s.id;speed.append(o);}
+      if(preserve&&preferred&&!(chosen?.speeds||[]).some(s=>s.id===preferred)){const o=element('option',preferred+' · недоступна');o.value=preferred;speed.append(o);}
+      speed.value=preserve&&preferred?preferred:(chosen?.speeds||[]).some(s=>s.id===preferred)?preferred:'default';update();
+    }
+    speeds(data.selection.serviceTier||data.defaults.serviceTier,true);model.disabled=!data.canManage;
+    model.onchange=()=>{status.textContent='';speeds(!model.value&&agent?data.defaults.serviceTier:speed.value);};speed.onchange=()=>{status.textContent='';update();};
+  }catch(e){status.textContent='';page.report(e);action(page,'Повторить',()=>openModelSettings(agent,deviceId));}
+}
+
+async function openComputerSettings() {
+  const page=modalPage('Управление компьютером','Сотрудник работает с окнами приложений на своём Mac через официальный Computer Use в Codex.');
+  const loading=element('p','Проверяем Computer Use…');page.content.append(loading);
+  const path='/v1/extensions/computer?conversationId='+encodeURIComponent(state.conversationID||'');
+  try {
+    const data=await api(path);loading.textContent='';
+    if(data.configured) {
+      page.content.append(element('p','Подключено через Codex. Доступ к нужным приложениям разрешается отдельно при первом поручении.'));
+      if(state.owner)action(page,'Отключить',async()=>{await api(path,{method:'DELETE'});await openComputerSettings();});
+    } else if(data.platform!=='darwin') {
+      page.content.append(element('p','Окнами приложений можно управлять у сотрудника на Mac. На этом устройстве доступны команды, файлы и подключённые сервисы.'));
+    } else if(data.available) {
+      if(state.owner)action(page,'Подключить Computer Use',async()=>{await api(path,{method:'POST',body:JSON.stringify({conversationId:state.conversationID})});await openComputerSettings();},true);
+    } else {
+      page.content.append(element('p','На Mac сотрудника откройте ChatGPT и включите плагин Computer Use. Затем вернитесь сюда.'));
+      const link=element('a','Как включить Computer Use');link.href='https://learn.chatgpt.com/docs/computer-use';link.target='_blank';link.rel='noreferrer';page.content.append(link);
+      action(page,'Проверить снова',openComputerSettings);
+    }
+  }catch(e){loading.textContent='';page.report(e);action(page,'Повторить',openComputerSettings);}
 }

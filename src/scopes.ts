@@ -1,3 +1,4 @@
+import { computerUseReadPaths } from "./computer-use.js";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -46,6 +47,8 @@ export class ScopedCodexEngine implements CodexEngine {
     const settings = `${authStorage}default_permissions = "openstrudel"\n[features]\napps = true\n[permissions.openstrudel.filesystem]\n":minimal" = "read"\n${JSON.stringify(cwd)} = "write"\n${JSON.stringify(resolve(home,"plugins/cache"))} = "read"\n${JSON.stringify(resolve(home,"skills/.system"))} = "read"\n${helpers}[permissions.openstrudel.network]\nenabled = true\n[apps._default]\nenabled = false\n`;
     const base = parse(settings + granted.map(id=>`\n[apps.${id}]\nenabled = true\n`).join(""));
     const legacy = readToml(connections);
+    const computer = computerUseReadPaths(extensions.mcp_servers?.cua_repl);
+    for (const path of computer) (base as any).permissions.openstrudel.filesystem[path] = "read";
     atomicText(resolve(home,"openstrudel-extensions.toml"),stringify(extensions));
     // Local plugins are explicit per audience. Never auto-import the owner's
     // account-wide remote plugin collection into a Telegram group.

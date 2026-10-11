@@ -1,3 +1,4 @@
+import { readModelSelection } from "./model-settings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
@@ -50,7 +51,7 @@ export class AgentArchives {
     const profiles: Profile[] = store.listProfiles().filter(p => profileId ? p.id === profileId : visible(p.id)).map(({ preview: _, ...p }) => ({ ...p, context: store.getSetting("employee.context." + p.id) ?? p.domain ?? "personal" }));
     // The main assistant becomes an ordinary added employee on import. Never
     // overwrite the receiving Home's main personality or primary conversation.
-    if (profileId === "main" || !profileId && visible("main")) profiles.unshift({ appearance: defaultAppearance("main"), id: "main", name: "OpenStrudel", instructions: store.getSetting("main.soul") ?? "", capabilities: [], model: null, tokenLimit: null, domain: "personal", purpose: "", createdAt: new Date().toISOString(), context: "personal" });
+    if (profileId === "main" || !profileId && visible("main")) profiles.unshift({ appearance: defaultAppearance("main"), id: "main", name: "OpenStrudel", instructions: store.getSetting("main.soul") ?? "", capabilities: [], ...readModelSelection(store,"main"), tokenLimit: null, domain: "personal", purpose: "", createdAt: new Date().toISOString(), context: "personal" });
     if (!profiles.length) throw new Error("На устройстве нет агентов для экспорта.");
     const chats: Conversation[] = conversations.map(c => ({ id: c.id, profileId: c.profileId ?? "main", context: this.messages.contextFor(c.id), title: c.title ?? "Чат", createdAt: c.createdAt, updatedAt: c.updatedAt, sourceChannel: c.channel,
       primary: c.channel === "api" && c.externalId === (c.profileId ? "home::employee::" + c.profileId : "home") }));
@@ -159,8 +160,8 @@ export class AgentArchives {
         this.store.setSetting("archive.source." + contexts.get(w.id)!, w.sourcePath);
       }
       for (const [index, p] of archive.profiles.entries()) {
-        db.prepare("INSERT INTO employee_profiles(id,name,instructions,capabilities_json,model,token_limit,created_at,domain,purpose,appearance_json) VALUES(?,?,?,?,?,?,?,?,?,?)")
-          .run(profiles.get(p.id)!, preview.employees[index]!.importedName, p.instructions, JSON.stringify(p.capabilities), p.model, p.tokenLimit, p.createdAt, p.domain ?? "personal", p.purpose ?? "", JSON.stringify(p.appearance ?? defaultAppearance(p.id)));
+        db.prepare("INSERT INTO employee_profiles(id,name,instructions,capabilities_json,model,token_limit,created_at,domain,purpose,appearance_json,service_tier) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
+          .run(profiles.get(p.id)!, preview.employees[index]!.importedName, p.instructions, JSON.stringify(p.capabilities), p.model, p.tokenLimit, p.createdAt, p.domain ?? "personal", p.purpose ?? "", JSON.stringify(p.appearance ?? defaultAppearance(p.id)),p.serviceTier ?? null);
         this.store.setSetting("employee.context." + profiles.get(p.id)!, contexts.get(p.context)!);
       }
       for (const c of archive.conversations) {
@@ -258,7 +259,7 @@ export function validateArchive(input: unknown): AgentArchive {
   const profiles: Profile[] = array(a.profiles, 1000).map(v => {
     const p = object(v), name = string(p.name, 80);
     if (!name.trim() || name !== name.trim()) fail();
-    return { appearance: p.appearance === undefined ? defaultAppearance(identifier(p.id)) : parseAppearance(p.appearance), id: identifier(p.id), context: identifier(p.context), name, instructions: string(p.instructions, 12000), capabilities: array(p.capabilities, 100).map(c => string(c, 200)), model: optional(p.model, 200), tokenLimit: p.tokenLimit === null ? null : number(p.tokenLimit), createdAt: date(p.createdAt), domain: choice(p.domain ?? "personal", ["personal", "work"]) as "personal" | "work", purpose: string(p.purpose ?? "", 240) };
+    return { appearance: p.appearance === undefined ? defaultAppearance(identifier(p.id)) : parseAppearance(p.appearance), id: identifier(p.id), context: identifier(p.context), name, instructions: string(p.instructions, 12000), capabilities: array(p.capabilities, 100).map(c => string(c, 200)), model: optional(p.model, 200), serviceTier: p.serviceTier == null ? null : optional(p.serviceTier,80), tokenLimit: p.tokenLimit === null ? null : number(p.tokenLimit), createdAt: date(p.createdAt), domain: choice(p.domain ?? "personal", ["personal", "work"]) as "personal" | "work", purpose: string(p.purpose ?? "", 240) };
   });
   if (!profiles.length) fail();
   const people = unique(profiles);

@@ -69,6 +69,8 @@ export class Store {
     if (!profileColumns.has("purpose")) this.db.exec("ALTER TABLE employee_profiles ADD COLUMN purpose TEXT NOT NULL DEFAULT ''");
     if (!profileColumns.has("appearance_json")) this.db.exec("ALTER TABLE employee_profiles ADD COLUMN appearance_json TEXT");
 
+    if (!profileColumns.has("service_tier")) this.db.exec("ALTER TABLE employee_profiles ADD COLUMN service_tier TEXT");
+
     const oldMessages = this.db.prepare("PRAGMA table_info(messages)").all() as Row[];
     const oldNames = new Set(oldMessages.map((column) => String(column.name)));
     const needsMessageMigration = oldNames.has("task_id");
@@ -423,7 +425,7 @@ export class Store {
     } };
   }
 
-  createProfile(input: { name?: string; instructions?: string; capabilities?: string[]; model?: string; tokenLimit?: number; domain?: EmployeeProfile["domain"]; purpose?: string; appearance?: AgentAppearance }): EmployeeProfile {
+  createProfile(input: { name?: string; instructions?: string; capabilities?: string[]; model?: string; serviceTier?: string; tokenLimit?: number; domain?: EmployeeProfile["domain"]; purpose?: string; appearance?: AgentAppearance }): EmployeeProfile {
     let name = input.name?.trim() || "Новый сотрудник";
     if (!input.name?.trim()) { let n = 2; while (this.getProfile(name)) name = `Новый сотрудник ${n++}`; }
     if (name.length > 80 || (input.instructions?.length ?? 0) > 12000) throw new Error("Слишком длинное имя или характер");
@@ -436,13 +438,14 @@ export class Store {
       instructions: input.instructions?.trim() ?? "",
       capabilities: input.capabilities ?? [],
       model: input.model ?? null,
+      serviceTier: input.serviceTier ?? null,
       tokenLimit: input.tokenLimit ?? null,
       createdAt: nowIso(),
       domain: input.domain ?? "personal",
       purpose: input.purpose?.trim() ?? "",
     };
     profile.appearance = input.appearance === undefined ? defaultAppearance(profile.id) : parseAppearance(input.appearance);
-    this.db.prepare("INSERT INTO employee_profiles (id, name, instructions, capabilities_json, model, token_limit, created_at, domain, purpose, appearance_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    this.db.prepare("INSERT INTO employee_profiles (id, name, instructions, capabilities_json, model, token_limit, created_at, domain, purpose, appearance_json, service_tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
       profile.id,
       profile.name,
       profile.instructions,
@@ -453,6 +456,7 @@ export class Store {
       profile.domain!,
       profile.purpose!,
       JSON.stringify(profile.appearance),
+      profile.serviceTier ?? null,
     );
     // Existing agents keep their explicitly shared legacy workspace. New agents
     // start with separate files and sandbox permissions from the first turn.
@@ -540,6 +544,7 @@ export class Store {
       instructions: String(row.instructions),
       capabilities: jsonArray(row.capabilities_json as string | null),
       model: row.model == null ? null : String(row.model),
+      serviceTier: row.service_tier == null ? null : String(row.service_tier),
       tokenLimit: row.token_limit == null ? null : Number(row.token_limit),
       createdAt: String(row.created_at),
       preview: row.preview == null ? null : String(row.preview),
