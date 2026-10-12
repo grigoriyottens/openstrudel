@@ -7,8 +7,8 @@ enum DigitalOceanBootstrap {
         case invalidIdentity, missingInstaller
         var errorDescription: String? {
             switch self {
-            case .invalidIdentity: return "Не удалось подготовить защищённое подключение. Начните установку заново."
-            case .missingInstaller: return "В этой версии нет файла облачной установки. Обновите OpenStrudel."
+            case .invalidIdentity: return L("Не удалось подготовить защищённое подключение. Начните установку заново.")
+            case .missingInstaller: return L("В этой версии нет файла облачной установки. Обновите OpenStrudel.")
             }
         }
     }

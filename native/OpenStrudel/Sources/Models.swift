@@ -115,15 +115,15 @@ struct ChatSchedule: Codable, Identifiable {
     var timing: String {
         let fields = cron.split(separator: " ")
         if fields.count == 5, let minute = Int(fields[0]), let hour = Int(fields[1]), fields[2...] == ["*", "*", "*"] {
-            return String(format: "Ежедневно в %02d:%02d", hour, minute) + " · " + timeZoneLabel
+            return String(format: L("Ежедневно в %02d:%02d"), hour, minute) + " · " + timeZoneLabel
         }
         if fields.count == 5, let minute = Int(fields[0]), let hour = Int(fields[1]), fields[2] == "*", fields[3] == "*", let day = Int(fields[4]), (0...7).contains(day) {
-            let names = ["По воскресеньям", "По понедельникам", "По вторникам", "По средам", "По четвергам", "По пятницам", "По субботам", "По воскресеньям"]
-            return names[day] + String(format: " в %02d:%02d", hour, minute) + " · " + timeZoneLabel
+            let names = [L("По воскресеньям"), L("По понедельникам"), L("По вторникам"), L("По средам"), L("По четвергам"), L("По пятницам"), L("По субботам"), L("По воскресеньям")]
+            return names[day] + String(format: L(" в %02d:%02d"), hour, minute) + " · " + timeZoneLabel
         }
-        return "Следующий выпуск · " + ((try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(nextRunAt))?.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(Locale(identifier: "ru_RU"))) ?? "по расписанию")
+        return L("Следующий выпуск · ") + ((try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(nextRunAt))?.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)) ?? L("по расписанию"))
     }
-    private var timeZoneLabel: String { timezone == "Europe/Moscow" ? "Москва" : timezone == "UTC" ? "UTC" : TimeZone(identifier: timezone)?.localizedName(for: .standard, locale: Locale(identifier: "ru_RU")) ?? timezone }
+    private var timeZoneLabel: String { timezone == "Europe/Moscow" ? L("Москва") : timezone == "UTC" ? "UTC" : TimeZone(identifier: timezone)?.localizedName(for: .standard, locale: L10n.locale) ?? timezone }
 }
 struct ScheduleRun: Decodable, Identifiable {
     let id: String
@@ -171,7 +171,7 @@ struct HomeMessage: Codable, Identifiable, Hashable {
     var scheduleTitle: String? {
         guard direction == "inbound", externalId?.hasPrefix("schedule:") == true else { return nil }
         let firstLine = text.components(separatedBy: "\n").first ?? ""
-        return firstLine.hasPrefix("Scheduled request: ") ? String(firstLine.dropFirst("Scheduled request: ".count)) : "По расписанию"
+        return firstLine.hasPrefix("Scheduled request: ") ? String(firstLine.dropFirst("Scheduled request: ".count)) : L("По расписанию")
     }
 
     /// Some imported history knows only the day, so it has no honest time.
@@ -205,14 +205,14 @@ struct AttachmentEnvelope: Decodable { let attachment: ChatAttachment }
 
 /// Chat dates follow the Russian interface, whatever the system region.
 enum ChatClock {
-    private static let locale = Locale(identifier: "ru_RU")
+    private static var locale: Locale { L10n.locale }
 
     static func time(_ date: Date) -> String { date.formatted(.dateTime.hour().minute().locale(locale)) }
 
     static func day(_ date: Date) -> String {
         let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return "Сегодня" }
-        if calendar.isDateInYesterday(date) { return "Вчера" }
+        if calendar.isDateInToday(date) { return L("Сегодня") }
+        if calendar.isDateInYesterday(date) { return L("Вчера") }
         let style = Date.FormatStyle.dateTime.day().month(.wide).locale(locale)
         return date.formatted(calendar.isDate(date, equalTo: .now, toGranularity: .year) ? style : style.year())
     }
@@ -235,7 +235,7 @@ struct PendingHomeMessage: Codable, Identifiable, Equatable {
 
 enum ComposerSendMode: String, Codable, CaseIterable {
     case steer, queue
-    var title: String { self == .steer ? "Уточнить сейчас" : "После ответа" }
+    var title: String { self == .steer ? L("Уточнить сейчас") : L("После ответа") }
 }
 
 enum PendingMessagesFile {
@@ -246,7 +246,7 @@ enum PendingMessagesFile {
     static func save(_ messages: [PendingHomeMessage], directory: URL, home: String) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let data = try JSONEncoder().encode(messages)
-        guard data.count <= 128 * 1024 * 1024 else { throw HomeClientError.server("Слишком много неотправленных файлов. Дождитесь их доставки.") }
+        guard data.count <= 128 * 1024 * 1024 else { throw HomeClientError.server(L("Слишком много неотправленных файлов. Дождитесь их доставки.")) }
         let file = url(directory: directory, home: home)
         try data.write(to: file, options: [.atomic, .completeFileProtectionUnlessOpen])
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
@@ -325,14 +325,17 @@ struct ManagedCodexAccount: Decodable, Identifiable {
             let name: String; let remainingPercent: Double?; let windowDurationMins: Int?; let resetsAt: Double?
             var id: String { name }
             var displayName: String {
-                switch windowDurationMins { case 300: return "5 часов"; case 10080: return "Неделя"; case 1440: return "Сутки"; default: return name }
+                switch windowDurationMins { case 300: return L("5 часов"); case 10080: return L("Неделя"); case 1440: return L("Сутки"); default: return name }
             }
         }
         struct Credits: Decodable { let hasCredits: Bool; let unlimited: Bool; let balance: String? }
+        struct ResetCredits: Decodable { let availableCount: Int; let nextExpiresAt: Double? }
         var credits: Credits? = nil
+        var resetCredits: ResetCredits? = nil
         let checkedAt: String; let ordinaryUsageAllowed: Bool?; let windows: [Window]; let unavailable: Bool?
     }
     let id: String; let name: String; let account: OpenAIAccount; let usage: Usage; let activeRuns: Int; let loginPending: Bool
+    var identityLabel: String { [account.email ?? name, account.planLabel].joined(separator: " · ") }
 }
 struct ManagedCodexAccounts: Decodable { let accounts: [ManagedCodexAccount]; let canManage: Bool }
 struct HomeActionResult: Decodable { let ok: Bool?; let status: String?; let operationId: String? }
@@ -349,16 +352,16 @@ struct HomeTransferOperation: Decodable, Identifiable {
     var isFinished: Bool { ["completed", "active", "canceled"].contains(phase) }
     var phaseDescription: String {
         switch phase {
-        case "waiting": return "Ждём завершения принятых поручений"
-        case "preparing": return "Готовим копию"
-        case "staging": return "Проверяем копию на новом устройстве"
-        case "releasing", "transferred": return "Передаём управление"
-        case "activating": return "Включаем на новом устройстве"
-        case "canceling": return "Отменяем подготовку"
-        case "completed", "active": return "Перенос завершён"
-        case "canceled": return "Подготовка отменена"
-        case "attention", "activation_failed": return "Нужна проверка устройств"
-        default: return "Проверяем состояние переноса"
+        case "waiting": return L("Ждём завершения принятых поручений")
+        case "preparing": return L("Готовим копию")
+        case "staging": return L("Проверяем копию на новом устройстве")
+        case "releasing", "transferred": return L("Передаём управление")
+        case "activating": return L("Включаем на новом устройстве")
+        case "canceling": return L("Отменяем подготовку")
+        case "completed", "active": return L("Перенос завершён")
+        case "canceled": return L("Подготовка отменена")
+        case "attention", "activation_failed": return L("Нужна проверка устройств")
+        default: return L("Проверяем состояние переноса")
         }
     }
 }
@@ -379,11 +382,25 @@ struct OpenAIAccount: Decodable, Equatable {
         switch planType?.lowercased() {
         case "plus": return "ChatGPT Plus"
         case "pro": return "ChatGPT Pro"
-        case "team", "business": return "ChatGPT Business"
-        case "enterprise": return "ChatGPT Enterprise"
+        case "prolite": return "ChatGPT Pro Lite"
+        case "go": return "ChatGPT Go"
+        case "team", "business", "self_serve_business_prolite", "self_serve_business_usage_based": return "ChatGPT Business"
+        case "enterprise", "ent26", "enterprise_cbp_automation", "enterprise_cbp_usage_based": return "ChatGPT Enterprise"
+        case "edu", "edu_plus", "edu_pro": return "ChatGPT Edu"
         case "free": return "ChatGPT Free"
-        default: return "OpenAI подключён"
+        default: return "ChatGPT"
         }
+    }
+    var isWorkspace: Bool? {
+        switch planType?.lowercased() {
+        case "free", "go", "plus", "pro", "prolite": false
+        case "team", "business", "self_serve_business_prolite", "self_serve_business_usage_based",
+             "enterprise", "ent26", "enterprise_cbp_automation", "enterprise_cbp_usage_based", "edu", "edu_plus", "edu_pro": true
+        default: nil
+        }
+    }
+    var categoryLabel: String? {
+        isWorkspace.map { $0 ? L("Workspace account") : L("Personal account") }
     }
     var needsSignInAgain: Bool { issue == "sign_in_required" }
     var isUnavailable: Bool { issue == "unavailable" }
@@ -439,9 +456,9 @@ struct OpenAILoginStatus: Decodable, Equatable {
 struct ServiceConnection: Decodable, Identifiable {
     var isAvailableToAdd: Bool { kind == "app" && !connected && (status == "available" || status == "sign_in") }
     var actionTitle: String {
-        if status == "available" { return "Добавить" }
-        if status == "unknown" || status == "unavailable" { return "Проверить" }
-        return "Подключить"
+        if status == "available" { return L("Добавить") }
+        if status == "unknown" || status == "unavailable" { return L("Проверить") }
+        return L("Подключить")
     }
     var icon: String {
         switch id {

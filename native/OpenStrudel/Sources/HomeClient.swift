@@ -54,7 +54,7 @@ private enum KeychainStore {
             status = SecItemAdd(item as CFDictionary, nil)
         }
         guard status == errSecSuccess else {
-            throw HomeClientError.server("Не удалось сохранить подключение в Связке ключей. Разблокируйте устройство и повторите подключение.")
+            throw HomeClientError.server(L("Не удалось сохранить подключение в Связке ключей. Разблокируйте устройство и повторите подключение."))
         }
     }
 
@@ -206,7 +206,7 @@ final class HomeClient: ObservableObject, Identifiable {
         if let url = URL(string: baseURLString), url.scheme == "https", session === URLSession.shared {
             if let host = url.host, let pin = readCredential(account: "home-certificate-pin"), token != nil {
                 session = PinnedHomeSession(host: host, port: url.port ?? 443, pin: pin).session()
-                connectionName = defaults.string(forKey: "openstrudel.connectionName") ?? "ваш Mac или сервер"
+                connectionName = defaults.string(forKey: "openstrudel.connectionName") ?? L("ваш Mac или сервер")
             } else {
                 // A URL alone is not a connection. Re-pair if its Keychain
                 // credentials are unavailable instead of using unpinned HTTPS.
@@ -225,10 +225,10 @@ final class HomeClient: ObservableObject, Identifiable {
         do {
             self.pendingMessages = try PendingMessagesFile.read(directory: self.pendingDirectory, home: baseURLString).map { value in
                 var pending = value
-                if pending.deliveryState == nil { pending.error = "Сообщение сохранено на этом устройстве. Проверьте доставку и отправьте ещё раз." }
+                if pending.deliveryState == nil { pending.error = L("Сообщение сохранено на этом устройстве. Проверьте доставку и отправьте ещё раз.") }
                 return pending
             }
-        } catch { self.errorMessage = "Не удалось прочитать неотправленные сообщения. Сохранённый файл остался на устройстве." }
+        } catch { self.errorMessage = L("Не удалось прочитать неотправленные сообщения. Сохранённый файл остался на устройстве.") }
         if shouldRestoreConnection { connectionState = .connecting }
     }
 
@@ -253,15 +253,15 @@ final class HomeClient: ObservableObject, Identifiable {
 
     var openAIRecoveryMessage: String {
         if openAIAccount?.isUnavailable == true {
-            return "Связь с вашим Mac или сервером сохранена. Проверим OpenAI снова автоматически. Чаты и черновики остаются на месте."
+            return L("Связь с вашим Mac или сервером сохранена. Проверим OpenAI снова автоматически. Чаты и черновики остаются на месте.")
         }
         if openAILoginPending && openAILogin == nil {
-            return "Вход уже открыт на другом устройстве. Завершите его на странице OpenAI; подключение обновится здесь автоматически."
+            return L("Вход уже открыт на другом устройстве. Завершите его на странице OpenAI; подключение обновится здесь автоматически.")
         }
         if !canManageOpenAI {
-            return "Войдите в OpenAI на устройстве этого сотрудника. Здесь подключение восстановится автоматически; отдельный вход не нужен."
+            return L("Войдите в OpenAI на устройстве этого сотрудника. Здесь подключение восстановится автоматически; отдельный вход не нужен.")
         }
-        return "Войдите в OpenAI один раз для устройства этого сотрудника. Подключённые устройства продолжат работу автоматически. Чаты и черновики сохранены."
+        return L("Войдите в OpenAI один раз для устройства этого сотрудника. Подключённые устройства продолжат работу автоматически. Чаты и черновики сохранены.")
     }
 
     var isLocalConnection: Bool {
@@ -294,7 +294,7 @@ final class HomeClient: ObservableObject, Identifiable {
     #endif
 
     var displayName: String {
-        if isLocalConnection { return "Этот Mac" }
+        if isLocalConnection { return L("Этот Mac") }
         if connectionName != "OpenStrudel", connectionName != "ваш Mac или сервер" { return connectionName }
         return devices.first(where: { $0.id == health?.nodeId })?.name ?? connectionName
     }
@@ -320,7 +320,7 @@ final class HomeClient: ObservableObject, Identifiable {
     var activeAppearance: AgentAppearance? { isEmployeeDraft ? draftAppearance : activeProfile?.resolvedAppearance }
 
     var activeAgentName: String {
-        isEmployeeDraft ? "Новый сотрудник" : activeProfile?.name ?? "OpenStrudel"
+        isEmployeeDraft ? L("Новый сотрудник") : activeProfile?.name ?? "OpenStrudel"
     }
 
     var telegramGroups: [TelegramChat] { (telegram?.chats ?? []).filter { $0.isGroup && $0.conversationId != nil } }
@@ -330,7 +330,7 @@ final class HomeClient: ObservableObject, Identifiable {
     var isEmployeeDraft: Bool { selectedProfileID?.hasPrefix("draft:") == true }
 
     var activeAgentSubtitle: String {
-        activeProfile?.instructions ?? "Главный собеседник"
+        activeProfile?.instructions ?? L("Главный собеседник")
     }
 
     func preparePairing(_ url: URL) {
@@ -362,7 +362,7 @@ final class HomeClient: ObservableObject, Identifiable {
             let (data, response) = try await pairedSession.data(for: request)
             guard let response = response as? HTTPURLResponse else { throw HomeClientError.invalidResponse }
             if response.statusCode == 401 {
-                throw HomeClientError.server("Приглашение истекло или уже использовано. Создайте новое в настройках OpenStrudel на компьютере.")
+                throw HomeClientError.server(L("Приглашение истекло или уже использовано. Создайте новое в настройках OpenStrudel на компьютере."))
             }
             guard response.statusCode == 200 else { throw HomeClientError.invalidResponse }
             let credential = try decoder.decode([String: String].self, from: data)
@@ -378,7 +378,7 @@ final class HomeClient: ObservableObject, Identifiable {
         } catch {
             pairedSession.invalidateAndCancel()
             if let error = error as? HomeClientError { pairingError = error.localizedDescription }
-            else { pairingError = "Не удалось связаться с этим Mac или сервером. Проверьте его подключение к интернету и попробуйте ещё раз." }
+            else { pairingError = L("Не удалось связаться с этим Mac или сервером. Проверьте его подключение к интернету и попробуйте ещё раз.") }
             return false
         }
     }
@@ -515,7 +515,7 @@ final class HomeClient: ObservableObject, Identifiable {
         guard !isLoading, acceptsOperations else { return }
         let generation = connectionGeneration
         guard isConfigured else {
-            if !quiet { errorMessage = "Подключитесь к своему Mac или серверу через приглашение." }
+            if !quiet { errorMessage = L("Подключитесь к своему Mac или серверу через приглашение.") }
             return
         }
         isLoading = true
@@ -651,7 +651,7 @@ final class HomeClient: ObservableObject, Identifiable {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !isSignedOut, !isSigningOut, !value.isEmpty || !files.isEmpty else { return }
         pendingMessages.append(PendingHomeMessage(text: value, profileID: selectedProfileID, conversationID: selectedChatID, files: files, draftDomain: draftEmployeeDomain, deviceID: draftDeviceID.isEmpty ? nil : draftDeviceID, appearance: isEmployeeDraft ? draftAppearance : nil, mode: mode))
-        do { try savePending() } catch { errorMessage = error.localizedDescription; pendingMessages[pendingMessages.count - 1].error = "Не удалось сохранить отправку на устройстве. Освободите место и повторите."; return }
+        do { try savePending() } catch { errorMessage = error.localizedDescription; pendingMessages[pendingMessages.count - 1].error = L("Не удалось сохранить отправку на устройстве. Освободите место и повторите."); return }
         guard !isDrainingSendQueue else { return }
         isDrainingSendQueue = true
         await drainSendQueue()
@@ -704,7 +704,7 @@ final class HomeClient: ObservableObject, Identifiable {
                 try savePending()
             } catch {
                 if let i = pendingMessages.firstIndex(where: { $0.id == pending.id }) {
-                    pendingMessages[i].error = "Не удалось подтвердить доставку. Повтор проверит это же сообщение."
+                    pendingMessages[i].error = L("Не удалось подтвердить доставку. Повтор проверит это же сообщение.")
                     try? savePending()
                 }
             }
@@ -747,7 +747,7 @@ final class HomeClient: ObservableObject, Identifiable {
     func previewFile(_ file: ChatAttachment) async -> URL? {
         do {
             return try await downloadFile(file)
-        } catch { errorMessage = "Не удалось открыть файл. Проверьте соединение и повторите."; return nil }
+        } catch { errorMessage = L("Не удалось открыть файл. Проверьте соединение и повторите."); return nil }
     }
 
     func downloadFile(_ file: ChatAttachment) async throws -> URL {
@@ -808,7 +808,7 @@ final class HomeClient: ObservableObject, Identifiable {
         } catch {
             guard generation == refreshGeneration, profileID == selectedProfileID else { return }
             if case HomeClientError.authenticationExpired = error { connectionNeedsPairing = true; health = nil }
-            syncError = "Нет связи. Сообщения появятся после подключения."
+            syncError = L("Нет связи. Сообщения появятся после подключения.")
         }
     }
 
@@ -820,12 +820,12 @@ final class HomeClient: ObservableObject, Identifiable {
                 let status: HomeRequestStatus = try await request("/v1/home/requests/" + pending.operationID!)
                 guard generation == connectionGeneration, let index = pendingMessages.firstIndex(where: { $0.id == pending.id }) else { return }
                 if status.status == "canceled" {
-                    pendingMessages[index].error = "Отменено до отправки устройству. Текст сохранён здесь."
+                    pendingMessages[index].error = L("Отменено до отправки устройству. Текст сохранён здесь.")
                     changed = true
                 } else if let response = status.response, response.status >= 400, response.status != 410 {
                     let data = Data(base64Encoded: response.body) ?? Data()
                     let failure = try? decoder.decode(HomeFailure.self, from: data)
-                    pendingMessages[index].error = (failure?.error ?? "Устройство не подтвердило выполнение.") + " Проверьте чат перед новой отправкой."
+                    pendingMessages[index].error = (failure?.error ?? L("Устройство не подтвердило выполнение.")) + L(" Проверьте чат перед новой отправкой.")
                     changed = true
                 }
             } catch { /* Keep the durable receipt while Home is unavailable. */ }
@@ -897,7 +897,7 @@ final class HomeClient: ObservableObject, Identifiable {
             syncError = nil
         } catch {
             guard generation == refreshGeneration else { return }
-            syncError = "Не удалось загрузить ранние сообщения. Попробуйте ещё раз."
+            syncError = L("Не удалось загрузить ранние сообщения. Попробуйте ещё раз.")
         }
     }
 
@@ -942,7 +942,7 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     func extensionContexts() async throws -> [ExtensionContext] {
-        guard let conversationID else { throw HomeClientError.server("Сначала откройте чат сотрудника.") }
+        guard let conversationID else { throw HomeClientError.server(L("Сначала откройте чат сотрудника.")) }
         let value: ExtensionContextsEnvelope = try await request("/v1/extensions/contexts?conversationId=" + conversationID)
         return value.contexts
     }
@@ -1071,7 +1071,7 @@ final class HomeClient: ObservableObject, Identifiable {
             let body = try JSONSerialization.data(withJSONObject: payload)
             let response: ProfileResponse = try await request("/v1/profiles/" + id, method: "PATCH", body: body)
             if let appearance, response.profile.appearance != appearance {
-                throw HomeClientError.server("Обновите OpenStrudel на устройстве этого сотрудника, чтобы сохранить образ.")
+                throw HomeClientError.server(L("Обновите OpenStrudel на устройстве этого сотрудника, чтобы сохранить образ."))
             }
             if let index = profiles.firstIndex(where: { $0.id == id }) {
                 catalogueGeneration += 1; catalogueETag = nil
@@ -1120,7 +1120,7 @@ final class HomeClient: ObservableObject, Identifiable {
         // Older devices ignore `kind` and return a personal pairing link.
         guard let url = link.url, url.scheme == "https", url.host == "t.me",
               URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "startgroup" && $0.value == link.code }) == true else {
-            throw HomeClientError.server("Обновите OpenStrudel на устройстве этого сотрудника, чтобы подключить группу.")
+            throw HomeClientError.server(L("Обновите OpenStrudel на устройстве этого сотрудника, чтобы подключить группу."))
         }
         return link
     }
@@ -1150,7 +1150,7 @@ final class HomeClient: ObservableObject, Identifiable {
             openAILoginStatus = nil
         } catch {
             guard generation == connectionGeneration, !(error is CancellationError) else { return }
-            openAIErrorMessage = "Не удалось открыть вход в OpenAI. Проверьте соединение и попробуйте ещё раз."
+            openAIErrorMessage = L("Не удалось открыть вход в OpenAI. Проверьте соединение и попробуйте ещё раз.")
         }
     }
 
@@ -1166,13 +1166,13 @@ final class HomeClient: ObservableObject, Identifiable {
                 await load()
             } else if status.status == "failed" || status.status == "canceled" {
                 openAIErrorMessage = status.status == "canceled"
-                    ? "Вход отменён или истёк. Откройте вход в OpenAI ещё раз."
-                    : "Вход в OpenAI не завершён. Попробуйте ещё раз."
+                    ? L("Вход отменён или истёк. Откройте вход в OpenAI ещё раз.")
+                    : L("Вход в OpenAI не завершён. Попробуйте ещё раз.")
                 openAILogin = nil
             }
         } catch {
             guard openAILogin?.loginId == login.loginId, !Task.isCancelled else { return }
-            openAIErrorMessage = "Не удалось проверить завершение входа. Проверим снова, когда восстановится связь."
+            openAIErrorMessage = L("Не удалось проверить завершение входа. Проверим снова, когда восстановится связь.")
         }
     }
 
@@ -1186,7 +1186,7 @@ final class HomeClient: ObservableObject, Identifiable {
             let _: OpenAILoginStatus = try await request("/v1/account/login/" + login.loginId + "/cancel", method: "POST")
         } catch {
             guard generation == connectionGeneration, !(error is CancellationError) else { return }
-            openAIErrorMessage = "Не удалось подтвердить отмену. Незавершённый вход истечёт автоматически."
+            openAIErrorMessage = L("Не удалось подтвердить отмену. Незавершённый вход истечёт автоматически.")
         }
     }
 
@@ -1205,13 +1205,13 @@ final class HomeClient: ObservableObject, Identifiable {
     var canTransferAgents: Bool { canManageOpenAI && health?.agentArchiveVersion == 1 }
 
     func exportAgents(deviceID: String? = nil, password: String? = nil, progress: (@MainActor @Sendable (Int64, Int64?) -> Void)? = nil) async throws -> Data {
-        guard canTransferAgents else { throw HomeClientError.server("Обновите OpenStrudel на устройстве с сотрудниками, чтобы сохранить копию.") }
+        guard canTransferAgents else { throw HomeClientError.server(L("Обновите OpenStrudel на устройстве с сотрудниками, чтобы сохранить копию.")) }
         let body = try password.map { try JSONSerialization.data(withJSONObject: ["password": $0]) }
         return try await requestData("/v1/agents/archive" + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: password == nil ? "GET" : "POST", body: body, progress: progress)
     }
 
     func previewAgentImport(_ data: Data, deviceID: String? = nil) async throws -> PendingAgentImport {
-        guard canTransferAgents else { throw HomeClientError.server("Импорт доступен владельцу команды после обновления Home.") }
+        guard canTransferAgents else { throw HomeClientError.server(L("Импорт доступен владельцу команды после обновления Home.")) }
         guard data.count <= AgentTransferFile.byteLimit else { throw AgentTransferFile.Failure.tooLarge }
         let generation = connectionGeneration
         let preview: AgentImportPreview = try await request("/v1/agents/archive/preview" + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: "POST", body: data)
@@ -1220,7 +1220,7 @@ final class HomeClient: ObservableObject, Identifiable {
 
     func importAgents(_ pending: PendingAgentImport) async throws -> AgentImportResult {
         guard canTransferAgents, pending.connectionGeneration == connectionGeneration else {
-            throw HomeClientError.server("Подключение изменилось. Выберите файл заново в нужной команде.")
+            throw HomeClientError.server(L("Подключение изменилось. Выберите файл заново в нужной команде."))
         }
         let result: AgentImportResult = try await request("/v1/agents/archive/import?plan=" + pending.preview.planToken + (pending.deviceID.map { "&deviceId=" + $0 } ?? ""), method: "POST", body: pending.data)
         // A lost response is safe to retry: the Home remembers this archive.
@@ -1252,12 +1252,12 @@ final class HomeClient: ObservableObject, Identifiable {
                 rememberAction(id, pending: false)
                 if reply.status >= 400 {
                     let failure = Data(base64Encoded: reply.body).flatMap { try? decoder.decode(HomeFailure.self, from: $0) }
-                    throw HomeClientError.server(failure?.error ?? "Действие не завершено. Проверьте его результат перед повтором.")
+                    throw HomeClientError.server(failure?.error ?? L("Действие не завершено. Проверьте его результат перед повтором."))
                 }
                 completed += 1
             } else { waiting += 1 }
         }
-        return "Завершено: \(completed). Ожидают устройства: \(waiting)."
+        return L("Завершено: \(completed). Ожидают устройства: \(waiting).")
     }
 
     private func request<T: Decodable>(_ path: String, method: String = "GET", body: Data? = nil) async throws -> T {
@@ -1265,7 +1265,7 @@ final class HomeClient: ObservableObject, Identifiable {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
-            throw HomeClientError.server("Не удалось прочитать ответ OpenStrudel. Проверьте, что приложение обновлено на всех ваших устройствах, и попробуйте ещё раз.")
+            throw HomeClientError.server(L("Не удалось прочитать ответ OpenStrudel. Проверьте, что приложение обновлено на всех ваших устройствах, и попробуйте ещё раз."))
         }
     }
 
@@ -1275,7 +1275,7 @@ final class HomeClient: ObservableObject, Identifiable {
         guard let url = URL(string: normalizedBaseURL + path) else { throw HomeClientError.invalidURL }
         guard (url.scheme == "http" && isLocalConnection)
                 || (url.scheme == "https" && session !== URLSession.shared && hasToken) else {
-            throw HomeClientError.server("Подключите OpenStrudel через приглашение с вашего Mac.")
+            throw HomeClientError.server(L("Подключите OpenStrudel через приглашение с вашего Mac."))
         }
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -1311,11 +1311,11 @@ final class HomeClient: ObservableObject, Identifiable {
                     defer { relocation = nil }
                     try await pending.value
                     if method == "GET" { return try await requestData(path, mayRelocate: false, responseETag: responseETag) }
-                    throw HomeClientError.server("Адрес устройства изменился. Действие не отправлено: повторите его на новом подключении.")
+                    throw HomeClientError.server(L("Адрес устройства изменился. Действие не отправлено: повторите его на новом подключении."))
                 }
                 if let message = envelope.error { throw HomeClientError.server(message) }
             }
-            throw HomeClientError.server("OpenStrudel не смог выполнить действие (код \(http.statusCode)). Попробуйте ещё раз. Если ошибка повторится, обратитесь в поддержку.")
+            throw HomeClientError.server(L("OpenStrudel не смог выполнить действие (код \(http.statusCode)). Попробуйте ещё раз. Если ошибка повторится, обратитесь в поддержку."))
         }
         if http.statusCode == 202, method != "GET", !path.hasPrefix("/v1/messages"),
            let queued = try? decoder.decode(HomeActionResult.self, from: data), let id = queued.operationId {
@@ -1324,17 +1324,17 @@ final class HomeClient: ObservableObject, Identifiable {
                 try await Task.sleep(for: .seconds(1))
                 guard generation == connectionGeneration else { throw CancellationError() }
                 let value: HomeRequestStatus = try await management("/v1/home/requests/" + id)
-                if value.status == "canceled" { rememberAction(id, pending: false); throw HomeClientError.server("Действие отменено до передачи устройству.") }
+                if value.status == "canceled" { rememberAction(id, pending: false); throw HomeClientError.server(L("Действие отменено до передачи устройству.")) }
                 if let reply = value.response, let bytes = Data(base64Encoded: reply.body) {
                     rememberAction(id, pending: false)
                     if reply.status >= 400 {
                         let failure = try? decoder.decode(HomeFailure.self, from: bytes)
-                        throw HomeClientError.server(failure?.error ?? "Действие не завершено. Проверьте результат перед повтором.")
+                        throw HomeClientError.server(failure?.error ?? L("Действие не завершено. Проверьте результат перед повтором."))
                     }
                     return bytes
                 }
             }
-            throw HomeClientError.server("Действие принято, но устройство ещё не подтвердило результат. Откройте «Устройства» → «Проверить сохранённые действия». Повторять действие не нужно.")
+            throw HomeClientError.server(L("Действие принято, но устройство ещё не подтвердило результат. Откройте «Устройства» → «Проверить сохранённые действия». Повторять действие не нужно."))
         }
         responseETag?(http.value(forHTTPHeaderField: "ETag"))
         return data
@@ -1379,7 +1379,7 @@ final class HomeClient: ObservableObject, Identifiable {
               let identity = try? decoder.decode(HomePeerIdentity.self, from: identityData),
               identity.nodeId == moved.primaryId, identity.homeId == moved.homeId,
               identity.protocolVersion == 1, identity.role == "primary", identity.epoch == moved.epoch
-        else { throw HomeClientError.server("Устройство ещё запускается. Подключимся, когда передача завершится.") }
+        else { throw HomeClientError.server(L("Устройство ещё запускается. Подключимся, когда передача завершится.")) }
         guard generation == connectionGeneration, !Task.isCancelled else { throw CancellationError() }
         // Identity and TLS are verified before the credential is sent.
         var check = URLRequest(url: url.appending(path: "health"))

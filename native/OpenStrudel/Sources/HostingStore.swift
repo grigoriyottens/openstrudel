@@ -31,8 +31,8 @@ struct HostingStoreSettings: View {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "server.rack").font(.title2)
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("Серверы").font(.headline)
-                        Text("Создание, доступ и продление. Для команды и других проектов.")
+                        Text(L("Серверы")).font(.headline)
+                        Text(L("Создание, доступ и продление. Для команды и других проектов."))
                             .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0); Image(systemName: "chevron.right")
@@ -52,17 +52,17 @@ struct HostingStoreView: View {
             if let origin = HostingStore.origin {
                 ZStack {
                     HostingBrowser(origin: origin, reload: reload, loading: $loading, error: $error)
-                    if loading { ProgressView("Открываем серверы…").padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18)) }
+                    if loading { ProgressView(L("Открываем серверы…")).padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18)) }
                     if let error {
                         ContentUnavailableView {
-                            Label("Не удалось открыть серверы", systemImage: "network.slash")
-                        } description: { Text(error) } actions: {
-                            Button("Попробовать ещё раз") { self.error = nil; loading = true; reload += 1 }
+                            Label(L("Не удалось открыть серверы"), systemImage: "network.slash")
+                        } description: { Text(L10n.serviceText(error)) } actions: {
+                            Button(L("Попробовать ещё раз")) { self.error = nil; loading = true; reload += 1 }
                         }.background(.background)
                     }
                 }
             } else {
-                ContentUnavailableView("Создание серверов пока недоступно", systemImage: "server.rack", description: Text("Вы можете продолжать работу со своей командой."))
+                ContentUnavailableView(L("Создание серверов пока недоступно"), systemImage: "server.rack", description: Text(L("Вы можете продолжать работу со своей командой.")))
             }
         }.frame(minWidth: 780, minHeight: 650)
     }
@@ -102,7 +102,7 @@ private struct HostingBrowser: NSViewRepresentable {
         private func failed(_ error: Error) {
             guard (error as NSError).code != NSURLErrorCancelled else { return }
             parent.loading = false
-            parent.error = "Проверьте соединение и повторите попытку. Это не прерывает работу агентов."
+            parent.error = L("Проверьте соединение и повторите попытку. Это не прерывает работу агентов.")
         }
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
             guard let url = action.request.url else { decisionHandler(.cancel); return }
@@ -147,7 +147,7 @@ private struct HostingBrowser: NSViewRepresentable {
                 if FileManager.default.fileExists(atPath: item.destination.path) {
                     _ = try FileManager.default.replaceItemAt(item.destination, withItemAt: item.temporary, options: .usingNewMetadataOnly)
                 } else { try FileManager.default.moveItem(at: item.temporary, to: item.destination) }
-            } catch { parent.error = "Не удалось сохранить файл. Выберите личную папку и повторите скачивание." }
+            } catch { parent.error = L("Не удалось сохранить файл. Выберите личную папку и повторите скачивание.") }
         }
         func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
             if let item = downloads.removeValue(forKey: ObjectIdentifier(download)) { try? FileManager.default.removeItem(at: item.temporary.deletingLastPathComponent()) }

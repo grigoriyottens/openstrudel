@@ -148,7 +148,7 @@ final class AccountRecoveryUITests: XCTestCase {
     }
 
     func finishDevicePairing() {
-        let open = buttons.matching(NSPredicate(format: "label == %@", "Открыть сотрудников")).firstMatch
+        let open = buttons["openDeviceEmployees"]
         XCTAssertTrue(open.waitForExistence(timeout: 25))
         open.tap()
     }

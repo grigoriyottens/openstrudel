@@ -141,6 +141,8 @@ export class HttpApi {
     }
     if (request.method === "GET" && path === "/favicon.ico") { response.writeHead(204).end(); return; }
     if (request.method === "GET" && path === "/home-settings.js") { await this.asset(response, "home-settings.js", "text/javascript; charset=utf-8"); return; }
+    if (request.method === "GET" && path === "/localization.js") { await this.asset(response, "localization.js", "text/javascript; charset=utf-8"); return; }
+    if (request.method === "GET" && path === "/localizations.json") { await this.asset(response, "localizations.json", "application/json; charset=utf-8"); return; }
     if (request.method === "GET" && ["/strudel-cream.png", "/strudel-graphite.png"].includes(path)) { await this.asset(response, path.slice(1), "image/png"); return; }
     if (request.method === "GET" && path === "/agent-characters.js") { await this.asset(response, "agent-characters.js", "text/javascript; charset=utf-8"); return; }
     if (request.method === "GET" && /^\/characters\/(coil|fold|knot|curl|wave|pillow)\.png$/.test(path)) { await this.asset(response, path.slice(1), "image/png"); return; }

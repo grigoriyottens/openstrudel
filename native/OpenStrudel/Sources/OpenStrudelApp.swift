@@ -17,27 +17,28 @@ struct OpenStrudelApp: App {
         .defaultSize(width: 1120, height: 760)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Новый сотрудник") { library.beginEmployee() }
+                Button(L("Новый сотрудник")) { library.beginEmployee() }
                     .keyboardShortcut("n", modifiers: .command)
                     .disabled(client.isCreating || library.isErasing)
             }
             CommandGroup(after: .appInfo) {
-                Button("Аккаунты и остатки") {
+                Button(L("Аккаунты и остатки")) {
                     Task { @MainActor in
                         await Task.yield()
                         HomeStatusItem.shared.showAccounts()
                     }
                 }
                     .keyboardShortcut("u", modifiers: [.command, .shift])
-                Button("Проверить обновления…", action: updater.checkForUpdates)
+                Button(L("Проверить обновления…"), action: updater.checkForUpdates)
                     .disabled(!updater.canCheckForUpdates)
             }
         }
-        Window("Серверы", id: "servers") {
+        Window(L("Серверы"), id: "servers") {
             Group {
                 if library.isErasing { LocalDataResetProgress().environmentObject(library) }
                 else { HostingStoreView() }
             }.tint(AppTheme.accent)
+            .modifier(InterfaceLanguage())
         }.defaultSize(width: 1000, height: 760)
         Settings {
             Group {
@@ -47,6 +48,7 @@ struct OpenStrudelApp: App {
                 .environmentObject(client)
                 .environmentObject(library)
                 .tint(AppTheme.accent)
+            .modifier(InterfaceLanguage())
         }.windowResizability(.contentSize)
         #else
         mainWindow
@@ -74,6 +76,7 @@ struct OpenStrudelApp: App {
         }
             .id(client.id + "-" + String(library.viewGeneration))
             .tint(AppTheme.accent)
+            .modifier(InterfaceLanguage())
             #if os(macOS)
             .modifier(AppIconAppearance())
             .modifier(HomeStatusItemAppearance())

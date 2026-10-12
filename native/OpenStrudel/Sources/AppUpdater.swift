@@ -18,7 +18,7 @@ final class AppUpdater: ObservableObject {
         let feed = (Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String).flatMap(URL.init(string:))
         guard let key, Data(base64Encoded: key)?.count == 32,
               let feed, feed.scheme == "https", feed.host != nil, feed.user == nil, feed.password == nil else {
-            startupFailure = "В этой сборке не настроена проверка подписи обновлений."
+            startupFailure = L("В этой сборке не настроена проверка подписи обновлений.")
             return
         }
         observation = controller.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
@@ -29,7 +29,7 @@ final class AppUpdater: ObservableObject {
             controller.updater.automaticallyChecksForUpdates = false
         }
         do { try controller.updater.start() }
-        catch { startupFailure = "Не удалось запустить проверку обновлений: " + error.localizedDescription }
+        catch { startupFailure = L("Couldn’t check for updates: \(error.localizedDescription)") }
     }
 
     var automaticChecksEnabled: Bool {
@@ -52,18 +52,18 @@ struct UpdateSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Версия \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
+            Text(L("Версия \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))"))
                 .font(.callout).foregroundStyle(AppTheme.secondaryText)
-            Toggle("Проверять обновления автоматически", isOn: Binding(
+            Toggle(L("Проверять обновления автоматически"), isOn: Binding(
                 get: { updater.automaticChecksEnabled }, set: { updater.automaticChecksEnabled = $0 }
             ))
-            Text("Сообщим о новой версии. Установка начнётся только после вашего подтверждения.")
+            Text(L("Сообщим о новой версии. Установка начнётся только после вашего подтверждения."))
                 .font(.caption).foregroundStyle(AppTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
             if let failure = updater.startupFailure {
-                Text(failure).font(.callout).foregroundStyle(AppTheme.warning)
+                Text(L10n.serviceText(failure)).font(.callout).foregroundStyle(AppTheme.warning)
             }
-            Button("Проверить обновления…", action: updater.checkForUpdates)
+            Button(L("Проверить обновления…"), action: updater.checkForUpdates)
                 .buttonStyle(.bordered).disabled(!updater.canCheckForUpdates)
                 .accessibilityIdentifier("checkForUpdates")
         }.settingsCard()

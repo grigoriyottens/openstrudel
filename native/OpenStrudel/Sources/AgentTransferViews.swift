@@ -53,53 +53,53 @@ struct AgentTransferSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             if client.devices.count > 1 && !localBackupOnly {
-                Picker("Сотрудники устройства", selection: $deviceID) {
+                Picker(L("Сотрудники устройства"), selection: $deviceID) {
                     ForEach(client.devices) { Text($0.name).tag($0.id) }
                 }.disabled(working)
             }
-            Text("Сотрудники «\(targetName)», их переписка, файлы и расписания — в одном файле.")
+            Text(L("Сотрудники «\(targetName)», их переписка, файлы и расписания — в одном файле."))
                 .font(.callout).fixedSize(horizontal: false, vertical: true)
-            Text("Вход в OpenAI и сервисы в копию не входит.")
+            Text(L("Вход в OpenAI и сервисы в копию не входит."))
                 .font(.caption).foregroundStyle(AppTheme.secondaryText)
             if client.canTransferAgents {
                 if client.health?.agentArchiveEncryption == true {
-                    Toggle("Защитить копию паролем", isOn: $protected).disabled(working)
+                    Toggle(L("Защитить копию паролем"), isOn: $protected).disabled(working)
                     if protected {
-                        SecureField("Пароль · не менее 12 символов", text: $password).textFieldStyle(.roundedBorder).disabled(working)
-                        Text("Сохраните пароль: без него копию не открыть.").font(.caption).foregroundStyle(AppTheme.secondaryText)
-                    } else { Text("Файл без пароля. Храните его в безопасном месте.").font(.caption).foregroundStyle(AppTheme.secondaryText) }
-                } else { Text("Файл без пароля. Для защищённых копий обновите OpenStrudel на этом устройстве.").font(.caption).foregroundStyle(AppTheme.secondaryText) }
+                        SecureField(L("Пароль · не менее 12 символов"), text: $password).textFieldStyle(.roundedBorder).disabled(working)
+                        Text(L("Сохраните пароль: без него копию не открыть.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                    } else { Text(L("Файл без пароля. Храните его в безопасном месте.")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
+                } else { Text(L("Файл без пароля. Для защищённых копий обновите OpenStrudel на этом устройстве.")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
                 HStack(spacing: 12) {
-                    Button("Сохранить копию…", action: export).buttonStyle(.borderedProminent)
+                    Button(L("Сохранить копию…"), action: export).buttonStyle(.borderedProminent)
                         .disabled(working || protected && password.count < 12).accessibilityIdentifier("exportAgents")
                     if !localBackupOnly {
-                        Button("Восстановить из копии…") { error = nil; notice = nil; showingImport = true }
+                        Button(L("Восстановить из копии…")) { error = nil; notice = nil; showingImport = true }
                             .disabled(working).accessibilityIdentifier("importAgents")
                     }
                 }
             } else {
-                Text(client.health == nil || client.homeUnreachable ? "Для копии нужно подключение к устройству с сотрудниками." : "Копии доступны владельцу устройства. Проверьте доступ и версию OpenStrudel.")
+                Text(client.health == nil || client.homeUnreachable ? L("Для копии нужно подключение к устройству с сотрудниками.") : L("Копии доступны владельцу устройства. Проверьте доступ и версию OpenStrudel."))
                     .font(.callout).foregroundStyle(AppTheme.secondaryText)
             }
             if let busy {
                 VStack(alignment: .leading, spacing: 10) {
                     if let total, total > 0 {
                         HStack {
-                            Text("Получаем копию с «\(targetName)»")
+                            Text(L("Получаем копию с «\(targetName)»"))
                             Spacer()
                             Text("\(Int(min(1, Double(received) / Double(total)) * 100))%").monospacedDigit()
                         }.font(.callout)
                         ProgressView(value: Double(received), total: Double(total))
-                        Text("\(ByteCountFormatter.string(fromByteCount: received, countStyle: .file)) из \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))")
+                        Text(L("\(ByteCountFormatter.string(fromByteCount: received, countStyle: .file)) из \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"))
                             .font(.caption).foregroundStyle(AppTheme.secondaryText)
                     } else { HStack(spacing: 10) { ProgressView().controlSize(.small); Text(busy).font(.callout) } }
-                    Button("Отменить") { operation?.cancel() }
+                    Button(L("Отменить")) { operation?.cancel() }
                 }.padding(.vertical, 6)
             }
-            if let error { Text(error).font(.callout).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("agentTransferError") }
-            if let notice { Text(notice).font(.callout).textSelection(.enabled).accessibilityIdentifier("agentTransferNotice") }
+            if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("agentTransferError") }
+            if let notice { Text(L10n.serviceText(notice)).font(.callout).textSelection(.enabled).accessibilityIdentifier("agentTransferNotice") }
             #if os(macOS)
-            if let savedURL { Button("Показать в Finder") { NSWorkspace.shared.activateFileViewerSelecting([savedURL]) } }
+            if let savedURL { Button(L("Показать в Finder")) { NSWorkspace.shared.activateFileViewerSelecting([savedURL]) } }
             #endif
         }
         .onAppear { deviceID = client.health?.nodeId ?? "" }
@@ -108,7 +108,7 @@ struct AgentTransferSettings: View {
                       defaultFilename: "OpenStrudel-" + targetName + "-" + Date().formatted(.iso8601.year().month().day().dateSeparator(.dash))) { result in
             document = nil
             switch result {
-            case .success(let url): savedURL = url; notice = (protected ? "Защищённая копия сохранена: " : "Копия сохранена: ") + url.lastPathComponent + "\n" + url.deletingLastPathComponent().path
+            case .success(let url): savedURL = url; notice = (protected ? L("Защищённая копия сохранена: ") : L("Копия сохранена: ")) + url.lastPathComponent + "\n" + url.deletingLastPathComponent().path
             case .failure(let value): report(value)
             }
         }
@@ -117,7 +117,7 @@ struct AgentTransferSettings: View {
             case .success(let urls):
                 guard let url = urls.first else { return }
                 operation = Task {
-                    busy = "Читаем «\(url.lastPathComponent)»…"; error = nil; notice = nil; total = nil
+                    busy = L("Читаем «\(url.lastPathComponent)»…"); error = nil; notice = nil; total = nil
                     defer { busy = nil; operation = nil }
                     do {
                         let data = try await AgentTransferFile.read(url)
@@ -131,12 +131,12 @@ struct AgentTransferSettings: View {
         .sheet(isPresented: $askingPassword, onDismiss: { importPassword = ""; importData = nil; pending = unlockedImport; unlockedImport = nil }) {
             NavigationStack {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Введите пароль, заданный при сохранении копии.").font(.callout)
-                    SecureField("Пароль копии", text: $importPassword).textFieldStyle(.roundedBorder)
-                    if let error { Text(error).font(.callout).foregroundStyle(AppTheme.destructive) }
-                    Button(busy == nil ? "Открыть копию" : "Проверяем…") {
+                    Text(L("Введите пароль, заданный при сохранении копии.")).font(.callout)
+                    SecureField(L("Пароль копии"), text: $importPassword).textFieldStyle(.roundedBorder)
+                    if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.destructive) }
+                    Button(busy == nil ? L("Открыть копию") : L("Проверяем…")) {
                         operation = Task {
-                            busy = "Открываем копию…"; error = nil
+                            busy = L("Открываем копию…"); error = nil
                             defer { busy = nil; operation = nil }
                             do {
                                 guard let importData else { return }
@@ -146,8 +146,8 @@ struct AgentTransferSettings: View {
                             } catch { report(error) }
                         }
                     }.buttonStyle(.borderedProminent).disabled(importPassword.isEmpty || busy != nil)
-                }.padding(24).navigationTitle("Защищённая копия")
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { operation?.cancel(); askingPassword = false } } }
+                }.padding(24).navigationTitle(L("Защищённая копия"))
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { operation?.cancel(); askingPassword = false } } }
             }
             #if os(macOS)
             .frame(width: 440, height: 270)
@@ -155,14 +155,14 @@ struct AgentTransferSettings: View {
         }
         .sheet(item: $pending) { item in
             AgentImportReview(pending: item) { result in
-                notice = result.preview.alreadyImported ? "Эта копия уже восстановлена. Дубликатов нет." : "Восстановлено сотрудников: \(result.profileIds.count). Они появились в списке чатов."
+                notice = result.preview.alreadyImported ? L("Эта копия уже восстановлена. Дубликатов нет.") : L("Восстановлено сотрудников: \(result.profileIds.count). Они появились в списке чатов.")
                 pending = nil
             }.environmentObject(client)
         }
     }
     private func export() {
         operation = Task {
-            busy = "Готовим копию сотрудников на «\(targetName)»…"; total = nil; received = 0; error = nil; notice = nil; savedURL = nil
+            busy = L("Готовим копию сотрудников на «\(targetName)»…"); total = nil; received = 0; error = nil; notice = nil; savedURL = nil
             defer { busy = nil; operation = nil }
             do {
                 let data = try await client.exportAgents(deviceID: targetID, password: protected ? password : nil) { received, total in
@@ -175,7 +175,7 @@ struct AgentTransferSettings: View {
     }
     private func report(_ value: Error) {
         guard !(value is CancellationError), !AttachmentImport.isCancellation(value), (value as? URLError)?.code != .cancelled else {
-            notice = "Операция отменена."; return
+            notice = L("Операция отменена."); return
         }
         error = UserFacingError.text(value.localizedDescription)
     }
@@ -195,11 +195,11 @@ private struct AgentImportReview: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if pending.preview.alreadyImported {
-                        Label("Эта команда уже добавлена", systemImage: "checkmark.circle")
+                        Label(L("Эта команда уже добавлена"), systemImage: "checkmark.circle")
                             .font(.title2.weight(.medium))
-                        Text("Повторный импорт этого файла не создаст дубликаты.")
+                        Text(L("Повторный импорт этого файла не создаст дубликаты."))
                     } else {
-                        Text("Текущие сотрудники и их файлы сохранятся. Сотрудники из файла появятся рядом с ними.")
+                        Text(L("Текущие сотрудники и их файлы сохранятся. Сотрудники из файла появятся рядом с ними."))
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(Array(pending.preview.employees.enumerated()), id: \.offset) { _, employee in
                                 HStack(alignment: .top, spacing: 10) {
@@ -207,18 +207,18 @@ private struct AgentImportReview: View {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(employee.importedName).font(.body.weight(.medium))
                                         if employee.name != employee.importedName {
-                                            Text("Имя изменено, чтобы не путать с существующим сотрудником.")
+                                            Text(L("Имя изменено, чтобы не путать с существующим сотрудником."))
                                                 .font(.caption).foregroundStyle(AppTheme.secondaryText)
                                         }
                                     }
                                 }
                             }
                         }
-                        Text("Чаты: \(pending.preview.counts.conversations) · Сообщения: \(pending.preview.counts.messages)\nФайлы: \(pending.preview.counts.files) · Расписания: \(pending.preview.counts.schedules)")
+                        Text(L("Чаты: \(pending.preview.counts.conversations) · Сообщения: \(pending.preview.counts.messages)\nФайлы: \(pending.preview.counts.files) · Расписания: \(pending.preview.counts.schedules)"))
                             .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                        Text("Расписания будут на паузе, отправка в Telegram отключена. Проверьте их перед включением. Подключённые сервисы нужно будет авторизовать заново.")
+                        Text(L("Расписания будут на паузе, отправка в Telegram отключена. Проверьте их перед включением. Подключённые сервисы нужно будет авторизовать заново."))
                             .font(.callout).fixedSize(horizontal: false, vertical: true)
-                        if let error { Text(error).foregroundStyle(AppTheme.destructive).accessibilityFocused($errorFocused) }
+                        if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive).accessibilityFocused($errorFocused) }
                         Button {
                             importing = true; error = nil
                             Task {
@@ -232,18 +232,18 @@ private struct AgentImportReview: View {
                         } label: {
                             HStack(spacing: 10) {
                                 if importing { ProgressView().controlSize(.small) }
-                                Text(importing ? "Добавляем сотрудников…" : "Добавить сотрудников: \(pending.preview.counts.employees)")
+                                Text(importing ? L("Добавляем сотрудников…") : L("Добавить сотрудников: \(pending.preview.counts.employees)"))
                             }.frame(maxWidth: .infinity, minHeight: 44)
                         }.buttonStyle(.borderedProminent).disabled(importing).accessibilityIdentifier("confirmAgentImport")
                     }
                 }.padding(24).frame(maxWidth: 580, alignment: .leading).frame(maxWidth: .infinity)
             }
-            .navigationTitle("Восстановление сотрудников")
+            .navigationTitle(L("Восстановление сотрудников"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar { ToolbarItem(placement: .cancellationAction) {
-                Button(pending.preview.alreadyImported ? "Готово" : "Отмена") { dismiss() }.disabled(importing)
+                Button(pending.preview.alreadyImported ? L("Готово") : L("Отмена")) { dismiss() }.disabled(importing)
             } }
         }
         .interactiveDismissDisabled(importing)

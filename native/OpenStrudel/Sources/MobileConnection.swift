@@ -11,9 +11,9 @@ enum HomeClientError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .authenticationExpired: return "Подключение отозвано. Создайте новое приглашение в OpenStrudel на компьютере."
-        case .invalidURL: return "Не удалось открыть подключение. Используйте новое приглашение."
-        case .invalidResponse: return "Не удалось получить ответ. Попробуйте ещё раз."
+        case .authenticationExpired: return L("Подключение отозвано. Создайте новое приглашение в OpenStrudel на компьютере.")
+        case .invalidURL: return L("Не удалось открыть подключение. Используйте новое приглашение.")
+        case .invalidResponse: return L("Не удалось получить ответ. Попробуйте ещё раз.")
         case .server(let message): return UserFacingError.text(message)
         case .empty(let message): return message
         }
@@ -21,27 +21,27 @@ enum HomeClientError: LocalizedError {
 }
 
 enum UserFacingError {
-    static let storageFull = "На устройстве сотрудника закончилось место. Освободите место. Перед повторной отправкой проверьте, успел ли сотрудник выполнить задачу."
+    static var storageFull: String { L("На устройстве сотрудника закончилось место. Освободите место. Перед повторной отправкой проверьте, успел ли сотрудник выполнить задачу.") }
 
     static func text(_ message: String) -> String {
         let normalized = message.lowercased()
         if normalized == "fetch failed" || normalized == "the operation was aborted due to timeout" {
-            return "Не удалось связаться с сервисом. Проверьте подключение к интернету и попробуйте ещё раз."
+            return L("Не удалось связаться с сервисом. Проверьте подключение к интернету и попробуйте ещё раз.")
         }
         if normalized.contains("enospc") || normalized.contains("sqlite_full")
             || normalized.contains("no space left on device") || normalized.contains("database or disk is full") {
             return storageFull
         }
         if normalized.hasPrefix("codex не ответил") {
-            return "Сотрудник не ответил вовремя. Перед повторной отправкой проверьте, успел ли он выполнить задачу."
+            return L("Сотрудник не ответил вовремя. Перед повторной отправкой проверьте, успел ли он выполнить задачу.")
         }
         if normalized.hasPrefix("связь с codex прервалась") {
-            return "Связь с сотрудником прервалась. Перед повторной отправкой проверьте результат последней задачи."
+            return L("Связь с сотрудником прервалась. Перед повторной отправкой проверьте результат последней задачи.")
         }
         if normalized.contains("workspace routing discovery unauthorized") {
-            return "Нужно восстановить вход в OpenAI. Откройте настройки OpenStrudel. Ваши чаты и сотрудники сохранены."
+            return L("Нужно восстановить вход в OpenAI. Откройте настройки OpenStrudel. Ваши чаты и сотрудники сохранены.")
         }
-        return message
+        return L10n.serviceText(message)
     }
 }
 
@@ -89,7 +89,7 @@ struct MacPairing: Identifiable {
               let port = value("port").flatMap(Int.init), (1...65535).contains(port),
               let key = value("key"), key.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
               let pin = value("pin"), pin.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil
-        else { throw HomeClientError.server("Это не приглашение OpenStrudel. Создайте новое в настройках на компьютере.") }
+        else { throw HomeClientError.server(L("Это не приглашение OpenStrudel. Создайте новое в настройках на компьютере.")) }
         if let keyPin = value("keyPin") {
             guard keyPin.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil else { throw HomeClientError.invalidURL }
             self.pin = "spki:" + keyPin

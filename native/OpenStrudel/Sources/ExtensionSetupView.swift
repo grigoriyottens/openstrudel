@@ -38,24 +38,24 @@ struct ConnectionCatalogView: View {
     var body: some View {
         ServiceList {
             Section {
-                Text(scope.isGroup ? "Для Telegram-группы «\(scope.title)»" : "Для разговора в приложении")
+                Text(scope.isGroup ? L("Для Telegram-группы «\(scope.title)»") : L("Для разговора в приложении"))
                     .foregroundStyle(AppTheme.secondaryText)
                 if let shared = scope.sharedNotice { Text(shared).font(.caption).foregroundStyle(AppTheme.secondaryText) }
-                if loading { ProgressView("Загружаем сервисы…") }
+                if loading { ProgressView(L("Загружаем сервисы…")) }
                 if let error {
                     Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)
-                    Button("Повторить") { Task { await refresh() } }.disabled(loading)
+                    Button(L("Повторить")) { Task { await refresh() } }.disabled(loading)
                 }
                 if let waiting {
-                    Text("Завершите вход в \(waiting.name) в браузере.")
-                    if let authorizationURL { Link("Открыть ещё раз", destination: authorizationURL) }
-                    Button("Проверить подключение") { Task { await refresh() } }.disabled(loading)
+                    Text(L("Завершите вход в \(waiting.name) в браузере."))
+                    if let authorizationURL { Link(L("Открыть ещё раз"), destination: authorizationURL) }
+                    Button(L("Проверить подключение")) { Task { await refresh() } }.disabled(loading)
                 }
             }
             if !results.isEmpty || !query.isEmpty {
                 Section {
                     if connections.filter(\.isAvailableToAdd).count > 6 {
-                        TextField("Найти сервис", text: $query).textFieldStyle(.roundedBorder)
+                        TextField(L("Найти сервис"), text: $query).textFieldStyle(.roundedBorder)
                     }
                     ForEach(results) { connection in
                         // Dynamic Type keeps both the service name and action visible.
@@ -65,33 +65,33 @@ struct ConnectionCatalogView: View {
                             Button {
                                 Task { await connect(connection) }
                             } label: {
-                                AdaptiveActionLabel(title: connecting == connection.id ? "Проверяем…" : waiting?.id == connection.id ? "Ожидаем входа" : connection.actionTitle)
+                                AdaptiveActionLabel(title: connecting == connection.id ? L("Проверяем…") : waiting?.id == connection.id ? L("Ожидаем входа") : connection.actionTitle)
                             }.adaptiveActionStyle(.bordered).disabled(connecting != nil || waiting != nil)
                                 .accessibilityLabel("\(connection.actionTitle) \(connection.name)")
                                 .accessibilityIdentifier("connect-service-" + connection.id)
                         }.padding(.vertical, 6)
                             .accessibilityElement(children: .contain)
                     }
-                    if results.isEmpty { Text("Ничего не найдено").foregroundStyle(AppTheme.secondaryText) }
-                } header: { Text("Из аккаунта OpenAI") } footer: {
-                    Text("«Добавить» разрешает сотруднику использовать сервис в этом чате.")
+                    if results.isEmpty { Text(L("Ничего не найдено")).foregroundStyle(AppTheme.secondaryText) }
+                } header: { Text(L("Из аккаунта OpenAI")) } footer: {
+                    Text(L("«Добавить» разрешает сотруднику использовать сервис в этом чате."))
                 }
             }
-            Section("Другие способы") {
+            Section(L("Другие способы")) {
                 NavigationLink { ExtensionSetupView(scope: scope, source: .mcp, isPresented: $isPresented) } label: {
-                    Label("Сервис по адресу MCP", systemImage: "link")
+                    Label(L("Сервис по адресу MCP"), systemImage: "link")
                 }.accessibilityIdentifier("addMCPService")
                 NavigationLink { ExtensionSetupView(scope: scope, source: .package, isPresented: $isPresented) } label: {
-                    Label("Навык или плагин из файла", systemImage: "folder.badge.plus")
+                    Label(L("Навык или плагин из файла"), systemImage: "folder.badge.plus")
                 }.accessibilityIdentifier("addExtensionFile")
             }
-            if let notice { Section { Text(notice).font(.caption).foregroundStyle(AppTheme.secondaryText) } }
+            if let notice { Section { Text(L10n.serviceText(notice)).font(.caption).foregroundStyle(AppTheme.secondaryText) } }
         }
-        .scrollContentBackground(.hidden).background(HomeBackground()).navigationTitle("Добавить")
+        .scrollContentBackground(.hidden).background(HomeBackground()).navigationTitle(L("Добавить"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { isPresented = false } } }
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { isPresented = false } } }
         .task { await refresh() }
         .task(id: waiting?.id) {
             guard waiting != nil else { return }
@@ -125,13 +125,13 @@ struct ConnectionCatalogView: View {
                 waiting = connection; authorizationURL = url
                 openURL(url) { @Sendable accepted in
                     Task { @MainActor in
-                        if !accepted { error = "Не удалось открыть браузер. Используйте ссылку «Открыть ещё раз»." }
+                        if !accepted { error = L("Не удалось открыть браузер. Используйте ссылку «Открыть ещё раз».") }
                     }
                 }
             } else {
                 await refresh()
                 if connections.contains(where: { $0.id == connection.id && $0.connected }) { isPresented = false }
-                else { error = "Сервис ещё не подтвердил подключение. Попробуйте ещё раз." }
+                else { error = L("Сервис ещё не подтвердил подключение. Попробуйте ещё раз.") }
             }
         } catch is CancellationError { }
         catch { self.error = error.localizedDescription }
@@ -158,57 +158,57 @@ struct ExtensionSetupView: View {
     var body: some View {
         Form {
             Section {
-                Text(scope.sharedNotice ?? (scope.isGroup ? "Для Telegram-группы «\(scope.title)»." : "Для разговора в приложении."))
+                Text(scope.sharedNotice ?? (scope.isGroup ? L("Для Telegram-группы «\(scope.title)».") : L("Для разговора в приложении.")))
                     .font(.callout).foregroundStyle(AppTheme.secondaryText)
             }
             if let preview {
-                Section(preview.kind == "skill" ? "Навык" : "Плагин") {
+                Section(preview.kind == "skill" ? L("Навык") : L("Плагин")) {
                     Text(preview.name).font(.headline)
                     Text(preview.description).fixedSize(horizontal: false, vertical: true)
-                    Text("Файлов: \(preview.files) · \(ByteCountFormatter.string(fromByteCount: Int64(preview.bytes), countStyle: .file))")
+                    Text(L("Файлов: \(preview.files) · \(ByteCountFormatter.string(fromByteCount: Int64(preview.bytes), countStyle: .file))"))
                         .font(.caption).foregroundStyle(AppTheme.secondaryText)
                     ForEach(preview.services, id: \.self) { Label($0, systemImage: "link") }
-                    if preview.hasHooks { Text("В пакете есть автоматические действия (hooks). Проверьте, что доверяете его автору.").font(.callout) }
-                    Button("Установить") { perform {
+                    if preview.hasHooks { Text(L("В пакете есть автоматические действия (hooks). Проверьте, что доверяете его автору.")).font(.callout) }
+                    Button(L("Установить")) { perform {
                         try await client.installExtension(files, digest: preview.digest, for: scope.id)
                         isPresented = false
                     } }.buttonStyle(.borderedProminent).disabled(busy)
-                    Button("Выбрать другой пакет") { self.preview = nil; files = []; importing = true }.disabled(busy)
+                    Button(L("Выбрать другой пакет")) { self.preview = nil; files = []; importing = true }.disabled(busy)
                 }
             } else if source == .mcp {
                 Section {
-                    TextField("Адрес MCP", text: $address, prompt: Text("https://example.com/mcp"))
+                    TextField(L("Адрес MCP"), text: $address, prompt: Text("https://example.com/mcp"))
                         .focused($focusedField, equals: .address)
                         .textContentType(.URL).autocorrectionDisabled()
-                        .accessibilityLabel("Адрес MCP").accessibilityIdentifier("mcpAddress")
+                        .accessibilityLabel(L("Адрес MCP")).accessibilityIdentifier("mcpAddress")
                         #if os(iOS)
                         .textInputAutocapitalization(.never).keyboardType(.URL)
                         #endif
-                    SecureField("Ключ, если сервис его требует", text: $token)
+                    SecureField(L("Ключ, если сервис его требует"), text: $token)
                         .focused($focusedField, equals: .token)
-                    DisclosureGroup("Название подключения") {
-                        TextField("Название латиницей", text: $name, prompt: Text(suggestedName)).autocorrectionDisabled()
+                    DisclosureGroup(L("Название подключения")) {
+                        TextField(L("Название латиницей"), text: $name, prompt: Text(suggestedName)).autocorrectionDisabled()
                             .focused($focusedField, equals: .name)
                     }
-                    Button("Добавить сервис") { perform {
+                    Button(L("Добавить сервис")) { perform {
                         try await client.addMCP(name: name.isEmpty ? suggestedName : name, url: address.trimmingCharacters(in: .whitespacesAndNewlines), token: token, for: scope.id)
                         token = ""; isPresented = false
                     } }.buttonStyle(.borderedProminent).disabled(busy || address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                } header: { Text("Сервис по адресу") } footer: {
-                    Text("Вставьте адрес MCP из настроек нужного сервиса. Если потребуется вход, продолжите его в браузере.")
+                } header: { Text(L("Сервис по адресу")) } footer: {
+                    Text(L("Вставьте адрес MCP из настроек нужного сервиса. Если потребуется вход, продолжите его в браузере."))
                 }
             } else {
                 Section {
-                    Button { importing = true } label: { Label("Выбрать навык или плагин…", systemImage: "folder.badge.plus") }.disabled(busy)
-                } header: { Text("Из файла") } footer: {
-                    Text("Выберите SKILL.md или папку пакета Codex. Сначала покажем, что будет добавлено.")
+                    Button { importing = true } label: { Label(L("Выбрать навык или плагин…"), systemImage: "folder.badge.plus") }.disabled(busy)
+                } header: { Text(L("Из файла")) } footer: {
+                    Text(L("Выберите SKILL.md или папку пакета Codex. Сначала покажем, что будет добавлено."))
                 }
             }
-            if busy { HStack(spacing: 10) { ProgressView().controlSize(.small); Text(preview == nil ? "Проверяем…" : "Устанавливаем…") }.accessibilityElement(children: .combine) }
+            if busy { HStack(spacing: 10) { ProgressView().controlSize(.small); Text(preview == nil ? L("Проверяем…") : L("Устанавливаем…")) }.accessibilityElement(children: .combine) }
             if let error { Section { Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true) } }
         }
         .formStyle(.grouped).scrollContentBackground(.hidden).background(HomeBackground())
-        .navigationTitle(source == .mcp ? "Подключить сервис" : "Установить из файла")
+        .navigationTitle(source == .mcp ? L("Подключить сервис") : L("Установить из файла"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
@@ -216,7 +216,7 @@ struct ExtensionSetupView: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button { focusedField = nil } label: { Image(systemName: "keyboard.chevron.compact.down") }
-                    .accessibilityLabel("Скрыть клавиатуру")
+                    .accessibilityLabel(L("Скрыть клавиатуру"))
             }
         }
         #endif
@@ -251,9 +251,9 @@ enum ExtensionBundleReader {
         var files: [ExtensionFile] = [], bytes = 0, entries = 0
         func visit(_ item: URL, path: String) throws {
             entries += 1
-            guard entries <= 1000, path.count <= 240 else { throw HomeClientError.server("Слишком много файлов или вложенных папок.") }
+            guard entries <= 1000, path.count <= 240 else { throw HomeClientError.server(L("Слишком много файлов или вложенных папок.")) }
             let values = try item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isRegularFileKey, .fileSizeKey])
-            guard values.isSymbolicLink != true else { throw HomeClientError.server("Выберите пакет с обычными файлами, без символических ссылок.") }
+            guard values.isSymbolicLink != true else { throw HomeClientError.server(L("Выберите пакет с обычными файлами, без символических ссылок.")) }
             if values.isDirectory == true {
                 for child in try manager.contentsOfDirectory(at: item, includingPropertiesForKeys: nil) {
                     if [".git", ".DS_Store"].contains(child.lastPathComponent) { continue }
@@ -262,7 +262,7 @@ enum ExtensionBundleReader {
             } else {
                 bytes += values.fileSize ?? 0
                 guard values.isRegularFile == true, bytes <= 10 * 1024 * 1024, files.count < 300 else {
-                    throw HomeClientError.server("Пакет должен содержать не более 300 файлов и занимать до 10 МБ.")
+                    throw HomeClientError.server(L("Пакет должен содержать не более 300 файлов и занимать до 10 МБ."))
                 }
                 let data = try Data(contentsOf: item)
                 let mode = (try manager.attributesOfItem(atPath: item.path)[.posixPermissions] as? NSNumber)?.intValue ?? 0

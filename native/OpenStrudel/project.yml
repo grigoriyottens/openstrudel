@@ -1,8 +1,7 @@
 name: OpenStrudel
 options:
   bundleIdPrefix: is.openstrudel
-  # The interface is Russian, so system menus, buttons and errors are too.
-  developmentLanguage: ru
+  developmentLanguage: en
   deploymentTarget:
     iOS: "26.0"
     macOS: "26.0"
@@ -33,7 +32,7 @@ targets:
         CFBundleDisplayName: OpenStrudel
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: is.openstrudel.team
-            UTTypeDescription: Команда OpenStrudel
+            UTTypeDescription: OpenStrudel backup
             UTTypeConformsTo: [public.data]
             UTTypeTagSpecification:
               public.filename-extension: [openstrudel]
@@ -43,9 +42,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: is.openstrudel.connect
             CFBundleURLSchemes: [openstrudel]
-        NSLocalNetworkUsageDescription: Подключение к вашему Mac или серверу, чтобы открыть общие чаты и сотрудников.
-        NSCameraUsageDescription: Сканирование приглашения OpenStrudel для подключения к вашим чатам.
-        NSMicrophoneUsageDescription: Запись голосового сообщения. Распознавание происходит на этом устройстве.
+        NSLocalNetworkUsageDescription: Connect to your Mac or server to open your assistants and conversations.
+        NSCameraUsageDescription: Scan an OpenStrudel connection code to connect your devices.
+        NSMicrophoneUsageDescription: Record speech and transcribe it on this device.
         NSAppTransportSecurity:
           # Self-hosted Homes use a certificate carried in the one-use invite.
           # PinnedHomeSession validates the exact host, port and certificate;
@@ -67,6 +66,10 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
+      - path: ../../public/localizations.json
+        buildPhase: resources
+      - path: Localizations
+        buildPhase: resources
       - path: ../../scripts/cloud-init.sh
         buildPhase: resources
     settings:
@@ -105,10 +108,10 @@ targets:
       properties:
         CFBundleDisplayName: OpenStrudel
         SUFeedURL: https://waiwai.is/openstrudel/updates/appcast.xml
-        NSMicrophoneUsageDescription: Запись голосового сообщения. Распознавание происходит на этом Mac.
+        NSMicrophoneUsageDescription: Record speech and transcribe it on this device.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: is.openstrudel.team
-            UTTypeDescription: Команда OpenStrudel
+            UTTypeDescription: OpenStrudel backup
             UTTypeConformsTo: [public.data]
             UTTypeTagSpecification:
               public.filename-extension: [openstrudel]
@@ -127,6 +130,10 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
+      - path: ../../public/localizations.json
+        buildPhase: resources
+      - path: Localizations
+        buildPhase: resources
       - path: ../../scripts/cloud-init.sh
         buildPhase: resources
       - path: Resources/Sparkle-LICENSE.txt
@@ -151,7 +158,12 @@ targets:
       - path: Sources/AppTheme.swift
       - path: Sources/ChatMedia.swift
       - path: Sources/AttachmentImport.swift
+      - path: Sources/ComposerTextField.swift
       - path: Sources/VoiceCapture.swift
+      - path: Sources/DictationAssets.swift
+      - path: Sources/Localization.swift
+      - path: ../../public/localizations.json
+        buildPhase: resources
       - path: Sources/Models.swift
       - path: Sources/AgentAppearance.swift
       - path: Sources/HomeClient.swift

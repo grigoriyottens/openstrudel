@@ -41,32 +41,32 @@ struct ServerSetupView: View {
 
     private var title: String {
         switch cloud.phase {
-        case .idle: "Сотрудники в облаке"
-        case .signingIn: "Войдите в DigitalOcean."
-        case .billingRequired: "Подключите оплату."
-        case .readyToCreate: "Всё готово к запуску."
-        case .creating, .waitingForServer: "Готовим вашу команду."
-        case .connected: "Всё готово."
-        case .failed: "Настройка не завершена"
+        case .idle: L("Сотрудники в облаке")
+        case .signingIn: L("Войдите в DigitalOcean.")
+        case .billingRequired: L("Подключите оплату.")
+        case .readyToCreate: L("Всё готово к запуску.")
+        case .creating, .waitingForServer: L("Готовим вашу команду.")
+        case .connected: L("Всё готово.")
+        case .failed: L("Настройка не завершена")
         }
     }
 
     private var explanation: String {
         switch cloud.phase {
         case .idle:
-            "Сотрудники смогут работать, когда Mac выключен. Размещение предоставляет DigitalOcean. Для начала войдите в свой аккаунт или создайте его."
+            L("Сотрудники смогут работать, когда Mac выключен. Размещение предоставляет DigitalOcean. Для начала войдите в свой аккаунт или создайте его.")
         case .signingIn:
-            "Завершите вход в открывшемся окне. Пароль получает только DigitalOcean."
+            L("Завершите вход в открывшемся окне. Пароль получает только DigitalOcean.")
         case .billingRequired:
-            "Добавьте способ оплаты на сайте DigitalOcean, затем вернитесь сюда. Данные карты остаются у провайдера."
+            L("Добавьте способ оплаты на сайте DigitalOcean, затем вернитесь сюда. Данные карты остаются у провайдера.")
         case .readyToCreate:
-            "OpenStrudel установится на отдельном сервере в вашем аккаунте DigitalOcean. Проверьте стоимость перед запуском."
+            L("OpenStrudel установится на отдельном сервере в вашем аккаунте DigitalOcean. Проверьте стоимость перед запуском.")
         case .creating, .waitingForServer:
-            "Обычно настройка занимает несколько минут. Можно закрыть окно и вернуться позже. Прогресс сохранится."
+            L("Обычно настройка занимает несколько минут. Можно закрыть окно и вернуться позже. Прогресс сохранится.")
         case .connected:
-            "Открываем OpenStrudel. Дальше останется войти в свой аккаунт OpenAI."
+            L("Открываем OpenStrudel. Дальше останется войти в свой аккаунт OpenAI.")
         case .failed:
-            "Ваш прогресс сохранён. Продолжите настройку, когда будете готовы."
+            L("Ваш прогресс сохранён. Продолжите настройку, когда будете готовы.")
         }
     }
 
@@ -87,12 +87,12 @@ struct ServerSetupView: View {
                     }
                     if cloud.phase == .readyToCreate, let quote = cloud.quote {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(quote.monthlyPrice.formatted(.currency(code: "USD")) + " / месяц")
+                            Text(quote.monthlyPrice.formatted(.currency(code: "USD")) + L(" / месяц"))
                                 .font(.title2.weight(.semibold)).monospacedDigit()
-                            Text("Оплата напрямую DigitalOcean. Подписка ChatGPT оплачивается отдельно.")
+                            Text(L("Оплата напрямую DigitalOcean. Подписка ChatGPT оплачивается отдельно."))
                                 .font(.callout).foregroundStyle(AppTheme.secondaryText)
                                 .fixedSize(horizontal: false, vertical: true)
-                            Text("Начисляется за время размещения, пока вы не удалите его в DigitalOcean. Налоги могут добавляться отдельно.")
+                            Text(L("Начисляется за время размещения, пока вы не удалите его в DigitalOcean. Налоги могут добавляться отдельно."))
                                 .font(.footnote).foregroundStyle(AppTheme.secondaryText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }.accessibilityElement(children: .combine)
@@ -105,21 +105,21 @@ struct ServerSetupView: View {
                     if working {
                         HStack(spacing: 12) {
                             ProgressView().controlSize(.small)
-                            Text(cloud.phase == .signingIn ? "Ожидаем входа" : "Настраиваем OpenStrudel")
+                            Text(cloud.phase == .signingIn ? L("Ожидаем входа") : L("Настраиваем OpenStrudel"))
                                 .font(.callout).foregroundStyle(AppTheme.secondaryText)
                         }.accessibilityElement(children: .combine)
                     }
                     actions
                     if let url = cloud.managementURL, cloud.phase != .connected {
-                        Link("Открыть в DigitalOcean", destination: url)
+                        Link(L("Открыть в DigitalOcean"), destination: url)
                             .font(.callout)
                             .buttonStyle(.plain).foregroundStyle(AppTheme.accent)
-                        Text("Размещение оплачивается, пока вы не удалите его в DigitalOcean.")
+                        Text(L("Размещение оплачивается, пока вы не удалите его в DigitalOcean."))
                             .font(.footnote).foregroundStyle(AppTheme.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if cloud.phase == .idle {
-                        Text("Понадобится аккаунт DigitalOcean и способ оплаты. Стоимость покажем до запуска.")
+                        Text(L("Понадобится аккаунт DigitalOcean и способ оплаты. Стоимость покажем до запуска."))
                             .font(.footnote).foregroundStyle(AppTheme.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -128,7 +128,7 @@ struct ServerSetupView: View {
             .defaultScrollAnchor(.center, for: .alignment)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(working ? "Продолжить позже" : "Закрыть") {
+                    Button(working ? L("Продолжить позже") : L("Закрыть")) {
                         cloud.cancel()
                         dismiss()
                     }
@@ -157,37 +157,37 @@ struct ServerSetupView: View {
         switch cloud.phase {
         case .idle:
             Button { Task { await cloud.signIn() } } label: {
-                SetupActionLabel(title: "Продолжить с DigitalOcean", icon: "arrow.up.right")
+                SetupActionLabel(title: L("Продолжить с DigitalOcean"), icon: "arrow.up.right")
             }.buttonStyle(.glassProminent).controlSize(.large)
                 .accessibilityIdentifier("cloudSignIn")
         case .billingRequired:
             VStack(spacing: 12) {
                 Link(destination: URL(string: "https://cloud.digitalocean.com/account/billing")!) {
-                    SetupActionLabel(title: "Добавить способ оплаты", icon: "arrow.up.right")
+                    SetupActionLabel(title: L("Добавить способ оплаты"), icon: "arrow.up.right")
                 }.buttonStyle(.glassProminent).controlSize(.large)
                 Button { Task { await cloud.resume() } } label: {
-                    SetupActionLabel(title: "Продолжить")
+                    SetupActionLabel(title: L("Продолжить"))
                 }.buttonStyle(.glass).controlSize(.large)
             }
         case .readyToCreate:
             Button { Task { await cloud.confirmCreate() } } label: {
-                SetupActionLabel(title: "Подтвердить и запустить", icon: "arrow.right")
+                SetupActionLabel(title: L("Подтвердить и запустить"), icon: "arrow.right")
             }.buttonStyle(.glassProminent).controlSize(.large)
                 .accessibilityIdentifier("cloudConfirmCost")
         case .failed:
             Button { Task { await cloud.resume() } } label: {
-                SetupActionLabel(title: "Продолжить настройку", icon: "arrow.clockwise")
+                SetupActionLabel(title: L("Продолжить настройку"), icon: "arrow.clockwise")
             }.buttonStyle(.glassProminent).controlSize(.large)
         case .connected:
             if connectionError != nil {
                 Button { Task { await finishConnection() } } label: {
-                    SetupActionLabel(title: "Открыть команду", icon: "arrow.right")
+                    SetupActionLabel(title: L("Открыть команду"), icon: "arrow.right")
                 }.buttonStyle(.glassProminent).controlSize(.large).disabled(connecting)
             }
         case .signingIn:
             #if os(macOS)
             if let url = cloud.authorizationURL {
-                Link("Открыть вход в браузере", destination: url)
+                Link(L("Открыть вход в браузере"), destination: url)
                     .buttonStyle(.glass).controlSize(.large)
             }
             #endif
@@ -203,7 +203,7 @@ struct ServerSetupView: View {
         if await client.connectToCloud(connection) {
             dismiss()
         } else {
-            connectionError = client.pairingError ?? "Не удалось сохранить подключение. Разблокируйте устройство и попробуйте ещё раз."
+            connectionError = client.pairingError ?? L("Не удалось сохранить подключение. Разблокируйте устройство и попробуйте ещё раз.")
         }
     }
 }
@@ -218,22 +218,22 @@ struct AIDataConsentView: View {
         ScrollView {
             VStack(spacing: 24) {
                 OpenStrudelMark(size: 76)
-                Text("Ваши данные")
+                Text(L("Ваши данные"))
                     .font(.system(.largeTitle, design: .serif, weight: .medium))
-                Text("Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI получает сообщения, нужную часть переписки и выбранные файлы.")
+                Text(L("Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI получает сообщения, нужную часть переписки и выбранные файлы."))
                     .font(.body).foregroundStyle(AppTheme.secondaryText)
-                Text("Другие сервисы получают данные только при обращении к ним.")
+                Text(L("Другие сервисы получают данные только при обращении к ним."))
                     .font(.callout).foregroundStyle(AppTheme.secondaryText)
                 Link(destination: URL(string: "https://waiwai.is/openstrudel/privacy")!) {
-                    Text("Подробнее о данных").frame(minHeight: 44).contentShape(Rectangle())
+                    Text(L("Подробнее о данных")).frame(minHeight: 44).contentShape(Rectangle())
                 }
                     .font(.callout)
                     .buttonStyle(.plain).foregroundStyle(AppTheme.accent)
                 Button(action: accept) {
-                    SetupActionLabel(title: textSize.isAccessibilitySize ? "Разрешить" : "Разрешить и продолжить")
+                    SetupActionLabel(title: textSize.isAccessibilitySize ? L("Разрешить") : L("Разрешить и продолжить"))
                 }
                     .adaptiveActionStyle(.glassProminent).controlSize(.large)
-                    .accessibilityLabel("Разрешить и продолжить")
+                    .accessibilityLabel(L("Разрешить и продолжить"))
                     .accessibilityIdentifier("acceptAIDataSharing")
             }.multilineTextAlignment(.center).padding(32).frame(maxWidth: 480)
                 .frame(maxWidth: .infinity)

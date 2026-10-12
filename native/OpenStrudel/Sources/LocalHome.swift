@@ -42,7 +42,7 @@ import Foundation
             let dataDirectory = target.appending(path: "runtime")
             let runtime = bundled ?? dataDirectory
             guard manager.fileExists(atPath: runtime.appending(path: "dist/cli.js").path) else {
-                throw HomeClientError.server("Эта сборка не содержит Codex. Установите полную версию OpenStrudel.")
+                throw HomeClientError.server(L("Эта сборка не содержит Codex. Установите полную версию OpenStrudel."))
             }
             try manager.createDirectory(at: dataDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let install = Process()
@@ -54,7 +54,7 @@ import Foundation
             install.standardError = FileHandle.nullDevice
             try install.run()
             install.waitUntilExit()
-            guard install.terminationStatus == 0 else { throw HomeClientError.server("Не удалось запустить OpenStrudel. Попробуйте ещё раз.") }
+            guard install.terminationStatus == 0 else { throw HomeClientError.server(L("Не удалось запустить OpenStrudel. Попробуйте ещё раз.")) }
         }.value
         for _ in 0..<80 {
             if let data = try? Data(contentsOf: target.appending(path: "LocalConnection.json")),
@@ -68,7 +68,7 @@ import Foundation
             }
             try await Task.sleep(for: .milliseconds(250))
         }
-        throw HomeClientError.server("Первый запуск занял больше времени. Попробуйте подключиться ещё раз.")
+        throw HomeClientError.server(L("Первый запуск занял больше времени. Попробуйте подключиться ещё раз."))
     }
 }
 #endif

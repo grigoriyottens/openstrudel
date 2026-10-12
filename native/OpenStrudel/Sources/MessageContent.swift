@@ -57,14 +57,14 @@ struct ImportedMessageText: View {
                             Image(systemName: "doc.text").font(.title2).foregroundStyle(AppTheme.secondaryText)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(name).font(.callout.weight(.medium)).lineLimit(2)
-                                Text("Открыть текст из истории").font(.caption).foregroundStyle(AppTheme.secondaryText)
+                                Text(L("Открыть текст из истории")).font(.caption).foregroundStyle(AppTheme.secondaryText)
                             }
                             Spacer(minLength: 8)
                             Image(systemName: "chevron.right").font(.caption).foregroundStyle(AppTheme.secondaryText)
                         }.padding(12).contentShape(Rectangle())
                     }.buttonStyle(.plain)
                         .background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 11))
-                        .accessibilityLabel("Открыть текст файла «\(name)»")
+                        .accessibilityLabel(L("Открыть текст файла «\(name)»"))
                 }
             }
         }
@@ -79,7 +79,7 @@ struct ImportedMessageText: View {
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
                 .toolbar { ToolbarItem(placement: .confirmationAction) {
-                    Button("Готово") { selected = nil }
+                    Button(L("Готово")) { selected = nil }
                 } }
             }
             #if os(macOS)

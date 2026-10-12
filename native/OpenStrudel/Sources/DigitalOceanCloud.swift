@@ -42,7 +42,7 @@ struct DigitalOceanQuote: Codable, Equatable, Sendable {
     let region: String
     let size: String
     let releaseSHA256: String
-    var title: String { "Basic · 2 CPU · 4 ГБ" }
+    var title: String { L("Basic · 2 CPU · 4 ГБ") }
 
     static func make(sizes: [DigitalOceanSize], regions: [DigitalOceanRegion], releaseSHA256: String) throws -> Self {
         let matches = sizes.filter { $0.slug == "s-2vcpu-4gb" }
@@ -237,7 +237,7 @@ struct DigitalOceanSavedState: Codable {
             let currentQuote = try await self.prepareQuote()
             guard currentQuote == approvedQuote else {
                 self.phase = .readyToCreate
-                self.message = "Условия установки обновились. Проверьте стоимость и подтвердите запуск ещё раз."
+                self.message = L("Условия установки обновились. Проверьте стоимость и подтвердите запуск ещё раз.")
                 return
             }
             guard var installation = self.state.installation else { throw DigitalOceanFailure.storage }
@@ -435,7 +435,7 @@ struct DigitalOceanSavedState: Codable {
                 privateKeyPEM: P256.Signing.PrivateKey().pemRepresentation, ownerToken: Self.hex(bytes), quote: result)
         } else { next.installation?.quote = result }
         try save(next); quote = result
-        if result.region == "ams3" { message = "Франкфурт сейчас недоступен. Установим ту же конфигурацию в Амстердаме, в Евросоюзе." }
+        if result.region == "ams3" { message = L("Франкфурт сейчас недоступен. Установим ту же конфигурацию в Амстердаме, в Евросоюзе.") }
         return result
     }
 
@@ -500,7 +500,7 @@ struct DigitalOceanSavedState: Codable {
             struct Health: Decodable { let ok: Bool; let service: String }
             let health = try JSONDecoder().decode(Health.self, from: data)
             guard health.ok, health.service == "openstrudel", let pin = trust.certificatePin else { throw DigitalOceanFailure.serverIdentity }
-            return HomeConnection(url: baseURL, token: installation.ownerToken, pin: pin, name: "Моя команда")
+            return HomeConnection(url: baseURL, token: installation.ownerToken, pin: pin, name: L("Моя команда"))
         } catch {
             if Task.isCancelled { throw CancellationError() }
             if trust.identityRejected { throw DigitalOceanFailure.serverIdentity }
@@ -540,35 +540,35 @@ struct DigitalOceanSavedState: Codable {
 
     private func handle(_ error: Error) {
         if error is CancellationError || (error as? URLError)?.code == .cancelled {
-            phase = .idle; message = state.installation?.createAttemptedAt == nil ? nil : "Настройка сохранена. Сервер продолжает работать; его оплата не останавливается при закрытии окна."
+            phase = .idle; message = state.installation?.createAttemptedAt == nil ? nil : L("Настройка сохранена. Сервер продолжает работать; его оплата не останавливается при закрытии окна.")
             return
         }
         phase = .failed
         if let failure = error as? DigitalOceanHTTPFailure {
             if failure.status == 401 { requireSignIn(); return }
-            if failure.paymentRequired { phase = .billingRequired; message = "Завершите настройку оплаты в DigitalOcean и вернитесь сюда."; return }
-            if failure.status == 403 { requireSignIn(); message = "DigitalOcean не предоставил доступ для установки. Войдите ещё раз и разрешите создание сервера."; return }
-            if failure.status == 429 { message = "DigitalOcean просит немного подождать. Продолжите настройку через несколько минут."; return }
-            message = "DigitalOcean пока не смог выполнить запрос. Настройка сохранена — продолжите немного позже."; return
+            if failure.paymentRequired { phase = .billingRequired; message = L("Завершите настройку оплаты в DigitalOcean и вернитесь сюда."); return }
+            if failure.status == 403 { requireSignIn(); message = L("DigitalOcean не предоставил доступ для установки. Войдите ещё раз и разрешите создание сервера."); return }
+            if failure.status == 429 { message = L("DigitalOcean просит немного подождать. Продолжите настройку через несколько минут."); return }
+            message = L("DigitalOcean пока не смог выполнить запрос. Настройка сохранена — продолжите немного позже."); return
         }
         switch error as? DigitalOceanFailure {
-        case .storage: message = "Не удалось безопасно сохранить настройку. Разблокируйте устройство и попробуйте ещё раз."
+        case .storage: message = L("Не удалось безопасно сохранить настройку. Разблокируйте устройство и попробуйте ещё раз.")
         case .signIn, .callback: requireSignIn()
-        case .accountNotReady: phase = .billingRequired; message = "Подтвердите почту и способ оплаты в DigitalOcean, затем продолжите настройку."
-        case .unavailablePlan: message = "Подходящая конфигурация сейчас недоступна. Попробуйте позже — другой сервер автоматически не заказываем."
-        case .release: message = "Не удалось проверить установку OpenStrudel. Попробуйте немного позже."
-        case .wrongAccount: requireSignIn(); message = "Эта установка связана с другим аккаунтом или командой DigitalOcean. Войдите в тот аккаунт, с которого её начали."
-        case .uncertainCreate: message = "Установка пока не ответила. Можно проверить подключение ещё раз. Если ожидание не помогает, откройте DigitalOcean, чтобы проверить установку или остановить оплату удалением. Повторная проверка не создаёт новую установку."
-        case .missingServer: message = "Начатый сервер больше не найден в DigitalOcean. Проверьте его состояние в аккаунте провайдера."
-        case .ambiguousServer, .serverIdentity: message = "Не удалось подтвердить, что это ваш сервер. Подключение остановлено; новый сервер не создаём."
-        case .serverAuthentication: message = "Сервер найден, но пока не принимает сохранённое подключение. Продолжите настройку позже."
-        default: message = "Не удалось закончить настройку. Проверьте интернет и продолжите — ваш прогресс сохранён."
+        case .accountNotReady: phase = .billingRequired; message = L("Подтвердите почту и способ оплаты в DigitalOcean, затем продолжите настройку.")
+        case .unavailablePlan: message = L("Подходящая конфигурация сейчас недоступна. Попробуйте позже — другой сервер автоматически не заказываем.")
+        case .release: message = L("Не удалось проверить установку OpenStrudel. Попробуйте немного позже.")
+        case .wrongAccount: requireSignIn(); message = L("Эта установка связана с другим аккаунтом или командой DigitalOcean. Войдите в тот аккаунт, с которого её начали.")
+        case .uncertainCreate: message = L("Установка пока не ответила. Можно проверить подключение ещё раз. Если ожидание не помогает, откройте DigitalOcean, чтобы проверить установку или остановить оплату удалением. Повторная проверка не создаёт новую установку.")
+        case .missingServer: message = L("Начатый сервер больше не найден в DigitalOcean. Проверьте его состояние в аккаунте провайдера.")
+        case .ambiguousServer, .serverIdentity: message = L("Не удалось подтвердить, что это ваш сервер. Подключение остановлено; новый сервер не создаём.")
+        case .serverAuthentication: message = L("Сервер найден, но пока не принимает сохранённое подключение. Продолжите настройку позже.")
+        default: message = L("Не удалось закончить настройку. Проверьте интернет и продолжите — ваш прогресс сохранён.")
         }
     }
     private func requireSignIn() {
         var next = state; next.tokens = nil; next.pendingOAuth = nil
-        do { try save(next); phase = .idle; message = "Войдите в DigitalOcean, чтобы продолжить сохранённую настройку." }
-        catch { phase = .failed; message = "Разблокируйте устройство, чтобы продолжить настройку." }
+        do { try save(next); phase = .idle; message = L("Войдите в DigitalOcean, чтобы продолжить сохранённую настройку.") }
+        catch { phase = .failed; message = L("Разблокируйте устройство, чтобы продолжить настройку.") }
     }
     private static func hex(_ bytes: some Sequence<UInt8>) -> String { bytes.map { String(format: "%02x", $0) }.joined() }
 }

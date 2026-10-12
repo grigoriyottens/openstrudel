@@ -42,8 +42,8 @@ enum AgentTransferFile {
         case tooLarge, invalidFile
         var errorDescription: String? {
             switch self {
-            case .tooLarge: "Файл экспорта больше 192 МБ. Выберите файл меньшего размера."
-            case .invalidFile: "Выберите файл экспорта команды OpenStrudel."
+            case .tooLarge: L("Файл экспорта больше 192 МБ. Выберите файл меньшего размера.")
+            case .invalidFile: L("Выберите файл экспорта команды OpenStrudel.")
             }
         }
     }

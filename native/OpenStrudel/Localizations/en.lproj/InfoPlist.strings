@@ -1,0 +1,3 @@
+"NSLocalNetworkUsageDescription" = "Connect to your Mac or server to open your assistants and conversations.";
+"NSCameraUsageDescription" = "Scan an OpenStrudel connection code to connect your devices.";
+"NSMicrophoneUsageDescription" = "Record speech and transcribe it on this device.";

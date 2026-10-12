@@ -5,16 +5,16 @@ enum EmployeeApprovalMode: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .ask: "Спрашивать"
-        case .auto: "Автоматически проверять"
-        case .approveAll: "Без подтверждений"
+        case .ask: L("Спрашивать")
+        case .auto: L("Автоматически проверять")
+        case .approveAll: L("Без подтверждений")
         }
     }
     var explanation: String {
         switch self {
-        case .ask: "Вы подтверждаете действия, которым нужно разрешение."
-        case .auto: "Codex проверяет такие действия и выполняет разрешённые."
-        case .approveAll: "Сотрудники выполняют поручения без дополнительных разрешений."
+        case .ask: L("Вы подтверждаете действия, которым нужно разрешение.")
+        case .auto: L("Codex проверяет такие действия и выполняет разрешённые.")
+        case .approveAll: L("Сотрудники выполняют поручения без дополнительных разрешений.")
         }
     }
 }
@@ -29,15 +29,15 @@ struct ApprovalSettingsView: View {
     @State private var settings: EmployeeApprovalSettings?
     @State private var loading = true
     @State private var saving = false
-    @State private var error: String?
+    @State private var error: (any Error)?
     @State private var confirmAll = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Действия сотрудников").font(.headline)
-            Text("На «\(client.displayName)» · в приложении и Telegram")
+            Text(L("Действия сотрудников")).font(.headline)
+            Text(L("На «\(client.displayName)» · в приложении и Telegram"))
                 .font(.caption).foregroundStyle(AppTheme.secondaryText)
-            if loading { ProgressView("Загружаем режим…").controlSize(.small) }
+            if loading { ProgressView(L("Загружаем режим…")).controlSize(.small) }
             if let settings {
                 ForEach(EmployeeApprovalMode.allCases) { mode in
                     Button {
@@ -61,21 +61,21 @@ struct ApprovalSettingsView: View {
                         .accessibilityAddTraits(settings.mode == mode ? [.isSelected] : [])
                         .accessibilityIdentifier("approvalMode-" + mode.rawValue)
                 }
-                if saving { ProgressView("Сохраняем…").controlSize(.small) }
-                Text(settings.canManage ? "Режим меняется со следующего поручения. Доступ к сервисам и правила сотрудника сохраняются." : "Режим меняет владелец этого устройства.")
+                if saving { ProgressView(L("Сохраняем…")).controlSize(.small) }
+                Text(settings.canManage ? L("Режим меняется со следующего поручения. Доступ к сервисам и правила сотрудника сохраняются.") : L("Режим меняет владелец этого устройства."))
                     .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
             }
             if let error {
-                Text(error).font(.callout).foregroundStyle(AppTheme.warning)
-                Button("Повторить") { Task { await load() } }.disabled(loading || saving)
+                Text(UserFacingError.text(error.localizedDescription)).font(.callout).foregroundStyle(AppTheme.warning)
+                Button(L("Повторить")) { Task { await load() } }.disabled(loading || saving)
             }
         }
         .task { await load() }
-        .alert("Выполнять без подтверждений?", isPresented: $confirmAll) {
-            Button("Включить для этого устройства") { Task { await save(.approveAll) } }
-            Button("Отмена", role: .cancel) { }
+        .alert(L("Выполнять без подтверждений?"), isPresented: $confirmAll) {
+            Button(L("Включить для этого устройства")) { Task { await save(.approveAll) } }
+            Button(L("Отмена"), role: .cancel) { }
         } message: {
-            Text("Все сотрудники на «\(client.displayName)» смогут выполнять порученные действия в доступных сервисах, включая изменение и удаление данных. В Telegram это относится к запросам допущенных участников.")
+            Text(L("Все сотрудники на «\(client.displayName)» смогут выполнять порученные действия в доступных сервисах, включая изменение и удаление данных. В Telegram это относится к запросам допущенных участников."))
         }
     }
 
@@ -84,13 +84,13 @@ struct ApprovalSettingsView: View {
         defer { loading = false }
         do { settings = try await client.management("/v1/settings/approvals") }
         catch is CancellationError { }
-        catch { self.error = UserFacingError.text(error.localizedDescription) }
+        catch { self.error = error }
     }
     private func save(_ mode: EmployeeApprovalMode) async {
         saving = true; error = nil
         defer { saving = false }
         do { settings = try await client.management("/v1/settings/approvals", method: "POST", payload: ["mode": mode.rawValue, "confirm": mode == .approveAll]) }
         catch is CancellationError { }
-        catch { self.error = UserFacingError.text(error.localizedDescription) }
+        catch { self.error = error }
     }
 }

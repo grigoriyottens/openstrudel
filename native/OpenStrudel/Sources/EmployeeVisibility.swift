@@ -8,7 +8,7 @@ struct HiddenEmployeesButton: View {
     var body: some View {
         if count > 0 {
             Button { showing = true } label: {
-                Label("Скрытые сотрудники · \(count)", systemImage: "eye.slash")
+                Label(L("Скрытые сотрудники · \(count)"), systemImage: "eye.slash")
                     .font(.callout).foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
@@ -24,7 +24,7 @@ private struct HiddenEmployeesView: View {
     var body: some View {
         NavigationStack {
             List {
-                Text("Скрыты только в этом приложении. Сотрудники продолжают работать и доступны на других устройствах.")
+                Text(L("Скрыты только в этом приложении. Сотрудники продолжают работать и доступны на других устройствах."))
                     .font(.callout).foregroundStyle(.secondary)
                 ForEach(library.visibleClients) { source in
                     let hidden = library.hiddenProfiles(on: source)
@@ -35,17 +35,17 @@ private struct HiddenEmployeesView: View {
                                     AgentAvatar(appearance: profile.resolvedAppearance, size: 32)
                                     Text(profile.name)
                                     Spacer()
-                                    Button("Показать") { Task { await library.setHidden(false, profile: profile, on: source) } }
+                                    Button(L("Показать")) { Task { await library.setHidden(false, profile: profile, on: source) } }
                                         .buttonStyle(.borderless)
-                                        .accessibilityLabel("Показать «\(profile.name)»")
+                                        .accessibilityLabel(L("Показать «\(profile.name)»"))
                                 }.padding(.vertical, 4).accessibilityElement(children: .contain)
                             }
                         }
                     }
                 }
             }
-            .navigationTitle("Скрытые сотрудники")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
+            .navigationTitle(L("Скрытые сотрудники"))
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } } }
         }
         #if os(macOS)
         .frame(width: 480, height: 400)
