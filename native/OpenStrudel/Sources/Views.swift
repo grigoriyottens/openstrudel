@@ -1827,7 +1827,7 @@ struct SectionTitle: View {
     }
 }
 
-private struct OpenAISettingsCard: View {
+struct OpenAISettingsCard: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
     @State private var copiedCode = false

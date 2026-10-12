@@ -43,6 +43,30 @@ describe("Server setup over SSH", () => {
       expect(readFileSync(join(root, "state/bootstrap.json"))).toEqual(original);
     }
   });
+  it("updates a failed, not-yet-installed release without changing its owner or identity", () => {
+    const { root, payload } = fixture();
+    expect(shell(root, "stage_setup", payload).status).toBe(0);
+    writeFileSync(join(root, "bin/systemctl"), "#!/bin/sh\nprintf 'failed\\n'\n", { mode: 0o700 });
+    const original = readFileSync(join(root, "state/bootstrap.json"));
+    const retry = { ...payload, previousReleaseHash: payload.releaseHash, releaseHash: "c".repeat(64), installer: Buffer.from("#!/usr/bin/env bash\necho updated\n").toString("base64") };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = shell(root, "stage_setup", retry);
+      expect(result.status, result.stderr).toBe(0);
+    }
+    expect(readFileSync(join(root, "state/release.sha256"), "utf8")).toBe(retry.releaseHash);
+    expect(readFileSync(join(root, "state/bootstrap.json"))).toEqual(original);
+    expect(readFileSync(join(root, "state/installation-id"), "utf8").trim()).toBe(payload.installationId);
+  });
+  it.each(["running", "installed", "completed", "wrong-owner", "wrong-release"])("does not replace a %s installation while updating a failed release", kind => {
+    const { root, payload } = fixture();
+    expect(shell(root, "stage_setup", payload).status).toBe(0);
+    writeFileSync(join(root, "bin/systemctl"), `#!/bin/sh\nprintf '${kind === "running" ? "activating" : "failed"}\\n'\n`, { mode: 0o700 });
+    if (kind === "installed") mkdirSync(join(root, "home"));
+    if (kind === "completed") writeFileSync(join(root, "state/complete"), "complete");
+    const retry = { ...payload, previousReleaseHash: kind === "wrong-release" ? "d".repeat(64) : payload.releaseHash, releaseHash: "c".repeat(64), ownerTokenHash: kind === "wrong-owner" ? "e".repeat(64) : payload.ownerTokenHash };
+    expect(shell(root, "stage_setup", retry).status).not.toBe(0);
+    expect(readFileSync(join(root, "state/release.sha256"), "utf8")).toBe(payload.releaseHash);
+  });
   it("preserves an unrelated installation and does not adopt a public staging directory", () => {
     const { root, payload } = fixture();
     mkdirSync(join(root, "home")); writeFileSync(join(root, "home/user-data"), "keep");

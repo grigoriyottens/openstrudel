@@ -227,12 +227,13 @@ struct DeviceAccountsView: View {
     @State private var login: OpenAILogin?
     @State private var loginAccount = ""
     @State private var logout: ManagedCodexAccount?
+    @State private var copiedCode = false
     private var query: String { deviceID.isEmpty ? "" : "?deviceId=" + deviceID }
     private func path(_ id: String, _ action: String) -> String { "/v1/accounts/" + id + "/" + action + query }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(L("ChatGPT on \(client.devices.first(where: { $0.id == deviceID })?.name ?? client.displayName)"))
+            Text(L("ChatGPT on \(deviceID == client.health?.nodeId ? client.displayName : client.devices.first(where: { $0.id == deviceID })?.name ?? client.displayName)"))
                 .font(.title3.weight(.semibold))
             if client.devices.count > 1 {
                 Picker(L("Устройство сотрудника"), selection: $deviceID) {
@@ -245,7 +246,7 @@ struct DeviceAccountsView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(account.account.email ?? account.name).font(.headline).textSelection(.enabled)
+                            Text(account.account.email ?? (account.id == "default" && account.name == "Основной" ? "ChatGPT" : account.name)).font(.headline).textSelection(.enabled)
                             Text(account.account.connected ? account.account.planLabel : account.account.isUnavailable ? L("Не удалось проверить аккаунт") : L("Нужен вход в OpenAI")).font(.caption).foregroundStyle(AppTheme.secondaryText)
                             if account.account.connected, let category = account.account.categoryLabel {
                                 Text(category).font(.caption).foregroundStyle(AppTheme.secondaryText)
@@ -278,7 +279,19 @@ struct DeviceAccountsView: View {
             }
             if let login {
                 Text(L("Завершите вход на сайте OpenAI")).font(.headline)
-                if let code = login.userCode { Text(code).font(.title2.monospaced()).textSelection(.enabled).accessibilityIdentifier("openAIDeviceCode") }
+                if let code = login.userCode {
+                    Text(L("Введите этот код на сайте OpenAI")).font(.callout).foregroundStyle(AppTheme.secondaryText)
+                    Text(code).font(.title2.monospaced()).textSelection(.enabled).accessibilityIdentifier("openAIDeviceCode")
+                    Button(copiedCode ? L("Код скопирован") : L("Скопировать код")) {
+                        #if os(macOS)
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(code, forType: .string)
+                        #else
+                        UIPasteboard.general.string = code
+                        #endif
+                        copiedCode = true
+                    }.accessibilityIdentifier("copyOpenAICode")
+                }
                 if let url = login.url { Link(L("Открыть OpenAI"), destination: url).buttonStyle(.borderedProminent) }
                 Button(L("Отменить вход")) { perform {
                     let _: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + login.loginId), method: "DELETE")
@@ -301,6 +314,7 @@ struct DeviceAccountsView: View {
             } else { await refresh() }
         }
         .task(id: login?.loginId) {
+            copiedCode = false
             guard let current = login else { return }
             while !Task.isCancelled && login?.loginId == current.loginId {
                 do {

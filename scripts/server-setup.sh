@@ -85,13 +85,27 @@ else:
     with os.fdopen(descriptor, "w") as out: out.write(identity + "\n"); out.flush(); os.fsync(out.fileno())
 bootstrap = json.dumps({k:payload[k] for k in ["installationId", "privateKeyPEM", "ownerTokenHash"]}, sort_keys=True).encode()
 files = [("bootstrap.json", bootstrap, 0o600), ("release.sha256", payload["releaseHash"].encode(), 0o600), ("connection-host", host.encode(), 0o600), ("install.sh", installer, 0o700)]
+changed = [name for name, content, mode in files if (root / name).is_file() and (root / name).read_bytes() != content]
+replace_release = False
+if changed and payload.get("previousReleaseHash"):
+    previous = payload["previousReleaseHash"]
+    if not isinstance(previous, str) or not re.fullmatch(r"[a-f0-9]{64}", previous): raise ValueError("OPENSTRUDEL_EXISTING")
+    # An explicit retry may update a failed download, never a running service
+    # or an installed Home. Keep the same bootstrap, owner and host throughout.
+    attempt_lock = os.open(str(root / "attempt.lock"), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    fcntl.flock(attempt_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    state = subprocess.run(["systemctl", "show", "openstrudel-install.service", "--property=ActiveState", "--value"], capture_output=True, text=True, timeout=10)
+    if state.returncode or state.stdout.strip() != "failed" or installation.exists() or installation.is_symlink() or (root / "complete").exists() or (root / "complete").is_symlink(): raise ValueError("OPENSTRUDEL_EXISTING")
+    if any(name not in ["release.sha256", "install.sh"] for name in changed): raise ValueError("OPENSTRUDEL_EXISTING")
+    if (root / "release.sha256").read_text().strip() not in [previous, payload["releaseHash"]]: raise ValueError("OPENSTRUDEL_EXISTING")
+    replace_release = True
 # Validate the entire recipe before completing any interrupted write.
 for name, content, mode in files:
     file = root / name
-    if file.is_symlink() or (file.exists() and file.read_bytes() != content): raise ValueError("OPENSTRUDEL_EXISTING")
+    if file.is_symlink() or (file.exists() and file.read_bytes() != content and not (replace_release and name in ["release.sha256", "install.sh"])): raise ValueError("OPENSTRUDEL_EXISTING")
 for name, content, mode in files:
     file = root / name
-    if not file.exists():
+    if not file.exists() or (replace_release and name in changed):
         temporary = root / ("." + name + ".new")
         # A killed write can leave this known temporary file. The matching
         # installation owns this private directory and the lock is held.
@@ -120,7 +134,7 @@ install_server() {
 }
 
 server_status() {
-  python3 - "$SETUP_STATE_DIR" <<'PY'
+  python3 - "$SETUP_STATE_DIR" "$SETUP_INSTALL_ROOT" <<'PY'
 import json, pathlib, subprocess, sys
 root = pathlib.Path(sys.argv[1])
 def text(name):
@@ -129,6 +143,8 @@ def text(name):
 result = subprocess.run(['systemctl', 'show', 'openstrudel-install.service', '--property=ActiveState', '--value'], capture_output=True, text=True)
 state = result.stdout.strip()
 if text('complete') == 'complete': state = 'complete'
-print(json.dumps(dict(installationID=text('installation-id'), state=state, stage=text('stage') or 'dependencies')))
+installation = pathlib.Path(sys.argv[2])
+canUpdateRelease = state == 'failed' and not installation.exists() and not installation.is_symlink() and text('complete') is None
+print(json.dumps(dict(installationID=text('installation-id'), state=state, stage=text('stage') or 'dependencies', canUpdateRelease=canUpdateRelease)))
 PY
 }

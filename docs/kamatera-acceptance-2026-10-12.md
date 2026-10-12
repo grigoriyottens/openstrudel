@@ -2,7 +2,7 @@
 
 ## Result
 
-A real test server was created through Kamatera's official API, then configured through OpenStrudel's existing-server wizard on this Mac. Installation, reconnecting after closing the app, authenticated HTTPS, a remote employee, archive export/restore and a full server reboot were verified. This is stronger evidence than the earlier local VM test, but it is not a complete model or integration test.
+A real test server was created through Kamatera's official API, then configured through OpenStrudel's existing-server wizard on this Mac. Installation, reconnecting after closing the app, authenticated HTTPS, a remote employee, archive export/restore and a full server reboot were verified. A follow-up also completed real ChatGPT sign-in in the native app, created an assistant through the composer and received a verified model reply. This is not proof of integrated purchase or every service connection.
 
 The cloud test found a release defect: the published Home 35 archive omitted the `OpenStrudel-Home/` prefix required by both installers. SSH and preflight worked; extraction correctly rejected the archive. The previous local VM acceptance had installed Home 33, so it did not cover Home 35 packaging.
 
@@ -12,7 +12,7 @@ SHA-256: `421ba9bb34baaa9b5adf8014763f6e6c9ce4f53a96bedf38fa54da2423ad65b2`.
 
 ## Cloud configuration and cost
 
-One server, `openstrudel-qa-20261012`, in Amsterdam: Ubuntu 24.04, 2 shared vCPUs, 4 GiB RAM and 40 GiB SSD. No backup or managed-service add-ons. The provider returned **$0.026/hour while on or off** and a $19 equivalent monthly price. This server was bought directly for acceptance, not through an embedded OpenStrudel checkout. Its removal was requested separately; no deletion is claimed while that answer is pending.
+One server, `openstrudel-qa-20261012`, in Amsterdam: Ubuntu 24.04, 2 shared vCPUs, 4 GiB RAM and 40 GiB SSD. No backup or managed-service add-ons. The provider returned **$0.026/hour while on or off** and a $19 equivalent monthly price. This server was bought directly for acceptance, not through an embedded OpenStrudel checkout. The user approved removal after the full acceptance run. The server is still running for the remaining checks; deletion must be confirmed through the provider before this work is closed.
 
 ## Verified behavior
 
@@ -24,6 +24,7 @@ One server, `openstrudel-qa-20261012`, in Amsterdam: Ubuntu 24.04, 2 shared vCPU
 | Continue later | The test Mac app was quit during installation. The server completed independently; relaunch recovered the saved identity without asking for the SSH key again |
 | Connection | The native wizard verified authenticated HTTPS and added the server as an independent device |
 | Remote employee | An opt-in native integration test created an employee on the actual Kamatera Home; the local device's employee collection remained empty; the employee appeared in the real app sidebar |
+| ChatGPT and first reply | The native account flow opened the official OpenAI device authorization. After successful sign-in, the server assistant was renamed to Server Pilot through a real request and answered in English: 17 × 23 = 391. No authentication files were copied to bypass sign-in. |
 | Backup | Native HomeClient exported, previewed and restored the server archive. Existing IDs survived; repeating the same import returned the same imported IDs without duplicating them |
 | Reboot | Linux boot ID changed. Home restarted automatically; certificate, installation/node identity and the existing profile data persisted |
 | Authentication | An external request to employee data without a token returned 401 |
@@ -41,12 +42,21 @@ Use [the packaging procedure](home-release-packaging.md) for future Home release
 
 ## Still unverified or unresolved
 
-- No ChatGPT account was enrolled on this new server. Its native sign-in screen was reached, but a real model reply on this VM was not tested. Existing review-server/model tests do not substitute for this check.
 - No integrated Kamatera purchase flow was added. OpenStrudel currently offers setup of an existing server and a separate DigitalOcean flow; provider provisioning in this test used the official API.
-- A pending install pins its release digest. An already failed Home 35 attempt does not recover merely because the public alias now points to 35.1. Explicit, identity-preserving recovery across a release change remains work; do not overwrite users' recovery records or data to bypass it.
+- A pending install pins its release digest. An already failed Home 35 attempt does not recover merely because the public alias now points to 35.1. A fix now preserves identity and permits replacement only before installation, when the previous service failed. Its 18 targeted script tests pass, including refusal to replace running, completed, installed or differently owned attempts. The native change and real failed-35 retry remain unverified; do not overwrite users' recovery records or data to bypass the test.
 - The restored employees appear correctly, but the server currently appends the Russian suffix `(импорт)` even in the English client. This generated-name localization defect remains open; the screenshots are not evidence of complete English copy coverage.
 - This run does not close physical-iPhone dictation/interruptions, fresh Google OAuth, live-microphone quality, Windows/Linux desktop or long-running native memory checks. Prior evidence remains scoped in [release 35 acceptance](release-35-acceptance.md).
 - The proposed OpenRamble-based dictation direction is documented [separately](dictation-direction-2026-10-12.md); the Apple speech engine in shipped clients was not replaced.
+
+## UX follow-up in progress
+
+| Before | After proposed in the checkpoint | Why |
+| --- | --- | --- |
+| Finishing installation drops the user into the app and leaves ChatGPT setup in settings. | Keep the setup sheet open for ChatGPT sign-in, then offer “Create an assistant here.” | The server journey should finish at a working assistant. |
+| Account settings show the container hostname. | Use the device label the user sees in navigation. | Users should recognize which server owns the account. |
+| The device code is selectable but has no copy action. | Show a short entry hint and a Copy code action with feedback. | Sign-in should not depend on knowing text-selection conventions. |
+
+These native changes are a work-in-progress checkpoint for continuation on Mac mini, not a built or published release. New strings still need the five-language catalog, native build and real UI acceptance. The new release-retry check also needs review of interruption before the installation identity marker is written.
 
 ## Evidence and rollback
 
