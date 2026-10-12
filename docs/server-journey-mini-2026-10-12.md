@@ -42,7 +42,7 @@ Before and after the QA service interruption, independent authenticated HTTPS ch
 2. Exercise the preserved failed Home 35 recovery record with the corrected installer. The working, authorized 35.1 installation must not be overwritten to manufacture this result. Fault-injection tests are not a substitute for that live acceptance.
 3. Repeat installation on a clean supported OS. The current server reused Docker and packages from the failed first attempt. No second paid resource was created on Mac mini.
 4. Keep integrated provider purchasing gated until real offer/payment/provisioning acceptance passes. Do not publish missing prices as a working checkout.
-5. Remove the exact paid disposable Kamatera VM after all required server checks, and confirm removal in provider inventory. Turning it off does not stop its hourly charge. The MacBook provider helper is not installed on this Mac; SSH access alone does not authorize pretending provider deletion succeeded.
+5. Remove the exact paid disposable Kamatera VM after all required server checks, and confirm removal in provider inventory. Turning it off does not stop its hourly charge. The MacBook provider helper is not installed on this Mac; at 22:59 the local 1Password CLI reported no signed-in account, and the browser console showed the Kamatera login page. The user was asked to restore provider access without sending credentials in chat. SSH access alone cannot confirm provider deletion.
 6. Continue the separately scoped voice, physical-iPhone interruption, fresh third-party OAuth, cross-network and long-running memory checks. The server results do not close these items.
 
 ## Evidence handling
