@@ -1,8 +1,8 @@
 # English metadata for the localized release
 
-Prepared, not uploaded or submitted. App Store Connect was rechecked on 12 October: version 1.0, build 34 remains `WAITING_FOR_REVIEW`, and the binary is `VALID`.
+The metadata and screenshots below are prepared, not applied to the pending App Store submission. The localized iOS build 35 was uploaded, processed as `VALID`, and verified in the existing internal TestFlight group as `IN_BETA_TESTING`. App Store Connect was rechecked on 12 October after release validation: version 1.0 still selects build 34, remains `WAITING_FOR_REVIEW`, and that binary is `VALID`.
 
-Keep the current submission in review while the new build completes release validation. These screenshots and the language claim must ship with the localized binary, not with build 34. If build 34 is approved first, publish this work as an update. Do not replace descriptive fields in a way that makes the reviewed binary inaccurate.
+Keep the current submission in review. These screenshots and the language claim must ship with the localized binary, not with build 34. If build 34 is approved first, publish this work as an update. Do not replace descriptive fields in a way that makes the reviewed binary inaccurate.
 
 ## Name
 
@@ -83,4 +83,4 @@ Captured from the real app using disposable English example content. Both UI tes
 - Local artifacts: `.data/localization-2026-10-12/store-screenshots/`; test result: `english-store.xcresult`.
 - Capture command lives in `StorePreviewUITests.testPublicScreenshots`; example data lives in `tests/fixtures/store-preview.ts`.
 
-Before upload, assign a new build/version as required, archive the release configuration, inspect the packaged icon and supported locales, validate private review access, and replace screenshots together with the selected localized build. Physical-device dictation and camera scanning remain release checks.
+Build 35 was archived, validated and uploaded; its packaged icon and five locales were inspected. Both private-review paths passed with the actual server on the iPhone Simulator: open the page in Safari, and paste the page URL in a fresh app installation. Each connected, received a real model reply and retained history after relaunch. The private connection page now defaults to English and supports all five languages. Replace screenshots and metadata together with the selected localized binary when preparing its public App Store submission. Physical-device dictation and camera scanning remain open checks.

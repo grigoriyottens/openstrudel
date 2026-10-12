@@ -1,6 +1,6 @@
 # Interface, accounts and local dictation
 
-Implemented and checked on 12 October 2026. These changes have not been published as a new signed release or submitted to Apple.
+Implemented and checked on 12 October 2026. Build 35 is now published for Mac and Home/web, installed on the development Mac, and available to internal iOS TestFlight testers. The App Store submission remains build 34. See [release 35 acceptance](release-35-acceptance.md) for the final delivery evidence and limits.
 
 ## Requested scope
 
@@ -8,7 +8,7 @@ Implemented and checked on 12 October 2026. These changes have not been publishe
 - ChatGPT accounts: recognizable plan and personal/workspace category, distinguish multiple accounts, actual subscription windows and reset times, a separate credit balance and additional reset passes when returned.
 - Integrated, optional local dictation. First use explains and offers the download. Reuse installed assets; no dependency on launching another app. Keep a recoverable recording through interruptions and conversation changes.
 - Clipboard images: Command-V, image preview and image-aware assistant input; ordinary text paste remains native.
-- Remote setup is queued in [the server setup brief](server-setup-queue-2026-10-12.md), with current provider evidence and acceptance criteria. No purchase without a chosen offer and approval.
+- Remote setup is implemented as described in [the server setup brief](server-setup-queue-2026-10-12.md), with current provider evidence and acceptance criteria. Paid provisioning still needs a chosen offer and approval.
 - English App Store copy and screenshots. Build 34 was still WAITING_FOR_REVIEW when checked on 12 October. Decide on replacement only after the new experience is verified.
 
 ## Implementation
@@ -40,11 +40,11 @@ Private logs, screenshots, fixture scripts and results are under `.data/localiza
 
 ## Release boundaries and remaining checks
 
-- Physical iPhone/iPad, camera QR scanning, live microphone recording, long/interrupted recordings on hardware and dictation accuracy in all five languages have not been revalidated in this pass. Native recording recovery tests and the Russian file transcription are narrower evidence.
+- Physical iPhone/iPad, camera QR scanning, live microphone recording, long/interrupted recordings on hardware and dictation accuracy in all five languages have not been revalidated in this pass. The later release check processed synthetic recorded speech with the real engine in all five languages; it is narrower than microphone and native-speaker acceptance.
 - The current OpenRamble package and recording lifecycle were reviewed; its macOS-only inference package was not added as a second runtime. Apple dictation availability is checked per device and language.
 - Paid server provisioning remains queued. The live WAI VDS catalog still disables OpenStrudel checkout; EQVPS and Vultr documentation are evidence of provider capabilities, not completed purchases or a production provider migration.
 - [English store text and screenshots](app-store-localization-2026-10-12.md) are prepared. The metadata draft fits Apple's field lengths. Build 34 remains `VALID` and `WAITING_FOR_REVIEW` in the final live API check. Its review was not canceled, and these new language claims were not applied to the older binary.
-- No new signed archive, Sparkle package, production install, web deployment or App Store submission is implied by these development builds and simulator checks.
+- The development checks above are retained as their original evidence. Subsequent signing, publication, installation and review-connection checks are recorded separately in [release 35 acceptance](release-35-acceptance.md). Build 35 has not been submitted to public App Review.
 
 ## Sources
 

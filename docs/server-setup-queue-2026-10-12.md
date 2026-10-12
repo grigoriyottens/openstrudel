@@ -1,6 +1,6 @@
-# Simple server setup: queued work
+# Simple server setup
 
-Requested on 12 October 2026. This is the next implementation brief, not an enabled purchase flow. No account, order, payment or virtual machine was created during this research.
+Requested on 12 October 2026. The existing-server flow is implemented and published in build 35. A disposable local Ubuntu VM was created for installation acceptance; no paid provider account, order, payment or production migration was performed. The integrated purchase proposal below remains dependent on provider access and an approved offer.
 
 ## Product decision
 
@@ -47,4 +47,4 @@ Do not choose a new production provider solely because it accepts crypto. The ne
 
 This brief extends [the earlier cloud work](easy-cloud.md) and [checkout contract](integrated-cloud-checkout.md); it does not describe those older checks as newly repeated.
 
-Implementation update: the Mac address/password/SSH-key setup path and provider choice are implemented in the next candidate. See [current acceptance evidence](remaining-work-2026-10-12.md). Paid provisioning and provider migration remain separate from this result.
+Implementation update: the Mac address/password/SSH-key setup path and named DigitalOcean entry are published in build 35. See [current acceptance evidence](release-35-acceptance.md). The local VM installation, real SSH authentication, interrupted-installation resume, remote employee creation and archive export were verified. Paid provisioning and provider migration remain separate from this result.

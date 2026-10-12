@@ -21,7 +21,11 @@ import XCTest
         app.launchArguments = ["-openstrudel.language", "en", "-AppleLanguages", "(en)"]
         app.launch()
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
+        // Start from a new document, as a reviewer opening the link for the first time.
+        // Safari otherwise reuses an old tab, even across test-runner relaunches.
+        safari.open(try XCTUnwrap(URL(string: "about:blank")))
         if pastingPage {
+            app.activate()
             let paste = app.buttons["pasteInvitation"]
             XCTAssertTrue(paste.waitForExistence(timeout: 15), app.debugDescription)
             paste.tap()
