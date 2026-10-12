@@ -2,7 +2,7 @@
 
 Execution started on 12 October 2026 after the five-language update was merged in PR #13. This replaces stale unchecked items in older plans with an explicit current queue. A checked item needs evidence from the surface it changes.
 
-Final delivery: [release 35 acceptance](release-35-acceptance.md). Mac/Home 35 are published; the local Mac is updated and iOS 35 is in internal TestFlight. The paid-provider and physical-device boundaries below remain open.
+Final delivery: [release 35 acceptance](release-35-acceptance.md). The [Kamatera follow-up](kamatera-acceptance-2026-10-12.md) verifies a real paid VM and corrects the Home archive as 35.1. Mac 35 is installed and iOS 35 is in internal TestFlight. Embedded provider checkout, a real model reply on the new VM and physical-device checks remain separate. The [dictation proposal](dictation-direction-2026-10-12.md) does not change the shipped speech engine.
 
 ## 1. Connect a server
 

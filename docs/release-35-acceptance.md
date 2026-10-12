@@ -1,5 +1,7 @@
 # Release 35 acceptance — 12 October 2026
 
+Follow-up: the [real Kamatera installation](kamatera-acceptance-2026-10-12.md) found that Home 35 was packaged without the directory required by the installers. Home 35.1 corrects the package and is now the current download; Mac/Sparkle/iOS 35 are unchanged. The follow-up records actual cloud installation, reboot and backup restoration, plus the remaining account/recovery boundaries.
+
 Build 35 is published for Mac and Home/web. The development Mac is updated with a verified rollback snapshot. iOS build 35 is available to the existing internal TestFlight group. The public App Store submission still uses build 34 and is waiting for review; build 35 has not replaced it.
 
 Mac and Home source: `b04bfe45f8f136e95ae5af112873f66111b96874`, including PRs [13](https://github.com/mikwiseman/openstrudel/pull/13), [14](https://github.com/mikwiseman/openstrudel/pull/14) and [15](https://github.com/mikwiseman/openstrudel/pull/15). Subsequent test/documentation commits do not change these release artifacts.
