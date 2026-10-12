@@ -3,6 +3,20 @@ import SwiftUI
 import AppKit
 #endif
 
+struct SavedConnectionUnlockButton: View {
+    @ObservedObject var client: HomeClient
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(L("Unlock connection")) {
+                Task { if await client.unlockSavedConnection() { await client.load(quiet: true) } }
+            }
+            .disabled(client.isUnlockingConnection)
+            .accessibilityIdentifier("unlockSavedConnection")
+            if client.isUnlockingConnection { ProgressView().controlSize(.small) }
+        }
+    }
+}
+
 struct SettingsView: View {
     enum Section: String, CaseIterable {
         case devices, accounts, backups, application
@@ -141,14 +155,20 @@ struct SettingsView: View {
                     set: { expandedDeviceID = $0 ? device.id : nil }
                 )) {
                     VStack(alignment: .leading, spacing: 12) {
-                        MobilePairingSettings().environmentObject(device)
+                        if device.connectionNeedsUnlock {
+                            Text(L("Unlock the saved connection to continue. Your chats and drafts are safe."))
+                                .font(.callout).foregroundStyle(AppTheme.secondaryText)
+                            SavedConnectionUnlockButton(client: device)
+                        } else {
+                            MobilePairingSettings().environmentObject(device)
+                        }
                     }.padding(.top, 12)
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: device.isLocalConnection ? "laptopcomputer" : "desktopcomputer").font(.title2)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(device.displayName).font(.headline)
-                            Text(device.homeUnreachable || device.health == nil ? L("Нет связи · попробуем снова") : L("На связи · сотрудников: \(device.profiles.count)"))
+                            Text(device.connectionNeedsUnlock ? L("Unlock connection") : device.homeUnreachable || device.health == nil ? L("Нет связи · попробуем снова") : L("На связи · сотрудников: \(device.profiles.count)"))
                                 .font(.caption).foregroundStyle(AppTheme.secondaryText)
                         }
                         Spacer()

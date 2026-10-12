@@ -12,6 +12,7 @@ This continues the MacBook checkpoint `d3418d1` on `codex/server-journey-complet
 - New assistants use the creating client's language for their default name. Import name collisions use numeric suffixes. Existing assistants are not renamed. Native and web clients translate known service notices without translating user or model messages.
 - A legacy OpenAI expired-sign-in error now retains the sign-in recovery instruction in all five languages. Tests use the selected interface locale instead of assuming Russian or a five-character time.
 - A locked Keychain connection now offers **Unlock connection** instead of asking the user to set up the device again. Startup stays silent; an explicit retry requests the existing credential off the main thread. The saved destination keeps the draft namespace stable, and a delayed credential result cannot reconnect after local erase. Missing credentials still require a connection link; revoked credentials retain the existing authenticated retry behavior. An unreadable saved pairing attempt fails before creating a replacement attempt or changing the current connection.
+- The sidebar and device settings distinguish locked credentials from an offline device. Chat and settings share the same recovery action; settings do not offer to generate connection links until access is restored.
 
 ## Verified on this Mac
 

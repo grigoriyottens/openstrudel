@@ -300,7 +300,8 @@ private struct Sidebar: View {
                             if library.hasOtherDevices {
                                 HStack(spacing: 5) {
                                     Text(source.displayName)
-                                    if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
+                                    if source.connectionNeedsUnlock { Image(systemName: "lock").accessibilityLabel(L("Unlock connection")) }
+                                    else if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
                                 }.font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.secondaryText)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 5)
@@ -488,10 +489,7 @@ private struct ConversationView: View {
                         .font(.callout)
                     Spacer(minLength: 0)
                     if client.connectionNeedsUnlock {
-                        Button(L("Unlock connection")) {
-                            Task { if await client.unlockSavedConnection() { await client.load(quiet: true) } }
-                        }.disabled(client.isUnlockingConnection)
-                        if client.isUnlockingConnection { ProgressView().controlSize(.small) }
+                        SavedConnectionUnlockButton(client: client)
                     } else if client.connectionNeedsPairing { Button(L("Подключить")) { showSettings = true } }
                 }.foregroundStyle(AppTheme.secondaryText).padding(.horizontal, chatInset).padding(.vertical, 10)
             }
