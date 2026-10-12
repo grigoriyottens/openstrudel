@@ -327,6 +327,7 @@ struct ConnectionInvitationView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var textSize
     let onConfirm: (MacPairing) -> Void
+    var onBack: (() -> Void)? = nil
     @State private var invitation = ""
     @State private var error: String?
     @State private var openingPage = false
@@ -389,7 +390,9 @@ struct ConnectionInvitationView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(onBack == nil ? L("Отмена") : L("Назад")) { if let onBack { onBack() } else { dismiss() } }
+                }
             }
         }
         #if os(macOS)

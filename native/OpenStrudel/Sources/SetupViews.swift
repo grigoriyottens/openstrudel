@@ -30,7 +30,7 @@ struct SetupActionLabel: View {
 /// Cloud setup keeps the provider's account and billing in the user's name.
 struct ServerSetupView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var client: HomeClient
+    @EnvironmentObject private var library: DeviceLibrary
     @StateObject private var cloud = DigitalOceanCloud.shared
     @State private var connecting = false
     @State private var connectionError: String?
@@ -200,7 +200,9 @@ struct ServerSetupView: View {
         guard let connection = cloud.connection, !connecting else { return }
         connecting = true
         defer { connecting = false }
+        let client = library.clients.first { $0.savedBaseURL == connection.url } ?? library.newConnection()
         if await client.connectToCloud(connection) {
+            library.add(client)
             dismiss()
         } else {
             connectionError = client.pairingError ?? L("Не удалось сохранить подключение. Разблокируйте устройство и попробуйте ещё раз.")

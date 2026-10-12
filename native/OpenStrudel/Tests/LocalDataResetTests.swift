@@ -83,13 +83,17 @@ struct LocalDataResetTests {
         let remote = try #require(UserDefaults(suiteName: remoteName))
         defaults.set(true, forKey: "openstrudel.aiConsent")
         remote.set("https://remote.invalid", forKey: "openstrudel.homeURL")
-        let service = reset.bundleID + ".credentials"
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: "test"]
-        #expect(SecItemAdd(query.merging([kSecValueData as String: Data("test".utf8)]) { _, new in new } as CFDictionary, nil) == errSecSuccess)
-        defer { SecItemDelete(query as CFDictionary); defaults.removePersistentDomain(forName: reset.bundleID); remote.removePersistentDomain(forName: remoteName) }
+        let queries: [[String: Any]] = [".credentials", ".digitalocean", ".server-setup", ".unrelated"].map {
+            [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: reset.bundleID + $0, kSecAttrAccount as String: "test"]
+        }
+        for query in queries {
+            #expect(SecItemAdd(query.merging([kSecValueData as String: Data("test".utf8)]) { _, new in new } as CFDictionary, nil) == errSecSuccess)
+        }
+        defer { for query in queries { SecItemDelete(query as CFDictionary) }; defaults.removePersistentDomain(forName: reset.bundleID); remote.removePersistentDomain(forName: remoteName) }
         try reset.eraseCredentials()
         try reset.erasePreferences(connectionIDs: ["remote"])
-        #expect(SecItemCopyMatching(query as CFDictionary, nil) == errSecItemNotFound)
+        for query in queries.prefix(3) { #expect(SecItemCopyMatching(query as CFDictionary, nil) == errSecItemNotFound) }
+        #expect(SecItemCopyMatching(queries[3] as CFDictionary, nil) == errSecSuccess)
         #expect(defaults.object(forKey: "openstrudel.aiConsent") == nil)
         #expect(remote.object(forKey: "openstrudel.homeURL") == nil)
         let fresh = HomeClient(defaults: defaults, pendingDirectory: reset.home.appending(path: "Pending"), connectionID: reset.bundleID)

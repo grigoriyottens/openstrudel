@@ -175,7 +175,13 @@ private struct HomeUnavailableView: View {
         }.defaultScrollAnchor(.center, for: .alignment)
         .sheet(isPresented: $showingInvitation, onDismiss: {
             if let invitation { client.pendingPairing = invitation; client.pairingError = nil; self.invitation = nil }
-        }) { ConnectionInvitationView { invitation = $0 } }
+        }) {
+            #if os(macOS)
+            ConnectDeviceView { invitation = $0 }
+            #else
+            ConnectionInvitationView { invitation = $0 }
+            #endif
+        }
     }
 }
 

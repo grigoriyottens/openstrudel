@@ -6865,5 +6865,432 @@
     "fr": "Téléchargez le modèle de dictée pour continuer.",
     "es": "Descarga el modelo de dictado para continuar.",
     "he": "כדי להמשיך, יש להוריד את מודל ההכתבה."
+  },
+  "Add a device using its connection link.": {
+    "en": "Add a device using its connection link.",
+    "ru": "Добавьте устройство по ссылке подключения.",
+    "fr": "Ajoutez un appareil avec son lien de connexion.",
+    "es": "Añade un dispositivo con su enlace de conexión.",
+    "he": "הוספת מכשיר באמצעות קישור החיבור שלו."
+  },
+  "Enter its address. OpenStrudel takes care of installation.": {
+    "en": "Enter its address. OpenStrudel takes care of installation.",
+    "ru": "Укажите адрес. OpenStrudel выполнит установку.",
+    "fr": "Saisissez son adresse. OpenStrudel se charge de l’installation.",
+    "es": "Introduce su dirección. OpenStrudel se encarga de la instalación.",
+    "he": "מזינים את הכתובת. OpenStrudel מטפל בהתקנה."
+  },
+  "Automatic setup supports Ubuntu 24.04 on a 64-bit Intel or ARM server.": {
+    "en": "Automatic setup supports Ubuntu 24.04 on a 64-bit Intel or ARM server.",
+    "ru": "Автоматическая установка работает на Ubuntu 24.04 с 64-битным процессором Intel или ARM.",
+    "fr": "L’installation automatique nécessite Ubuntu 24.04 sur un serveur Intel ou ARM 64 bits.",
+    "es": "La instalación automática requiere Ubuntu 24.04 en un servidor Intel o ARM de 64 bits.",
+    "he": "ההתקנה האוטומטית תומכת ב־Ubuntu 24.04 בשרת Intel או ARM עם מעבד 64 סיביות."
+  },
+  "Checking the connection": {
+    "en": "Checking the connection",
+    "ru": "Проверяем подключение",
+    "fr": "Vérification de la connexion",
+    "es": "Comprobando la conexión",
+    "he": "בודקים את החיבור"
+  },
+  "Checking the server's identity": {
+    "en": "Checking the server's identity",
+    "ru": "Проверяем подлинность сервера",
+    "fr": "Vérification de l’identité du serveur",
+    "es": "Verificando la identidad del servidor",
+    "he": "מאמתים את זהות השרת"
+  },
+  "Checking your server": {
+    "en": "Checking your server",
+    "ru": "Проверяем сервер",
+    "fr": "Vérification du serveur",
+    "es": "Comprobando el servidor",
+    "he": "בודקים את השרת"
+  },
+  "Choose private key…": {
+    "en": "Choose private key…",
+    "ru": "Выбрать закрытый ключ…",
+    "fr": "Choisir une clé privée…",
+    "es": "Elegir clave privada…",
+    "he": "בחירת מפתח פרטי…"
+  },
+  "Compare this fingerprint with the one in your server provider's control panel.": {
+    "en": "Compare this fingerprint with the one in your server provider's control panel.",
+    "ru": "Сверьте этот отпечаток с отпечатком в панели управления вашего провайдера.",
+    "fr": "Comparez cette empreinte avec celle du panneau de gestion de votre hébergeur.",
+    "es": "Compara esta huella con la del panel de control de tu proveedor.",
+    "he": "יש להשוות את טביעת האצבע הזו לזו שבלוח הבקרה של ספק השרת."
+  },
+  "Confirm and connect": {
+    "en": "Confirm and connect",
+    "ru": "Подтвердить и подключиться",
+    "fr": "Confirmer et se connecter",
+    "es": "Confirmar y conectar",
+    "he": "אישור וחיבור"
+  },
+  "Confirm your server": {
+    "en": "Confirm your server",
+    "ru": "Подтвердите сервер",
+    "fr": "Confirmez votre serveur",
+    "es": "Confirma tu servidor",
+    "he": "אישור השרת"
+  },
+  "Connect a device": {
+    "en": "Connect a device",
+    "ru": "Подключить устройство",
+    "fr": "Connecter un appareil",
+    "es": "Conectar un dispositivo",
+    "he": "חיבור מכשיר"
+  },
+  "Connecting to the server": {
+    "en": "Connecting to the server",
+    "ru": "Подключаемся к серверу",
+    "fr": "Connexion au serveur",
+    "es": "Conectando al servidor",
+    "he": "מתחברים לשרת"
+  },
+  "Continue server setup": {
+    "en": "Continue server setup",
+    "ru": "Продолжить настройку сервера",
+    "fr": "Reprendre la configuration du serveur",
+    "es": "Continuar la configuración del servidor",
+    "he": "המשך הגדרת השרת"
+  },
+  "Continue setup": {
+    "en": "Continue setup",
+    "ru": "Продолжить настройку",
+    "fr": "Reprendre la configuration",
+    "es": "Continuar la configuración",
+    "he": "המשך ההגדרה"
+  },
+  "Downloading OpenStrudel": {
+    "en": "Downloading OpenStrudel",
+    "ru": "Загружаем OpenStrudel",
+    "fr": "Téléchargement d’OpenStrudel",
+    "es": "Descargando OpenStrudel",
+    "he": "מורידים את OpenStrudel"
+  },
+  "Enter a server address, sign-in name and a port between 1 and 65535.": {
+    "en": "Enter a server address, sign-in name and a port between 1 and 65535.",
+    "ru": "Укажите адрес сервера, имя пользователя и порт от 1 до 65535.",
+    "fr": "Saisissez l’adresse du serveur, le nom d’utilisateur et un port entre 1 et 65535.",
+    "es": "Introduce la dirección del servidor, el nombre de usuario y un puerto entre 1 y 65535.",
+    "he": "יש להזין כתובת שרת, שם משתמש ויציאה בין 1 ל־65535."
+  },
+  "Enter the password or choose a private SSH key. Add its passphrase if it has one.": {
+    "en": "Enter the password or choose a private SSH key. Add its passphrase if it has one.",
+    "ru": "Введите пароль или выберите закрытый SSH-ключ. Если ключ защищён паролем, укажите его.",
+    "fr": "Saisissez le mot de passe ou choisissez une clé SSH privée. Ajoutez sa phrase secrète si elle en possède une.",
+    "es": "Introduce la contraseña o elige una clave SSH privada. Añade su frase de contraseña si la tiene.",
+    "he": "יש להזין סיסמה או לבחור מפתח SSH פרטי. אם המפתח מוגן בסיסמה, יש להזין גם אותה."
+  },
+  "Enter your server credentials again to continue. Your installation is saved.": {
+    "en": "Enter your server credentials again to continue. Your installation is saved.",
+    "ru": "Для продолжения снова введите данные входа. Установка сохранена.",
+    "fr": "Saisissez à nouveau vos identifiants pour continuer. Votre installation est sauvegardée.",
+    "es": "Vuelve a introducir tus credenciales para continuar. La instalación está guardada.",
+    "he": "כדי להמשיך, יש להזין שוב את פרטי הכניסה לשרת. ההתקנה נשמרה."
+  },
+  "Get a server with DigitalOcean": {
+    "en": "Get a server with DigitalOcean",
+    "ru": "Получить сервер в DigitalOcean",
+    "fr": "Obtenir un serveur chez DigitalOcean",
+    "es": "Obtener un servidor en DigitalOcean",
+    "he": "קבלת שרת דרך DigitalOcean"
+  },
+  "Install OpenStrudel": {
+    "en": "Install OpenStrudel",
+    "ru": "Установить OpenStrudel",
+    "fr": "Installer OpenStrudel",
+    "es": "Instalar OpenStrudel",
+    "he": "התקנת OpenStrudel"
+  },
+  "Installation has stopped. Your progress is saved. Check the server, then retry the same installation.": {
+    "en": "Installation has stopped. Your progress is saved. Check the server, then retry the same installation.",
+    "ru": "Установка остановилась. Прогресс сохранён. Проверьте сервер и повторите установку.",
+    "fr": "L’installation s’est arrêtée. La progression est sauvegardée. Vérifiez le serveur, puis relancez cette installation.",
+    "es": "La instalación se ha detenido. El progreso está guardado. Comprueba el servidor y vuelve a intentar la misma instalación.",
+    "he": "ההתקנה נעצרה. ההתקדמות נשמרה. יש לבדוק את השרת ולנסות שוב את אותה התקנה."
+  },
+  "Installing OpenStrudel": {
+    "en": "Installing OpenStrudel",
+    "ru": "Устанавливаем OpenStrudel",
+    "fr": "Installation d’OpenStrudel",
+    "es": "Instalando OpenStrudel",
+    "he": "מתקינים את OpenStrudel"
+  },
+  "Key passphrase, if any": {
+    "en": "Key passphrase, if any",
+    "ru": "Пароль ключа, если есть",
+    "fr": "Phrase secrète de la clé, si nécessaire",
+    "es": "Frase de contraseña de la clave, si tiene",
+    "he": "סיסמת המפתח, אם קיימת"
+  },
+  "Open server": {
+    "en": "Open server",
+    "ru": "Открыть сервер",
+    "fr": "Ouvrir le serveur",
+    "es": "Abrir servidor",
+    "he": "פתיחת השרת"
+  },
+  "OpenStrudel is already installed. Connect to it using a link from its device settings; its data will stay unchanged.": {
+    "en": "OpenStrudel is already installed. Connect to it using a link from its device settings; its data will stay unchanged.",
+    "ru": "OpenStrudel уже установлен. Подключитесь по ссылке из настроек устройства. Данные сохранятся.",
+    "fr": "OpenStrudel est déjà installé. Connectez-vous avec le lien de ses réglages d’appareil. Ses données seront conservées.",
+    "es": "OpenStrudel ya está instalado. Conéctate con el enlace de sus ajustes de dispositivo. Sus datos se conservarán.",
+    "he": "OpenStrudel כבר מותקן. אפשר להתחבר באמצעות קישור מהגדרות המכשיר שלו. הנתונים יישמרו."
+  },
+  "Opening your server": {
+    "en": "Opening your server",
+    "ru": "Открываем сервер",
+    "fr": "Ouverture du serveur",
+    "es": "Abriendo el servidor",
+    "he": "פותחים את השרת"
+  },
+  "Port 7789 is already in use. Choose another server or free that port before setup.": {
+    "en": "Port 7789 is already in use. Choose another server or free that port before setup.",
+    "ru": "Порт 7789 уже занят. Выберите другой сервер или освободите порт перед установкой.",
+    "fr": "Le port 7789 est déjà utilisé. Choisissez un autre serveur ou libérez ce port avant l’installation.",
+    "es": "El puerto 7789 está en uso. Elige otro servidor o libera el puerto antes de instalar.",
+    "he": "יציאה 7789 כבר בשימוש. יש לבחור שרת אחר או לפנות את היציאה לפני ההתקנה."
+  },
+  "Preparing the server": {
+    "en": "Preparing the server",
+    "ru": "Подготавливаем сервер",
+    "fr": "Préparation du serveur",
+    "es": "Preparando el servidor",
+    "he": "מכינים את השרת"
+  },
+  "Preparing your server": {
+    "en": "Preparing your server",
+    "ru": "Подготавливаем ваш сервер",
+    "fr": "Préparation de votre serveur",
+    "es": "Preparando tu servidor",
+    "he": "מכינים את השרת שלך"
+  },
+  "Ready to install": {
+    "en": "Ready to install",
+    "ru": "Всё готово к установке",
+    "fr": "Prêt pour l’installation",
+    "es": "Todo listo para instalar",
+    "he": "הכול מוכן להתקנה"
+  },
+  "Retry installation": {
+    "en": "Retry installation",
+    "ru": "Повторить установку",
+    "fr": "Réessayer l’installation",
+    "es": "Reintentar instalación",
+    "he": "ניסיון התקנה נוסף"
+  },
+  "SSH key": {
+    "en": "SSH key",
+    "ru": "SSH-ключ",
+    "fr": "Clé SSH",
+    "es": "Clave SSH",
+    "he": "מפתח SSH"
+  },
+  "SSH port": {
+    "en": "SSH port",
+    "ru": "Порт SSH",
+    "fr": "Port SSH",
+    "es": "Puerto SSH",
+    "he": "יציאת SSH"
+  },
+  "Server": {
+    "en": "Server",
+    "ru": "Сервер",
+    "fr": "Serveur",
+    "es": "Servidor",
+    "he": "שרת"
+  },
+  "Server address": {
+    "en": "Server address",
+    "ru": "Адрес сервера",
+    "fr": "Adresse du serveur",
+    "es": "Dirección del servidor",
+    "he": "כתובת השרת"
+  },
+  "Set up a server": {
+    "en": "Set up a server",
+    "ru": "Настроить сервер",
+    "fr": "Configurer un serveur",
+    "es": "Configurar un servidor",
+    "he": "הגדרת שרת"
+  },
+  "Setup needs attention": {
+    "en": "Setup needs attention",
+    "ru": "Проверьте настройку",
+    "fr": "La configuration nécessite votre attention",
+    "es": "Revisa la configuración",
+    "he": "נדרשת בדיקה של ההגדרה"
+  },
+  "Sign in to ChatGPT on this device to create your first employee.": {
+    "en": "Sign in to ChatGPT on this device to create your first employee.",
+    "ru": "Войдите в ChatGPT на этом устройстве, чтобы создать первого сотрудника.",
+    "fr": "Connectez-vous à ChatGPT sur cet appareil pour créer votre premier assistant.",
+    "es": "Inicia sesión en ChatGPT en este dispositivo para crear tu primer asistente.",
+    "he": "כדי ליצור את העוזר הראשון, יש להתחבר ל־ChatGPT במכשיר הזה."
+  },
+  "Sign in with": {
+    "en": "Sign in with",
+    "ru": "Способ входа",
+    "fr": "Mode de connexion",
+    "es": "Método de acceso",
+    "he": "שיטת הכניסה"
+  },
+  "Sign-in name": {
+    "en": "Sign-in name",
+    "ru": "Имя пользователя",
+    "fr": "Nom d’utilisateur",
+    "es": "Nombre de usuario",
+    "he": "שם משתמש"
+  },
+  "Sign-in was refused. Check the sign-in name, password or SSH key.": {
+    "en": "Sign-in was refused. Check the sign-in name, password or SSH key.",
+    "ru": "Войти не удалось. Проверьте имя пользователя, пароль или SSH-ключ.",
+    "fr": "La connexion a été refusée. Vérifiez le nom d’utilisateur, le mot de passe ou la clé SSH.",
+    "es": "Se ha rechazado el acceso. Comprueba el nombre de usuario, la contraseña o la clave SSH.",
+    "he": "הכניסה נדחתה. יש לבדוק את שם המשתמש, הסיסמה או מפתח ה־SSH."
+  },
+  "The server did not respond. Check its address, SSH port and internet connection, then try again.": {
+    "en": "The server did not respond. Check its address, SSH port and internet connection, then try again.",
+    "ru": "Сервер не ответил. Проверьте адрес, порт SSH и подключение к интернету, затем попробуйте ещё раз.",
+    "fr": "Le serveur ne répond pas. Vérifiez son adresse, le port SSH et la connexion Internet, puis réessayez.",
+    "es": "El servidor no responde. Comprueba su dirección, el puerto SSH y la conexión a internet, e inténtalo de nuevo.",
+    "he": "השרת לא הגיב. יש לבדוק את הכתובת, יציאת ה־SSH והחיבור לאינטרנט, ולנסות שוב."
+  },
+  "The server does not match this installation. No connection was added.": {
+    "en": "The server does not match this installation. No connection was added.",
+    "ru": "Сервер не соответствует этой установке. Подключение не добавлено.",
+    "fr": "Le serveur ne correspond pas à cette installation. Aucune connexion n’a été ajoutée.",
+    "es": "El servidor no corresponde a esta instalación. No se ha añadido ninguna conexión.",
+    "he": "השרת אינו תואם להתקנה הזו. לא נוסף חיבור."
+  },
+  "The server is still being prepared. You can close this window and check again later.": {
+    "en": "The server is still being prepared. You can close this window and check again later.",
+    "ru": "Сервер ещё подготавливается. Можно закрыть окно и проверить позже.",
+    "fr": "Le serveur est encore en cours de préparation. Vous pouvez fermer cette fenêtre et revenir plus tard.",
+    "es": "El servidor aún se está preparando. Puedes cerrar esta ventana y volver más tarde.",
+    "he": "השרת עדיין בהכנה. אפשר לסגור את החלון ולבדוק שוב מאוחר יותר."
+  },
+  "The server's identity could not be verified. Check the address and its fingerprint with your provider.": {
+    "en": "The server's identity could not be verified. Check the address and its fingerprint with your provider.",
+    "ru": "Не удалось подтвердить подлинность сервера. Сверьте адрес и отпечаток с данными провайдера.",
+    "fr": "L’identité du serveur n’a pas pu être vérifiée. Vérifiez l’adresse et l’empreinte auprès de votre hébergeur.",
+    "es": "No se pudo verificar la identidad del servidor. Confirma la dirección y la huella con tu proveedor.",
+    "he": "לא ניתן לאמת את זהות השרת. יש לבדוק את הכתובת ואת טביעת האצבע מול הספק."
+  },
+  "The verified installer could not be loaded. Check your connection and update OpenStrudel, then try again.": {
+    "en": "The verified installer could not be loaded. Check your connection and update OpenStrudel, then try again.",
+    "ru": "Не удалось загрузить проверенный установщик. Проверьте интернет, обновите OpenStrudel и попробуйте ещё раз.",
+    "fr": "Impossible de charger le programme d’installation vérifié. Vérifiez votre connexion, mettez OpenStrudel à jour et réessayez.",
+    "es": "No se pudo cargar el instalador verificado. Comprueba la conexión, actualiza OpenStrudel e inténtalo de nuevo.",
+    "he": "לא ניתן לטעון את המתקין המאומת. יש לבדוק את החיבור, לעדכן את OpenStrudel ולנסות שוב."
+  },
+  "This can take a few minutes. You can close this window; installation continues on the server.": {
+    "en": "This can take a few minutes. You can close this window; installation continues on the server.",
+    "ru": "Это может занять несколько минут. Можно закрыть окно: установка продолжится на сервере.",
+    "fr": "Cela peut prendre quelques minutes. Vous pouvez fermer cette fenêtre : l’installation continue sur le serveur.",
+    "es": "Puede tardar unos minutos. Puedes cerrar esta ventana; la instalación continuará en el servidor.",
+    "he": "הפעולה עשויה להימשך כמה דקות. אפשר לסגור את החלון; ההתקנה תימשך בשרת."
+  },
+  "This server has an older or unavailable Docker installation. Update it to Docker 29 with Compose, or use a new Ubuntu server.": {
+    "en": "This server has an older or unavailable Docker installation. Update it to Docker 29 with Compose, or use a new Ubuntu server.",
+    "ru": "Установленный Docker устарел или недоступен. Обновите его до Docker 29 с Compose или используйте новый сервер Ubuntu.",
+    "fr": "Le Docker installé est ancien ou indisponible. Passez à Docker 29 avec Compose ou utilisez un nouveau serveur Ubuntu.",
+    "es": "La instalación de Docker es antigua o no está disponible. Actualízala a Docker 29 con Compose o usa un servidor Ubuntu nuevo.",
+    "he": "גרסת Docker בשרת ישנה או שאינה זמינה. יש לעדכן ל־Docker 29 עם Compose או להשתמש בשרת Ubuntu חדש."
+  },
+  "This server needs at least 4 GB of memory, 30 GB of storage and 8 GB free.": {
+    "en": "This server needs at least 4 GB of memory, 30 GB of storage and 8 GB free.",
+    "ru": "Серверу нужно не менее 4 ГБ памяти, 30 ГБ хранилища и 8 ГБ свободного места.",
+    "fr": "Ce serveur nécessite au moins 4 Go de mémoire, 30 Go de stockage et 8 Go d’espace libre.",
+    "es": "El servidor necesita al menos 4 GB de memoria, 30 GB de almacenamiento y 8 GB libres.",
+    "he": "לשרת דרושים לפחות 4 GB זיכרון, 30 GB אחסון ו־8 GB פנויים."
+  },
+  "Use an Ubuntu 24.04 server with 4 GB of memory and 30 GB of storage.": {
+    "en": "Use an Ubuntu 24.04 server with 4 GB of memory and 30 GB of storage.",
+    "ru": "Подойдёт сервер Ubuntu 24.04 с 4 ГБ памяти и 30 ГБ хранилища.",
+    "fr": "Utilisez un serveur Ubuntu 24.04 avec 4 Go de mémoire et 30 Go de stockage.",
+    "es": "Usa un servidor Ubuntu 24.04 con 4 GB de memoria y 30 GB de almacenamiento.",
+    "he": "נדרש שרת Ubuntu 24.04 עם 4 GB זיכרון ו־30 GB אחסון."
+  },
+  "Use employees from your other devices here.": {
+    "en": "Use employees from your other devices here.",
+    "ru": "Работайте здесь с сотрудниками с других устройств.",
+    "fr": "Retrouvez ici les assistants de vos autres appareils.",
+    "es": "Usa aquí los asistentes de tus otros dispositivos.",
+    "he": "אפשר לעבוד כאן עם העוזרים מהמכשירים האחרים שלך."
+  },
+  "Use root or an account with password-free administrator access to install OpenStrudel.": {
+    "en": "Use root or an account with password-free administrator access to install OpenStrudel.",
+    "ru": "Для установки нужен root или пользователь с правами администратора без повторного ввода пароля.",
+    "fr": "Pour installer OpenStrudel, utilisez root ou un compte disposant de droits administrateur sans mot de passe supplémentaire.",
+    "es": "Para instalar OpenStrudel, usa root o una cuenta con acceso de administrador sin contraseña adicional.",
+    "he": "להתקנת OpenStrudel יש להשתמש ב־root או בחשבון עם הרשאות מנהל ללא סיסמה נוספת."
+  },
+  "Your SSH password and key are used only for this setup session.": {
+    "en": "Your SSH password and key are used only for this setup session.",
+    "ru": "Пароль и SSH-ключ используются только в этом сеансе настройки.",
+    "fr": "Votre mot de passe et votre clé SSH servent uniquement à cette session de configuration.",
+    "es": "Tu contraseña y tu clave SSH se usan solo durante esta sesión de configuración.",
+    "he": "הסיסמה ומפתח ה־SSH משמשים רק לסבב ההגדרה הנוכחי."
+  },
+  "Your server is ready": {
+    "en": "Your server is ready",
+    "ru": "Ваш сервер готов",
+    "fr": "Votre serveur est prêt",
+    "es": "Tu servidor está listo",
+    "he": "השרת שלך מוכן"
+  },
+  "Назад": {
+    "en": "Back",
+    "ru": "Назад",
+    "fr": "Retour",
+    "es": "Atrás",
+    "he": "חזרה"
+  },
+  "Пароль": {
+    "en": "Password",
+    "ru": "Пароль",
+    "fr": "Mot de passe",
+    "es": "Contraseña",
+    "he": "סיסמה"
+  },
+  "Connect with a link": {
+    "en": "Connect with a link",
+    "ru": "Подключить по ссылке",
+    "fr": "Connecter avec un lien",
+    "es": "Conectar con un enlace",
+    "he": "חיבור באמצעות קישור"
+  },
+  "OpenStrudel will be installed on this server. Assistants and their files will stay here.": {
+    "en": "OpenStrudel will be installed on this server. Assistants and their files will stay here.",
+    "ru": "OpenStrudel будет установлен на этом сервере. Сотрудники и их файлы будут храниться здесь.",
+    "fr": "OpenStrudel sera installé sur ce serveur. Les assistants et leurs fichiers y seront conservés.",
+    "es": "OpenStrudel se instalará en este servidor. Los asistentes y sus archivos se guardarán aquí.",
+    "he": "OpenStrudel יותקן בשרת הזה. העוזרים והקבצים שלהם יישמרו כאן."
+  },
+  "OpenStrudel is installed, but this Mac cannot reach it. Allow incoming TCP connections on port 7789 in your server's firewall, then try again.": {
+    "en": "OpenStrudel is installed, but this Mac cannot reach it. Allow incoming TCP connections on port 7789 in your server's firewall, then try again.",
+    "ru": "OpenStrudel установлен, но этот Mac не может подключиться. Разрешите входящие TCP-подключения на порт 7789 в настройках сетевого экрана сервера и повторите попытку.",
+    "fr": "OpenStrudel est installé, mais ce Mac ne parvient pas à le joindre. Autorisez les connexions TCP entrantes sur le port 7789 dans le pare-feu du serveur, puis réessayez.",
+    "es": "OpenStrudel está instalado, pero este Mac no puede conectarse. Permite las conexiones TCP entrantes en el puerto 7789 del cortafuegos del servidor y vuelve a intentarlo.",
+    "he": "OpenStrudel מותקן, אבל ה־Mac הזה אינו מצליח להתחבר אליו. יש לאפשר חיבורי TCP נכנסים ביציאה 7789 בחומת האש של השרת ולנסות שוב."
+  },
+  "This server already hosts other apps. Use a new Ubuntu server so their settings and data stay unchanged.": {
+    "en": "This server already hosts other apps. Use a new Ubuntu server so their settings and data stay unchanged.",
+    "ru": "На этом сервере уже работают другие приложения. Используйте новый сервер Ubuntu, чтобы сохранить их настройки и данные.",
+    "fr": "Ce serveur héberge déjà d’autres applications. Utilisez un nouveau serveur Ubuntu pour préserver leurs réglages et leurs données.",
+    "es": "Este servidor ya aloja otras aplicaciones. Usa un servidor Ubuntu nuevo para conservar sus ajustes y datos.",
+    "he": "בשרת הזה כבר מותקנים יישומים אחרים. כדאי להשתמש בשרת Ubuntu חדש כדי לשמור על ההגדרות והנתונים שלהם."
+  },
+  "OpenStrudel cannot access Keychain. Unlock this Mac, then try again and allow access if macOS asks.": {
+    "en": "OpenStrudel cannot access Keychain. Unlock this Mac, then try again and allow access if macOS asks.",
+    "ru": "OpenStrudel не может открыть Связку ключей. Разблокируйте Mac и повторите попытку. Если macOS запросит доступ, разрешите его.",
+    "fr": "OpenStrudel ne peut pas accéder au trousseau. Déverrouillez ce Mac, réessayez et autorisez l’accès si macOS le demande.",
+    "es": "OpenStrudel no puede acceder al llavero. Desbloquea este Mac, vuelve a intentarlo y permite el acceso si macOS lo solicita.",
+    "he": "ל־OpenStrudel אין גישה לצרור המפתחות. יש לבטל את נעילת ה־Mac, לנסות שוב ולאשר גישה אם macOS מבקשת."
   }
 }

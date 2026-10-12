@@ -22,6 +22,19 @@ function call(port: number, path: string, token?: string, origin?: string, nonce
 }
 
 describe("iPhone pairing", () => {
+  it("serves sign-in language assets over TLS before pairing without exposing private API data", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "strudel-public-languages-")), store = new Store(":memory:");
+    const mobile = new MobileAccess(store, (req, res) => res.end(JSON.stringify({ path: req.url })), { directory, port: 0, host: "127.0.0.1" });
+    try {
+      await mobile.invite();
+      for (const path of ["/localization.js", "/localizations.json"]) {
+        expect((await call(mobile.port!, path)).status).toBe(200);
+      }
+      for (const path of ["/v1/profiles", "/v1/conversation", "/v1/mobile"]) {
+        expect((await call(mobile.port!, path)).status).toBe(401);
+      }
+    } finally { await mobile.close(); store.close(); await rm(directory, { recursive: true, force: true }); }
+  });
   it("signs out only the requesting device without disturbing agents or another connection", async () => {
     const directory = await mkdtemp(join(tmpdir(), "strudel-signout-")), store = new Store(":memory:");
     const mobile = new MobileAccess(store, (_req, res) => res.end('{"ok":true}'), { directory, port: 0, host: "127.0.0.1" });
