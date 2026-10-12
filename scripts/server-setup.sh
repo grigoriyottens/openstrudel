@@ -81,8 +81,15 @@ if marker.exists() or marker.is_symlink():
     if marker.is_symlink() or marker.read_text().strip() != identity: raise ValueError("OPENSTRUDEL_EXISTING")
 else:
     if any((root / p).exists() or (root / p).is_symlink() for p in ["bootstrap.json", "install.sh", "complete"]) or installation.exists(): raise ValueError("OPENSTRUDEL_EXISTING")
-    descriptor = os.open(str(marker), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    temporary = root / ".installation-id.new"
+    if temporary.is_symlink(): raise ValueError("OPENSTRUDEL_EXISTING")
+    if temporary.exists(): temporary.unlink()
+    descriptor = os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, "w") as out: out.write(identity + "\n"); out.flush(); os.fsync(out.fileno())
+    # Publish the complete identity without replacing any existing marker.
+    # A stopped write must never leave an empty identity blocking safe replay.
+    os.link(temporary, marker)
+    temporary.unlink()
 bootstrap = json.dumps({k:payload[k] for k in ["installationId", "privateKeyPEM", "ownerTokenHash"]}, sort_keys=True).encode()
 files = [("bootstrap.json", bootstrap, 0o600), ("release.sha256", payload["releaseHash"].encode(), 0o600), ("connection-host", host.encode(), 0o600), ("install.sh", installer, 0o700)]
 changed = [name for name, content, mode in files if (root / name).is_file() and (root / name).read_bytes() != content]

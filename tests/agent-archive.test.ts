@@ -133,8 +133,8 @@ describe("additive team transfer", () => {
     const archive = source.archive.export();
     expect(JSON.stringify(archive)).not.toMatch(/DO_NOT_EXPORT_(SECRET|THREAD)/);
     const preview = destination.archive.preview(archive);
-    expect(preview.employees[0]?.importedName).toBe("OpenStrudel (импорт)");
-    expect(preview.employees.find(e => e.name === "Редактор")?.importedName).toBe("Редактор (импорт)");
+    expect(preview.employees[0]?.importedName).toBe("OpenStrudel (2)");
+    expect(preview.employees.find(e => e.name === "Редактор")?.importedName).toBe("Редактор (2)");
     expect(preview.counts).toMatchObject({ employees: 3, schedules: 2, messages: 5 });
     expect(preview.connections).toEqual(["calendar", "private"]);
     expect(destination.store.listProfiles()).toHaveLength(1); // preview has no side effects
@@ -143,7 +143,7 @@ describe("additive team transfer", () => {
     expect(destination.store.getProfile(existing.id)?.instructions).toBe("Existing personality");
     expect(destination.store.getSetting("main.soul")).toBe("My existing main assistant");
     expect(readFileSync(resolve(workspace, "MEMORY.md"), "utf8")).toBe("Existing memory");
-    const editor = destination.store.getProfile("Редактор (импорт)")!;
+    const editor = destination.store.getProfile("Редактор (2)")!;
     expect(editor).toMatchObject({ instructions: source.employee.instructions, capabilities: ["research"], model: "gpt-5", tokenLimit: 12345, purpose: "Мой журнал", domain: "work" });
     expect(editor.id).not.toBe(source.employee.id);
     const chat = destination.store.profileConversation(editor.id), context = destination.messages.contextFor(chat.id);

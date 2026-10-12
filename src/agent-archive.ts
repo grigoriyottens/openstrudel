@@ -115,8 +115,8 @@ export class AgentArchives {
     const names = new Set(["OpenStrudel", ...this.store.listProfiles().map(p => p.name)]);
     const employees = archive.profiles.map(p => {
       let name = p.name;
-      for (let n = 1; names.has(name); n++) {
-        const suffix = n === 1 ? " (импорт)" : ` (импорт ${n})`;
+      for (let n = 2; names.has(name); n++) {
+        const suffix = ` (${n})`;
         name = p.name.slice(0, 80 - suffix.length) + suffix;
       }
       names.add(name);

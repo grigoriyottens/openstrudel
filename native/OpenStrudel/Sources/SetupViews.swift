@@ -268,8 +268,9 @@ struct ServerAccountSetupView: View {
             }
         }.frame(width: 540, height: 650)
         .onChange(of: client.openAILogin) { _, login in if let url = login?.url { openURL(url) } }
-        .task {
-            while !Task.isCancelled {
+        .task(id: client.openAILogin?.loginId) {
+            await client.refreshOpenAIAccount()
+            while !Task.isCancelled && !connected && (client.openAILogin != nil || client.openAILoginPending) {
                 if client.openAILogin != nil { await client.pollOpenAILogin() }
                 else { await client.refreshOpenAIAccount() }
                 do { try await Task.sleep(for: .seconds(2)) } catch { break }

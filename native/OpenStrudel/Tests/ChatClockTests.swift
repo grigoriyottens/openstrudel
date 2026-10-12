@@ -10,7 +10,7 @@ struct ChatClockTests {
     @Test func liveMessagesKeepTheirExactMoment() throws {
         let sent = message("2026-09-28T06:14:05.120Z")
         #expect(try #require(sent.sentAt).timeIntervalSince1970 == 1_790_576_045.12)
-        #expect(sent.time?.count == 5)
+        #expect(try #require(sent.time).isEmpty == false)
     }
 
     @Test func dayOnlyHistoryShowsItsDayWithoutAnInventedTime() throws {
@@ -20,10 +20,11 @@ struct ChatClockTests {
     }
 
     @Test func daysReadAsPeopleSayThem() throws {
-        #expect(ChatClock.day(.now) == "Сегодня")
-        #expect(ChatClock.day(try #require(Calendar.current.date(byAdding: .day, value: -1, to: .now))) == "Вчера")
+        #expect(ChatClock.day(.now) == L("Сегодня"))
+        #expect(ChatClock.day(try #require(Calendar.current.date(byAdding: .day, value: -1, to: .now))) == L("Вчера"))
         let older = try Date.ISO8601FormatStyle().parse("2025-03-05T12:00:00Z")
-        #expect(ChatClock.day(older).hasPrefix("5 марта 2025"))
+        #expect(ChatClock.day(older).contains("2025"))
+        #expect(ChatClock.day(older).contains(older.formatted(.dateTime.month(.wide).locale(L10n.locale))))
     }
 
     @Test func lazyDateHeadingsKeepTheirConversationSnapshot() throws {

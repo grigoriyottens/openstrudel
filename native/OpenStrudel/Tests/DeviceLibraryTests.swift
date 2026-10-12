@@ -3,6 +3,107 @@ import Testing
 
 @Suite(.serialized)
 @MainActor struct DeviceLibraryTests {
+    @Test func lockedCredentialsKeepTheDestinationAndRecoverWithoutPairingAgain() async throws {
+        let name = "OpenStrudel.unlock-test." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let connection = HomeConnection(url: "https://server.example:7789", token: "fixture", pin: String(repeating: "b", count: 64), name: "My server")
+        let saved = String(decoding: try JSONEncoder().encode(connection), as: UTF8.self)
+        defaults.set(connection.url, forKey: "openstrudel.homeURL")
+        let client = HomeClient(defaults: defaults, connectionID: name, credentialReader: { account, interactive in
+            guard account.hasSuffix("home-connection") else { return nil }
+            guard interactive else { throw URLError(.userAuthenticationRequired) }
+            return saved
+        })
+        #expect(client.connectionNeedsUnlock)
+        #expect(client.connectionNeedsPairing)
+        #expect(!client.isConfigured)
+        #expect(client.baseURLString == connection.url) // Same draft namespace while locked.
+        await #expect(throws: HomeClientError.self) {
+            let _: HomeHealth = try await client.management("/health")
+        }
+        #expect(await client.unlockSavedConnection())
+        #expect(!client.connectionNeedsUnlock)
+        #expect(!client.connectionNeedsPairing)
+        #expect(client.isConfigured && client.hasToken)
+        #expect(client.baseURLString == connection.url)
+        #expect(client.connectionName == connection.name)
+        #expect(!client.isUnlockingConnection)
+    }
+
+    @Test func aMissingCredentialStillNeedsANewConnectionLink() async throws {
+        let name = "OpenStrudel.missing-credential-test." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("https://server.example:7789", forKey: "openstrudel.homeURL")
+        let client = HomeClient(defaults: defaults, connectionID: name, credentialReader: { _, _ in nil })
+        #expect(client.connectionNeedsPairing)
+        #expect(!client.connectionNeedsUnlock)
+        #expect(!client.isConfigured)
+        #expect(await client.unlockSavedConnection() == false)
+    }
+
+    @Test func aLockedPairingAttemptDoesNotReplaceTheAttemptOrLockTheExistingConnection() async throws {
+        let name = "OpenStrudel.pairing-credential-test." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let pin = String(repeating: "b", count: 64)
+        let connection = HomeConnection(url: "https://server.example:7789", token: "fixture", pin: pin, name: "My server")
+        let saved = String(decoding: try JSONEncoder().encode(connection), as: UTF8.self)
+        let client = HomeClient(defaults: defaults, connectionID: name, credentialReader: { account, _ in
+            if account.contains("pair-attempt-") { throw HomeClientError.server("Keychain is locked") }
+            return account.hasSuffix("home-connection") ? saved : nil
+        })
+        let link = try #require(URL(string: "openstrudel://connect?host=other.example&port=7789&key=\(String(repeating: "a", count: 64))&pin=\(pin)"))
+        #expect(await client.connectToMac(try MacPairing(url: link)) == false)
+        #expect(client.pairingError != nil)
+        #expect(!client.connectionNeedsUnlock && !client.connectionNeedsPairing)
+        #expect(client.isConfigured && client.hasToken)
+        #expect(client.baseURLString == connection.url)
+    }
+
+    @Test func decliningKeychainAccessKeepsTheSavedConnectionForRetry() async throws {
+        let name = "OpenStrudel.declined-credential-test." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("https://server.example:7789", forKey: "openstrudel.homeURL")
+        let client = HomeClient(defaults: defaults, connectionID: name, credentialReader: { _, _ in throw URLError(.userCancelledAuthentication) })
+        #expect(await client.unlockSavedConnection() == false)
+        #expect(client.connectionNeedsUnlock && client.connectionNeedsPairing)
+        #expect(!client.hasToken && !client.isUnlockingConnection)
+        #expect(client.errorMessage != nil)
+        #expect(defaults.string(forKey: "openstrudel.homeURL") == "https://server.example:7789")
+    }
+
+    @Test func delayedKeychainAccessCannotReconnectAfterLocalErase() async throws {
+        let name = "OpenStrudel.stale-credential-test." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("https://server.example:7789", forKey: "openstrudel.homeURL")
+        let gate = CredentialReadGate()
+        defer { gate.finish.signal() }
+        let saved = String(decoding: try JSONEncoder().encode(HomeConnection(url: "https://server.example:7789", token: "fixture", pin: String(repeating: "b", count: 64), name: "Server")), as: UTF8.self)
+        let client = HomeClient(defaults: defaults, connectionID: name, credentialReader: { account, interactive in
+            guard account.hasSuffix("home-connection") else { return nil }
+            guard interactive else { throw URLError(.userAuthenticationRequired) }
+            gate.markStarted()
+            guard gate.finish.wait(timeout: .now() + 5) == .success else { throw URLError(.timedOut) }
+            return saved
+        })
+        let operation = Task { await client.unlockSavedConnection() }
+        var started = false
+        for _ in 0..<200 {
+            if gate.didStart { started = true; break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(started)
+        client.suspendForLocalErase()
+        gate.finish.signal()
+        #expect(await operation.value == false)
+        #expect(client.isSignedOut && !client.hasToken && !client.isConfigured)
+        #expect(client.baseURLString.isEmpty)
+    }
+
     @Test func aPairedTLSConnectionIsNotTheLocalRuntime() throws {
         let name = "OpenStrudel.paired-device-test." + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))
@@ -111,4 +212,12 @@ import Testing
         #expect(library.visibleClients.count == 1)
         #expect(library.visibleClients.first === first)
     }
+}
+
+private final class CredentialReadGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var started = false
+    var didStart: Bool { lock.withLock { started } }
+    func markStarted() { lock.withLock { started = true } }
+    let finish = DispatchSemaphore(value: 0)
 }

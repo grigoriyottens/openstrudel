@@ -93,6 +93,45 @@ describe("Server setup over SSH", () => {
     expect(shell(root, "stage_setup", payload).status).toBe(0);
     expect(JSON.parse(readFileSync(join(root, "state/bootstrap.json"), "utf8")).installationId).toBe(payload.installationId);
   });
+  it("replays after interruption before the identity marker, without adopting unidentified data", () => {
+    const { root, payload } = fixture();
+    mkdirSync(join(root, "state"), { mode: 0o700 });
+    writeFileSync(join(root, "state/setup.lock"), "", { mode: 0o600 });
+    expect(shell(root, "stage_setup", payload).status).toBe(0);
+    expect(readFileSync(join(root, "state/installation-id"), "utf8").trim()).toBe(payload.installationId);
+
+    const other = fixture();
+    mkdirSync(join(other.root, "state"), { mode: 0o700 });
+    const unidentified = "unidentified-existing-recipe";
+    writeFileSync(join(other.root, "state/bootstrap.json"), unidentified);
+    expect(shell(other.root, "stage_setup", other.payload).status).not.toBe(0);
+    expect(readFileSync(join(other.root, "state/bootstrap.json"), "utf8")).toBe(unidentified);
+    expect(existsSync(join(other.root, "state/installation-id"))).toBe(false);
+  });
+  it("recovers after the process stops partway through writing its identity", () => {
+    const { root, payload } = fixture();
+    const hook = join(root, "fault"); mkdirSync(hook);
+    writeFileSync(join(hook, "sitecustomize.py"), `import os
+original = os.fdopen
+class InterruptedWriter:
+    def __init__(self, out): self.out = out
+    def __enter__(self): return self
+    def __exit__(self, *args): self.out.close()
+    def write(self, text):
+        self.out.write(text[:8]); self.out.flush(); os._exit(77)
+def fdopen(fd, mode="r", *args, **kwargs):
+    out = original(fd, mode, *args, **kwargs)
+    return InterruptedWriter(out) if mode == "w" else out
+os.fdopen = fdopen
+`);
+    const interrupted = shell(root, `export PYTHONPATH=${quote(hook)}\nstage_setup`, payload);
+    expect(interrupted.status).toBe(77);
+    expect(existsSync(join(root, "state/installation-id"))).toBe(false);
+    const replay = shell(root, "stage_setup", payload);
+    expect(replay.status, replay.stderr).toBe(0);
+    expect(readFileSync(join(root, "state/installation-id"), "utf8").trim()).toBe(payload.installationId);
+    expect(existsSync(join(root, "state/.installation-id.new"))).toBe(false);
+  });
   it("refuses symlink staging paths without modifying the destination", () => {
     const { root, payload } = fixture();
     mkdirSync(join(root, "other"), { mode: 0o700 });

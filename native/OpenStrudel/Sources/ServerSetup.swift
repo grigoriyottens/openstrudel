@@ -246,7 +246,12 @@ private final class SSHProcess: @unchecked Sendable {
     }
 }
 
-struct SSHServerTransport: Sendable {
+protocol ServerSSHTransport: Sendable {
+    func scan(_ target: ServerTarget) async throws -> SSHHostKey
+    func run(target: ServerTarget, key: SSHHostKey, access: ServerAccess, input: Data, elevated: Bool) async throws -> Data
+}
+
+struct SSHServerTransport: ServerSSHTransport {
     static func arguments(target: ServerTarget, knownHosts: String, keyFile: String?, access: ServerAccess, command: String) -> [String] {
         var args = ["-T", "-F", "/dev/null", "-p", String(target.port), "-l", target.user,
             "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=\(knownHosts)", "-o", "GlobalKnownHostsFile=/dev/null",
@@ -348,13 +353,17 @@ extension ServerSetupStore {
     @Published private(set) var recoveryLoaded = false
     private let store: any ServerSetupStore
     private let probe: (ServerInstallation) async throws -> HomeConnection?
-    private let transport = SSHServerTransport()
+    private let transport: any ServerSSHTransport
+    private let currentReleaseHash: () async throws -> String
     private var operation: Task<Void, Never>?
     private var generation = UUID()
     private var unlocking = false
-    init(store: any ServerSetupStore = ServerSetupKeychain(), probe: ((ServerInstallation) async throws -> HomeConnection?)? = nil) {
+    init(store: any ServerSetupStore = ServerSetupKeychain(), probe: ((ServerInstallation) async throws -> HomeConnection?)? = nil,
+         transport: any ServerSSHTransport = SSHServerTransport(), releaseHash: (() async throws -> String)? = nil) {
         self.store = store
         self.probe = probe ?? Self.connect
+        self.transport = transport
+        self.currentReleaseHash = releaseHash ?? Self.releaseHash
         reloadRecovery()
     }
     func reloadRecovery() {
@@ -410,7 +419,7 @@ extension ServerSetupStore {
         guard let target, let key = hostKey else { return }
         start {
             self.phase = .checking
-            let data = try await self.transport.run(target: target, key: key, access: access, input: ServerSetupScripts.command("check_server"))
+            let data = try await self.transport.run(target: target, key: key, access: access, input: ServerSetupScripts.command("check_server"), elevated: false)
             try Task.checkCancellation()
             let check = try JSONDecoder().decode(ServerPreflight.self, from: data)
             self.preflight = check
@@ -431,9 +440,12 @@ extension ServerSetupStore {
                 saved = pending
                 let data = try await self.transport.run(target: target, key: key, access: access, input: ServerSetupScripts.command("server_status"), elevated: true)
                 let status = try JSONDecoder().decode(ServerInstallationStatus.self, from: data)
-                guard status.installationID == saved.id else { throw ServerSetupFailure.identity }
-                if status.canUpdateRelease == true {
-                    let latest = try await Self.releaseHash()
+                // The connection can drop before staging writes its identity.
+                // Replay the saved recipe; the remote script still refuses
+                // unrelated data, ownership or an existing installation.
+                guard status.installationID == nil || status.installationID == saved.id else { throw ServerSetupFailure.identity }
+                if status.installationID == saved.id && status.canUpdateRelease == true {
+                    let latest = try await self.currentReleaseHash()
                     if latest != saved.releaseHash {
                         saved.previousReleaseHash = saved.releaseHash
                         saved.releaseHash = latest
@@ -441,7 +453,8 @@ extension ServerSetupStore {
                 }
             }
             else {
-                saved = try ServerInstallation(target: target, hostKey: key, releaseHash: await Self.releaseHash())
+                let hash = try await self.currentReleaseHash()
+                saved = try ServerInstallation(target: target, hostKey: key, releaseHash: hash)
             }
             try Task.checkCancellation()
             saved.attempted = true

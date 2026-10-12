@@ -58,7 +58,7 @@ struct MobileInvitation: Decodable {
 }
 
 /// Store the destination, certificate and credential together in one Keychain write.
-struct HomeConnection: Codable {
+struct HomeConnection: Codable, Sendable {
     let url: String
     let token: String
     let pin: String

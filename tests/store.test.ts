@@ -2,6 +2,21 @@ import { describe, expect, it } from "vitest";
 import { Store } from "../src/store.js";
 
 describe("Store", () => {
+  it("names new assistants in the creating client's language without renaming existing ones", () => {
+    const store = new Store(":memory:");
+    try {
+      expect(store.createProfile({}).name).toBe("New assistant");
+      const original = store.createProfile({ name: "Новый сотрудник", instructions: "Existing rules" });
+      expect(store.createProfile({ defaultName: "Новый сотрудник" }).name).toBe("Новый сотрудник 2");
+      expect(store.createProfile({ defaultName: "Nouvel assistant" }).name).toBe("Nouvel assistant");
+      expect(store.createProfile({ name: "My name", defaultName: "Nouvel assistant" }).name).toBe("My name");
+      expect(store.getProfile(original.id)).toMatchObject({ name: "Новый сотрудник", instructions: "Existing rules" });
+      const longName = "x".repeat(80);
+      store.createProfile({ name: longName });
+      expect(store.createProfile({ defaultName: longName }).name).toBe("x".repeat(78) + " 2");
+      expect(() => store.createProfile({ defaultName: "x".repeat(81) })).toThrow();
+    } finally { store.close(); }
+  });
   it("keeps a short role and access domain separate from the full employee rules", () => {
     const store = new Store(":memory:");
     const p = store.createProfile({ name: "Редактор", instructions: "Full rules", purpose: "Помогает писать", domain: "work" });

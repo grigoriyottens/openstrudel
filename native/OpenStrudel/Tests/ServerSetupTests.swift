@@ -75,6 +75,18 @@ struct ServerSetupTests {
         #expect(failed.problemWhenUnreachable == .installation)
     }
 
+    @Test func oldRecoveryRecordsAndStatusRemainReadable() throws {
+        let saved = try pendingInstallation()
+        var record = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(saved)) as? [String: Any])
+        record.removeValue(forKey: "previousReleaseHash")
+        let restored = try JSONDecoder().decode(ServerInstallation.self, from: JSONSerialization.data(withJSONObject: record))
+        #expect(restored.id == saved.id)
+        #expect(restored.ownerToken == saved.ownerToken)
+        #expect(restored.previousReleaseHash == nil)
+        let status = try JSONDecoder().decode(ServerInstallationStatus.self, from: Data(#"{"installationID":null,"state":"inactive","stage":"dependencies"}"#.utf8))
+        #expect(status.canUpdateRelease == nil)
+    }
+
     @Test @MainActor func lockedRecoveryCannotStartAnotherInstallation() throws {
         let store = ServerSetupLockedStore()
         let flow = ServerSetupFlow(store: store)
@@ -111,6 +123,101 @@ struct ServerSetupTests {
         for _ in 0..<100 where offline.phase != .paused { await Task.yield() }
         #expect(offline.phase == .paused)
         #expect(offline.installation?.id == saved.id)
+    }
+
+    @Test @MainActor func interruptedBeforeRemoteIdentityReplaysTheSavedInstallation() async throws {
+        let saved = try pendingInstallation()
+        let transport = ServerSetupTestTransport(status: Data(#"{"installationID":null,"state":"inactive","stage":"dependencies","canUpdateRelease":true}"#.utf8))
+        let store = ServerSetupMemoryStore(installation: saved)
+        var releaseRequests = 0
+        let connection = HomeConnection(url: "https://server.example.com:7789", token: "fixture", pin: String(repeating: "b", count: 64), name: "Server")
+        let flow = ServerSetupFlow(store: store, probe: { _ in connection }, transport: transport, releaseHash: {
+            releaseRequests += 1
+            return String(repeating: "c", count: 64)
+        })
+        flow.confirm(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .ready)
+        flow.install(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .connected)
+        #expect(releaseRequests == 0, "An unstaged retry must retain its pinned release")
+        #expect(store.installation?.id == saved.id)
+        #expect(store.installation?.releaseHash == saved.releaseHash)
+        #expect(store.installation?.ownerToken == saved.ownerToken)
+        #expect(store.installation?.privateKeyPEM == saved.privateKeyPEM)
+        let inputs = await transport.installInputs
+        #expect(inputs.count == 1)
+        #expect(inputs.first?.contains(saved.id) == true)
+    }
+
+    @Test @MainActor func changedRemoteIdentityCannotRunTheInstaller() async throws {
+        let saved = try pendingInstallation()
+        let transport = ServerSetupTestTransport(status: Data(#"{"installationID":"different","state":"failed","stage":"download","canUpdateRelease":true}"#.utf8))
+        let store = ServerSetupMemoryStore(installation: saved)
+        var releaseRequests = 0
+        let flow = ServerSetupFlow(store: store, probe: { _ in nil }, transport: transport, releaseHash: {
+            releaseRequests += 1
+            return String(repeating: "c", count: 64)
+        })
+        flow.confirm(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+        flow.install(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .failed)
+        #expect(flow.error == .identity)
+        #expect(releaseRequests == 0)
+        #expect(await transport.installInputs.isEmpty)
+        #expect(store.installation?.releaseHash == saved.releaseHash)
+        #expect(store.installation?.previousReleaseHash == nil)
+    }
+
+    @Test @MainActor func failedOwnedReleaseCanBeUpdatedWithoutReplacingItsIdentity() async throws {
+        let saved = try pendingInstallation()
+        let status = try JSONSerialization.data(withJSONObject: ["installationID": saved.id, "state": "failed", "stage": "download", "canUpdateRelease": true])
+        let transport = ServerSetupTestTransport(status: status)
+        let store = ServerSetupMemoryStore(installation: saved)
+        let connection = HomeConnection(url: "https://server.example.com:7789", token: "fixture", pin: String(repeating: "b", count: 64), name: "Server")
+        let updatedHash = String(repeating: "c", count: 64)
+        let flow = ServerSetupFlow(store: store, probe: { _ in connection }, transport: transport, releaseHash: { updatedHash })
+        flow.confirm(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+        flow.install(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .connected)
+        #expect(store.installation?.releaseHash == updatedHash)
+        #expect(store.installation?.previousReleaseHash == saved.releaseHash)
+        #expect(store.installation?.id == saved.id)
+        #expect(store.installation?.ownerToken == saved.ownerToken)
+        #expect(store.installation?.privateKeyPEM == saved.privateKeyPEM)
+        let inputs = await transport.installInputs
+        #expect(inputs.count == 1)
+        #expect(inputs.first?.contains("\"previousReleaseHash\":\"\(saved.releaseHash)\"") == true)
+    }
+
+    private func pendingInstallation() throws -> ServerInstallation {
+        let target = try ServerTarget(host: "server.example.com", user: "root", port: 22)
+        let key = try SSHHostKey(line: "host ssh-ed25519 " + Data(repeating: 1, count: 51).base64EncodedString(), target: target)
+        return try ServerInstallation(target: target, hostKey: key, releaseHash: String(repeating: "a", count: 64))
+    }
+}
+
+private actor ServerSetupTestTransport: ServerSSHTransport {
+    let status: Data
+    private(set) var installInputs: [String] = []
+    init(status: Data) { self.status = status }
+    func scan(_ target: ServerTarget) async throws -> SSHHostKey { throw ServerSetupFailure.hostKey }
+    func run(target: ServerTarget, key: SSHHostKey, access: ServerAccess, input: Data, elevated: Bool) async throws -> Data {
+        let script = String(decoding: input, as: UTF8.self)
+        if script.hasSuffix("\ncheck_server\n") {
+            return try JSONEncoder().encode(ServerPreflight(os: "ubuntu", version: "24.04", architecture: "x86_64", memoryMiB: 3900, diskGiB: 35, freeGiB: 20, administrator: true, python: true, installationID: nil, existing: false, portBusy: false))
+        }
+        if script.hasSuffix("\nserver_status\n") { return status }
+        if script.contains("\ninstall_server <<'OPENSTRUDEL_SETUP_INPUT'\n") {
+            installInputs.append(script)
+            return Data()
+        }
+        throw ServerSetupFailure.installer
     }
 }
 

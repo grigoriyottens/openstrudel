@@ -189,7 +189,7 @@ private struct OwnServerSetupView: View {
             flow.resume()
         }
         .onDisappear { flow.pause(); password = ""; passphrase = ""; key = nil }
-        .onChange(of: flow.phase) { _, phase in
+        .onChange(of: flow.phase, initial: true) { _, phase in
             if phase == .connected { Task { await finish() } }
         }
         .fileImporter(isPresented: $choosingKey, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in

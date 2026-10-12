@@ -43,8 +43,8 @@ Use [the packaging procedure](home-release-packaging.md) for future Home release
 ## Still unverified or unresolved
 
 - No integrated Kamatera purchase flow was added. OpenStrudel currently offers setup of an existing server and a separate DigitalOcean flow; provider provisioning in this test used the official API.
-- A pending install pins its release digest. An already failed Home 35 attempt does not recover merely because the public alias now points to 35.1. A fix now preserves identity and permits replacement only before installation, when the previous service failed. Its 18 targeted script tests pass, including refusal to replace running, completed, installed or differently owned attempts. The native change and real failed-35 retry remain unverified; do not overwrite users' recovery records or data to bypass the test.
-- The restored employees appear correctly, but the server currently appends the Russian suffix `(импорт)` even in the English client. This generated-name localization defect remains open; the screenshots are not evidence of complete English copy coverage.
+- A pending install pins its release digest. An already failed Home 35 attempt does not recover merely because the public alias now points to 35.1. The continuation now preserves identity, permits replacement only before installation after a failed service, and atomically publishes the installation marker. Native and script fault-injection tests pass; the real failed-35 retry remains unverified. Do not overwrite users' recovery records or data to bypass that test.
+- The published server still appends the Russian suffix `(импорт)` even in the English client. Source now uses numeric collision suffixes and client-localized default assistant names; existing employees keep their names. Build and unit checks passed, with the final connected UI pass pending. See the continuation report below.
 - This run does not close physical-iPhone dictation/interruptions, fresh Google OAuth, live-microphone quality, Windows/Linux desktop or long-running native memory checks. Prior evidence remains scoped in [release 35 acceptance](release-35-acceptance.md).
 - The proposed OpenRamble-based dictation direction is documented [separately](dictation-direction-2026-10-12.md); the Apple speech engine in shipped clients was not replaced.
 
@@ -56,7 +56,7 @@ Use [the packaging procedure](home-release-packaging.md) for future Home release
 | Account settings show the container hostname. | Use the device label the user sees in navigation. | Users should recognize which server owns the account. |
 | The device code is selectable but has no copy action. | Show a short entry hint and a Copy code action with feedback. | Sign-in should not depend on knowing text-selection conventions. |
 
-These native changes are a work-in-progress checkpoint for continuation on Mac mini, not a built or published release. New strings still need the five-language catalog, native build and real UI acceptance. The new release-retry check also needs review of interruption before the installation identity marker is written.
+The Mac mini continuation has added the five-language catalog, passed native tests and Mac/iOS Simulator builds, fixed interrupted identity publication, and verified a useful server task plus app/service restart recovery. These changes are not a published release. The exact evidence and remaining account, Keychain and clean-install checks are in [the continuation report](server-journey-mini-2026-10-12.md).
 
 ## Evidence and rollback
 

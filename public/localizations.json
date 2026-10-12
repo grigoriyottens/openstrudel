@@ -7418,5 +7418,103 @@
     "fr": "Ouvrez cette page sur l’appareil où OpenStrudel est installé, puis choisissez « Ouvrir OpenStrudel ».",
     "es": "Abre esta página en el dispositivo con OpenStrudel y pulsa «Abrir OpenStrudel».",
     "he": "פתחו את הדף במכשיר שבו מותקנת OpenStrudel ובחרו באפשרות «פתיחת OpenStrudel»."
+  },
+  "Set up my server": {
+    "en": "Set up my server",
+    "fr": "Configurer mon serveur",
+    "es": "Configurar mi servidor",
+    "he": "הגדרת השרת שלי",
+    "ru": "Настроить мой сервер"
+  },
+  "Already have a server? Enter its address and sign-in details.": {
+    "en": "Already have a server? Enter its address and sign-in details.",
+    "fr": "Vous avez déjà un serveur ? Saisissez son adresse et vos identifiants.",
+    "es": "¿Ya tienes un servidor? Introduce su dirección y tus datos de acceso.",
+    "he": "כבר יש לך שרת? יש להזין את הכתובת ואת פרטי הכניסה.",
+    "ru": "Уже есть сервер? Введите его адрес и данные для входа."
+  },
+  "OpenStrudel is installed": {
+    "en": "OpenStrudel is installed",
+    "fr": "OpenStrudel est installé",
+    "es": "OpenStrudel está instalado",
+    "he": "OpenStrudel מותקן",
+    "ru": "OpenStrudel установлен"
+  },
+  "Next, connect your ChatGPT account.": {
+    "en": "Next, connect your ChatGPT account.",
+    "fr": "Connectez maintenant votre compte ChatGPT.",
+    "es": "Ahora conecta tu cuenta de ChatGPT.",
+    "he": "כעת יש לחבר את חשבון ChatGPT שלך.",
+    "ru": "Теперь подключите аккаунт ChatGPT."
+  },
+  "Connect ChatGPT": {
+    "en": "Connect ChatGPT",
+    "fr": "Connecter ChatGPT",
+    "es": "Conectar ChatGPT",
+    "he": "חיבור ChatGPT",
+    "ru": "Подключите ChatGPT"
+  },
+  "Create an assistant here": {
+    "en": "Create an assistant here",
+    "fr": "Créer un assistant ici",
+    "es": "Crear un asistente aquí",
+    "he": "יצירת עוזר כאן",
+    "ru": "Создать сотрудника здесь"
+  },
+  "OpenStrudel is installed. Sign in to ChatGPT to let your assistants work on this server.": {
+    "en": "OpenStrudel is installed. Sign in to ChatGPT to let your assistants work on this server.",
+    "fr": "OpenStrudel est installé. Connectez-vous à ChatGPT pour que vos assistants puissent travailler sur ce serveur.",
+    "es": "OpenStrudel está instalado. Inicia sesión en ChatGPT para que tus asistentes trabajen en este servidor.",
+    "he": "OpenStrudel מותקן. יש להיכנס ל-ChatGPT כדי שהעוזרים שלך יוכלו לעבוד בשרת הזה.",
+    "ru": "OpenStrudel установлен. Войдите в ChatGPT, чтобы сотрудники могли работать на этом сервере."
+  },
+  "Your assistants can now work here, even when your Mac is off.": {
+    "en": "Your assistants can now work here, even when your Mac is off.",
+    "fr": "Vos assistants peuvent désormais travailler ici, même lorsque votre Mac est éteint.",
+    "es": "Tus asistentes ya pueden trabajar aquí, incluso cuando tu Mac está apagado.",
+    "he": "העוזרים שלך יכולים כעת לעבוד כאן, גם כשה-Mac שלך כבוי.",
+    "ru": "Сотрудники смогут работать здесь, даже когда ваш Mac выключен."
+  },
+  "The server did not respond. Your installation is saved.": {
+    "en": "The server did not respond. Your installation is saved.",
+    "fr": "Le serveur ne répond pas. Votre installation est conservée.",
+    "es": "El servidor no responde. Tu instalación está guardada.",
+    "he": "השרת לא הגיב. ההתקנה שלך נשמרה.",
+    "ru": "Сервер не ответил. Установка сохранена."
+  },
+  "Вход в OpenAI истёк. Войдите ещё раз.": {
+    "en": "Your OpenAI sign-in has expired. Sign in again.",
+    "fr": "Votre connexion à OpenAI a expiré. Reconnectez-vous.",
+    "es": "Tu sesión de OpenAI ha caducado. Vuelve a iniciar sesión.",
+    "he": "תוקף ההתחברות ל-OpenAI פג. יש להתחבר שוב.",
+    "ru": "Вход в OpenAI истёк. Войдите ещё раз."
+  },
+  "Характер сохранён": {
+    "en": "Instructions saved",
+    "fr": "Instructions enregistrées",
+    "es": "Instrucciones guardadas",
+    "he": "ההנחיות נשמרו",
+    "ru": "Характер сохранён"
+  },
+  "Unlock connection": {
+    "en": "Unlock connection",
+    "ru": "Восстановить доступ",
+    "fr": "Déverrouiller la connexion",
+    "es": "Desbloquear conexión",
+    "he": "פתיחת החיבור"
+  },
+  "Unlock the saved connection to continue. Your chats and drafts are safe.": {
+    "en": "Unlock the saved connection to continue. Your chats and drafts are safe.",
+    "ru": "Разрешите доступ к сохранённому подключению. Переписка и черновики сохранены.",
+    "fr": "Déverrouillez la connexion enregistrée pour continuer. Vos conversations et brouillons sont conservés.",
+    "es": "Desbloquea la conexión guardada para continuar. Tus conversaciones y borradores están a salvo.",
+    "he": "יש לפתוח את החיבור השמור כדי להמשיך. השיחות והטיוטות שלך נשמרו."
+  },
+  "Allow OpenStrudel to access its saved connection in Keychain, then try again.": {
+    "en": "Allow OpenStrudel to access its saved connection in Keychain, then try again.",
+    "ru": "Разрешите OpenStrudel доступ к сохранённому подключению в Связке ключей и попробуйте ещё раз.",
+    "fr": "Autorisez OpenStrudel à accéder à sa connexion enregistrée dans le Trousseau, puis réessayez.",
+    "es": "Permite que OpenStrudel acceda a su conexión guardada en el Llavero y vuelve a intentarlo.",
+    "he": "יש לאפשר ל-OpenStrudel לגשת לחיבור השמור בצרור המפתחות, ואז לנסות שוב."
   }
 }

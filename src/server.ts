@@ -394,6 +394,7 @@ export class HttpApi {
         try {
           profile = this.store.createProfile({
             name,
+            defaultName: typeof body.defaultName === "string" ? body.defaultName : undefined,
             instructions,
             capabilities: Array.isArray(body.capabilities) ? body.capabilities.filter((item): item is string => typeof item === "string") : [],
             model: body.model == null ? undefined : String(body.model),
