@@ -8,7 +8,7 @@ final class StorePreviewUITests: XCTestCase {
             throw XCTSkip("Start the isolated store-preview fixture with --sign-in.")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL", "-openstrudel.language", "en", "-AppleLanguages", "(en)"]
         app.launch()
         let (data, _) = try await URLSession.shared.data(from: XCTUnwrap(URL(string: fixture + "/invite")))
         let value = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -48,7 +48,7 @@ final class StorePreviewUITests: XCTestCase {
             throw XCTSkip("Start the isolated store-preview fixture.")
         }
         let app = XCUIApplication()
-        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"]
+        app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL", "-openstrudel.language", "en", "-AppleLanguages", "(en)"]
         app.launch()
         let (data, response) = try await URLSession.shared.data(from: XCTUnwrap(URL(string: fixture + "/invite")))
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
@@ -60,13 +60,13 @@ final class StorePreviewUITests: XCTestCase {
         app.finishDevicePairing()
         let consent = app.buttons["acceptAIDataSharing"]
         if consent.waitForExistence(timeout: 15) { consent.tap() }
-        let chats = app.buttons["Чаты"]
+        let chats = app.buttons["Chats"]
         XCTAssertTrue(chats.waitForExistence(timeout: 30), app.debugDescription)
         chats.tap()
-        XCTAssertTrue(app.staticTexts["Редактор"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Editor"].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
         capture("store-01-employees", app)
-        app.staticTexts["Редактор"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["Место для ваших идей"].waitForExistence(timeout: 15), app.debugDescription)
+        app.staticTexts["Editor"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["A place for your ideas"].waitForExistence(timeout: 15), app.debugDescription)
         capture("store-02-conversation", app)
     }
 

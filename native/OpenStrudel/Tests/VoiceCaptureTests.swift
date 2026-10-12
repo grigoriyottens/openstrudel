@@ -25,6 +25,10 @@ import Testing
     @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_FIXTURE"] != nil))
     func recognizesAnActualRussianRecordingLocally() async throws {
         let path = try #require(ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_FIXTURE"])
+        if ProcessInfo.processInfo.environment["OPENSTRUDEL_INSTALL_VOICE_FIXTURE"] == "1" {
+            let assets = AppleDictationAssets()
+            try await assets.install(locale: "ru-RU") { _ in }
+        }
         let module = try await VoiceCapture.prepare(locale: "ru-RU")
         let text = try await VoiceCapture.transcribe(file: URL(fileURLWithPath: path), module: module)
         #expect(text.localizedCaseInsensitiveContains("проверка"))

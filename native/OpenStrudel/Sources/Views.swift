@@ -49,6 +49,11 @@ struct OpenStrudelRootView: View {
                 #endif
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if client.health == nil || !aiConsent || client.openAIAccount?.connected == false && client.profiles.isEmpty {
+                LanguagePicker(compact: true).padding(16)
+            }
+        }
         .task(id: pollingPhase) {
             guard pollingPhase == .active else { return }
             #if os(macOS)
@@ -87,7 +92,7 @@ struct OpenStrudelRootView: View {
                 set: { if !$0 { client.errorMessage = nil } }
             )
         ) {
-            Button("Понятно", role: .cancel) {}
+            Button(L("Понятно"), role: .cancel) {}
         } message: {
             Text(UserFacingError.text(client.errorMessage ?? ""))
         }
@@ -102,10 +107,10 @@ private struct HomeConnectingView: View {
     var body: some View {
         VStack(spacing: 24) {
             OpenStrudelMark(size: 76)
-            Text(client.isStartingLocalHome ? "Запускаем OpenStrudel" : "Подключаемся к вашей команде")
+            Text(client.isStartingLocalHome ? L("Запускаем OpenStrudel") : L("Подключаемся к вашей команде"))
                 .font(.system(.title, design: .serif, weight: .medium))
                 .multilineTextAlignment(.center)
-            ProgressView().controlSize(.large).accessibilityLabel("Подключение")
+            ProgressView().controlSize(.large).accessibilityLabel(L("Подключение"))
         }
         .padding(28).frame(maxWidth: 620)
         .accessibilityIdentifier("homeConnecting")
@@ -126,44 +131,44 @@ private struct HomeUnavailableView: View {
         VStack(spacing: 28) {
             OpenStrudelMark(size: 76)
             VStack(spacing: 12) {
-                Text(reconnecting ? "Нет связи с OpenStrudel" : client.isSignedOut ? "Вы вышли на этом устройстве" : "Помощники для ваших задач")
+                Text(reconnecting ? L("Нет связи с OpenStrudel") : client.isSignedOut ? L("Вы вышли на этом устройстве") : L("Помощники для ваших задач"))
                     .font(AppTypography.welcome)
                     .multilineTextAlignment(.center)
                 Text(reconnecting
-                     ? "Пока не удаётся подключиться к вашей команде. Ваши чаты сохранены. Подключимся автоматически."
-                     : client.isSignedOut ? "Сотрудники сохранены на своих устройствах. Подключитесь снова, чтобы продолжить." : "Начните на этом Mac. Создайте сотрудников или восстановите их из копии. Другие устройства можно подключить позже.")
+                     ? L("Пока не удаётся подключиться к вашей команде. Ваши чаты сохранены. Подключимся автоматически.")
+                     : client.isSignedOut ? L("Сотрудники сохранены на своих устройствах. Подключитесь снова, чтобы продолжить.") : L("Начните на этом Mac. Создайте сотрудников или восстановите их из копии. Другие устройства можно подключить позже."))
                     .font(.body).foregroundStyle(AppTheme.secondaryText)
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: 12) {
                 if client.isConfigured && !client.isLocalConnection {
                     Button { Task { await client.load() } } label: {
-                        SetupActionLabel(title: "Попробовать ещё раз", icon: "arrow.clockwise")
+                        SetupActionLabel(title: L("Попробовать ещё раз"), icon: "arrow.clockwise")
                     }.buttonStyle(.glassProminent).controlSize(.large)
                     if let managementURL = DigitalOceanCloud.managementURL(for: client.normalizedBaseURL) {
                         Link(destination: managementURL) {
-                            SetupActionLabel(title: "Управлять облаком", icon: "arrow.up.right.square")
+                            SetupActionLabel(title: L("Управлять облаком"), icon: "arrow.up.right.square")
                         }.buttonStyle(.glass).controlSize(.large)
                             .accessibilityIdentifier("manageCloudOffline")
-                            .accessibilityHint("Открыть вашу установку в DigitalOcean")
+                            .accessibilityHint(L("Открыть вашу установку в DigitalOcean"))
                     }
                 } else if LocalHome.isAvailable {
                     Button {
                         starting = true
                         Task { await client.startLocalHome(); starting = false }
                     } label: {
-                        SetupChoiceLabel(title: starting ? "Готовим ваш Mac…" : "Начать на этом Mac", subtitle: "Сотрудники и их файлы будут храниться здесь.", icon: "desktopcomputer")
+                        SetupChoiceLabel(title: starting ? L("Готовим ваш Mac…") : L("Начать на этом Mac"), subtitle: L("Сотрудники и их файлы будут храниться здесь."), icon: "desktopcomputer")
                     }.buttonStyle(.glassProminent).controlSize(.large)
                         .buttonBorderShape(.roundedRectangle(radius: 22))
                         .disabled(starting).accessibilityIdentifier("setupThisMac")
                 }
                 Button { showingInvitation = true } label: {
-                    SetupActionLabel(title: "Подключить другое устройство", icon: "link")
+                    SetupActionLabel(title: L("Подключить другое устройство"), icon: "link")
                 }.buttonStyle(.plain).foregroundStyle(AppTheme.secondaryText)
                     .disabled(starting).accessibilityIdentifier("setupExisting")
             }
             if client.isConfigured { DeviceSignOutButton {} }
-            Link("Конфиденциальность", destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
+            Link(L("Конфиденциальность"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
                 .font(.caption).buttonStyle(.plain).foregroundStyle(AppTheme.secondaryText)
         }
         .padding(40).frame(maxWidth: 520).frame(maxWidth: .infinity)
@@ -221,7 +226,7 @@ private struct Sidebar: View {
                 if searching {
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass").foregroundStyle(AppTheme.secondaryText)
-                        TextField("Найти чат", text: $query)
+                        TextField(L("Найти чат"), text: $query)
                             .textFieldStyle(.plain)
                             .focused($searchFocused)
                             .task {
@@ -233,8 +238,8 @@ private struct Sidebar: View {
                         Button(action: closeSearch) { Image(systemName: "xmark.circle.fill") }
                             .buttonStyle(.plain)
                             .foregroundStyle(.tertiary)
-                            .accessibilityLabel("Закрыть поиск")
-                            .help("Закрыть поиск (Escape)")
+                            .accessibilityLabel(L("Закрыть поиск"))
+                            .help(L("Закрыть поиск (Escape)"))
                     }
                     .padding(.horizontal, 10)
                     .frame(height: 32)
@@ -248,19 +253,19 @@ private struct Sidebar: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AppTheme.secondaryText)
-                    .accessibilityLabel("Поиск чата")
-                    .help("Найти сотрудника (⌘F)")
+                    .accessibilityLabel(L("Поиск чата"))
+                    .help(L("Найти сотрудника (⌘F)"))
                     .keyboardShortcut("f", modifiers: .command)
 
                     Spacer()
                     Button { showHistory = true } label: {
-                        Label("Переписки", systemImage: "clock.arrow.circlepath")
+                        Label(L("Переписки"), systemImage: "clock.arrow.circlepath")
                             .font(.callout).frame(minHeight: 36)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AppTheme.secondaryText)
                     .accessibilityIdentifier("openConversations")
-                    .help("История разговоров с ботом")
+                    .help(L("История разговоров с ботом"))
                     Spacer(minLength: 0)
                 }
 
@@ -272,7 +277,7 @@ private struct Sidebar: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AppTheme.secondaryText)
-                .help("Новый сотрудник (⌘N)")
+                .help(L("Новый сотрудник (⌘N)"))
             }
             .padding(.horizontal, 15)
             .padding(.top, 12)
@@ -289,19 +294,19 @@ private struct Sidebar: View {
                             if library.hasOtherDevices {
                                 HStack(spacing: 5) {
                                     Text(source.displayName)
-                                    if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel("Нет связи") }
+                                    if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
                                 }.font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.secondaryText)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 5)
                             }
                             if showsMain {
-                                SidebarRow(name: "OpenStrudel", subtitle: library.hasOtherDevices ? source.displayName : "Помощник для ваших задач",
+                                SidebarRow(name: "OpenStrudel", subtitle: library.hasOtherDevices ? source.displayName : L("Помощник для ваших задач"),
                                            selected: source === client && source.selectedProfileID == nil && source.selectedChatID == nil, appearance: nil) {
                                     closeSearch(); Task { await library.select(source, profile: nil) }
                                 }
                             }
                             if source.isEmployeeDraft && searchTerm.isEmpty {
-                                SidebarRow(name: "Новый сотрудник", subtitle: "Опишите его задачу", selected: source === client, appearance: source.draftAppearance) { library.select(source) }
+                                SidebarRow(name: L("Новый сотрудник"), subtitle: L("Опишите его задачу"), selected: source === client, appearance: source.draftAppearance) { library.select(source) }
                             }
                             ForEach(people) { profile in
                                 SidebarRow(name: profile.name, subtitle: profile.previewText.isEmpty ? profile.roleText : profile.previewText,
@@ -320,21 +325,21 @@ private struct Sidebar: View {
                                 }
                                 #endif
                                 .contextMenu {
-                                    Button("Скрыть у меня", systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
+                                    Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
                                     Divider()
-                                    Button("Удалить сотрудника…", role: .destructive) { requestDeletion(profile, from: source) }
+                                    Button(L("Удалить сотрудника…"), role: .destructive) { requestDeletion(profile, from: source) }
                                         .disabled(deleting || !source.canManageOpenAI || source.homeUnreachable)
                                 }
                             }
                         }
                         let groups = source.telegramGroups.filter { !searchTerm.isEmpty && $0.title.localizedCaseInsensitiveContains(searchTerm) }
                         if !groups.isEmpty {
-                            Text(library.hasOtherDevices ? "Переписки · " + source.displayName : "Переписки")
+                            Text(library.hasOtherDevices ? L("Conversations · \(source.displayName)") : L("Переписки"))
                                 .font(.caption.weight(.medium)).foregroundStyle(AppTheme.secondaryText)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 5)
                             ForEach(groups) { group in
-                                SidebarRow(name: group.title, subtitle: group.enabled == false ? "Бот на паузе" : "Группа в Telegram",
+                                SidebarRow(name: group.title, subtitle: group.enabled == false ? L("Бот на паузе") : L("Группа в Telegram"),
                                            selected: source === client && source.selectedChatID == group.conversationId,
                                            appearance: source.profiles.first(where: { $0.id == group.profileId })?.resolvedAppearance,
                                            symbol: "person.2") {
@@ -358,9 +363,9 @@ private struct Sidebar: View {
                     Image(systemName: library.hasOtherDevices ? "desktopcomputer" : client.isLocalConnection ? "laptopcomputer" : "desktopcomputer")
                         .font(.system(size: 19)).frame(width: 30)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(library.hasOtherDevices ? "Мои устройства" : client.displayName)
+                        Text(library.hasOtherDevices ? L("Мои устройства") : client.displayName)
                             .font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.middle)
-                        Text("Устройства и настройки").font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        Text(L("Устройства и настройки")).font(.caption).foregroundStyle(AppTheme.secondaryText)
                     }
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
@@ -369,17 +374,17 @@ private struct Sidebar: View {
                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Устройства и настройки")
-            .accessibilityValue(library.hasOtherDevices ? "Мои устройства" : client.displayName)
+            .accessibilityLabel(L("Устройства и настройки"))
+            .accessibilityValue(library.hasOtherDevices ? L("Мои устройства") : client.displayName)
             .accessibilityIdentifier("openDeviceSettings")
-            .help("Устройства и настройки OpenStrudel (⌘,)")
+            .help(L("Устройства и настройки OpenStrudel (⌘,)"))
             .padding(.horizontal, 12)
             .padding(.bottom, 13)
         }
         .sheet(isPresented: $showHistory) { ConversationBrowser(isPresented: $showHistory) }
-        .alert("Удалить «\(deletion?.name ?? "сотрудника")»?", isPresented: $confirmDeletion) {
-            Button("Отмена", role: .cancel) {}
-            Button("Удалить", role: .destructive) {
+        .alert(L("Удалить «\(deletion?.name ?? L("сотрудника"))»?"), isPresented: $confirmDeletion) {
+            Button(L("Отмена"), role: .cancel) {}
+            Button(L("Удалить"), role: .destructive) {
                 guard let target = deletion else { return }
                 deleting = true
                 Task {
@@ -389,7 +394,7 @@ private struct Sidebar: View {
                 }
             }
         } message: {
-            Text("Сотрудник, переписка и расписания будут удалены с устройства «\(deletion?.device ?? "OpenStrudel")». Отменить удаление нельзя.")
+            Text(L("Сотрудник, переписка и расписания будут удалены с устройства «\(deletion?.device ?? "OpenStrudel")». Отменить удаление нельзя."))
         }
     }
 
@@ -473,10 +478,10 @@ private struct ConversationView: View {
                 HStack(spacing: 10) {
                     if client.isConnecting { ProgressView().controlSize(.small) }
                     else { Image(systemName: "wifi.slash") }
-                    Text(client.connectionNeedsPairing ? "Подключите «\(client.displayName)» снова. Переписка сохранена на устройстве." : client.isConnecting ? "Подключаемся к «\(client.displayName)»…" : "«\(client.displayName)» не на связи. Переписка и черновики сохранены. Подключимся автоматически.")
+                    Text(client.connectionNeedsPairing ? L("Подключите «\(client.displayName)» снова. Переписка сохранена на устройстве.") : client.isConnecting ? L("Подключаемся к «\(client.displayName)»…") : L("«\(client.displayName)» не на связи. Переписка и черновики сохранены. Подключимся автоматически."))
                         .font(.callout)
                     Spacer(minLength: 0)
-                    if client.connectionNeedsPairing { Button("Подключить") { showSettings = true } }
+                    if client.connectionNeedsPairing { Button(L("Подключить")) { showSettings = true } }
                 }.foregroundStyle(AppTheme.secondaryText).padding(.horizontal, chatInset).padding(.vertical, 10)
             }
 
@@ -506,7 +511,7 @@ private struct ConversationView: View {
                                 } label: {
                                     HStack {
                                         if client.isLoadingEarlier { ProgressView().controlSize(.small) }
-                                        Text(client.isLoadingEarlier ? "Загружаем историю…" : "Показать более ранние сообщения")
+                                        Text(client.isLoadingEarlier ? L("Загружаем историю…") : L("Показать более ранние сообщения"))
                                     }
                                 }
                                     .disabled(client.isLoadingEarlier)
@@ -528,13 +533,13 @@ private struct ConversationView: View {
                                     if let error = pending.error {
                                         Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.secondaryText)
                                         if pending.operationID == nil {
-                                            Button("Проверить доставку и повторить") { Task { await client.retry(pending) } }.buttonStyle(.plain).frame(minHeight: controlTarget)
+                                            Button(L("Проверить доставку и повторить")) { Task { await client.retry(pending) } }.buttonStyle(.plain).frame(minHeight: controlTarget)
                                         }
                                     } else if let delivery = pending.deliveryState {
-                                        Text(delivery == "waiting_for_device" ? "Сообщение сохранено. Ждём подключения устройства." : "Сообщение сохранено. Передаём сотруднику.")
+                                        Text(delivery == "waiting_for_device" ? L("Сообщение сохранено. Ждём подключения устройства.") : L("Сообщение сохранено. Передаём сотруднику."))
                                             .font(.caption).foregroundStyle(AppTheme.secondaryText)
                                         if client.canManageOpenAI {
-                                            Button("Отменить доставку") { Task { await client.cancelPending(pending) } }.buttonStyle(.plain).frame(minHeight: controlTarget)
+                                            Button(L("Отменить доставку")) { Task { await client.cancelPending(pending) } }.buttonStyle(.plain).frame(minHeight: controlTarget)
                                         }
                                     }
                                 }
@@ -601,7 +606,7 @@ private struct ConversationView: View {
                 // layout animation can loop while the iPad keyboard is visible.
                 .overlay(alignment: .bottom) {
                     if hasNewMessages && !followsLatest {
-                        Button("Новые сообщения", systemImage: "arrow.down") {
+                        Button(L("Новые сообщения"), systemImage: "arrow.down") {
                             followsLatest = true
                             hasNewMessages = false
                             scrollToBottom(proxy, animated: true)
@@ -618,7 +623,7 @@ private struct ConversationView: View {
             }
 
             if client.activeTelegramChat != nil {
-                Text("Здесь можно обсудить переписку с помощником. Ответ останется в OpenStrudel.")
+                Text(L("Здесь можно обсудить переписку с помощником. Ответ останется в OpenStrudel."))
                     .font(.caption).foregroundStyle(AppTheme.secondaryText)
                     .frame(maxWidth: chatColumn, alignment: .leading).padding(.horizontal, chatInset)
                     .accessibilityIdentifier("telegramReplyDestination")
@@ -670,7 +675,7 @@ private struct ConversationView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Button { focused = false; showEmployees = true } label: { Image(systemName: "line.3.horizontal") }
                     .foregroundStyle(.primary)
-                    .accessibilityLabel("Чаты")
+                    .accessibilityLabel(L("Чаты"))
             }
             ToolbarItem(placement: .principal) {
                 ConversationTitle { focused = false; showBotDetails = true }
@@ -678,7 +683,7 @@ private struct ConversationView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 if client.activeProfile == nil {
                     Button { focused = false; showSettings = true } label: { Image(systemName: "gearshape") }
-                        .foregroundStyle(.primary).accessibilityLabel("Настройки")
+                        .foregroundStyle(.primary).accessibilityLabel(L("Настройки"))
                 }
             }
         }
@@ -696,11 +701,11 @@ private struct ConversationView: View {
                         VStack(alignment: .leading, spacing: 20) {
                             ModelSettingsView(agentID: "main")
                             Divider()
-                            NavigationLink { ConnectionsView(embedded: true) } label: { Label("Сервисы и навыки", systemImage: "link") }
+                            NavigationLink { ConnectionsView(embedded: true) } label: { Label(L("Сервисы и навыки"), systemImage: "link") }
                         }.padding(24)
                     }
                         .navigationTitle("OpenStrudel")
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { showBotDetails = false } } }
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { showBotDetails = false } } }
                 }
                 #if os(macOS)
                 .frame(width: 500, height: 400)
@@ -742,21 +747,21 @@ private struct OpenAIRecoveryNotice: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if dynamicTypeSize.isAccessibilitySize {
-                Text(client.openAIAccount?.isUnavailable == true ? "Связь с OpenAI" : "Вход в OpenAI")
+                Text(client.openAIAccount?.isUnavailable == true ? L("Связь с OpenAI") : L("Вход в OpenAI"))
                     .font(.callout.weight(.medium)).accessibilityIdentifier("openAIRecoveryNotice")
-                Text("Чаты и черновики сохранены.").font(.caption).foregroundStyle(AppTheme.secondaryText)
+                Text(L("Чаты и черновики сохранены.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 explanation
             }
             if client.openAIAccount?.isUnavailable == true {
-                Button { Task { await client.refreshOpenAIAccount(force: true) } } label: { SetupActionLabel(title: "Проверить ещё раз") }
+                Button { Task { await client.refreshOpenAIAccount(force: true) } } label: { SetupActionLabel(title: L("Проверить ещё раз")) }
                     .adaptiveActionStyle(.glass).disabled(client.isLoading)
             } else if client.canManageOpenAI {
-                Button { showAccounts = true } label: { SetupActionLabel(title: "Войти в OpenAI") }.adaptiveActionStyle(.glass)
+                Button { showAccounts = true } label: { SetupActionLabel(title: L("Войти в OpenAI")) }.adaptiveActionStyle(.glass)
                     .accessibilityIdentifier("recoverOpenAIAccount")
             } else if dynamicTypeSize.isAccessibilitySize {
-                Button { showAccounts = true } label: { SetupActionLabel(title: "Как восстановить вход") }.adaptiveActionStyle(.glass)
+                Button { showAccounts = true } label: { SetupActionLabel(title: L("Как восстановить вход")) }.adaptiveActionStyle(.glass)
             }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
             .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
@@ -766,8 +771,8 @@ private struct OpenAIRecoveryNotice: View {
 
     private var explanation: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(client.openAIAccount?.isUnavailable == true ? "Не удалось проверить соединение с OpenAI."
-                 : "Вход в OpenAI нужно восстановить.").font(.callout.weight(.medium))
+            Text(client.openAIAccount?.isUnavailable == true ? L("Не удалось проверить соединение с OpenAI.")
+                 : L("Вход в OpenAI нужно восстановить.")).font(.callout.weight(.medium))
                 .accessibilityIdentifier("openAIRecoveryNotice")
             Text(client.openAIRecoveryMessage).font(.caption).foregroundStyle(AppTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
@@ -804,7 +809,7 @@ private struct ConversationTitle: View {
                         Image(systemName: group.isGroup ? "person.2" : "bubble.left").foregroundStyle(AppTheme.accent)
                         VStack(spacing: 2) {
                             Text(group.title).font(.headline).lineLimit(1)
-                            Text(group.enabled == false ? "Telegram · бот на паузе" : "Telegram")
+                            Text(group.enabled == false ? L("Telegram · бот на паузе") : "Telegram")
                                 .font(.caption).foregroundStyle(AppTheme.secondaryText)
                         }
                         Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -818,15 +823,15 @@ private struct ConversationTitle: View {
                     }.frame(minHeight: controlTarget).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Настройки сотрудника")
+                .accessibilityLabel(L("Настройки сотрудника"))
                 .accessibilityValue(client.activeAgentName)
                 .accessibilityIdentifier("openEmployeeDetails")
-                .help("Открыть сотрудника «\(client.activeAgentName)»")
+                .help(L("Открыть сотрудника «\(client.activeAgentName)»"))
             } else {
                 HStack(spacing: 7) { identity }.frame(minHeight: controlTarget)
             }
             if let archive = client.importedConversations.first(where: { $0.id == client.selectedChatID }) {
-                Label("Архив · " + archive.title, systemImage: "archivebox")
+                Label(L("Archive · \(archive.title)"), systemImage: "archivebox")
                     .labelStyle(.titleAndIcon)
                     .font(.caption).foregroundStyle(AppTheme.secondaryText).lineLimit(1)
             }
@@ -850,7 +855,7 @@ private struct EmployeeDestinationChoices: View {
             Button {
                 choose(destination)
             } label: {
-                Text(destination.name + (destination.available ? "" : " · недоступно"))
+                Text(destination.available ? destination.name : L("\(destination.name) · unavailable"))
             }
             .disabled(!destination.available)
             .accessibilityIdentifier("employeeDestination-" + destination.id)
@@ -867,7 +872,7 @@ private struct NewEmployeeControl<Label: View>: View {
         Group {
             if library.employeeDestinations.count > 1 {
                 Menu {
-                    Section("Создать сотрудника на") {
+                    Section(L("Создать сотрудника на")) {
                         EmployeeDestinationChoices { destination in
                             beforeCreate()
                             library.beginEmployee(on: destination.client, deviceID: destination.deviceID)
@@ -884,7 +889,7 @@ private struct NewEmployeeControl<Label: View>: View {
                 .disabled(library.employeeDestinations.first?.available != true)
             }
         }
-        .accessibilityLabel("Новый сотрудник")
+        .accessibilityLabel(L("Новый сотрудник"))
         .accessibilityIdentifier("newEmployee")
     }
 }
@@ -896,10 +901,10 @@ private struct EmptyChat: View {
     var body: some View {
         VStack(spacing: 12) {
             AgentAvatar(appearance: client.activeAppearance, size: 72)
-            Text(client.isEmployeeDraft ? "Создайте сотрудника" : client.activeProfile?.name ?? "Напишите, что нужно")
+            Text(client.isEmployeeDraft ? L("Создайте сотрудника") : client.activeProfile?.name ?? L("Напишите, что нужно"))
                 .font(AppTypography.emptyTitle)
             if client.isEmployeeDraft {
-                Text("Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты».")
+                Text(L("Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты»."))
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryText)
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
@@ -910,7 +915,7 @@ private struct EmptyChat: View {
                             library.chooseEmployeeDevice(destination.client, deviceID: destination.deviceID)
                         }
                     } label: {
-                        Label("Создать на: " + client.executionDeviceName, systemImage: "desktopcomputer")
+                        Label(L("Create on \(client.executionDeviceName)"), systemImage: "desktopcomputer")
                             .font(.callout).fixedSize(horizontal: false, vertical: true)
                             .frame(minHeight: controlTarget)
                     }
@@ -920,20 +925,20 @@ private struct EmptyChat: View {
                     .buttonStyle(.bordered)
                     #endif
                     .padding(.top, 8)
-                    .accessibilityLabel("Где будет работать сотрудник")
+                    .accessibilityLabel(L("Где будет работать сотрудник"))
                     .accessibilityValue(client.executionDeviceName)
                     .accessibilityIdentifier("employeeCreationDevice")
                 } else {
-                    Text("Будет работать на «" + client.executionDeviceName + "»")
+                    Text(L("Works on “\(client.executionDeviceName)”."))
                         .font(.callout).foregroundStyle(AppTheme.secondaryText)
                         .multilineTextAlignment(.center)
                 }
             } else if client.homeUnreachable || client.connectionNeedsPairing {
-                Text("История появится после подключения к устройству.")
+                Text(L("История появится после подключения к устройству."))
                     .font(.subheadline).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
             } else if let profile = client.activeProfile {
-                Text(profile.roleText.isEmpty ? "Напишите, что нужно." : profile.roleText)
+                Text(profile.roleText.isEmpty ? L("Напишите, что нужно.") : profile.roleText)
                     .font(.subheadline).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
             }
@@ -1014,7 +1019,7 @@ private struct MessageBubble: View {
                                     Spacer(minLength: 8)
                                     Image(systemName: "arrow.down").font(.caption).foregroundStyle(.tertiary)
                                 }.padding(10).background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 11))
-                            }.buttonStyle(.plain).accessibilityLabel("Открыть " + file.name)
+                            }.buttonStyle(.plain).accessibilityLabel(L("Open \(file.name)"))
                             }
                         }
                     }
@@ -1034,7 +1039,7 @@ private struct MessageBubble: View {
     }
 
     private var meta: String {
-        [message.status == "queued" ? "В очереди" : nil, message.time].compactMap { $0 }.joined(separator: " · ")
+        [message.status == "queued" ? L("В очереди") : nil, message.time].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func withTime(_ text: String) -> String {
@@ -1080,14 +1085,14 @@ private struct ThinkingBubble: View {
             HStack(spacing: 8) {
                 AgentAvatar(appearance: appearance, size: 24)
                 ProgressView().controlSize(.small).dynamicTypeSize(.medium).accessibilityHidden(true)
-                Text(textSize.isAccessibilitySize ? "Готовим ответ…" : name + " работает")
+                Text(textSize.isAccessibilitySize ? L("Готовим ответ…") : L("\(name) is working"))
                     .font(.subheadline)
                     .foregroundStyle(AppTheme.secondaryText)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .accessibilityElement(children: .ignore).accessibilityLabel(name + " работает")
+            .accessibilityElement(children: .ignore).accessibilityLabel(L("\(name) is working"))
             Spacer(minLength: textSize.isAccessibilitySize ? 0 : 80)
         }
         .transition(.opacity)
@@ -1113,8 +1118,9 @@ private struct Composer: View {
     @State private var importID = UUID()
     @State private var importing = false
     @StateObject private var voice = VoiceCapture()
-    @AppStorage("openstrudel.dictation") private var dictationProvider = "ramble"
-    @AppStorage("openstrudel.dictationLocale") private var dictationLocale = "ru-RU"
+    @Environment(\.scenePhase) private var recordingScenePhase
+    @ObservedObject private var dictationAssets = DictationAssets.shared
+    private var dictationLocale: String { DictationAssets.selectedLocale }
     @State private var showDictation = false
     @State private var editingMessage: HomeMessage?
     @State private var queuedContentHeight: CGFloat = 44
@@ -1129,9 +1135,6 @@ private struct Composer: View {
             guard voice.phase == .idle else { return false }
             importProviders(providers); return true
         }
-        #if os(macOS)
-        .onPasteCommand(of: [.fileURL, .image]) { importProviders($0) }
-        #endif
         .sheet(isPresented: $showDictation) { DictationSetupView { voice.start(locale: dictationLocale) } }
         .sheet(item: $editingMessage) { message in QueuedMessageEditor(message: message).environmentObject(client) }
         .photosPicker(isPresented: $showPhotos, selection: $photoSelection, maxSelectionCount: max(1, AttachmentImport.countLimit - files.count), matching: .images)
@@ -1147,7 +1150,7 @@ private struct Composer: View {
                         guard data.count <= AttachmentImport.byteLimit else { throw AttachmentImport.Failure.tooLarge }
                         try Task.checkCancellation()
                         let type = photo.supportedContentTypes.first(where: { $0.conforms(to: .image) }) ?? .jpeg
-                        picked.append(PickedFile(name: "Фото." + (type.preferredFilenameExtension ?? "jpg"), mimeType: type.preferredMIMEType ?? "image/jpeg", data: data))
+                        picked.append(PickedFile(name: L("Фото") + "." + (type.preferredFilenameExtension ?? "jpg"), mimeType: type.preferredMIMEType ?? "image/jpeg", data: data))
                     }
                     completeImport(picked, id: id, context: context)
                 } catch { reportImportError(error, id: id, context: context) }
@@ -1160,7 +1163,7 @@ private struct Composer: View {
                 do {
                     let urls = try result.get()
                     guard files.count + urls.count <= AttachmentImport.countLimit else {
-                        fileError = "Можно прикрепить до шести файлов. Уберите лишние файлы и попробуйте ещё раз."; return
+                        fileError = L("Можно прикрепить до шести файлов. Уберите лишние файлы и попробуйте ещё раз."); return
                     }
                     let selection = try await AttachmentImport.files(at: urls)
                     completeImport(selection, id: id, context: context)
@@ -1170,36 +1173,41 @@ private struct Composer: View {
         .onAppear { attachVoice() }
         .onChange(of: contextID) { _, _ in editingMessage = nil; cancelImport(); attachVoice() }
         .onDisappear { cancelImport(); voice.detach() }
-        .alert("Не удалось добавить файл", isPresented: Binding(get: { fileError != nil }, set: { if !$0 { fileError = nil } })) { Button("Понятно", role: .cancel) {} } message: { Text(fileError ?? "") }
+        .onChange(of: recordingScenePhase) { _, phase in
+            #if os(iOS)
+            if phase == .background && voice.phase == .recording { voice.finish(send: false, locale: dictationLocale) }
+            #endif
+        }
+        .alert(L("Не удалось добавить файл"), isPresented: Binding(get: { fileError != nil }, set: { if !$0 { fileError = nil } })) { Button(L("Понятно"), role: .cancel) {} } message: { Text(fileError ?? "") }
     }
 
     private var composerContents: some View {
         VStack(alignment: .leading, spacing: 4) {
             if client.health?.turnControlVersion == 1 && !client.visibleQueuedMessages.isEmpty {
-                Text("После ответа").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 10)
+                Text(L("После ответа")).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 10)
                 ScrollView {
                     VStack(spacing: 2) {
                         ForEach(client.visibleQueuedMessages) { queued in
                             HStack(spacing: 4) {
                                 Button { editingMessage = queued } label: {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(queued.text.isEmpty ? "Вложение" : queued.text).lineLimit(2)
+                                        Text(queued.text.isEmpty ? L("Вложение") : queued.text).lineLimit(2)
                                         if let files = queued.attachments, !files.isEmpty {
                                             Text(files.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                         }
                                     }.font(.callout).frame(maxWidth: .infinity, minHeight: controlTarget, alignment: .leading).contentShape(Rectangle())
                                 }.buttonStyle(.plain).disabled(client.health?.queueControlVersion != 1)
-                                    .accessibilityLabel("Изменить сообщение: " + (queued.text.isEmpty ? "Вложение" : queued.text))
+                                    .accessibilityLabel(L("Edit message: \(queued.text.isEmpty ? L("Вложение") : queued.text)"))
                                     .accessibilityIdentifier("editQueuedMessage-" + queued.id)
                                 if client.health?.queueControlVersion == 1 && client.visibleQueuedMessages.count > 1 {
                                     Button { Task { await client.moveQueuedMessageFirst(queued) } } label: {
                                         Image(systemName: "arrow.up.to.line").font(.system(size: 18)).frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
                                     }.buttonStyle(.plain).disabled(client.visibleQueuedMessages.first?.id == queued.id)
-                                        .accessibilityLabel("В начало очереди").help("Отправить первым после текущего ответа")
+                                        .accessibilityLabel(L("В начало очереди")).help(L("Отправить первым после текущего ответа"))
                                 }
                                 Button { Task { await client.cancelMessage(queued) } } label: {
                                     Image(systemName: "xmark").font(.system(size: 18)).frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
-                                }.buttonStyle(.plain).accessibilityLabel("Убрать сообщение из очереди")
+                                }.buttonStyle(.plain).accessibilityLabel(L("Убрать сообщение из очереди"))
                             }.padding(.horizontal, 16)
                         }
                     }
@@ -1219,7 +1227,7 @@ private struct Composer: View {
                                 } else { Image(systemName: "doc").foregroundStyle(AppTheme.secondaryText).frame(width: 28) }
                                 Text(file.name).font(.caption).lineLimit(1)
                                 Button { files.removeAll { $0.id == file.id } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(AppTheme.secondaryText).frame(width: controlTarget, height: controlTarget).contentShape(Rectangle()) }
-                                    .buttonStyle(.plain).accessibilityLabel("Убрать " + file.name)
+                                    .buttonStyle(.plain).accessibilityLabel(L("Remove \(file.name)"))
                             }.padding(5).background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
                         }
                     }.padding(.horizontal, 12).padding(.top, 9)
@@ -1228,7 +1236,7 @@ private struct Composer: View {
             if voice.phase != .idle {
                 VoiceRecordingRow(voice: voice, locale: dictationLocale, canSend: canSend)
             } else {
-                if !voice.detail.isEmpty { Text(voice.detail).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 8) }
+                if !voice.detail.isEmpty { Text(L10n.serviceText(voice.detail)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 8) }
                 inputRow
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
@@ -1249,10 +1257,10 @@ private struct Composer: View {
 
     private var attachmentMenu: some View {
         Menu {
-                Button("Фото", systemImage: "photo") { showPhotos = true }
-                Button("Прикрепить файл", systemImage: "paperclip") { showFiles = true }
+                Button(L("Фото"), systemImage: "photo") { showPhotos = true }
+                Button(L("Прикрепить файл"), systemImage: "paperclip") { showFiles = true }
                 Divider()
-                Button("Голосовой ввод…", systemImage: "mic") { showDictation = true }
+                Button(L("Голосовой ввод…"), systemImage: "mic") { showDictation = true }
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 17, weight: .medium))
@@ -1264,36 +1272,38 @@ private struct Composer: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .frame(width: controlTarget, height: controlTarget)
-            .accessibilityLabel("Прикрепить фото или файл")
-            .help(files.count >= AttachmentImport.countLimit ? "Можно прикрепить до шести файлов" : "Прикрепить фото или файл до 25 МБ")
+            .accessibilityLabel(L("Прикрепить фото или файл"))
+            .help(files.count >= AttachmentImport.countLimit ? L("Можно прикрепить до шести файлов") : L("Прикрепить фото или файл до 25 МБ"))
             .disabled(importing || files.count >= AttachmentImport.countLimit)
     }
 
-    private var draftField: some View {
-        TextField("Сообщение", text: $draft, axis: .vertical)
-                .accessibilityLabel("Сообщение").accessibilityIdentifier("messageComposer")
+    @ViewBuilder private var draftField: some View {
+        #if os(macOS)
+        ComposerTextField(text: $draft, focused: Binding(get: { focused }, set: { focused = $0 }), paste: { providers in
+            guard voice.phase == .idle else { return }
+            importProviders(providers)
+        }, submit: { if canSend && hasContent && !importing { send(sendMode) } })
+            .overlay(alignment: .leading) {
+                if draft.isEmpty { Text(L("Сообщение")).font(ChatTypography.body).foregroundStyle(AppTheme.secondaryText).allowsHitTesting(false).accessibilityHidden(true) }
+            }
+            .padding(.vertical, 8).frame(minHeight: controlTarget)
+        #else
+        TextField(L("Сообщение"), text: $draft, axis: .vertical)
+                .accessibilityLabel(L("Сообщение")).accessibilityIdentifier("messageComposer")
                 .textFieldStyle(.plain)
                 .font(ChatTypography.body)
                 .lineLimit(1...(textSize.isAccessibilitySize ? 2 : 6))
                 .padding(.vertical, 8)
                 .frame(minHeight: controlTarget)
                 .focused($focused)
-                #if os(macOS)
-                .onKeyPress(.return, phases: .down) { press in
-                    guard press.modifiers.contains(.shift),
-                          let editor = NSApp.keyWindow?.firstResponder as? NSTextView else { return .ignored }
-                    editor.insertNewlineIgnoringFieldEditor(nil)
-                    return .handled
-                }
-                .help("Return отправляет сообщение. Shift+Return добавляет новую строку.")
-                #endif
                 .onSubmit { if canSend && hasContent && !importing { send(sendMode) } }
+        #endif
     }
 
     @ViewBuilder private var inputActions: some View {
             if client.isSending && client.health?.turnControlVersion == 1 {
                 Menu {
-                    Picker("Отправка во время ответа", selection: $sendMode) {
+                    Picker(L("Отправка во время ответа"), selection: $sendMode) {
                         ForEach(ComposerSendMode.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                 } label: {
@@ -1306,18 +1316,17 @@ private struct Composer: View {
 
             if importing {
                 ProgressView().controlSize(.small).frame(width: controlTarget, height: controlTarget)
-                    .accessibilityLabel("Добавляем файлы")
+                    .accessibilityLabel(L("Добавляем файлы"))
             } else {
                 Button {
                     focused = true
-                    #if os(macOS)
-                    if dictationProvider == "ramble" { showDictation = true }
-                    else { voice.start(locale: dictationLocale) }
-                    #else
-                    voice.start(locale: dictationLocale)
-                    #endif
+                    Task {
+                        await dictationAssets.check(locale: dictationLocale)
+                        if dictationAssets.state == .ready && UserDefaults.standard.bool(forKey: "openstrudel.dictationIntroduced") { voice.start(locale: dictationLocale) }
+                        else { showDictation = true }
+                    }
                 } label: { Image(systemName: "mic").font(.system(size: 18)).frame(width: controlTarget, height: controlTarget).contentShape(Rectangle()) }
-                    .buttonStyle(.plain).accessibilityLabel("Голосовой ввод").accessibilityIdentifier("voiceInput")
+                    .buttonStyle(.plain).accessibilityLabel(L("Голосовой ввод")).accessibilityIdentifier("voiceInput")
                 sendButton
             }
     }
@@ -1340,9 +1349,9 @@ private struct Composer: View {
         .buttonStyle(.plain)
         .disabled(!canSend || (!hasContent && !canStop))
         .opacity(canSend && (hasContent || canStop) ? 1 : 0.4)
-        .accessibilityLabel(canStop ? "Остановить ответ" : client.isSending ? sendMode.title : "Отправить")
+        .accessibilityLabel(canStop ? L("Остановить ответ") : client.isSending ? sendMode.title : L("Отправить"))
         .accessibilityIdentifier("sendMessage")
-        .help(canStop ? "Остановить текущий ответ" : "Отправить сообщение (⌘Return)")
+        .help(canStop ? L("Остановить текущий ответ") : L("Отправить сообщение (⌘Return)"))
         .keyboardShortcut(hasContent ? KeyboardShortcut(.return, modifiers: .command) : nil)
     }
 
@@ -1356,7 +1365,7 @@ private struct Composer: View {
 
     private func importProviders(_ providers: [NSItemProvider]) {
         guard !providers.isEmpty, !importing, voice.phase == .idle else { return }
-        guard files.count + providers.count <= AttachmentImport.countLimit else { fileError = "Можно прикрепить до шести файлов."; return }
+        guard files.count + providers.count <= AttachmentImport.countLimit else { fileError = L("Можно прикрепить до шести файлов."); return }
         let (id, context) = beginImport()
         importTask = Task {
             defer { if importID == id { importing = false } }
@@ -1376,14 +1385,14 @@ private struct Composer: View {
     private func completeImport(_ selection: [PickedFile], id: UUID, context: String) {
         guard importID == id, contextID == context, !Task.isCancelled else { return }
         guard files.count + selection.count <= AttachmentImport.countLimit else {
-            fileError = "Можно прикрепить до шести файлов."; return
+            fileError = L("Можно прикрепить до шести файлов."); return
         }
         files.append(contentsOf: selection)
     }
 
     private func reportImportError(_ error: Error, id: UUID, context: String) {
         guard importID == id, contextID == context, !AttachmentImport.isCancellation(error), !Task.isCancelled else { return }
-        fileError = (error as? AttachmentImport.Failure)?.errorDescription ?? "Не удалось открыть файл. Проверьте, что он доступен на устройстве, и выберите его ещё раз."
+        fileError = (error as? AttachmentImport.Failure)?.errorDescription ?? L("Не удалось открыть файл. Проверьте, что он доступен на устройстве, и выберите его ещё раз.")
     }
 
     private func cancelImport() {
@@ -1413,21 +1422,21 @@ private struct QueuedMessageEditor: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
                 TextEditor(text: $text).font(.body).focused($focused)
-                    .frame(minHeight: 160).accessibilityLabel("Текст сообщения в очереди")
+                    .frame(minHeight: 160).accessibilityLabel(L("Текст сообщения в очереди"))
                     .accessibilityIdentifier("queuedMessageText")
                 if let files = message.attachments, !files.isEmpty {
                     ForEach(files) { file in Label(file.name, systemImage: file.icon).font(.callout).foregroundStyle(.secondary) }
                 }
-                if let error { Text(error).font(.callout).foregroundStyle(AppTheme.warning).textSelection(.enabled) }
+                if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.warning).textSelection(.enabled) }
             }.padding(24).background(HomeBackground())
-                .navigationTitle("Изменить сообщение")
+                .navigationTitle(L("Изменить сообщение"))
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() }.disabled(saving).keyboardShortcut(.cancelAction) }
+                    ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.disabled(saving).keyboardShortcut(.cancelAction) }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button(saving ? "Сохраняем…" : "Сохранить") {
+                        Button(saving ? L("Сохраняем…") : L("Сохранить")) {
                             saving = true; error = nil
                             Task {
                                 do { try await client.editQueuedMessage(message, text: text); dismiss() }
@@ -1463,7 +1472,7 @@ private struct EmployeePicker: View {
             List {
                 if searchTerm.isEmpty {
                     Button { showingHistory = true } label: {
-                        Label("Переписки", systemImage: "clock.arrow.circlepath")
+                        Label(L("Переписки"), systemImage: "clock.arrow.circlepath")
                     }.accessibilityIdentifier("openConversations")
                 }
                 if !showsMain && !library.visibleClients.contains(where: { source in library.visibleProfiles(on: source).contains { $0.name.localizedCaseInsensitiveContains(searchTerm) || $0.roleText.localizedCaseInsensitiveContains(searchTerm) } || source.telegramGroups.contains { $0.title.localizedCaseInsensitiveContains(searchTerm) } }) {
@@ -1484,19 +1493,19 @@ private struct EmployeePicker: View {
                             }
                             .accessibilityIdentifier("employee-" + profile.id)
                             .contextMenu {
-                                Button("Скрыть у меня", systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
+                                Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button("Скрыть", systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }.tint(.gray)
+                                Button(L("Скрыть"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }.tint(.gray)
                             }
                         }
                     } header: { if library.hasOtherDevices { Text(source.displayName) } }
                     }
                     let groups = source.telegramGroups.filter { !searchTerm.isEmpty && $0.title.localizedCaseInsensitiveContains(searchTerm) }
                     if !groups.isEmpty {
-                        Section(library.hasOtherDevices ? "Переписки · " + source.displayName : "Переписки") {
+                        Section(library.hasOtherDevices ? L("Conversations · \(source.displayName)") : L("Переписки")) {
                             ForEach(groups) { group in
-                                EmployeePickerRow(name: group.title, subtitle: group.enabled == false ? "Бот на паузе" : "Группа в Telegram",
+                                EmployeePickerRow(name: group.title, subtitle: group.enabled == false ? L("Бот на паузе") : L("Группа в Telegram"),
                                                   selected: source === client && source.selectedChatID == group.conversationId,
                                                   appearance: nil, symbol: "person.2") {
                                     Task { await library.select(source, group: group); dismiss() }
@@ -1509,24 +1518,24 @@ private struct EmployeePicker: View {
             }
             .scrollContentBackground(.hidden)
             .background(HomeBackground())
-            .navigationTitle("Чаты")
+            .navigationTitle(L("Чаты"))
             .navigationDestination(isPresented: $showingHistory) { ConversationBrowser(isPresented: $isPresented, embedded: true) }
             #if os(iOS)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Найти чат")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: L("Найти чат"))
             #else
-            .searchable(text: $query, prompt: "Найти чат")
+            .searchable(text: $query, prompt: L("Найти чат"))
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     HStack(spacing: 16) {
                         Button { showingSettings = true } label: { Image(systemName: "gearshape") }
-                            .accessibilityLabel("Настройки").accessibilityIdentifier("teamSettings")
+                            .accessibilityLabel(L("Настройки")).accessibilityIdentifier("teamSettings")
                         NewEmployeeControl(beforeCreate: { dismiss() }) {
                             Image(systemName: "plus").frame(minWidth: controlTarget, minHeight: controlTarget)
                         }
                     }
                 }
-                ToolbarItem(placement: .cancellationAction) { Button("Готово") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Готово")) { dismiss() } }
             }
         }
         .sheet(isPresented: $showingSettings) { SettingsView().environmentObject(client) }
@@ -1561,8 +1570,8 @@ private struct ConversationBrowser: View {
     private var content: some View {
         List {
             if !hasHistory {
-                ContentUnavailableView("Пока нет переписок", systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Разговоры с ботом в Telegram появятся здесь автоматически."))
+                ContentUnavailableView(L("Пока нет переписок"), systemImage: "bubble.left.and.bubble.right",
+                    description: Text(L("Разговоры с ботом в Telegram появятся здесь автоматически.")))
             } else {
                 ForEach(library.visibleClients) { source in
                     let chats = (source.telegram?.chats ?? []).filter { $0.conversationId != nil && (term.isEmpty || $0.title.localizedCaseInsensitiveContains(term)) }
@@ -1571,14 +1580,14 @@ private struct ConversationBrowser: View {
                         Section {
                             ForEach(chats) { chat in
                                 EmployeePickerRow(name: chat.title,
-                                    subtitle: (chat.isGroup ? "Группа в Telegram" : "Личный разговор в Telegram") + (chat.enabled == false ? " · на паузе" : ""),
+                                    subtitle: (chat.isGroup ? L("Группа в Telegram") : L("Личный разговор в Telegram")) + (chat.enabled == false ? L(" · на паузе") : ""),
                                     selected: source === client && source.selectedChatID == chat.conversationId,
                                     appearance: nil, symbol: chat.isGroup ? "person.2" : "bubble.left") {
                                         open(source, conversation: chat.conversationId)
                                     }.accessibilityIdentifier("telegramConversation-" + chat.chatId)
                             }
                             ForEach(archives) { chat in
-                                EmployeePickerRow(name: chat.title, subtitle: "Из прежнего приложения",
+                                EmployeePickerRow(name: chat.title, subtitle: L("Из прежнего приложения"),
                                     selected: source === client && source.selectedChatID == chat.id,
                                     appearance: nil, symbol: "archivebox") {
                                         open(source, conversation: chat.id)
@@ -1595,11 +1604,11 @@ private struct ConversationBrowser: View {
         }
         .scrollContentBackground(.hidden)
         .background(HomeBackground())
-        .navigationTitle("Переписки")
-        .searchable(text: $query, prompt: "Найти переписку")
+        .navigationTitle(L("Переписки"))
+        .searchable(text: $query, prompt: L("Найти переписку"))
         .toolbar {
             if !embedded {
-                ToolbarItem(placement: .confirmationAction) { Button("Готово") { isPresented = false } }
+                ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { isPresented = false } }
             }
         }
     }
@@ -1657,10 +1666,10 @@ private struct SearchEmptyState: View {
     let clear: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Ничего не найдено").font(.headline)
-            Text("Нет совпадений для «\(query)». Проверьте название или очистите поиск.")
+            Text(L("Ничего не найдено")).font(.headline)
+            Text(L("Нет совпадений для «\(query)». Проверьте название или очистите поиск."))
                 .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-            Button("Очистить поиск", action: clear).frame(minHeight: controlTarget)
+            Button(L("Очистить поиск"), action: clear).frame(minHeight: controlTarget)
         }.padding(.vertical, 16).accessibilityIdentifier("searchEmptyState")
     }
 }
@@ -1693,13 +1702,13 @@ private struct BotDetailsView: View {
                 HStack(spacing: 12) {
                     AgentAvatar(appearance: appearance, size: 72)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Имя").font(.caption).foregroundStyle(AppTheme.secondaryText)
-                        TextField("Имя сотрудника", text: $name).textFieldStyle(.plain).font(.title2.weight(.semibold))
+                        Text(L("Имя")).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        TextField(L("Имя сотрудника"), text: $name).textFieldStyle(.plain).font(.title2.weight(.semibold))
                     }
                 }
                 Button { showConnections = true } label: {
                     HStack {
-                        Label("Сервисы и навыки", systemImage: "link")
+                        Label(L("Сервисы и навыки"), systemImage: "link")
                         Spacer()
                         Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                     }.frame(minHeight: controlTarget).contentShape(Rectangle())
@@ -1715,24 +1724,24 @@ private struct BotDetailsView: View {
                 }.buttonStyle(.plain)
                 Divider()
                 if client.health?.agentAppearanceVersion == 1 {
-                    DisclosureGroup("Образ сотрудника") {
+                    DisclosureGroup(L("Образ сотрудника")) {
                         AgentAppearancePicker(selection: $appearance).padding(.top, 12)
                     }
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Чем занимается сотрудник").font(.subheadline.weight(.medium))
-                    Text("Опишите задачи и правила, которым он должен следовать.")
+                    Text(L("Чем занимается сотрудник")).font(.subheadline.weight(.medium))
+                    Text(L("Опишите задачи и правила, которым он должен следовать."))
                         .font(.caption).foregroundStyle(AppTheme.secondaryText)
                     TextEditor(text: $instructions).font(.body).scrollContentBackground(.hidden)
                         .frame(height: 180).padding(10)
                         .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
-                        .accessibilityLabel("Описание сотрудника")
+                        .accessibilityLabel(L("Описание сотрудника"))
                 }
                 ModelSettingsView(agentID: profile.id)
                 if client.health?.homeProtocol == 1 { AgentAccountPreference(profile: profile) }
                 if !client.schedules.isEmpty {
                     Divider()
-                    Text("Расписание").font(.subheadline.weight(.medium))
+                    Text(L("Расписание")).font(.subheadline.weight(.medium))
                 }
                 ForEach(client.schedules.filter(\.enabled)) { schedule in
                     Toggle(isOn: Binding(get: { schedule.enabled }, set: { value in Task { await client.setSchedule(schedule, enabled: value) } })) {
@@ -1743,7 +1752,7 @@ private struct BotDetailsView: View {
                     }
                 }
                 if client.schedules.contains(where: { !$0.enabled }) {
-                    DisclosureGroup("Приостановленные") {
+                    DisclosureGroup(L("Приостановленные")) {
                         ForEach(client.schedules.filter { !$0.enabled }) { schedule in
                             Toggle(schedule.name, isOn: Binding(get: { schedule.enabled }, set: { value in Task { await client.setSchedule(schedule, enabled: value) } })).font(.callout)
                         }
@@ -1753,25 +1762,25 @@ private struct BotDetailsView: View {
                     Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.warning)
                 }
                 if let saveError {
-                    Text(saveError).font(.callout).foregroundStyle(AppTheme.warning)
+                    Text(L10n.serviceText(saveError)).font(.callout).foregroundStyle(AppTheme.warning)
                         .accessibilityIdentifier("employeeSaveError")
                 }
             }
             .padding(24)
             }
             .background(HomeBackground())
-            .navigationTitle("Сотрудник")
+            .navigationTitle(L("Сотрудник"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена") { if hasChanges { confirmDiscard = true } else { dismiss() } }
+                    Button(L("Отмена")) { if hasChanges { confirmDiscard = true } else { dismiss() } }
                         .disabled(isSaving).keyboardShortcut(.cancelAction)
                         .accessibilityIdentifier("cancelEmployeeChanges")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Сохраняем…" : hasChanges ? "Сохранить" : "Готово") {
+                    Button(isSaving ? L("Сохраняем…") : hasChanges ? L("Сохранить") : L("Готово")) {
                         guard hasChanges else { dismiss(); return }
                         isSaving = true
                         saveError = nil
@@ -1779,17 +1788,17 @@ private struct BotDetailsView: View {
                             let saved = await client.updateProfile(id: profile.id, name: name, instructions: instructions, appearance: appearance != profile.resolvedAppearance ? appearance : nil)
                             isSaving = false
                             if saved { dismiss() }
-                            else { saveError = client.errorMessage ?? "Не удалось сохранить изменения. Попробуйте ещё раз."; client.errorMessage = nil }
+                            else { saveError = client.errorMessage ?? L("Не удалось сохранить изменения. Попробуйте ещё раз."); client.errorMessage = nil }
                         }
                     }.disabled(isSaving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.defaultAction).accessibilityIdentifier("saveEmployeeChanges")
                 }
             }
             .interactiveDismissDisabled(hasChanges || isSaving)
-            .alert("Не сохранять изменения?", isPresented: $confirmDiscard) {
-                Button("Не сохранять", role: .destructive) { dismiss() }
-                Button("Продолжить редактирование", role: .cancel) {}
-            } message: { Text("Имя, образ и описание сотрудника останутся прежними.") }
+            .alert(L("Не сохранять изменения?"), isPresented: $confirmDiscard) {
+                Button(L("Не сохранять"), role: .destructive) { dismiss() }
+                Button(L("Продолжить редактирование"), role: .cancel) {}
+            } message: { Text(L("Имя, образ и описание сотрудника останутся прежними.")) }
             .navigationDestination(isPresented: $showConnections) { ConnectionsView(embedded: true) }
             .navigationDestination(isPresented: $showTelegram) { TelegramChatsView(profile: profile, embedded: true) }
             .task { await client.loadChatSettings() }
@@ -1832,14 +1841,15 @@ private struct OpenAISettingsCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     if let account = client.openAIAccount, account.connected {
                         Text(account.email ?? "OpenAI").font(.subheadline.weight(.medium))
-                            .accessibilityLabel("Аккаунт OpenAI").accessibilityValue(account.email ?? "OpenAI").accessibilityIdentifier("openAIAccountIdentity")
-                        Text(planTitle(account.planType)).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                            .accessibilityLabel(L("Аккаунт OpenAI")).accessibilityValue(account.email ?? "OpenAI").accessibilityIdentifier("openAIAccountIdentity")
+                        Text([account.planLabel, account.categoryLabel].compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(AppTheme.secondaryText)
                     } else if client.openAIAccount?.isUnavailable == true {
-                        Text("Нет связи с OpenAI").font(.subheadline.weight(.medium))
-                        Text("Повторный вход пока не нужен").font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        Text(L("Нет связи с OpenAI")).font(.subheadline.weight(.medium))
+                        Text(L("Повторный вход пока не нужен")).font(.caption).foregroundStyle(AppTheme.secondaryText)
                     } else {
-                        Text("Аккаунт не подключён").font(.subheadline.weight(.medium))
-                        Text("Войдите в свой аккаунт OpenAI").font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        Text(L("Аккаунт не подключён")).font(.subheadline.weight(.medium))
+                        Text(L("Войдите в свой аккаунт OpenAI")).font(.caption).foregroundStyle(AppTheme.secondaryText)
                     }
                     if client.openAIAccount?.isUnavailable != true { ConnectionStatus(connected: connected) }
                 }
@@ -1857,21 +1867,21 @@ private struct OpenAISettingsCard: View {
             }
             if client.openAIAccount?.isUnavailable == true && client.openAILogin == nil && !client.openAILoginPending {
                 Button { Task { await client.refreshOpenAIAccount(force: true) } } label: {
-                    SetupActionLabel(title: "Проверить ещё раз", icon: "arrow.clockwise")
+                    SetupActionLabel(title: L("Проверить ещё раз"), icon: "arrow.clockwise")
                 }.adaptiveActionStyle(.glass).controlSize(.large)
                     .accessibilityIdentifier("retryOpenAIAccount")
             } else if !client.canManageOpenAI {
                 if showIdentity {
-                Text(connected ? "Используется аккаунт устройства, на котором работает сотрудник."
+                Text(connected ? L("Используется аккаунт устройства, на котором работает сотрудник.")
                      : client.openAIRecoveryMessage)
                     .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
                 }
             } else if let login = client.openAILogin {
                 VStack(alignment: .leading, spacing: 8) {
                     if login.type == "device", let code = login.userCode {
-                        Text("Введите этот код на сайте OpenAI").font(.callout).foregroundStyle(AppTheme.secondaryText)
+                        Text(L("Введите этот код на сайте OpenAI")).font(.callout).foregroundStyle(AppTheme.secondaryText)
                         Text(code).font(.system(.title3, design: .monospaced).weight(.semibold)).textSelection(.enabled)
-                            .accessibilityLabel("Код для входа: " + code)
+                            .accessibilityLabel(L("Sign-in code: \(code)"))
                             .accessibilityIdentifier("openAIDeviceCode")
                         Button {
                             #if os(macOS)
@@ -1881,33 +1891,33 @@ private struct OpenAISettingsCard: View {
                             UIPasteboard.general.string = code
                             #endif
                             copiedCode = true
-                        } label: { SetupActionLabel(title: copiedCode ? "Код скопирован" : "Скопировать код", icon: copiedCode ? "checkmark" : "doc.on.doc") }
+                        } label: { SetupActionLabel(title: copiedCode ? L("Код скопирован") : L("Скопировать код"), icon: copiedCode ? "checkmark" : "doc.on.doc") }
                             .adaptiveActionStyle(.glass).accessibilityIdentifier("copyOpenAICode")
-                        DisclosureGroup("Не получается войти?") {
-                            Text("В ChatGPT откройте «Настройки», затем «Безопасность» и разрешите вход по коду устройства. Для рабочего аккаунта может понадобиться помощь администратора. Если код истёк, отмените вход здесь и начните снова.")
+                        DisclosureGroup(L("Не получается войти?")) {
+                            Text(L("В ChatGPT откройте «Настройки», затем «Безопасность» и разрешите вход по коду устройства. Для рабочего аккаунта может понадобиться помощь администратора. Если код истёк, отмените вход здесь и начните снова."))
                                 .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
                         }.padding(.vertical, 4)
                     } else {
-                        Text("Откройте страницу OpenAI и завершите вход.").font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        Text(L("Откройте страницу OpenAI и завершите вход.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
                     }
                     if let url = login.url {
-                        Button { openURL(url) } label: { SetupActionLabel(title: "Открыть OpenAI", icon: "arrow.up.right") }
+                        Button { openURL(url) } label: { SetupActionLabel(title: L("Открыть OpenAI"), icon: "arrow.up.right") }
                             .adaptiveActionStyle(.glassProminent).accessibilityIdentifier("reopenOpenAILogin")
                     }
                     Button { Task { await client.cancelOpenAILogin() } } label: {
-                        SetupActionLabel(title: "Отменить вход")
+                        SetupActionLabel(title: L("Отменить вход"))
                     }.adaptiveActionStyle(.glass).controlSize(.large).accessibilityIdentifier("cancelOpenAILogin")
                 }
             } else if client.openAILoginPending {
-                Text("Вход открыт на другом устройстве. Завершите его на сайте OpenAI. Это окно обновится автоматически.")
+                Text(L("Вход открыт на другом устройстве. Завершите его на сайте OpenAI. Это окно обновится автоматически."))
                     .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
             } else if connected {
                 Button { Task { await client.beginOpenAILogin() } } label: {
-                    SetupActionLabel(title: client.isStartingOpenAILogin ? "Открываем OpenAI…" : "Сменить аккаунт")
+                    SetupActionLabel(title: client.isStartingOpenAILogin ? L("Открываем OpenAI…") : L("Сменить аккаунт"))
                 }.adaptiveActionStyle(.glass).controlSize(.large).disabled(client.isStartingOpenAILogin)
             } else if client.canManageOpenAI {
                 Button { Task { await client.beginOpenAILogin() } } label: {
-                    SetupActionLabel(title: client.isStartingOpenAILogin ? "Открываем OpenAI…" : "Войти в OpenAI", icon: "arrow.up.right")
+                    SetupActionLabel(title: client.isStartingOpenAILogin ? L("Открываем OpenAI…") : L("Войти в OpenAI"), icon: "arrow.up.right")
                 }.adaptiveActionStyle(.glassProminent).controlSize(.large)
                     .disabled(client.isStartingOpenAILogin)
                     .accessibilityIdentifier("signInOpenAI")
@@ -1916,14 +1926,6 @@ private struct OpenAISettingsCard: View {
         .onChange(of: client.openAILogin?.id) { _, _ in copiedCode = false }
     }
 
-    private func planTitle(_ raw: String?) -> String {
-        let value = raw?.lowercased() ?? ""
-        if value.contains("business") { return "ChatGPT Business" }
-        if value.contains("enterprise") { return "ChatGPT Enterprise" }
-        if value.contains("pro") { return "ChatGPT Pro" }
-        if value.contains("plus") { return "ChatGPT Plus" }
-        return "ChatGPT"
-    }
 }
 
 private struct OpenAIWelcomeView: View {
@@ -1934,17 +1936,17 @@ private struct OpenAIWelcomeView: View {
         VStack(spacing: 24) {
             OpenStrudelMark(size: 76)
             VStack(spacing: 12) {
-                Text(client.openAIAccount?.isUnavailable == true ? "Нет связи с OpenAI"
-                     : !client.canManageOpenAI ? "Нужен вход владельца"
-                     : client.openAIAccount?.needsSignInAgain == true ? "Войдите в OpenAI снова"
-                     : "Подключите OpenAI")
+                Text(client.openAIAccount?.isUnavailable == true ? L("Нет связи с OpenAI")
+                     : !client.canManageOpenAI ? L("Нужен вход владельца")
+                     : client.openAIAccount?.needsSignInAgain == true ? L("Войдите в OpenAI снова")
+                     : L("Подключите OpenAI"))
                     .font(AppTypography.welcome).multilineTextAlignment(.center)
                 Text(client.openAIAccount?.isUnavailable == true
-                     ? "Проверьте подключение к интернету и попробуйте ещё раз. Ваши чаты и сотрудники сохранены."
+                     ? L("Проверьте подключение к интернету и попробуйте ещё раз. Ваши чаты и сотрудники сохранены.")
                      : !client.canManageOpenAI ? client.openAIRecoveryMessage
                      : client.openAIAccount?.needsSignInAgain == true
-                     ? "Сохранённый вход больше не действует. Войдите снова для сотрудников этого устройства."
-                     : "Войдите на сайте OpenAI. Этот аккаунт будут использовать сотрудники на «\(client.displayName)».")
+                     ? L("Сохранённый вход больше не действует. Войдите снова для сотрудников этого устройства.")
+                     : L("Войдите на сайте OpenAI. Этот аккаунт будут использовать сотрудники на «\(client.displayName)»."))
                     .font(.body).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
             }
             OpenAISettingsCard(showIdentity: false)
@@ -1988,14 +1990,14 @@ private struct TelegramChatsView: View {
             VStack(alignment: .leading, spacing: 24) {
                 if let group = client.activeTelegramGroup {
                     VStack(alignment: .leading, spacing: 16) {
-                        Label("Группа в Telegram", systemImage: "person.2").foregroundStyle(AppTheme.secondaryText)
+                        Label(L("Группа в Telegram"), systemImage: "person.2").foregroundStyle(AppTheme.secondaryText)
                         Text(groupDescription(group)).font(.headline)
                         if group.enabled != false {
-                            Text(group.replies == "mentions" ? "Отвечает на @упоминание и ответы боту" : "Отвечает по правилам сотрудника")
+                            Text(group.replies == "mentions" ? L("Отвечает на @упоминание и ответы боту") : L("Отвечает по правилам сотрудника"))
                                 .font(.callout).foregroundStyle(AppTheme.secondaryText)
                         }
                         Divider()
-                        Button { showConnections = true } label: { Label("Сервисы и навыки", systemImage: "link") }
+                        Button { showConnections = true } label: { Label(L("Сервисы и навыки"), systemImage: "link") }
                             .accessibilityIdentifier("telegramGroupServices")
                         groupAction(group)
                     }
@@ -2003,17 +2005,17 @@ private struct TelegramChatsView: View {
                 if client.telegram?.configured == true && client.openAIAccount?.connected == false {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(client.openAIAccount?.isUnavailable == true
-                             ? "Не удалось проверить OpenAI. Подключение Telegram сохранено."
-                             : "Войдите в OpenAI, чтобы помощник мог отвечать.")
+                             ? L("Не удалось проверить OpenAI. Подключение Telegram сохранено.")
+                             : L("Войдите в OpenAI, чтобы помощник мог отвечать."))
                             .font(.callout)
-                        Button("Аккаунты OpenAI") { showAccounts = true }
+                        Button(L("Аккаунты OpenAI")) { showAccounts = true }
                             .accessibilityIdentifier("telegramOpenAIAccounts")
                     }.settingsCard()
                 }
                 if client.activeTelegramGroup == nil && !groups.isEmpty {
                     Divider()
                     VStack(alignment: .leading, spacing: 16) {
-                        Text("Группы").font(.headline)
+                        Text(L("Группы")).font(.headline)
                         ForEach(groups) { chat in
                             VStack(alignment: .leading, spacing: 10) {
                               HStack(alignment: .top, spacing: 12) {
@@ -2022,7 +2024,7 @@ private struct TelegramChatsView: View {
                                     Text(chat.title).font(.body.weight(.medium))
                                     Text(groupDescription(chat)).font(.callout).foregroundStyle(AppTheme.secondaryText)
                                     if chat.enabled != false {
-                                        Text(chat.replies == "mentions" ? "Отвечает на @упоминание и ответы боту" : "Отвечает по правилам сотрудника")
+                                        Text(chat.replies == "mentions" ? L("Отвечает на @упоминание и ответы боту") : L("Отвечает по правилам сотрудника"))
                                             .font(.caption).foregroundStyle(AppTheme.secondaryText)
                                     }
                                 }
@@ -2034,7 +2036,7 @@ private struct TelegramChatsView: View {
                         }
                     }
                 }
-                if let error { Text(error).foregroundStyle(AppTheme.destructive).font(.callout) }
+                if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive).font(.callout) }
             }.padding(24)
         }
         .background(HomeBackground()).navigationTitle(client.activeTelegramGroup?.title ?? "Telegram")
@@ -2043,11 +2045,11 @@ private struct TelegramChatsView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                if !embedded { Button("Готово") { dismiss() } }
+                if !embedded { Button(L("Готово")) { dismiss() } }
             }
         }
         .navigationDestination(isPresented: $showAccounts) {
-            ScrollView { DeviceAccountsView().padding(24) }.navigationTitle("Аккаунты OpenAI")
+            ScrollView { DeviceAccountsView().padding(24) }.navigationTitle(L("Аккаунты OpenAI"))
         }
         .navigationDestination(isPresented: $showConnections) { ConnectionsView(embedded: true) }
     }
@@ -2055,17 +2057,17 @@ private struct TelegramChatsView: View {
     @ViewBuilder private func groupAction(_ chat: TelegramChat) -> some View {
         if busyGroup == chat.chatId { ProgressView().controlSize(.small) }
         else {
-            Button(chat.enabled == false ? "Продолжить" : "Приостановить") { toggle(chat) }
+            Button(chat.enabled == false ? L("Продолжить") : L("Приостановить")) { toggle(chat) }
                 .disabled(busyGroup != nil)
-                .accessibilityLabel((chat.enabled == false ? "Продолжить в группе «" : "Приостановить в группе «") + chat.title + "»")
+                .accessibilityLabel((chat.enabled == false ? L("Продолжить в группе «") : L("Приостановить в группе «")) + chat.title + "»")
                 .accessibilityIdentifier("toggleTelegramGroup-" + chat.chatId)
         }
     }
 
     private func groupDescription(_ chat: TelegramChat) -> String {
-        if chat.enabled == false { return "На паузе · переписка сохранена" }
-        if let name = client.profiles.first(where: { $0.id == chat.profileId })?.name { return "Отвечает «\(name)»" }
-        return "Помощник сам подбирает сотрудника по задаче"
+        if chat.enabled == false { return L("На паузе · переписка сохранена") }
+        if let name = client.profiles.first(where: { $0.id == chat.profileId })?.name { return L("Отвечает «\(name)»") }
+        return L("Помощник сам подбирает сотрудника по задаче")
     }
 
     private func toggle(_ chat: TelegramChat) {
@@ -2097,9 +2099,9 @@ private struct TelegramSettingsCard: View {
             }
             if let telegram = client.telegram, telegram.configured {
                 if let url = client.telegramLink?.url {
-                    Link(destination: url) { AdaptiveActionLabel(title: "Открыть Telegram") }
+                    Link(destination: url) { AdaptiveActionLabel(title: L("Открыть Telegram")) }
                         .adaptiveActionStyle(.borderedProminent)
-                    Text("В Telegram нажмите «Начать», чтобы продолжить разговор.")
+                    Text(L("В Telegram нажмите «Начать», чтобы продолжить разговор."))
                         .font(.callout).foregroundStyle(AppTheme.secondaryText)
                 }
                 if textSize.isAccessibilitySize {
@@ -2116,22 +2118,22 @@ private struct TelegramSettingsCard: View {
         }
         .settingsCard()
         .sheet(isPresented: $showChats) { TelegramChatsView() }
-        .confirmationDialog("Отключить Telegram?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
-            Button("Отключить Telegram", role: .destructive) { Task { await client.disconnectTelegram() } }
-            Button("Отмена", role: .cancel) {}
-        } message: { Text("Сотрудники перестанут отвечать в Telegram. Переписка в OpenStrudel сохранится.") }
+        .confirmationDialog(L("Отключить Telegram?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
+            Button(L("Отключить Telegram"), role: .destructive) { Task { await client.disconnectTelegram() } }
+            Button(L("Отмена"), role: .cancel) {}
+        } message: { Text(L("Сотрудники перестанут отвечать в Telegram. Переписка в OpenStrudel сохранится.")) }
     }
 
     @ViewBuilder private var telegramActions: some View {
         Button { Task { await client.createTelegramLink() } } label: {
-            AdaptiveActionLabel(title: client.telegramLink == nil ? "Продолжить в Telegram" : "Обновить приглашение")
+            AdaptiveActionLabel(title: client.telegramLink == nil ? L("Продолжить в Telegram") : L("Обновить приглашение"))
         }
             .font(.body).adaptiveActionStyle(.bordered).controlSize(.large)
         if !(client.telegram?.chats ?? []).isEmpty {
-            Button { showChats = true } label: { AdaptiveActionLabel(title: "Чаты") }
+            Button { showChats = true } label: { AdaptiveActionLabel(title: L("Чаты")) }
                 .font(.body).adaptiveActionStyle(.bordered).controlSize(.large)
         }
-        Button(role: .destructive) { confirmDisconnect = true } label: { AdaptiveActionLabel(title: "Отключить") }
+        Button(role: .destructive) { confirmDisconnect = true } label: { AdaptiveActionLabel(title: L("Отключить")) }
             .font(.body).adaptiveActionStyle(.bordered).controlSize(.large)
             .tint(AppTheme.destructive)
     }
@@ -2145,7 +2147,7 @@ struct ConnectionStatus: View {
         HStack(spacing: 6) {
             Circle().fill(connected ? Color.green : Color.secondary.opacity(0.4)).frame(width: 7, height: 7)
                 .accessibilityHidden(true)
-            Text(connected ? "Подключён" : "Не подключён")
+            Text(connected ? L("Подключён") : L("Не подключён"))
         }
         .font(.caption)
         .foregroundStyle(AppTheme.secondaryText)
@@ -2209,15 +2211,15 @@ private struct InteractionCard: View {
                 Text(detail).font(.subheadline).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled)
             }
             if let raw = interaction.url, let url = URL(string: raw) {
-                Button("Открыть подключение", systemImage: "arrow.up.right") { openURL(url) }
+                Button(L("Открыть подключение"), systemImage: "arrow.up.right") { openURL(url) }
                     .buttonStyle(.bordered)
             }
             ForEach(interaction.questions) { question in
                 if !question.question.isEmpty { Text(question.question).font(.subheadline) }
                 if question.options.isEmpty {
-                    TextField("Ваш ответ", text: Binding(get: { answers[question.id] ?? "" }, set: { answers[question.id] = $0 }))
+                    TextField(L("Ваш ответ"), text: Binding(get: { answers[question.id] ?? "" }, set: { answers[question.id] = $0 }))
                         .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel(question.question.isEmpty ? "Ваш ответ" : question.question)
+                        .accessibilityLabel(question.question.isEmpty ? L("Ваш ответ") : question.question)
                         .frame(minHeight: controlTarget)
                 } else {
                     // Short choices sit side by side; long ones stack.
@@ -2228,7 +2230,7 @@ private struct InteractionCard: View {
                 }
             }
             if interaction.questions.count > 1 || interaction.questions.first?.options.isEmpty == true {
-                Button("Продолжить") { submit() }
+                Button(L("Продолжить")) { submit() }
                     .disabled(busy || interaction.questions.contains { (answers[$0.id] ?? "").isEmpty })
             }
             if busy { ProgressView().controlSize(.small) }
@@ -2306,8 +2308,8 @@ private struct ConnectionsView: View {
             ServiceList {
                 connectionHeader
                 if availableConnections.filter({ $0.id != "mcp:cua_repl" && !$0.isAvailableToAdd }).count > 6 {
-                    TextField("Найти подключение", text: $query)
-                        .textFieldStyle(.roundedBorder).accessibilityLabel("Найти подключение")
+                    TextField(L("Найти подключение"), text: $query)
+                        .textFieldStyle(.roundedBorder).accessibilityLabel(L("Найти подключение"))
                 }
                 if !scopeID.isEmpty {
                     Section { ComputerUseSettingsView(conversationID: scopeID, isGroup: scope?.isGroup == true).id(scopeID) }
@@ -2317,17 +2319,17 @@ private struct ConnectionsView: View {
 
             }
             .scrollContentBackground(.hidden)
-            .background(HomeBackground()).navigationTitle("Сервисы и навыки")
+            .background(HomeBackground()).navigationTitle(L("Сервисы и навыки"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    if !embedded { Button("Готово") { dismiss() } }
+                    if !embedded { Button(L("Готово")) { dismiss() } }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await refresh() } } label: { Image(systemName: "arrow.clockwise") }
-                        .accessibilityLabel("Обновить сервисы").disabled(loading)
+                        .accessibilityLabel(L("Обновить сервисы")).disabled(loading)
                 }
             }
 
@@ -2341,11 +2343,11 @@ private struct ConnectionsView: View {
         .onChange(of: showAdd) { wasPresented, isPresented in
             if wasPresented && !isPresented { Task { await refresh() } }
         }
-        .confirmationDialog("Удалить расширение?", isPresented: Binding(get: { pendingRemoval != nil || pendingMCPRemoval != nil }, set: { if !$0 { pendingRemoval = nil; pendingMCPRemoval = nil } }), titleVisibility: .visible) {
-            if let item = pendingRemoval { Button("Удалить «\(item.name)»", role: .destructive) { updateExtension(item); pendingRemoval = nil } }
-            if let item = pendingMCPRemoval { Button("Удалить «\(item.name)»", role: .destructive) { removeMCP(item); pendingMCPRemoval = nil } }
-            Button("Отмена", role: .cancel) { pendingRemoval = nil; pendingMCPRemoval = nil }
-        } message: { Text("Переписка и файлы сотрудника сохранятся.") }
+        .confirmationDialog(L("Удалить расширение?"), isPresented: Binding(get: { pendingRemoval != nil || pendingMCPRemoval != nil }, set: { if !$0 { pendingRemoval = nil; pendingMCPRemoval = nil } }), titleVisibility: .visible) {
+            if let item = pendingRemoval { Button(L("Удалить «\(item.name)»"), role: .destructive) { updateExtension(item); pendingRemoval = nil } }
+            if let item = pendingMCPRemoval { Button(L("Удалить «\(item.name)»"), role: .destructive) { removeMCP(item); pendingMCPRemoval = nil } }
+            Button(L("Отмена"), role: .cancel) { pendingRemoval = nil; pendingMCPRemoval = nil }
+        } message: { Text(L("Переписка и файлы сотрудника сохранятся.")) }
         .task { await loadContexts() }
         .task(id: scopeID) { await loadScope() }
         .task(id: waiting?.id) { await pollAuthorization() }
@@ -2356,7 +2358,7 @@ private struct ConnectionsView: View {
 
     private func loadContexts() async {
         do { contexts = try await client.extensionContexts(); scopeID = client.conversationID ?? "" }
-        catch { self.error = "Не удалось определить чат. Вернитесь к переписке и откройте сервисы снова."; loading = false }
+        catch { self.error = L("Не удалось определить чат. Вернитесь к переписке и откройте сервисы снова."); loading = false }
     }
 
     private func loadScope() async {
@@ -2376,7 +2378,7 @@ private struct ConnectionsView: View {
 
     @ViewBuilder private var extensionRows: some View {
                 if !extensions.isEmpty {
-                    Section("Навыки и плагины") {
+                    Section(L("Навыки и плагины")) {
                         ForEach(extensions.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }) { item in
                             VStack(alignment: .leading, spacing: 8) {
                                 if item.removable && (client.canManageConnections || client.canManageOpenAI) {
@@ -2386,7 +2388,7 @@ private struct ConnectionsView: View {
                                 } else { Label(item.name, systemImage: item.enabled ? "checkmark.circle" : "pause.circle") }
                                 Text(item.description).font(.caption).foregroundStyle(AppTheme.secondaryText).lineLimit(3)
                                 if item.removable && (client.canManageConnections || client.canManageOpenAI) {
-                                    Button("Удалить…", role: .destructive) { pendingRemoval = item }.buttonStyle(.borderless).font(.caption).disabled(changing)
+                                    Button(L("Удалить…"), role: .destructive) { pendingRemoval = item }.buttonStyle(.borderless).font(.caption).disabled(changing)
                                 }
                             }.padding(.vertical, 6)
                                 .accessibilityElement(children: .contain)
@@ -2401,13 +2403,13 @@ private struct ConnectionsView: View {
                     serviceRow(connection)
                     .contextMenu {
                         if connection.removable == true && (client.canManageConnections || client.canManageOpenAI) {
-                            Button("Удалить подключение…", role: .destructive) { pendingMCPRemoval = connection }
+                            Button(L("Удалить подключение…"), role: .destructive) { pendingMCPRemoval = connection }
                         }
                     }
                 }
                 if results.isEmpty && !query.isEmpty { SearchEmptyState(query: query) { query = "" } }
                 else if results.isEmpty && !loading && error == nil {
-                    Text(extensions.isEmpty && !availableConnections.contains(where: { $0.id == "mcp:cua_repl" }) ? "Пока без подключений. Нажмите «Добавить», чтобы сотрудник мог работать с вашими сервисами." : "Другие сервисы можно подключить через «Добавить».")
+                    Text(extensions.isEmpty && !availableConnections.contains(where: { $0.id == "mcp:cua_repl" }) ? L("Пока без подключений. Нажмите «Добавить», чтобы сотрудник мог работать с вашими сервисами.") : L("Другие сервисы можно подключить через «Добавить»."))
                         .foregroundStyle(AppTheme.secondaryText)
                 }
 
@@ -2415,15 +2417,15 @@ private struct ConnectionsView: View {
 
     private var connectionHeader: some View {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Для «\(client.activeAgentName)» · \(client.executionDeviceName)")
+                    Text(L("Для «\(client.activeAgentName)» · \(client.executionDeviceName)"))
                         .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                    Label(scope?.isGroup == true ? "Telegram · " + (scope?.title ?? "Группа") : "В приложении", systemImage: scope?.isGroup == true ? "paperplane" : "bubble.left")
+                    Label(scope?.isGroup == true ? "Telegram · " + (scope?.title ?? L("Группа")) : L("В приложении"), systemImage: scope?.isGroup == true ? "paperplane" : "bubble.left")
                         .font(.headline)
-                    if scope?.isGroup == true { Text("Подключения для этой группы.").font(.caption).foregroundStyle(AppTheme.secondaryText) }
+                    if scope?.isGroup == true { Text(L("Подключения для этой группы.")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
                     if let shared = scope?.sharedNotice { Text(shared).font(.callout).foregroundStyle(AppTheme.secondaryText) }
-                    if loading { HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Проверяем доступ к сервисам…").font(.callout) } }
+                    if loading { HStack(spacing: 8) { ProgressView().controlSize(.small); Text(L("Проверяем доступ к сервисам…")).font(.callout) } }
                     if let waiting {
-                        Text("Завершите подключение \(waiting.name) в браузере. Здесь появится подтверждение.")
+                        Text(L("Завершите подключение \(waiting.name) в браузере. Здесь появится подтверждение."))
                             .font(.callout).fixedSize(horizontal: false, vertical: true)
                         ViewThatFits(in: .horizontal) {
                             HStack { authorizationActions }.fixedSize(horizontal: true, vertical: false)
@@ -2433,11 +2435,11 @@ private struct ConnectionsView: View {
                     if let notice { Label(notice, systemImage: "checkmark.circle").font(.callout) }
                     if let error {
                         Text(UserFacingError.text(error)).font(.callout).foregroundStyle(AppTheme.warning)
-                        Button("Повторить") { Task { await refresh() } }.disabled(loading)
+                        Button(L("Повторить")) { Task { await refresh() } }.disabled(loading)
                     }
-                    if let extensionNotice, !extensionNotice.hasPrefix("Каталог OpenAI") { Text(extensionNotice).font(.caption).foregroundStyle(AppTheme.secondaryText) }
+                    if let extensionNotice, !extensionNotice.hasPrefix(L("Каталог OpenAI")) { Text(extensionNotice).font(.caption).foregroundStyle(AppTheme.secondaryText) }
                     if client.canManageConnections || client.canManageOpenAI {
-                        Button { query = ""; showAdd = true } label: { Label("Добавить…", systemImage: "plus") }
+                        Button { query = ""; showAdd = true } label: { Label(L("Добавить…"), systemImage: "plus") }
                             .buttonStyle(.bordered).disabled(scope == nil || changing).padding(.top, 8).accessibilityIdentifier("addEmployeeExtension")
                     }
                 }
@@ -2448,8 +2450,8 @@ private struct ConnectionsView: View {
     }
 
     @ViewBuilder private var authorizationActions: some View {
-        if let authorizationURL { Link("Открыть ещё раз", destination: authorizationURL) }
-        Button("Проверить подключение") { Task { await refresh() } }.disabled(loading)
+        if let authorizationURL { Link(L("Открыть ещё раз"), destination: authorizationURL) }
+        Button(L("Проверить подключение")) { Task { await refresh() } }.disabled(loading)
     }
 
     private func serviceRow(_ connection: ServiceConnection) -> some View {
@@ -2474,11 +2476,11 @@ private struct ConnectionsView: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(connection.name)
             if let detail = connection.detail { Text(detail).font(.caption).foregroundStyle(AppTheme.secondaryText) }
-            if let count = connection.toolCount, connection.connected { Text("Инструментов: \(count)").font(.caption).foregroundStyle(AppTheme.secondaryText) }
-            if connection.status == "unavailable" { Text("Нет связи с сервисом").font(.caption).foregroundStyle(AppTheme.secondaryText) }
-            if connection.status == "unknown" { Text("Не удалось проверить подключение").font(.caption).foregroundStyle(AppTheme.secondaryText) }
+            if let count = connection.toolCount, connection.connected { Text(L("Инструментов: \(count)")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
+            if connection.status == "unavailable" { Text(L("Нет связи с сервисом")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
+            if connection.status == "unknown" { Text(L("Не удалось проверить подключение")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
             if connection.removable == true && (client.canManageConnections || client.canManageOpenAI) {
-                Button("Удалить…", role: .destructive) { pendingMCPRemoval = connection }.buttonStyle(.borderless).font(.caption).disabled(changing)
+                Button(L("Удалить…"), role: .destructive) { pendingMCPRemoval = connection }.buttonStyle(.borderless).font(.caption).disabled(changing)
             }
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -2487,12 +2489,12 @@ private struct ConnectionsView: View {
 
     @ViewBuilder private func connectionAction(_ connection: ServiceConnection) -> some View {
         if connection.connected {
-            Label("Подключён", systemImage: "checkmark").font(.caption).foregroundStyle(AppTheme.secondaryText)
+            Label(L("Подключён"), systemImage: "checkmark").font(.caption).foregroundStyle(AppTheme.secondaryText)
         } else {
             Button {
                 Task { await connect(connection) }
             } label: {
-                AdaptiveActionLabel(title: connecting == connection.id ? "Проверяем…" : waiting?.id == connection.id ? "Ожидаем входа" : connection.actionTitle)
+                AdaptiveActionLabel(title: connecting == connection.id ? L("Проверяем…") : waiting?.id == connection.id ? L("Ожидаем входа") : connection.actionTitle)
             }.adaptiveActionStyle(.bordered).disabled(connecting != nil || waiting?.id == connection.id)
                 .accessibilityLabel("\(connection.actionTitle) \(connection.name)")
                 .accessibilityIdentifier("connect-service-" + connection.id)
@@ -2507,13 +2509,13 @@ private struct ConnectionsView: View {
                 waiting = connection; authorizationURL = url
                 openURL(url) { @Sendable accepted in
                     Task { @MainActor in
-                        if !accepted { error = "Не удалось открыть браузер. Используйте ссылку «Открыть ещё раз»." }
+                        if !accepted { error = L("Не удалось открыть браузер. Используйте ссылку «Открыть ещё раз».") }
                     }
                 }
             } else {
                 await refresh()
-                if availableConnections.contains(where: { $0.id == connection.id && $0.connected }) { notice = "Подключено: " + connection.name }
-                else { error = "Сервис ещё не подтвердил подключение. Нажмите «Обновить сервисы»." }
+                if availableConnections.contains(where: { $0.id == connection.id && $0.connected }) { notice = L("Connected: \(connection.name)") }
+                else { error = L("Сервис ещё не подтвердил подключение. Нажмите «Обновить сервисы».") }
             }
         } catch is CancellationError { }
         catch { self.error = error.localizedDescription }
@@ -2530,9 +2532,9 @@ private struct ConnectionsView: View {
             let (result, packages) = try await (services, installed)
             guard refreshID == requestID, scope == scopeID else { return }
             availableConnections = result.connections; extensions = packages?.items ?? []
-            extensionNotice = packages?.notice ?? result.notice ?? (packages == nil ? "Не удалось загрузить навыки. Проверьте, что OpenStrudel на устройстве сотрудника обновлён." : nil)
+            extensionNotice = packages?.notice ?? result.notice ?? (packages == nil ? L("Не удалось загрузить навыки. Проверьте, что OpenStrudel на устройстве сотрудника обновлён.") : nil)
             if let waiting, availableConnections.contains(where: { $0.id == waiting.id && $0.connected }) {
-                notice = "Подключено: " + waiting.name; self.waiting = nil; authorizationURL = nil
+                notice = L("Connected: \(waiting.name)"); self.waiting = nil; authorizationURL = nil
             }
         } catch is CancellationError { }
         catch { if refreshID == requestID { self.error = error.localizedDescription } }

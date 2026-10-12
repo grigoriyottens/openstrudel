@@ -20,11 +20,11 @@ struct AgentAppearancePicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             headerLayout {
-                Text("Образ").font(.subheadline.weight(.medium))
+                Text(L("Образ")).font(.subheadline.weight(.medium))
                 if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                Button { selection = selection.shuffled() } label: { Label("Другой", systemImage: "shuffle") }
+                Button { selection = selection.shuffled() } label: { Label(L("Другой"), systemImage: "shuffle") }
                     .fixedSize(horizontal: true, vertical: false)
-                    .buttonStyle(.borderless).accessibilityLabel("Случайный образ")
+                    .buttonStyle(.borderless).accessibilityLabel(L("Случайный образ"))
                     .accessibilityIdentifier("shuffleAgentAppearance")
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 62), spacing: 10), count: 3), spacing: 10) {

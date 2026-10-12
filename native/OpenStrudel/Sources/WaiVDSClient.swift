@@ -315,7 +315,7 @@ struct WaiVDSSavedState: Codable {
             if [401, 403].contains(http.statusCode) { throw WaiVDSFailure.homeAuthentication }
             struct Health: Decodable { let ok: Bool; let service: String }
             guard http.statusCode == 200, let health = try? JSONDecoder().decode(Health.self, from: data), health.ok, health.service == "openstrudel" else { throw WaiVDSFailure.response }
-            let saved = HomeConnection(url: endpoint.absoluteString, token: installation.ownerToken, pin: connection.certificateSha256, name: "Моя команда")
+            let saved = HomeConnection(url: endpoint.absoluteString, token: installation.ownerToken, pin: connection.certificateSha256, name: L("Моя команда"))
             var next = state; next.installations[installation.id]?.connection = saved; try save(next)
             return saved // OpenAI login remains a separate, personal Home action.
         }

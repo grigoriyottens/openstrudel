@@ -14,7 +14,7 @@ export type OpenAIAccount = {
 
 export type CodexAuthTokens = { accessToken: string; chatgptAccountId: string; chatgptPlanType?: string };
 export type UsageWindow = { usedPercent: number; windowDurationMins: number | null; resetsAt: number | null };
-export type AccountUsage = { checkedAt: string; ordinaryUsageAllowed: boolean | null; windows: Array<UsageWindow & { name: string; remainingPercent: number }>; credits?: { hasCredits: boolean; unlimited: boolean; balance: string | null } | null; unavailable?: boolean };
+export type AccountUsage = { checkedAt: string; ordinaryUsageAllowed: boolean | null; windows: Array<UsageWindow & { name: string; remainingPercent: number }>; credits?: { hasCredits: boolean; unlimited: boolean; balance: string | null } | null; resetCredits?: { availableCount: number; nextExpiresAt: number | null } | null; unavailable?: boolean };
 
 export type LoginStart =
   | { type: "browser"; loginId: string; authUrl: string }
@@ -117,7 +117,7 @@ export class CodexAccountService {
     if (!force && this.usageCache && this.usageCache.until > Date.now()) return Promise.resolve(this.usageCache.value);
     if (!this.executionHome()) return Promise.resolve({ checkedAt: new Date().toISOString(), ordinaryUsageAllowed: null, windows: [], unavailable: true });
     if (!this.usageReading) this.usageReading = this.withAuthRpc(async rpc => {
-      const result = await rpc.request("account/rateLimits/read", { excludeResetCreditDetails: true });
+      const result = await rpc.request("account/rateLimits/read", { excludeResetCreditDetails: false });
       const windows: AccountUsage["windows"] = [];
       const buckets = result.rateLimitsByLimitId ?? { codex: result.rateLimits };
       for (const [id, raw] of Object.entries(buckets)) {
@@ -130,9 +130,17 @@ export class CodexAccountService {
           windows.push({ name: id === "codex" ? label : `${bucket.limitName ?? id} · ${label}`, usedPercent: w.usedPercent, remainingPercent: Math.max(0, Math.min(100, 100 - w.usedPercent)), windowDurationMins: duration ?? null, resetsAt: w.resetsAt ?? null });
         }
       }
-      const raw = result.rateLimits?.credits ?? (Object.values(buckets).find((b: any) => b?.credits) as any)?.credits;
+      const raw = (buckets.codex as any)?.credits ?? (Object.values(buckets).find((b: any) => b?.credits) as any)?.credits ?? result.rateLimits?.credits;
       const credits = raw && typeof raw.hasCredits === "boolean" ? { hasCredits: raw.hasCredits, unlimited: raw.unlimited === true, balance: typeof raw.balance === "string" || typeof raw.balance === "number" ? String(raw.balance) : null } : null;
-      return { checkedAt: new Date().toISOString(), ordinaryUsageAllowed: typeof result.ordinaryUsageAllowed === "boolean" ? result.ordinaryUsageAllowed : null, windows, credits };
+      const resets = result.rateLimitResetCredits;
+      // Counts are authoritative. The optional detail list may be capped; never
+      // infer the count from it or expose opaque redemption identifiers.
+      const expiries = (Array.isArray(resets?.credits) ? resets.credits : [])
+        .filter((credit: any) => credit.status === "available" && typeof credit.expiresAt === "number" && Number.isFinite(credit.expiresAt))
+        .map((credit: any) => credit.expiresAt as number);
+      const resetCredits = Number.isSafeInteger(resets?.availableCount) && resets.availableCount >= 0
+        ? { availableCount: resets.availableCount as number, nextExpiresAt: expiries.length ? Math.min(...expiries) : null } : null;
+      return { checkedAt: new Date().toISOString(), ordinaryUsageAllowed: typeof result.ordinaryUsageAllowed === "boolean" ? result.ordinaryUsageAllowed : null, windows, credits, resetCredits };
     }).catch(() => ({ checkedAt: new Date().toISOString(), ordinaryUsageAllowed: null, windows: [], unavailable: true })).then(value => {
       this.usageCache = { until: Date.now() + 30_000, value }; return value;
     }).finally(() => { this.usageReading = undefined; });

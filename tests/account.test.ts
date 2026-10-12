@@ -52,6 +52,29 @@ afterEach(() => {
 });
 
 describe("one explicitly authorized Home account", () => {
+  it("keeps reset passes separate from spendable credits and prefers the current Codex bucket", async () => {
+    store.setSetting("codex.auth.mode", "managed");
+    wire.request.mockResolvedValue({
+      rateLimits: { credits: { hasCredits: true, unlimited: false, balance: "old" } },
+      rateLimitsByLimitId: { codex: { credits: { hasCredits: true, unlimited: false, balance: "12.50" } } },
+      rateLimitResetCredits: { availableCount: 2, credits: [
+          { id: "private-reset-id", status: "available", resetType: "codexRateLimits", expiresAt: 1800100000 },
+          { id: "consumed", status: "redeemed", resetType: "codexRateLimits", expiresAt: 1700000000 }
+        ] }
+    });
+    const usage = await account.usage();
+    expect(usage.credits?.balance).toBe("12.50");
+    expect(usage.resetCredits).toEqual({ availableCount: 2, nextExpiresAt: 1800100000 });
+    expect(JSON.stringify(usage)).not.toContain("private-reset-id");
+    expect(wire.request).not.toHaveBeenCalledWith("account/rateLimitResetCredit/consume", expect.anything());
+  });
+
+  it("does not turn missing reset-pass information into zero", async () => {
+    store.setSetting("codex.auth.mode", "managed");
+    wire.request.mockResolvedValue({ rateLimits: {} });
+    expect((await account.usage()).resetCredits).toBeNull();
+  });
+
   it("keeps credit balance separate from subscription windows and labels their real duration", async () => {
     store.setSetting("codex.auth.mode", "managed");
     wire.request.mockResolvedValue({ rateLimits: { primary: { usedPercent: 31, windowDurationMins: 300, resetsAt: 1800000000 }, secondary: { usedPercent: 52, windowDurationMins: 10080, resetsAt: 1800100000 }, credits: { hasCredits: true, unlimited: false, balance: "27.50" } } });

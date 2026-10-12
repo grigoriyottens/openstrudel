@@ -31,7 +31,7 @@ struct ModelSettingsView: View {
     @State private var speed = "default"
     @State private var loading = true
     @State private var saving = false
-    @State private var error: String?
+    @State private var error: (any Error)?
     @State private var saved = false
     private var path: String { "/v1/settings/models" + (agentID.map { "?agentId=" + $0 } ?? "") }
     private var selected: ModelChoice? {
@@ -45,45 +45,45 @@ struct ModelSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Модель и скорость").font(.headline)
-            Text(agentID == nil ? "По умолчанию для сотрудников на «\(client.displayName)»" : "Для этого сотрудника · на «\(client.displayName)»")
+            Text(L("Модель и скорость")).font(.headline)
+            Text(agentID == nil ? L("По умолчанию для сотрудников на «\(client.displayName)»") : L("Для этого сотрудника · на «\(client.displayName)»"))
                 .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-            if loading { ProgressView("Получаем доступные модели…").controlSize(.small) }
+            if loading { ProgressView(L("Получаем доступные модели…")).controlSize(.small) }
             if let settings {
-                Picker("Модель", selection: $model) {
+                Picker(L("Модель"), selection: $model) {
                     if agentID != nil {
-                        Text("Как на устройстве · \(settings.models.first { $0.id == settings.defaults.model }?.name ?? settings.defaults.model ?? "")").tag("")
+                        Text(L("Как на устройстве · \(settings.models.first { $0.id == settings.defaults.model }?.name ?? settings.defaults.model ?? "")")).tag("")
                     } else if let recommended = settings.recommended {
-                        Text("Автоматически · \(recommended.name)").tag("")
+                        Text(L("Автоматически · \(recommended.name)")).tag("")
                     }
-                    if !model.isEmpty && !settings.models.contains(where: { $0.id == model }) { Text(model + " · недоступна").tag(model) }
+                    if !model.isEmpty && !settings.models.contains(where: { $0.id == model }) { Text(L("\(model) · unavailable")).tag(model) }
                     ForEach(settings.models) { Text($0.name).tag($0.id) }
                 }.accessibilityIdentifier("modelChoice").disabled(saving || !settings.canManage)
-                Picker("Скорость", selection: $speed) {
-                    ForEach(selected?.speeds ?? []) { Text($0.name).tag($0.id) }
-                    if let selected, !selected.speeds.contains(where: { $0.id == speed }) { Text(speed + " · недоступна").tag(speed) }
+                Picker(L("Скорость"), selection: $speed) {
+                    ForEach(selected?.speeds ?? []) { Text(L10n.text($0.name)).tag($0.id) }
+                    if let selected, !selected.speeds.contains(where: { $0.id == speed }) { Text(L("\(speed) · unavailable")).tag(speed) }
                 }.accessibilityIdentifier("modelSpeed").disabled((model.isEmpty && agentID != nil) || saving || !settings.canManage)
                 if model.isEmpty && agentID == nil, let recommended = settings.recommended {
-                    Text((recommended.isDefault ? "Рекомендует OpenAI" : "Модель по умолчанию") + " · " + (recommended.defaultReasoningEffort ?? "medium").capitalized)
+                    Text((recommended.isDefault ? L("Рекомендует OpenAI") : L("Модель по умолчанию")) + " · " + (recommended.defaultReasoningEffort ?? "medium").capitalized)
                         .font(.caption).foregroundStyle(AppTheme.secondaryText)
                 }
                 if speed != "default" {
-                    Text("Ускоренный режим может расходовать больше лимита аккаунта.")
+                    Text(L("Ускоренный режим может расходовать больше лимита аккаунта."))
                         .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
                 }
                 if !settings.canManage {
-                    Text("Настройки меняет владелец устройства.").font(.caption).foregroundStyle(AppTheme.secondaryText)
+                    Text(L("Настройки меняет владелец устройства.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
                 } else if changed {
-                    Button(saving ? "Сохраняем…" : "Применить") { Task { await save() } }
+                    Button(saving ? L("Сохраняем…") : L("Применить")) { Task { await save() } }
                         .buttonStyle(.borderedProminent).disabled(saving || selected == nil || ((agentID == nil || !model.isEmpty) && selected?.speeds.contains(where: { $0.id == speed }) != true))
                         .accessibilityIdentifier("saveModelSelection")
                 }
-                Text(saved && !changed ? "Сохранено. Применится со следующего поручения." : "Начатая работа продолжится с прежними настройками.")
+                Text(saved && !changed ? L("Сохранено. Применится со следующего поручения.") : L("Начатая работа продолжится с прежними настройками."))
                     .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
             }
             if let error {
-                Text(error).font(.callout).foregroundStyle(AppTheme.warning).accessibilityIdentifier("modelSettingsError")
-                Button("Повторить") { Task { await load() } }.disabled(saving)
+                Text(UserFacingError.text(error.localizedDescription)).font(.callout).foregroundStyle(AppTheme.warning).accessibilityIdentifier("modelSettingsError")
+                Button(L("Повторить")) { Task { await load() } }.disabled(saving)
             }
         }
         .task(id: path) { await load() }
@@ -103,7 +103,7 @@ struct ModelSettingsView: View {
         defer { loading = false }
         do { let result: ModelSettings = try await client.management(path); apply(result) }
         catch is CancellationError { }
-        catch { self.error = UserFacingError.text(error.localizedDescription) }
+        catch { self.error = error }
     }
     private func save() async {
         saving = true; error = nil
@@ -113,6 +113,6 @@ struct ModelSettingsView: View {
             let result: ModelSettings = try await client.management(path, method: "POST", payload: payload)
             apply(result); saved = true
         } catch is CancellationError { }
-        catch { self.error = UserFacingError.text(error.localizedDescription) }
+        catch { self.error = error }
     }
 }

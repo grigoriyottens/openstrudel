@@ -39,11 +39,11 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Сканирование приглашения OpenStrudel для подключения к вашим чатам.</string>
+	<string>Scan an OpenStrudel connection code to connect your devices.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Подключение к вашему Mac или серверу, чтобы открыть общие чаты и сотрудников.</string>
+	<string>Connect to your Mac or server to open your assistants and conversations.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Запись голосового сообщения. Распознавание происходит на этом устройстве.</string>
+	<string>Record speech and transcribe it on this device.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -72,7 +72,7 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Команда OpenStrudel</string>
+			<string>OpenStrudel backup</string>
 			<key>UTTypeIdentifier</key>
 			<string>is.openstrudel.team</string>
 			<key>UTTypeTagSpecification</key>

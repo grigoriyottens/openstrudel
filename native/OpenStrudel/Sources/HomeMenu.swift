@@ -22,11 +22,11 @@ struct HomeMenu: View {
             HStack {
                 Text("OpenStrudel").font(.headline)
                 Spacer()
-                if busy { ProgressView().controlSize(.small).accessibilityLabel("Обновляем состояние") }
+                if busy { ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем состояние")) }
             }
             Label(client.displayName, systemImage: "desktopcomputer").font(.callout)
             if library.visibleClients.count > 1 {
-                Picker("Устройство", selection: Binding(get: { client.id }, set: { id in
+                Picker(L("Устройство"), selection: Binding(get: { client.id }, set: { id in
                     if let selected = library.visibleClients.first(where: { $0.id == id }) { library.select(selected) }
                 })) {
                     ForEach(library.visibleClients) { Text($0.displayName).tag($0.id) }
@@ -38,12 +38,12 @@ struct HomeMenu: View {
                     ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(account.account.email ?? account.name).font(.callout.weight(.medium)).textSelection(.enabled)
-                            Text(account.account.connected ? (index == 0 ? "Первый для новых поручений" : "Резервный по приоритету") : "Нужен вход в OpenAI")
+                            Text(account.account.connected ? (index == 0 ? L("Первый для новых поручений") : L("Резервный по приоритету")) : L("Нужен вход в OpenAI"))
                                 .font(.caption).foregroundStyle(.secondary)
                             UsageSummary(usage: account.usage)
-                            if account.activeRuns > 0 { Text("В работе: \(account.activeRuns)").font(.caption) }
+                            if account.activeRuns > 0 { Text(L("В работе: \(account.activeRuns)")).font(.caption) }
                             if canManage && index > 0 && account.account.connected {
-                                Button("Использовать первым") { Task {
+                                Button(L("Использовать первым")) { Task {
                                     do {
                                         let _: HomeActionResult = try await client.management("/v1/accounts/" + account.id + "/priority?deviceId=" + deviceID, method: "POST", payload: [:])
                                         await reloadAccounts()
@@ -56,17 +56,17 @@ struct HomeMenu: View {
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { accountContentHeight = $0 }
             }.frame(height: min(accountContentHeight, 330))
             } else if busy {
-                Text("Загружаем аккаунты…").font(.callout).foregroundStyle(.secondary)
+                Text(L("Загружаем аккаунты…")).font(.callout).foregroundStyle(.secondary)
             } else if error == nil {
-                Text("Подключите аккаунт OpenAI в настройках, чтобы видеть остатки.").font(.callout).foregroundStyle(.secondary)
+                Text(L("Подключите аккаунт OpenAI в настройках, чтобы видеть остатки.")).font(.callout).foregroundStyle(.secondary)
             }
-            if let error { Text(error).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+            if let error { Text(L10n.serviceText(error)).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
             Divider()
             HStack {
-                Button("Открыть", action: openApplication)
-                Button("Настройки", action: openPreferences)
+                Button(L("Открыть"), action: openApplication)
+                Button(L("Настройки"), action: openPreferences)
                 Spacer()
-                Button { Task { await refresh() } } label: { Image(systemName: "arrow.clockwise") }.accessibilityLabel("Обновить остатки").disabled(busy)
+                Button { Task { await refresh() } } label: { Image(systemName: "arrow.clockwise") }.accessibilityLabel(L("Обновить остатки")).disabled(busy)
             }
         }.padding(18).frame(width: 350)
         .task(id: connectionKey) {
@@ -91,7 +91,7 @@ struct HomeMenu: View {
             accounts = result.accounts; canManage = result.canManage; error = nil
         } catch {
             guard !Task.isCancelled, key == connectionKey, requestID == token else { return }
-            self.error = "Не удалось обновить остатки. Повторим автоматически."
+            self.error = L("Не удалось обновить остатки. Повторим автоматически.")
         }
     }
     private func reloadAccounts() async { await refresh() }
@@ -126,7 +126,7 @@ final class HomeStatusItem: NSObject, NSPopoverDelegate {
         guard item == nil else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(named: "MenuStrudel")
-        item.button?.setAccessibilityLabel("OpenStrudel: аккаунты и остатки")
+        item.button?.setAccessibilityLabel(L("OpenStrudel: аккаунты и остатки"))
         item.button?.toolTip = "OpenStrudel"
         item.button?.target = self
         item.button?.action = #selector(toggle)

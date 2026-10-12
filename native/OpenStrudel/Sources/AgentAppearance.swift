@@ -6,8 +6,8 @@ struct AgentAppearance: Codable, Hashable, Sendable {
     var tone: Int
 
     static let kinds = ["coil", "fold", "knot", "curl", "wave", "pillow"]
-    static let names = ["Завиток", "Конвертик", "Узелок", "Рогалик", "Волна", "Подушечка"]
-    static let tones = ["Абрикос", "Мёд", "Фисташка", "Мята", "Небо", "Черника", "Сирень", "Малина"]
+    static var names: [String] { [L("Завиток"), L("Конвертик"), L("Узелок"), L("Рогалик"), L("Волна"), L("Подушечка")] }
+    static var tones: [String] { [L("Абрикос"), L("Мёд"), L("Фисташка"), L("Мята"), L("Небо"), L("Черника"), L("Сирень"), L("Малина")] }
     static let angles: [Double] = [0, 32, 72, 125, 180, 215, 255, 315]
     var isValid: Bool { version == 1 && Self.kinds.contains(kind) && Self.tones.indices.contains(tone) }
     var label: String { Self.names[Self.kinds.firstIndex(of: kind) ?? 0] }

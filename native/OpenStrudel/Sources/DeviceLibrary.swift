@@ -244,14 +244,14 @@ final class DeviceLibrary: ObservableObject {
         HomeClient.invalidateForLocalErase()
         invitation = nil; fileDrafts = [:]
         for client in clients { client.suspendForLocalErase() }
-        erasePhase = "Останавливаем сотрудников этого Mac…"
+        erasePhase = L("Останавливаем сотрудников этого Mac…")
         await LocalHome.prepareForErase()
         await DigitalOceanCloud.shared.prepareForLocalErase()
         do {
             try await Task.detached { try reset.stopManagedService() }.value
-            erasePhase = "Удаляем сотрудников, чаты и файлы…"
+            erasePhase = L("Удаляем сотрудников, чаты и файлы…")
             try await Task.detached { try reset.eraseFiles(stop: { try reset.stopManagedService() }) }.value
-            erasePhase = "Удаляем сохранённые входы и настройки…"
+            erasePhase = L("Удаляем сохранённые входы и настройки…")
             try reset.eraseCredentials()
             await WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
             URLCache.shared.removeAllCachedResponses()

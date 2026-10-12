@@ -43,22 +43,22 @@ enum WaiVDSFailure: Error, LocalizedError, Equatable {
     case busy, network, unknownResult, paymentPending, identity, homeAuthentication, rateLimited, conflict
     var errorDescription: String? {
         switch self {
-        case .storage: return "Не удалось сохранить настройку. Разблокируйте Mac и попробуйте ещё раз."
-        case .signIn: return "Войдите в аккаунт размещения, чтобы продолжить. Ваш заказ сохранён."
-        case .freshSignIn: return "Подтвердите вход ещё раз, чтобы получить доступ к серверу."
-        case .wrongAccount: return "Этот заказ связан с другим аккаунтом. Войдите в тот аккаунт, с которого его начали."
-        case .unavailable: return "Размещение ещё проходит проверку. Оплата пока недоступна."
-        case .quoteExpired: return "Цена устарела. Проверьте новую сумму перед оплатой."
-        case .busy: return "Предыдущее действие ещё выполняется."
-        case .network: return "Не удалось проверить заказ. Проверьте интернет и попробуйте ещё раз."
-        case .unknownResult: return "Ответ не получен. Настройка сохранена. Проверьте её состояние перед следующим действием."
-        case .paymentPending: return "Проверяем платёж. Повторно платить пока не нужно."
-        case .identity: return "Не удалось подтвердить, что это ваш сервер. Подключение остановлено."
-        case .homeAuthentication: return "Сервер найден, но сохранённый доступ больше не действует. Восстановите подключение."
-        case .callback: return "Не удалось подтвердить возвращение в приложение. Повторите вход или проверку заказа."
-        case .rateLimited: return "Сервис просит немного подождать. Проверьте заказ через несколько минут."
-        case .conflict: return "Состояние заказа изменилось. Проверьте его перед следующим действием."
-        case .response: return "Не удалось проверить ответ сервиса. Ваш заказ сохранён."
+        case .storage: return L("Не удалось сохранить настройку. Разблокируйте Mac и попробуйте ещё раз.")
+        case .signIn: return L("Войдите в аккаунт размещения, чтобы продолжить. Ваш заказ сохранён.")
+        case .freshSignIn: return L("Подтвердите вход ещё раз, чтобы получить доступ к серверу.")
+        case .wrongAccount: return L("Этот заказ связан с другим аккаунтом. Войдите в тот аккаунт, с которого его начали.")
+        case .unavailable: return L("Размещение ещё проходит проверку. Оплата пока недоступна.")
+        case .quoteExpired: return L("Цена устарела. Проверьте новую сумму перед оплатой.")
+        case .busy: return L("Предыдущее действие ещё выполняется.")
+        case .network: return L("Не удалось проверить заказ. Проверьте интернет и попробуйте ещё раз.")
+        case .unknownResult: return L("Ответ не получен. Настройка сохранена. Проверьте её состояние перед следующим действием.")
+        case .paymentPending: return L("Проверяем платёж. Повторно платить пока не нужно.")
+        case .identity: return L("Не удалось подтвердить, что это ваш сервер. Подключение остановлено.")
+        case .homeAuthentication: return L("Сервер найден, но сохранённый доступ больше не действует. Восстановите подключение.")
+        case .callback: return L("Не удалось подтвердить возвращение в приложение. Повторите вход или проверку заказа.")
+        case .rateLimited: return L("Сервис просит немного подождать. Проверьте заказ через несколько минут.")
+        case .conflict: return L("Состояние заказа изменилось. Проверьте его перед следующим действием.")
+        case .response: return L("Не удалось проверить ответ сервиса. Ваш заказ сохранён.")
         }
     }
 }
@@ -127,7 +127,7 @@ struct WaiVDSQuote: Codable, Equatable, Sendable {
     var priceText: String {
         // USD and USDT remain distinct; do not run either through a locale's default currency.
         let amount = Decimal(amountMinor) / 100
-        return "\(amount.formatted(.number.precision(.fractionLength(2)))) \(currency) за 30 дней"
+        return L("\(amount.formatted(.number.precision(.fractionLength(2)))) \(currency) за 30 дней")
     }
 }
 
@@ -169,25 +169,25 @@ struct WaiVDSOrder: Codable, Equatable, Sendable {
             && (paidUntil ?? 0) > WaiVDSContract.milliseconds(date)
     }
     var message: String {
-        if provisioningState == "deleted" || homeState == "deleted" { return "Размещение удалено." }
-        if provisioningState == "deleting" { return "Удаляем размещение." }
-        if orderStatus == "refunded" && paymentState == "refunded" { return "Возврат оформлен." }
+        if provisioningState == "deleted" || homeState == "deleted" { return L("Размещение удалено.") }
+        if provisioningState == "deleting" { return L("Удаляем размещение.") }
+        if orderStatus == "refunded" && paymentState == "refunded" { return L("Возврат оформлен.") }
         if ["needs_refund", "refunded"].contains(orderStatus) || ["partially_paid", "partially_refunded", "refund_review", "additional_payment_review"].contains(paymentState)
-            || actionRequired == "contact_support" { return "Нужна помощь с оплатой. Ваш заказ сохранён." }
+            || actionRequired == "contact_support" { return L("Нужна помощь с оплатой. Ваш заказ сохранён.") }
         if paymentState == "unknown" || ["unknown", "confirmation_pending"].contains(sessionState) || actionRequired == "wait_for_confirmation" {
-            return "Проверяем платёж. Повторно платить пока не нужно."
+            return L("Проверяем платёж. Повторно платить пока не нужно.")
         }
-        if orderStatus == "canceled" { return "Заказ закрыт." }
+        if orderStatus == "canceled" { return L("Заказ закрыт.") }
         if paymentState == "paid" {
-            if homeState == "attention" || ["attention", "unknown", "rejected"].contains(provisioningState) { return "Оплата получена. Нужна помощь с подготовкой размещения." }
-            if provisioningState == "overdue" { return "Оплаченный срок закончился. Проверьте продление размещения." }
-            if homeState == "ready" && provisioningState == "ready" { return "Размещение готово. Проверяем подключение." }
-            return "Оплата получена. Подготовка ещё идёт."
+            if homeState == "attention" || ["attention", "unknown", "rejected"].contains(provisioningState) { return L("Оплата получена. Нужна помощь с подготовкой размещения.") }
+            if provisioningState == "overdue" { return L("Оплаченный срок закончился. Проверьте продление размещения.") }
+            if homeState == "ready" && provisioningState == "ready" { return L("Размещение готово. Проверяем подключение.") }
+            return L("Оплата получена. Подготовка ещё идёт.")
         }
-        if actionRequired == "retry_payment" { return "Предыдущий счёт закрыт без оплаты. Можно оплатить заказ." }
-        if actionRequired == "new_quote_required" { return "Срок оплаты закончился. Проверьте заказ перед новой покупкой." }
-        if actionRequired == "purchase_unavailable" { return "Оплата размещения временно недоступна." }
-        return "Ожидаем оплату. Заказ сохранён."
+        if actionRequired == "retry_payment" { return L("Предыдущий счёт закрыт без оплаты. Можно оплатить заказ.") }
+        if actionRequired == "new_quote_required" { return L("Срок оплаты закончился. Проверьте заказ перед новой покупкой.") }
+        if actionRequired == "purchase_unavailable" { return L("Оплата размещения временно недоступна.") }
+        return L("Ожидаем оплату. Заказ сохранён.")
     }
 }
 

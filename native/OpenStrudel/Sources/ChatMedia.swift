@@ -24,12 +24,12 @@ struct ChatImage: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Открыть изображение: " + (name.isEmpty ? "Фото" : name))
+                .accessibilityLabel(L("Open image: \(name.isEmpty ? L("Фото") : name)"))
             } else {
                 VStack(spacing: 10) {
                     if failed {
                         Image(systemName: "photo").font(.title2).foregroundStyle(.secondary)
-                        Button("Загрузить изображение") { attempt += 1 }.font(.callout)
+                        Button(L("Загрузить изображение")) { attempt += 1 }.font(.callout)
                     } else {
                         ProgressView().controlSize(.small)
                     }

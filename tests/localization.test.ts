@@ -1,0 +1,39 @@
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { describe, it, expect } from 'vitest';
+const catalog = JSON.parse(readFileSync('public/localizations.json', 'utf8'));
+function localizer(language?: string) {
+  const context = vm.createContext({});
+  vm.runInContext(readFileSync('public/localization.js', 'utf8'), context);
+  return context.StrudelLocale.create(catalog, language);
+}
+describe('interface languages', () => {
+  it('uses English by default and preserves user text inside placeholders', () => {
+    const l = localizer();
+    expect(l.language).toBe('en');
+    expect(l.text('Удалить «{0}»?', ['Личное {1}'])).toBe('Delete “Личное {1}”?');
+    expect(l.text('Удалить «{0}»?', ['<script>'])).toBe('Delete “<script>”?');
+  });
+  it('supports Hebrew without letting an address reorder the surrounding sentence', () => {
+    const l = localizer('he');
+    expect(l.direction).toBe('rtl');
+    expect(l.text('Connection {0}', ['me@example.com'])).toContain('\u2068me@example.com\u2069');
+    l.setLanguage('unknown');
+    expect(l.language).toBe('en');
+  });
+  it('has five complete translations with matching placeholders', () => {
+    for (const [key, entries] of Object.entries(catalog) as [string, Record<string,string>][]) {
+      const slots = (key.match(/\{\d+\}/g) || []).sort();
+      for (const language of ['en','ru','fr','es','he']) {
+        expect(entries[language], `${language}: ${key}`).toBeTruthy();
+        expect((entries[language].match(/\{\d+\}/g) || []).sort(), `${language}: ${key}`).toEqual(slots);
+        expect(entries[language], `${language}: ${key}`).not.toMatch(/\bAI\b/);
+      }
+    }
+  });
+  it('localizes server errors, keeping interpolated values intact', () => {
+    const l = localizer();
+    expect(l.error('Удалить «Работа {1}»?')).toBe('Delete “Работа {1}”?');
+    expect(l.error('Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.')).toBe('Update OpenStrudel on this assistant’s device to choose a model.');
+  });
+});

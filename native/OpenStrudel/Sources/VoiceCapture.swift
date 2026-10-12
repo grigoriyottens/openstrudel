@@ -29,23 +29,23 @@ import CryptoKit
         file = Self.draftURL(context: context)
         if let file, FileManager.default.fileExists(atPath: file.path) {
             phase = .saved
-            detail = "Сохранена голосовая запись. Можно распознать ещё раз."
+            detail = L("Сохранена голосовая запись. Можно распознать ещё раз.")
         }
     }
 
     func start(locale: String) {
         guard phase == .idle else { return }
-        phase = .preparing; detail = "Разрешите доступ к микрофону…"
+        phase = .preparing; detail = L("Разрешите доступ к микрофону…")
         let id = generation
         work = Task {
             do {
+                let module = try await Self.prepare(locale: locale)
                 guard await AVCaptureDevice.requestAccess(for: .audio) else {
-                    throw VoiceFailure("Разрешите доступ к микрофону в настройках системы.")
+                    throw VoiceFailure(L("Разрешите доступ к микрофону в настройках системы."))
                 }
                 try Task.checkCancellation()
                 guard id == generation else { return }
-                detail = "Подготавливаем распознавание…"
-                let module = try await Self.prepare(locale: locale)
+                detail = L("Подготавливаем распознавание…")
                 try Task.checkCancellation()
                 guard id == generation, let file else { return }
                 #if os(iOS)
@@ -58,7 +58,7 @@ import CryptoKit
                     AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64000
                 ])
                 recorder.isMeteringEnabled = true
-                guard recorder.record(forDuration: Self.maximumDuration) else { throw VoiceFailure("Не удалось начать запись. Проверьте микрофон.") }
+                guard recorder.record(forDuration: Self.maximumDuration) else { throw VoiceFailure(L("Не удалось начать запись. Проверьте микрофон.")) }
                 self.recorder = recorder; self.transcriber = module
                 phase = .recording; levels = []; seconds = 0; detail = ""
                 meter = Task { [weak self] in
@@ -75,7 +75,7 @@ import CryptoKit
             } catch {
                 guard id == generation, !Task.isCancelled else { return }
                 stopRecorder()
-                phase = .idle; detail = (error as? VoiceFailure)?.message ?? "Не удалось подготовить голосовой ввод. Проверьте интернет для загрузки системной модели и попробуйте снова."
+                phase = .idle; detail = (error as? VoiceFailure)?.message ?? (error as? DictationFailure)?.errorDescription ?? L("Dictation could not start. Check microphone access and try again.")
             }
         }
     }
@@ -83,7 +83,7 @@ import CryptoKit
     func finish(send: Bool, locale: String) {
         guard phase == .recording || phase == .saved, let file else { return }
         stopRecorder()
-        phase = .transcribing; detail = "Распознаём на устройстве…"
+        phase = .transcribing; detail = L("Распознаём на устройстве…")
         let id = generation
         work = Task {
             do {
@@ -93,7 +93,7 @@ import CryptoKit
                 let result = try await Self.transcribe(file: file, module: module)
                 try Task.checkCancellation()
                 guard id == generation else { return }
-                guard !result.isEmpty else { throw VoiceFailure("Не удалось разобрать речь. Попробуйте ещё раз или запишите новое сообщение.") }
+                guard !result.isEmpty else { throw VoiceFailure(L("Не удалось разобрать речь. Попробуйте ещё раз или запишите новое сообщение.")) }
                 // Deliver before deleting the recoverable audio draft.
                 deliver?(result, send)
                 try? FileManager.default.removeItem(at: file)
@@ -101,7 +101,7 @@ import CryptoKit
             } catch {
                 guard id == generation, !Task.isCancelled else { return }
                 transcriber = nil; phase = .saved
-                detail = (error as? VoiceFailure)?.message ?? "Не удалось распознать. Запись сохранена, можно повторить."
+                detail = (error as? VoiceFailure)?.message ?? L("Не удалось распознать. Запись сохранена, можно повторить.")
             }
         }
     }
@@ -132,14 +132,8 @@ import CryptoKit
     }
 
     static func prepare(locale: String) async throws -> DictationTranscriber {
-        let requested = Locale(identifier: locale == "system" ? Locale.current.identifier : locale)
-        guard let supported = await DictationTranscriber.supportedLocale(equivalentTo: requested) else {
-            throw VoiceFailure("Этот язык пока недоступен для распознавания. Выберите другой в настройках голосового ввода.")
-        }
-        let module = DictationTranscriber(locale: supported, preset: .longDictation)
-        if let installation = try await AssetInventory.assetInstallationRequest(supporting: [module]) {
-            try await installation.downloadAndInstall()
-        }
+        let module = try await AppleDictationAssets.module(locale: locale)
+        guard await AssetInventory.status(forModules: [module]) == .installed else { throw DictationFailure.modelNeeded }
         return module
     }
 
@@ -178,7 +172,7 @@ struct VoiceRecordingRow: View {
             : AnyLayout(HStackLayout(spacing: 12))
         layout {
             Button { voice.cancel() } label: { Image(systemName: "xmark").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
-                .buttonStyle(.plain).accessibilityLabel("Отменить запись")
+                .buttonStyle(.plain).accessibilityLabel(L("Отменить запись"))
             if voice.phase == .recording {
                 Canvas { context, size in
                     let count = min(VoiceCapture.maximumLevels, max(1, Int(size.width / 6)))
@@ -193,81 +187,94 @@ struct VoiceRecordingRow: View {
                 }.frame(height: 28).accessibilityHidden(true)
                 Text(String(format: "%d:%02d", voice.seconds / 60, voice.seconds % 60)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 Button { voice.finish(send: false, locale: locale) } label: { Image(systemName: "stop.fill").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
-                    .buttonStyle(.plain).accessibilityLabel("Остановить и проверить текст")
+                    .buttonStyle(.plain).accessibilityLabel(L("Остановить и проверить текст"))
                 Button { voice.finish(send: true, locale: locale) } label: { Image(systemName: "arrow.up").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
-                    .buttonStyle(.glassProminent).buttonBorderShape(.circle).disabled(!canSend).accessibilityLabel("Распознать и отправить")
+                    .buttonStyle(.glassProminent).buttonBorderShape(.circle).disabled(!canSend).accessibilityLabel(L("Распознать и отправить"))
             } else {
                 if voice.phase == .preparing || voice.phase == .transcribing { ProgressView().controlSize(.small) }
-                Text(voice.detail).font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                Text(L10n.serviceText(voice.detail)).font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 if voice.phase == .saved {
-                    Button { voice.finish(send: false, locale: locale) } label: { AdaptiveActionLabel(title: "Распознать") }
+                    Button { voice.finish(send: false, locale: locale) } label: { AdaptiveActionLabel(title: L("Распознать")) }
                         .adaptiveActionStyle(.glass)
                 }
             }
         }.padding(.horizontal, 8).padding(.vertical, 6)
-        .accessibilityElement(children: .contain).accessibilityLabel(voice.phase == .recording ? "Идёт запись" : "Голосовой ввод")
+        .accessibilityElement(children: .contain).accessibilityLabel(voice.phase == .recording ? L("Идёт запись") : L("Голосовой ввод"))
     }
 }
 
 struct DictationSettings: View {
     var showsTitle = true
-    @AppStorage("openstrudel.dictation") private var provider = "ramble"
-    @AppStorage("openstrudel.dictationLocale") private var locale = "ru-RU"
-    #if os(macOS)
-    private var rambleURL: URL? { NSWorkspace.shared.urlForApplication(withBundleIdentifier: "is.waiwai.dictation") }
-    #endif
+    @AppStorage("openstrudel.dictationLocale") private var locale = "interface"
+    @ObservedObject private var assets = DictationAssets.shared
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if showsTitle { Text("Голосовой ввод").font(.headline) }
-            #if os(macOS)
-            Picker("Распознавание", selection: $provider) {
-                Text("Open Ramble · рекомендуем").tag("ramble")
-                Text("Встроенное Apple").tag("apple")
-            }
-            if provider == "ramble" {
-                Text("Open Ramble превращает речь в текст на вашем Mac. Поставьте курсор в сообщение и используйте горячую клавишу из Open Ramble. Текст можно проверить перед отправкой.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                if let rambleURL {
-                    Button("Открыть Open Ramble") { NSWorkspace.shared.openApplication(at: rambleURL, configuration: .init()) }
-                } else { Link("Скачать Open Ramble", destination: URL(string: "https://waiwai.is/ramble")!) }
-            } else { appleSettings }
-            #else
-            appleSettings
-            #endif
-        }
-    }
-    private var appleSettings: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Picker("Язык записи", selection: $locale) {
-                Text("Русский").tag("ru-RU")
-                Text("English").tag("en-US")
-                Text("Язык системы").tag("system")
-            }
-            Text("Распознавание на этом устройстве. При первом использовании Apple загрузит языковую модель. Запись до 5 минут.")
+            if showsTitle { Text(L("Dictation")).font(.headline) }
+            Picker(L("Spoken language"), selection: $locale) {
+                Text(L("Same as the app")).tag("interface")
+                ForEach(AppLanguage.allCases) { Text($0.title).tag($0.speechLocale) }
+            }.disabled(assets.state == .downloading).accessibilityIdentifier("dictationLanguage")
+            Text(L("Speech is transcribed on this device. Record up to 5 minutes, then review the text before sending."))
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            DictationModelStatus()
         }
+        .task(id: DictationAssets.selectedLocale) { await assets.check(locale: DictationAssets.selectedLocale) }
+    }
+}
+
+private struct DictationModelStatus: View {
+    @ObservedObject private var assets = DictationAssets.shared
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            switch assets.state {
+            case .checking:
+                ProgressView(L("Checking the local model…"))
+            case .ready:
+                Label(L("Ready for offline dictation"), systemImage: "checkmark.circle")
+                    .foregroundStyle(.secondary).accessibilityIdentifier("dictationReady")
+            case .downloading:
+                if let progress = assets.progress {
+                    ProgressView(value: progress) {
+                        Text(L("Downloading the model…"))
+                    } currentValueLabel: { Text(progress, format: .percent.precision(.fractionLength(0))).monospacedDigit() }
+                } else { ProgressView(L("Preparing the download…")) }
+                Button(L("Cancel download")) { assets.cancel() }.accessibilityIdentifier("cancelDictationDownload")
+            case .available, .failed:
+                if let error = assets.error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
+                Text(L("Download a language model once. After that, dictation works without internet. Models already on this device are reused."))
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button(L("Download model")) { assets.download() }
+                    .buttonStyle(.borderedProminent).accessibilityIdentifier("downloadDictationModel")
+            case .unsupported:
+                Text(L10n.serviceText(assets.error ?? "")).font(.callout).foregroundStyle(.secondary)
+            }
+        }.accessibilityElement(children: .contain)
     }
 }
 
 struct DictationSetupView: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var assets = DictationAssets.shared
     let record: () -> Void
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    Image(systemName: "waveform").font(.system(size: 36, weight: .light)).foregroundStyle(AppTheme.accent).accessibilityHidden(true)
                     DictationSettings(showsTitle: false)
-                    Button("Записать прямо здесь") {
-                        UserDefaults.standard.set("apple", forKey: "openstrudel.dictation")
-                        dismiss(); record()
-                    }.buttonStyle(.glassProminent)
+                    if assets.state == .ready {
+                        Button(L("Start dictating")) {
+                            UserDefaults.standard.set(true, forKey: "openstrudel.dictationIntroduced")
+                            dismiss(); record()
+                        }.buttonStyle(.glassProminent).accessibilityIdentifier("startLocalDictation")
+                    }
                 }.padding(24)
             }
-            .navigationTitle("Голосовой ввод")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
+            .navigationTitle(L("Dictation"))
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Done")) { dismiss() } } }
         }
         #if os(macOS)
-        .frame(width: 480, height: 360)
+        .frame(width: 480, height: 430)
         #endif
     }
 }

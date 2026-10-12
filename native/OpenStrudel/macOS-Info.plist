@@ -37,7 +37,7 @@
 		<true/>
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Запись голосового сообщения. Распознавание происходит на этом Mac.</string>
+	<string>Record speech and transcribe it on this device.</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
@@ -60,7 +60,7 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>Команда OpenStrudel</string>
+			<string>OpenStrudel backup</string>
 			<key>UTTypeIdentifier</key>
 			<string>is.openstrudel.team</string>
 			<key>UTTypeTagSpecification</key>

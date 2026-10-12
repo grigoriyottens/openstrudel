@@ -4,7 +4,12 @@ import AppKit
 #endif
 
 struct SettingsView: View {
-    enum Section: String, CaseIterable { case devices = "Устройства", accounts = "Аккаунты", backups = "Копии", application = "Приложение" }
+    enum Section: String, CaseIterable {
+        case devices, accounts, backups, application
+        var title: String {
+            switch self { case .devices: L("Устройства"); case .accounts: L("Аккаунты"); case .backups: L("Копии"); case .application: L("Приложение") }
+        }
+    }
     @EnvironmentObject private var library: DeviceLibrary
     @EnvironmentObject private var client: HomeClient
     @Environment(\.dismiss) private var dismiss
@@ -37,6 +42,7 @@ struct SettingsView: View {
         #if os(macOS)
         .frame(width: 620, height: 600)
         #endif
+        .modifier(InterfaceLanguage())
         .onAppear { selectedID = client.id }
         .sheet(isPresented: $adding, onDismiss: {
             if let pairing { confirmingPairing = pairing; self.pairing = nil }
@@ -46,8 +52,8 @@ struct SettingsView: View {
 
     private var settingsContent: some View {
             VStack(spacing: 0) {
-                Picker("Настройки", selection: $section) {
-                    ForEach(Section.allCases, id: \.self) { Text($0.rawValue) }
+                Picker(L("Настройки"), selection: $section) {
+                    ForEach(Section.allCases, id: \.self) { Text($0.title) }
                 }
                 #if os(macOS)
                 .pickerStyle(.segmented)
@@ -59,7 +65,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
                         if section != .devices && section != .application && library.visibleClients.count > 1 {
-                            Picker("Устройство", selection: $selectedID) {
+                            Picker(L("Устройство"), selection: $selectedID) {
                                 ForEach(library.visibleClients) { Text($0.displayName).tag($0.id) }
                             }
                         }
@@ -70,11 +76,13 @@ struct SettingsView: View {
                             Divider()
                             TelegramSetupView().environmentObject(selected).id("telegram-" + selected.id)
                         case .backups:
-                            Text("Резервная копия сотрудников").font(.title3.weight(.semibold))
+                            Text(L("Резервная копия сотрудников")).font(.title3.weight(.semibold))
                             AgentTransferSettings().environmentObject(selected).id(selected.id)
                         case .application:
+                            LanguagePicker()
+                            Divider()
                             if library.visibleClients.count > 1 {
-                                Picker("Сотрудники на устройстве", selection: $selectedID) {
+                                Picker(L("Сотрудники на устройстве"), selection: $selectedID) {
                                     ForEach(library.visibleClients) { Text($0.displayName).tag($0.id) }
                                 }
                             }
@@ -85,12 +93,12 @@ struct SettingsView: View {
                             DictationSettings()
                             Divider()
                             #if os(macOS)
-                            Toggle("Показывать в строке меню", isOn: $showMenuBar)
+                            Toggle(L("Показывать в строке меню"), isOn: $showMenuBar)
                             UpdateSettings()
                             HostingStoreSettings()
                             #endif
-                            Link("Помощь", destination: URL(string: "https://waiwai.is/openstrudel#help")!)
-                            Link("Конфиденциальность", destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
+                            Link(L("Помощь"), destination: URL(string: "https://waiwai.is/openstrudel#help")!)
+                            Link(L("Конфиденциальность"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
                             #if os(macOS)
                             LocalDataResetButton()
                             #endif
@@ -103,11 +111,11 @@ struct SettingsView: View {
     private var settingsNavigation: some View {
         NavigationStack {
             settingsContent
-                .navigationTitle("Настройки")
+                .navigationTitle(L("Настройки"))
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") {
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) {
                     #if os(macOS)
                     if isPresented { dismiss() } else { NSApp.keyWindow?.close() }
                     #else
@@ -119,7 +127,7 @@ struct SettingsView: View {
 
     private var deviceList: some View {
         VStack(alignment: .leading, spacing: 22) {
-            Text("Сотрудники работают там, где вы их создали. Здесь можно подключить ещё один Mac или сервер.")
+            Text(L("Сотрудники работают там, где вы их создали. Здесь можно подключить ещё один Mac или сервер."))
                 .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
             ForEach(library.visibleClients) { device in
                 DisclosureGroup(isExpanded: Binding(
@@ -134,7 +142,7 @@ struct SettingsView: View {
                         Image(systemName: device.isLocalConnection ? "laptopcomputer" : "desktopcomputer").font(.title2)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(device.displayName).font(.headline)
-                            Text(device.homeUnreachable || device.health == nil ? "Нет связи · попробуем снова" : "На связи · сотрудников: \(device.profiles.count)")
+                            Text(device.homeUnreachable || device.health == nil ? L("Нет связи · попробуем снова") : L("На связи · сотрудников: \(device.profiles.count)"))
                                 .font(.caption).foregroundStyle(AppTheme.secondaryText)
                         }
                         Spacer()
@@ -143,12 +151,12 @@ struct SettingsView: View {
                 DeviceSignOutButton {}.environmentObject(device)
                 if device.id != library.visibleClients.last?.id { Divider() }
             }
-            Button("Подключить устройство…") { adding = true }.buttonStyle(.borderedProminent)
+            Button(L("Подключить устройство…")) { adding = true }.buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("addDevice")
             HiddenEmployeesButton()
             #if os(macOS)
             if !library.visibleClients.contains(where: \.isLocalConnection), LocalHome.isAvailable {
-                Button(localStarting ? "Запускаем этот Mac…" : "Работать также на этом Mac") {
+                Button(localStarting ? L("Запускаем этот Mac…") : L("Работать также на этом Mac")) {
                     localStarting = true
                     Task { await library.openLocal(); localStarting = false }
                 }.disabled(localStarting)
@@ -171,11 +179,11 @@ struct AddDeviceConfirmation: View {
         NavigationStack {
             VStack(spacing: 20) {
                 Image(systemName: connected ? "checkmark.circle.fill" : "desktopcomputer").font(.system(size: 48)).foregroundStyle(AppTheme.accent)
-                Text(connected ? "Устройство подключено" : "Подключить «\(pairing.name)»?")
+                Text(connected ? L("Устройство подключено") : L("Подключить «\(pairing.name)»?"))
                     .font(.title2.weight(.semibold)).multilineTextAlignment(.center)
-                Text(connected ? (candidate?.homeUnreachable == true ? "Подключение сохранено. Ждём ответа устройства — сотрудники появятся, когда оно выйдет на связь." : "Сотрудники этого устройства теперь доступны в списке чатов.") : "Вы сможете общаться с его сотрудниками и создавать новых. Они продолжат работать на «\(pairing.name)».")
+                Text(connected ? (candidate?.homeUnreachable == true ? L("Подключение сохранено. Ждём ответа устройства — сотрудники появятся, когда оно выйдет на связь.") : L("Сотрудники этого устройства теперь доступны в списке чатов.")) : L("Вы сможете общаться с его сотрудниками и создавать новых. Они продолжат работать на «\(pairing.name)»."))
                     .font(.callout).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
-                if let error { Text(error).font(.callout).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("pairingError") }
+                if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("pairingError") }
                 Button {
                     if connected { if let candidate { library.select(candidate) }; dismiss(); return }
                     busy = true; error = nil
@@ -186,12 +194,12 @@ struct AddDeviceConfirmation: View {
                         busy = false
                     }
                 } label: {
-                    HStack { if busy { ProgressView().controlSize(.small) }; Text(connected ? "Открыть сотрудников" : busy ? "Проверяем подключение…" : "Подключить") }
+                    HStack { if busy { ProgressView().controlSize(.small) }; Text(connected ? L("Открыть сотрудников") : busy ? L("Проверяем подключение…") : L("Подключить")) }
                         .frame(minHeight: 32)
                 }.buttonStyle(.borderedProminent).disabled(busy).keyboardShortcut(.defaultAction)
-                .accessibilityIdentifier("confirmMacPairing")
+                .accessibilityIdentifier(connected ? "openDeviceEmployees" : "confirmMacPairing")
             }.padding(32).frame(maxWidth: 460)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(connected ? "Готово" : "Отмена") { dismiss() }.disabled(busy) } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(connected ? L("Готово") : L("Отмена")) { dismiss() }.disabled(busy) } }
         }
         .interactiveDismissDisabled(busy)
         #if os(macOS)
@@ -204,6 +212,7 @@ struct DeviceAccountsView: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
     @State private var deviceID = ""
+    @State private var loadedDeviceID: String?
     @State private var accounts: [ManagedCodexAccount] = []
     @State private var loading = true
     @State private var busy = false
@@ -217,64 +226,74 @@ struct DeviceAccountsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("OpenAI на «\(client.displayName)»").font(.title3.weight(.semibold))
+            Text(L("ChatGPT on \(client.devices.first(where: { $0.id == deviceID })?.name ?? client.displayName)"))
+                .font(.title3.weight(.semibold))
             if client.devices.count > 1 {
-                Picker("Устройство сотрудника", selection: $deviceID) {
+                Picker(L("Устройство сотрудника"), selection: $deviceID) {
                     ForEach(client.devices) { Text($0.name).tag($0.id) }
-                }
+                }.disabled(login != nil || busy)
             }
-            if loading { ProgressView(accounts.isEmpty ? "Загружаем аккаунты и лимиты…" : "Обновляем остатки…").controlSize(.small) }
-            if let error { Text(error).font(.callout).foregroundStyle(AppTheme.destructive) }
+            if loading { ProgressView(accounts.isEmpty ? L("Загружаем аккаунты и лимиты…") : L("Обновляем остатки…")).controlSize(.small) }
+            if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.destructive) }
             ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(account.account.email ?? account.name).font(.headline).textSelection(.enabled)
-                            Text(account.account.connected ? account.account.planLabel : account.account.isUnavailable ? "Не удалось проверить аккаунт" : "Нужен вход в OpenAI").font(.caption).foregroundStyle(AppTheme.secondaryText)
+                            Text(account.account.connected ? account.account.planLabel : account.account.isUnavailable ? L("Не удалось проверить аккаунт") : L("Нужен вход в OpenAI")).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                            if account.account.connected, let category = account.account.categoryLabel {
+                                Text(category).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                            }
+                            if accounts.filter({ $0.account.email == account.account.email && $0.account.planType == account.account.planType }).count > 1 {
+                                Text(L("Connection \(String(account.id.suffix(6)))")).font(.caption.monospaced()).foregroundStyle(AppTheme.secondaryText)
+                            }
                         }
                         Spacer()
                         if canManage && account.account.connected {
                             Menu {
-                                if index > 0 { Button("Использовать по умолчанию") { perform {
+                                if index > 0 { Button(L("Использовать по умолчанию")) { perform {
                                     let _: HomeActionResult = try await client.management(path(account.id, "priority"), method: "POST", payload: [:])
                                     await refresh()
                                 } } }
-                                Button("Выйти из аккаунта…", role: .destructive) { logout = account }
+                                Button(L("Выйти из аккаунта…"), role: .destructive) { logout = account }
                                     .disabled(account.activeRuns > 0)
                             } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize()
-                                .accessibilityLabel("Действия с аккаунтом")
+                                .accessibilityLabel(L("Действия с аккаунтом"))
                         }
                     }
                     if account.account.connected { UsageSummary(usage: account.usage) }
                     else if canManage && !account.account.isUnavailable {
-                        Button { perform { try await signIn(account.id) } } label: { AdaptiveActionLabel(title: "Войти в OpenAI") }
+                        Button { perform { try await signIn(account.id) } } label: { AdaptiveActionLabel(title: L("Войти в OpenAI")) }
                             .adaptiveActionStyle(.borderedProminent).disabled(login != nil || busy).accessibilityIdentifier("signInOpenAI")
                     }
-                    if accounts.count > 1 && index == 0 { Text("По умолчанию для новых поручений").font(.caption).foregroundStyle(AppTheme.secondaryText) }
+                    if accounts.count > 1 && index == 0 { Text(L("По умолчанию для новых поручений")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
                 }
                 Divider()
             }
             if let login {
-                Text("Завершите вход на сайте OpenAI").font(.headline)
+                Text(L("Завершите вход на сайте OpenAI")).font(.headline)
                 if let code = login.userCode { Text(code).font(.title2.monospaced()).textSelection(.enabled).accessibilityIdentifier("openAIDeviceCode") }
-                if let url = login.url { Link("Открыть OpenAI", destination: url).buttonStyle(.borderedProminent) }
-                Button("Отменить вход") { perform {
+                if let url = login.url { Link(L("Открыть OpenAI"), destination: url).buttonStyle(.borderedProminent) }
+                Button(L("Отменить вход")) { perform {
                     let _: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + login.loginId), method: "DELETE")
                     self.login = nil
                 } }.accessibilityIdentifier("cancelOpenAILogin")
             } else if canManage && !accounts.isEmpty {
-                Button("Добавить аккаунт OpenAI") { perform {
+                Button(L("Добавить аккаунт OpenAI")) { perform {
                     struct Added: Decodable { let id: String }
                     let result: Added = try await client.management("/v1/accounts" + query, method: "POST", payload: ["name": "OpenAI"])
                     try await signIn(result.id)
                 } }.disabled(busy)
             }
-            Button("Обновить остатки") { Task { await refresh(force: true) } }.disabled(loading)
-            Text("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта.")
+            Button(L("Обновить остатки")) { Task { await refresh(force: true) } }.disabled(loading)
+            Text(L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
                 .font(.caption).foregroundStyle(AppTheme.secondaryText)
         }
-        .task(id: deviceID) { await refresh() }
-        .onAppear { deviceID = client.health?.nodeId ?? "" }
+        .task(id: deviceID) {
+            if deviceID.isEmpty, let localDeviceID = client.health?.nodeId {
+                deviceID = localDeviceID
+            } else { await refresh() }
+        }
         .task(id: login?.loginId) {
             guard let current = login else { return }
             while !Task.isCancelled && login?.loginId == current.loginId {
@@ -282,27 +301,28 @@ struct DeviceAccountsView: View {
                     try await Task.sleep(for: .seconds(2))
                     let status: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + current.loginId))
                     if status.status == "completed" { login = nil; await refresh(force: true); await client.refreshOpenAIAccount(force: true) }
-                    if ["failed", "canceled"].contains(status.status) { login = nil; error = "Вход не завершён. Попробуйте ещё раз." }
+                    if ["failed", "canceled"].contains(status.status) { login = nil; error = L("Вход не завершён. Попробуйте ещё раз.") }
                 } catch is CancellationError { break }
-                catch { self.error = "Не удалось проверить вход. Повторим, когда появится связь." }
+                catch { self.error = L("Не удалось проверить вход. Повторим, когда появится связь.") }
             }
         }
-        .confirmationDialog("Выйти из аккаунта OpenAI?", isPresented: Binding(get: { logout != nil }, set: { if !$0 { logout = nil } })) {
-            if let account = logout { Button("Выйти", role: .destructive) { perform {
+        .confirmationDialog(L("Выйти из аккаунта OpenAI?"), isPresented: Binding(get: { logout != nil }, set: { if !$0 { logout = nil } })) {
+            if let account = logout { Button(L("Выйти"), role: .destructive) { perform {
                 let _: HomeActionResult = try await client.management(path(account.id, "logout"), method: "POST")
                 logout = nil; await refresh()
             } } }
-        } message: { Text("Сотрудники и переписка сохранятся. Для новых поручений понадобится вход.") }
+        } message: { Text(L("Сотрудники и переписка сохранятся. Для новых поручений понадобится вход.")) }
     }
     private func refresh(force: Bool = false) async {
         let selected = deviceID
+        if loadedDeviceID != selected { accounts = []; canManage = false; loadedDeviceID = selected }
         loading = true; error = nil
         defer { if selected == deviceID { loading = false } }
         do {
             let result: ManagedCodexAccounts = try await client.management("/v1/accounts" + query + (query.isEmpty ? "?" : "&") + "refresh=" + String(force))
             guard selected == deviceID, !Task.isCancelled else { return }
             accounts = result.accounts; canManage = result.canManage
-        } catch { if !Task.isCancelled { self.error = UserFacingError.text(error.localizedDescription) } }
+        } catch { if !Task.isCancelled && selected == deviceID { self.error = UserFacingError.text(error.localizedDescription) } }
     }
     private func signIn(_ id: String) async throws {
         loginAccount = id
@@ -320,25 +340,51 @@ struct UsageSummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if usage.unavailable == true {
-                Label("Не удалось получить остатки. Попробуйте обновить.", systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(AppTheme.secondaryText)
+                Label(L("Не удалось получить остатки. Попробуйте обновить."), systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(AppTheme.secondaryText)
             } else if usage.windows.isEmpty {
-                Text("OpenAI не передал лимиты подписки.").font(.callout).foregroundStyle(AppTheme.secondaryText)
+                Text(L("OpenAI не передал лимиты подписки.")).font(.callout).foregroundStyle(AppTheme.secondaryText)
             }
             ForEach(usage.windows) { window in
                 VStack(alignment: .leading, spacing: 5) {
-                    HStack { Text(window.displayName); Spacer(); Text(window.remainingPercent.map { "\(Int($0.rounded()))% осталось" } ?? "Нет данных").monospacedDigit() }.font(.callout)
-                    if let remaining = window.remainingPercent { ProgressView(value: max(0, min(100, remaining)), total: 100).accessibilityLabel(window.displayName).accessibilityValue("Осталось \(Int(remaining)) процентов") }
+                    HStack { Text(window.displayName); Spacer(); Text(window.remainingPercent.map { L("\(Int($0.rounded()))% осталось") } ?? L("Нет данных")).monospacedDigit() }.font(.callout)
+                    if let remaining = window.remainingPercent { ProgressView(value: max(0, min(100, remaining)), total: 100).accessibilityLabel(window.displayName).accessibilityValue(L("Осталось \(Int(remaining)) процентов")) }
                     if let reset = window.resetsAt {
-                        Text("Сброс \(Date(timeIntervalSince1970: reset).formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(Locale(identifier: "ru_RU"))))")
+                        Text(L("Сброс \(Date(timeIntervalSince1970: reset).formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)))"))
                             .font(.caption).foregroundStyle(AppTheme.secondaryText)
                     }
                 }
             }
             HStack {
-                Text("Кредиты"); Spacer()
-                Text(usage.credits.map { $0.unlimited ? "Без ограничений" : $0.balance ?? ($0.hasCredits ? "Доступны · баланс не передан" : "Нет кредитов") } ?? "Баланс не передан")
+                Text(L("Кредиты")); Spacer()
+                Text(usage.credits.map { $0.unlimited ? L("Без ограничений") : $0.balance ?? ($0.hasCredits ? L("Доступны · баланс не передан") : L("Нет кредитов")) } ?? L("Баланс не передан"))
                     .monospacedDigit().foregroundStyle(AppTheme.secondaryText)
             }.font(.callout)
+            if let resets = usage.resetCredits {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack {
+                        Text(L("Extra limit resets")); Spacer()
+                        Text(String(resets.availableCount)).monospacedDigit()
+                    }.font(.callout)
+                    if let expires = resets.nextExpiresAt {
+                        Text(L("Next expiry: \(Date(timeIntervalSince1970: expires).formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)))"))
+                            .font(.caption).foregroundStyle(AppTheme.secondaryText)
+                    }
+                }
+            }
+            if let checked = ISO8601DateFormatter().date(from: usage.checkedAt)
+                ?? DateFormatter.usageTimestamp.date(from: usage.checkedAt) {
+                Text(L("Updated \(checked.formatted(.dateTime.hour().minute().locale(L10n.locale)))"))
+                    .font(.caption).foregroundStyle(AppTheme.secondaryText)
+            }
         }
+    }
+}
+
+private extension DateFormatter {
+    static var usageTimestamp: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX"
+        return formatter
     }
 }
