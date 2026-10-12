@@ -247,6 +247,7 @@ final class DeviceLibrary: ObservableObject {
         erasePhase = L("Останавливаем сотрудников этого Mac…")
         await LocalHome.prepareForErase()
         await DigitalOceanCloud.shared.prepareForLocalErase()
+        ServerSetupFlow.shared.prepareForLocalErase()
         do {
             try await Task.detached { try reset.stopManagedService() }.value
             erasePhase = L("Удаляем сотрудников, чаты и файлы…")
@@ -269,6 +270,7 @@ final class DeviceLibrary: ObservableObject {
         observeClients()
         LocalHome.finishErase()
         DigitalOceanCloud.shared.finishLocalErase()
+        ServerSetupFlow.shared.finishLocalErase()
         viewGeneration += 1
         erased = false; isErasing = false
     }

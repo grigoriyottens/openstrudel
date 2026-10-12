@@ -281,7 +281,7 @@ import Testing
         state.accountBody = #"{"account":{"connected":false,"email":null,"planType":null,"managed":true,"issue":"sign_in_required"},"canManage":false,"loginPending":true}"#
         await client.refreshOpenAIAccount(force: true)
         #expect(client.openAILoginPending)
-        #expect(client.openAIRecoveryMessage.contains("другом устройстве"))
+        #expect(client.openAIRecoveryMessage == L("Вход уже открыт на другом устройстве. Завершите его на странице OpenAI; подключение обновится здесь автоматически."))
         #expect(client.messages.first?.text == "Сохранённая история")
 
         state.accountBody = #"{"account":{"connected":true,"email":"owner@example.invalid","planType":"plus","managed":true},"canManage":false,"loginPending":false}"#
@@ -342,7 +342,7 @@ import Testing
         state.loginStatus = "canceled"
         await client.pollOpenAILogin()
         #expect(client.openAILogin == nil)
-        #expect(client.openAIErrorMessage?.contains("истёк") == true)
+        #expect(client.openAIErrorMessage == L("Вход отменён или истёк. Откройте вход в OpenAI ещё раз."))
         #expect(client.errorMessage == nil)
         await client.beginOpenAILogin()
         #expect(state.loginStarts == 2)
@@ -390,7 +390,7 @@ import Testing
         do {
             _ = try await client.createTelegramGroupLink(profileID: "chosen-employee")
             Issue.record("A personal pairing link must not open during group setup")
-        } catch { #expect(error.localizedDescription.contains("Обновите OpenStrudel")) }
+        } catch { #expect(error.localizedDescription == L("Обновите OpenStrudel на устройстве этого сотрудника, чтобы подключить группу.")) }
     }
 
     @Test func queueUsesServerOrderAndConflictLeavesTheExistingMessageIntact() async throws {
@@ -446,7 +446,7 @@ import Testing
         #expect(client.visibleQueuedMessages.first?.text == "Revised")
         reject = true
         do { try await client.editQueuedMessage(second, text: "Stale"); Issue.record("Stale edit must fail") }
-        catch { #expect(error.localizedDescription.contains("другом устройстве")) }
+        catch { #expect(error.localizedDescription == L10n.serviceText("Сообщение изменено на другом устройстве.")) }
         #expect(client.visibleQueuedMessages.first?.text == "Revised")
         #expect(writes == 3)
         await client.selectProfile("another-employee")

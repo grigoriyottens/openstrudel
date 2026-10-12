@@ -9,6 +9,11 @@ STAGING_DIR=
 
 fail() { printf 'OpenStrudel: %s\n' "$*" >&2; exit 1; }
 progress() { printf 'OpenStrudel: %s\n' "$1"; }
+mark_stage() {
+  case "$1" in dependencies|download|build|verify|ready) ;; *) return 1 ;; esac
+  printf '%s\n' "$1" > "$STATE_DIR/stage.new"
+  mv "$STATE_DIR/stage.new" "$STATE_DIR/stage"
+}
 
 installer_unit() {
   cat <<'UNIT'
@@ -55,7 +60,7 @@ run_attempt() {
     read -r attempt < "$STATE_DIR/attempts" || exit 78
   fi
   if [[ ! "$attempt" =~ ^[0-5]$ || "$attempt" == 5 ]]; then
-    progress 'Installation attempts exhausted. Check this server in DigitalOcean; billing continues until it is deleted.'
+    progress 'Installation attempts exhausted. Check the server and retry from OpenStrudel.'
     exit 78
   fi
   attempt=$((attempt + 1))
@@ -67,7 +72,7 @@ run_attempt() {
     printf 'complete\n' > "$STATE_DIR/complete.new"
     mv "$STATE_DIR/complete.new" "$STATE_DIR/complete"
   elif [[ "$attempt" == 5 ]]; then
-    progress 'Installation attempts exhausted. Existing data is preserved; check this server in DigitalOcean.'
+    progress 'Installation attempts exhausted. Existing data is preserved; check the server and retry from OpenStrudel.'
     exit 78
   else
     progress 'Installation interrupted. The same installation will resume after one minute.'
@@ -216,6 +221,14 @@ install_dependencies() {
   timeout 600 apt-get update -qq
   timeout 900 apt-get install -y --no-install-recommends ca-certificates curl python3 util-linux apparmor iptables
   install_metadata_guard
+  # A supplied server may already have a compatible runtime. Keep its Docker
+  # packages and repository configuration rather than upgrading unrelated work.
+  local version
+  version=$(docker version --format '{{.Server.Version}}' 2>/dev/null || true)
+  if [[ "$version" =~ ^([0-9]+)\. && "${BASH_REMATCH[1]}" -ge 29 ]] && docker compose version >/dev/null 2>&1; then
+    [[ -r /sys/module/apparmor/parameters/enabled && "$(cat /sys/module/apparmor/parameters/enabled)" == Y ]] || fail 'AppArmor must be enabled; the Codex sandbox will not be disabled.'
+    return
+  fi
   # Reconcile every package even when a previous attempt installed the CLI but
   # was interrupted before the Engine or Compose was configured.
   # https://docs.docker.com/engine/install/ubuntu/#install-using-the-apt-repository
@@ -234,7 +247,6 @@ install_dependencies() {
   timeout 1200 apt-get install -y --no-install-recommends docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   [[ -r /sys/module/apparmor/parameters/enabled && "$(cat /sys/module/apparmor/parameters/enabled)" == Y ]] || fail 'AppArmor must be enabled; the Codex sandbox will not be disabled.'
   systemctl enable --now docker
-  local version
   version=$(docker version --format '{{.Server.Version}}')
   [[ "$version" =~ ^([0-9]+)\. && "${BASH_REMATCH[1]}" -ge 29 ]] || fail 'Docker Engine 29 or newer is required.'
   docker compose version >/dev/null
@@ -286,15 +298,28 @@ prepare_release() {
 }
 
 configure() {
-  PUBLIC_HOST=$(ip -j -4 address show scope global | python3 -c 'import ipaddress,json,sys; addresses=[a["local"] for i in json.load(sys.stdin) for a in i.get("addr_info",[]) if ipaddress.ip_address(a["local"]).is_global]; print(addresses[0] if addresses else "")')
-  if [[ -z "$PUBLIC_HOST" ]]; then
-    PUBLIC_HOST=$(curl --noproxy '*' -fsS --connect-timeout 2 --max-time 5 http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address)
-  fi
+  if [[ -e "$STATE_DIR/connection-host" ]]; then
+    # SSH setup already has the address reachable from the user's Mac, which
+    # can be a private server or a DNS name behind a provider's public NAT.
+    [[ ! -L "$STATE_DIR/connection-host" ]] || fail 'Invalid connection address.'
+    PUBLIC_HOST=$(cat "$STATE_DIR/connection-host")
+    python3 - "$PUBLIC_HOST" <<'PY' || fail 'Invalid connection address.'
+import ipaddress, re, sys
+host = sys.argv[1]
+if len(host) > 253 or not all(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', p) for p in host.split('.')): sys.exit(1)
+if all(c in '0123456789.' for c in host): ipaddress.IPv4Address(host)
+PY
+  else
+    PUBLIC_HOST=$(ip -j -4 address show scope global | python3 -c 'import ipaddress,json,sys; addresses=[a["local"] for i in json.load(sys.stdin) for a in i.get("addr_info",[]) if ipaddress.ip_address(a["local"]).is_global]; print(addresses[0] if addresses else "")')
+    if [[ -z "$PUBLIC_HOST" ]]; then
+      PUBLIC_HOST=$(curl --noproxy '*' -fsS --connect-timeout 2 --max-time 5 http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address)
+    fi
   python3 - "$PUBLIC_HOST" <<'PY' || fail 'Could not determine the public IPv4 address.'
 import ipaddress, sys
 value = ipaddress.ip_address(sys.argv[1])
 if value.version != 4 or not value.is_global: sys.exit(1)
 PY
+  fi
   local env_file="$INSTALL_ROOT/deploy/.env"
   if [[ -e "$env_file" ]]; then
     [[ ! -L "$env_file" ]] || fail 'Refusing a symlinked server configuration.'
@@ -355,15 +380,20 @@ main() {
   exec 9>/run/lock/openstrudel-cloud.lock
   flock -w 30 9 || fail 'Another installation is already in progress.'
   trap 'status=$?; [[ -z "$STAGING_DIR" ]] || rm -rf "$STAGING_DIR"; if [[ $status -ne 0 ]]; then printf "OpenStrudel: Installation stopped; existing data is preserved.\n" >&2; fi' EXIT
+  mark_stage dependencies
   install_dependencies
+  mark_stage download
   prepare_release
   configure
   install_apparmor_profile
   progress 'Preparing OpenStrudel.'
+  mark_stage build
   COMPOSE_TIMEOUT=2400 compose build home
   bootstrap_home
   compose up -d --no-build home
+  mark_stage verify
   wait_ready
+  mark_stage ready
   progress 'Ready. Return to OpenStrudel to connect.'
 }
 

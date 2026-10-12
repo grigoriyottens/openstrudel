@@ -36,3 +36,25 @@ import Testing
         #expect(text.contains("12") || text.localizedCaseInsensitiveContains("двенадцать"))
     }
 }
+
+@Suite("Actual local dictation", .serialized, .enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_LANGUAGES"] != nil))
+@MainActor struct DictationLanguageIntegrationTests {
+    @Test(arguments: ["en-US", "ru-RU", "fr-FR", "es-ES", "he-IL"])
+    func recognizesRecordedSpeechInEachInterfaceLanguage(locale: String) async throws {
+        let directory = try #require(ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_LANGUAGES"])
+        let references: [String: [String]] = [
+            "en-US": ["local", "meeting", "tomorrow"],
+            "ru-RU": ["проверка", "встреча", "завтра"],
+            "fr-FR": ["dictée", "réunion", "demain"],
+            "es-ES": ["dictado", "reunión", "mañana"],
+            "he-IL": ["בדיקה", "הפגישה", "מחר"]
+        ]
+        let assets = AppleDictationAssets()
+        try await assets.install(locale: locale) { _ in }
+        let module = try await VoiceCapture.prepare(locale: locale)
+        let started = ContinuousClock.now
+        let text = try await VoiceCapture.transcribe(file: URL(fileURLWithPath: directory).appending(path: locale + ".aiff"), module: module)
+        print("Local dictation \(locale): \(text) [\(started.duration(to: .now))]")
+        for word in references[locale] ?? [] { #expect(text.localizedCaseInsensitiveContains(word), "Missing expected word: \(word)") }
+    }
+}

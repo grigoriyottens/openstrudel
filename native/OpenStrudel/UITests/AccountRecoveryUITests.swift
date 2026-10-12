@@ -149,7 +149,7 @@ final class AccountRecoveryUITests: XCTestCase {
 
     func finishDevicePairing() {
         let open = buttons["openDeviceEmployees"]
-        XCTAssertTrue(open.waitForExistence(timeout: 25))
+        XCTAssertTrue(open.waitForExistence(timeout: 25), debugDescription)
         open.tap()
     }
 }

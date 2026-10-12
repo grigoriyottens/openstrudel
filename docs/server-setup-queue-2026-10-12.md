@@ -46,3 +46,5 @@ Do not choose a new production provider solely because it accepts crypto. The ne
 - For purchases: declined, delayed and completed payment; duplicate notifications; expired offer; unknown provisioning result; renewal and confirmed deletion.
 
 This brief extends [the earlier cloud work](easy-cloud.md) and [checkout contract](integrated-cloud-checkout.md); it does not describe those older checks as newly repeated.
+
+Implementation update: the Mac address/password/SSH-key setup path and provider choice are implemented in the next candidate. See [current acceptance evidence](remaining-work-2026-10-12.md). Paid provisioning and provider migration remain separate from this result.

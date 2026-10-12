@@ -46,7 +46,13 @@ struct SettingsView: View {
         .onAppear { selectedID = client.id }
         .sheet(isPresented: $adding, onDismiss: {
             if let pairing { confirmingPairing = pairing; self.pairing = nil }
-        }) { ConnectionInvitationView { pairing = $0 } }
+        }) {
+            #if os(macOS)
+            ConnectDeviceView { pairing = $0 }
+            #else
+            ConnectionInvitationView { pairing = $0 }
+            #endif
+        }
         .sheet(item: $confirmingPairing) { AddDeviceConfirmation(pairing: $0).environmentObject(library) }
     }
 

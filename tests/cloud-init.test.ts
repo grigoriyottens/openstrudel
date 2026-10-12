@@ -22,6 +22,13 @@ function shell(code: string, root: string, args: string[] = []) {
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe("DigitalOcean cloud-init", () => {
+  it("persists only a known completed phase transition, without inventing a percentage", () => {
+    const root = fixture();
+    expect(shell("mark_stage download", root).status).toBe(0);
+    expect(readFileSync(join(root, "stage"), "utf8")).toBe("download\n");
+    expect(shell("mark_stage unknown", root).status).not.toBe(0);
+    expect(readFileSync(join(root, "stage"), "utf8")).toBe("download\n");
+  });
   function retryInstaller(root: string, action: string) {
     // The retry tests isolate the durable attempt budget from the host's lock
     // utility and package manager. The real bootstrap/replay has separate tests.
@@ -141,7 +148,7 @@ install_apparmor_profile
     const main = join(root, "main.swift");
     writeFileSync(main, `import Foundation\nimport CryptoKit\nlet key = P256.Signing.PrivateKey()\nlet installer = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))\nlet rendered = try DigitalOceanBootstrap.userData(installationID: "${id}", privateKeyPEM: key.pemRepresentation, ownerTokenHash: "${"a".repeat(64)}", releaseSHA256: "${"b".repeat(64)}", installer: installer)\nvar rejected = false\ndo { _ = try DigitalOceanBootstrap.userData(installationID: "not-an-id", privateKeyPEM: key.pemRepresentation, ownerTokenHash: "${"a".repeat(64)}", releaseSHA256: "${"b".repeat(64)}", installer: installer) } catch { rejected = true }\nlet json = try JSONSerialization.data(withJSONObject: ["userData": rendered, "publicKey": key.publicKey.derRepresentation.base64EncodedString(), "invalidRejected": rejected])\nprint(String(decoding: json, as: UTF8.self))\n`);
     const executable = join(root, "render");
-    execFileSync("swiftc", [resolve("native/OpenStrudel/Sources/DigitalOceanBootstrap.swift"), main, "-o", executable], { timeout: 60_000, stdio: "pipe" });
+    execFileSync("swiftc", [resolve("native/OpenStrudel/Sources/DigitalOceanBootstrap.swift"), resolve("native/OpenStrudel/Sources/Localization.swift"), main, "-o", executable], { timeout: 60_000, stdio: "pipe" });
     const result = JSON.parse(execFileSync(executable, [script], { encoding: "utf8", timeout: 10_000 }));
     expect(result.invalidRejected).toBe(true);
     expect(Buffer.byteLength(result.userData)).toBeLessThan(65_536);

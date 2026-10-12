@@ -106,7 +106,7 @@ struct LocalDataReset: Sendable {
 
     func eraseCredentials() throws {
         let service = bundleID == "is.openstrudel.mac" ? "is.openstrudel.native" : bundleID + ".credentials"
-        for name in [service, bundleID + ".digitalocean"] {
+        for name in [service, bundleID + ".digitalocean", bundleID + ".server-setup"] {
             let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: name]
             let status = SecItemDelete(query as CFDictionary)
             guard status == errSecSuccess || status == errSecItemNotFound else { throw Failure.keychain }

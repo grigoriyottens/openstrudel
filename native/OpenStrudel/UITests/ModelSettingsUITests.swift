@@ -5,6 +5,7 @@ import XCTest
         continueAfterFailure = false
         guard let fixture = ProcessInfo.processInfo.environment["OPENSTRUDEL_MODEL_FIXTURE"] else { throw XCTSkip("Start model-settings.ts.") }
         let app = XCUIApplication()
+        app.launchArguments = ["-openstrudel.language", "ru", "-AppleLanguages", "(ru)"]
         app.launch()
         let invite = try await read(fixture + "/invite")
         app.open(try XCTUnwrap(URL(string: XCTUnwrap(invite["url"] as? String))))
