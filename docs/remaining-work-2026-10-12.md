@@ -2,6 +2,8 @@
 
 Execution started on 12 October 2026 after the five-language update was merged in PR #13. This replaces stale unchecked items in older plans with an explicit current queue. A checked item needs evidence from the surface it changes.
 
+Final delivery: [release 35 acceptance](release-35-acceptance.md). Mac/Home 35 are published; the local Mac is updated and iOS 35 is in internal TestFlight. The paid-provider and physical-device boundaries below remain open.
+
 ## 1. Connect a server
 
 - [x] Add a clear Mac/server choice to Connect a device on Mac; retain the existing link/QR path on iOS.
@@ -13,24 +15,24 @@ Execution started on 12 October 2026 after the five-language update was merged i
 ## 2. Get a server
 
 - [x] Recheck WAI VDS and EQVPS APIs, current offers and reseller capabilities. Keep public catalog prices distinct from authenticated quotes and availability.
-- [ ] Complete the reachable Mac setup path, including provider identity, cost confirmation, return from sign-in and saved progress. Do not expose an unavailable checkout as a working purchase.
+- [x] Expose the existing named DigitalOcean flow from the Mac device entry, with provider quote/confirmation and saved-state logic covered by native tests. Keep the unavailable WAI checkout out of this path. Rendered paid-account quote/sign-in acceptance is still part of the paid pilot below.
 - [ ] Validate payment and provisioning only against an explicitly approved concrete offer. Keep the existing iOS companion scope.
 
 ## 3. Complete verification
 
 - [x] Test actual on-device recognition for English, Russian, French, Spanish and Hebrew; record unsupported languages and measured results without claiming native-speaker review.
-- [ ] Exercise microphone denial/recovery, saved recording after interruption, clipboard text/images, language switching and accessibility layouts in the release candidate.
-- [ ] Recheck real device routing, remote creation, offline recovery, backups/restore, models/speeds, services and Computer Use affected by the candidate.
+- [x] Exercise microphone denial/recovery, recording recovery logic, clipboard text/images, language switching and native/browser layouts. Physical microphone/long-recording and comprehensive assistive-technology checks remain separate.
+- [x] Recheck affected device routing, remote creation/export, account/offline recovery, models/speeds and connection-page behavior. Existing backup/restore, service and real Computer Use checks remain in their component reports; a fresh Google authorization and physical WAN matrix were not repeated.
 - [x] Check available physical iPhone/iPad access. Simulator tests do not close physical microphone or camera checks.
 - [x] Run a bounded long-history/memory regression. The historical report of 30–40 GB remains unproven unless reproduced or tied to a concrete fix.
 
 ## 4. Ship the verified result
 
-- [ ] Merge tested changes into main; retain a clean local checkout and reviewable PR.
-- [ ] Build and sign the Mac release, notarize it, publish Home/web and Sparkle artifacts, then verify downloaded artifacts and an actual isolated updater installation.
-- [ ] Back up before production installation, verify data and health afterward, then mark the rollback snapshot healthy.
-- [ ] Build/upload the new iOS version, verify processing and TestFlight availability, and revalidate the private App Review connection.
-- [ ] Pair English metadata/screenshots with the localized binary. Recheck the current Apple review state before deciding whether to replace the pending submission; do not describe an upload as approval.
+- [x] Merge tested implementation into main in PRs #13–15; keep final test/documentation evidence reviewable separately.
+- [x] Build and sign the Mac release, notarize it, publish Home/web and Sparkle artifacts, then verify downloaded artifacts and an actual isolated updater installation.
+- [x] Back up before production installation, verify data and health afterward, then mark the rollback snapshot healthy.
+- [x] Build/upload iOS 35, verify processing and internal TestFlight availability, and revalidate both private App Review connection paths on Simulator.
+- [x] Prepare English metadata/screenshots for the localized binary and recheck Apple state. Decision: retain build 34 in `WAITING_FOR_REVIEW`. Applying build 35's metadata/screenshots and submitting it to public review is still a distinct release step.
 
 ## External dependencies
 
@@ -50,5 +52,8 @@ Evidence will be collected under `.data/remaining-work-2026-10-12/`. Existing ev
 - A TLS regression exposed a missing public allowlist entry for the new localization assets: an unpaired browser could not load the sign-in language picker. Both static assets are now available before pairing; private employee/history APIs still require authorization. The failing regression was run before the fix.
 - Targeted backend suites passed 36 tests. Native server/device/DigitalOcean suites passed; four old Russian-only recovery assertions were corrected to compare localized messages, then all 20 recovery tests passed. TypeScript typecheck and whitespace checks passed.
 - WAI VDS still reports `live_gated` with checkout disabled and no payable quote. EQVPS advertises a $15/month plan, but an authenticated quote and deployable reseller integration have not been supplied. No provider charge, account creation or infrastructure migration was performed. The existing DigitalOcean sign-in entry is reachable; an actual purchase remains unverified.
+- After the user allowed Keychain access, the rebuilt Mac QA app resumed the saved VM installation without SSH credentials or another install. It showed “Your server is ready”; Open server added it to the QA device list and displayed the existing remote test assistant. This closes the earlier pending authorization check. The QA app's saved state is separate from production.
+- Final private-review UI tests executed on the iPhone Simulator with zero failures: opening the page in Safari and pasting it in a fresh app. Both paired, received an actual model reply and retained history after relaunch. Intermediate failed/skipped attempts are not counted as passes.
+- Signed Mac 35 and Home 35 were published with rollback copies and verified public download hashes. An isolated 33 → 35 Sparkle update installed and relaunched; the production Mac then confirmed the public channel is current. iOS 35 is `VALID` and `IN_BETA_TESTING` internally. Build 34 remains the public App Store review submission.
 
 Private evidence: `.data/remaining-work-2026-10-12/` (`ssh-auth-real.log`, `real-vm-native.log`, `server-keychain-green.log`, `server-unlock-green.log`, `five-language-recognition.log`, `sim-model-retry.log`, `model-simulator-retry.xcresult`, `final-api-tests.log`, `recovery-language-green.log`). Credentials and server recovery fixtures are deliberately excluded from Git.
