@@ -202,15 +202,18 @@ struct ServerSSHIntegrationTests {
 
 @Suite("Installed Ubuntu server", .serialized, .enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_VM_INTEGRATION"] == "1"))
 @MainActor struct ServerVMIntegrationTests {
-    @Test func resumesPinnedServerAddsADeviceAndCreatesASeparateRemoteEmployee() async throws {
+    @Test func resumesPinnedServerCreatesRemoteEmployeeAndRestoresItsBackup() async throws {
         struct Fixture: Decodable {
             struct Bootstrap: Decodable { let installationId: String; let privateKeyPEM: String }
             let bootstrap: Bootstrap; let ownerToken: String; let pin: String; let hostKey: String
+            let host: String?; let user: String?; let sshPort: Int?
         }
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { root.deleteLastPathComponent() }
-        let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: root.appending(path: ".data/remaining-work-2026-10-12/vm-private.json")))
-        let target = try ServerTarget(host: "127.0.0.1", user: "mikwiseman", port: 57423)
+        let fixtureURL = ProcessInfo.processInfo.environment["OPENSTRUDEL_VM_FIXTURE"].map { URL(fileURLWithPath: $0) }
+            ?? root.appending(path: ".data/remaining-work-2026-10-12/vm-private.json")
+        let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: fixtureURL))
+        let target = try ServerTarget(host: fixture.host ?? "127.0.0.1", user: fixture.user ?? "mikwiseman", port: fixture.sshPort ?? 57423)
         let parts = fixture.hostKey.split(whereSeparator: \.isWhitespace)
         let key = try SSHHostKey(line: "host \(parts[0]) \(parts[1])", target: target)
         let payload: [String: Any] = ["id": fixture.bootstrap.installationId,
@@ -244,7 +247,18 @@ struct ServerSSHIntegrationTests {
         #expect(local.profiles.isEmpty)
         let archive = try await remote.exportAgents()
         #expect(archive.count > 100)
-        try archive.write(to: root.appending(path: ".data/remaining-work-2026-10-12/vm-employee-backup.strudel"))
+        try archive.write(to: fixtureURL.deletingLastPathComponent().appending(path: "vm-employee-backup.strudel"))
+        let originalIDs = Set(remote.profiles.map(\.id))
+        let pending = try await remote.previewAgentImport(archive)
+        #expect(pending.preview.employees.contains { $0.name == employee })
+        let restored = try await remote.importAgents(pending)
+        #expect(restored.profileIds.count == pending.preview.counts.employees)
+        #expect(originalIDs.isSubset(of: Set(remote.profiles.map(\.id))))
+        #expect(restored.profileIds.allSatisfy { id in remote.profiles.contains { $0.id == id } })
+        let restoredIDs = Set(remote.profiles.map(\.id))
+        let replayed = try await remote.importAgents(pending)
+        #expect(replayed.profileIds == restored.profileIds)
+        #expect(Set(remote.profiles.map(\.id)) == restoredIDs)
         try flow.finish()
         #expect(flow.installation == nil)
         remote.disconnectFromMac()

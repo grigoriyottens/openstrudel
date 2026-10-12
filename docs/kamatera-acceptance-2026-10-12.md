@@ -1,0 +1,55 @@
+# Kamatera acceptance — 12 October 2026
+
+## Result
+
+A real test server was created through Kamatera's official API, then configured through OpenStrudel's existing-server wizard on this Mac. Installation, reconnecting after closing the app, authenticated HTTPS, a remote employee, archive export/restore and a full server reboot were verified. This is stronger evidence than the earlier local VM test, but it is not a complete model or integration test.
+
+The cloud test found a release defect: the published Home 35 archive omitted the `OpenStrudel-Home/` prefix required by both installers. SSH and preflight worked; extraction correctly rejected the archive. The previous local VM acceptance had installed Home 33, so it did not cover Home 35 packaging.
+
+The corrected **Home 35.1 package** is published at [the immutable download](https://waiwai.is/openstrudel/downloads/OpenStrudel-Home-1.0-35.1.tar.gz) and the current Home alias. Runtime source is unchanged from build 35: `b04bfe45f8f136e95ae5af112873f66111b96874`. This is a packaging correction, not a new Mac, iOS or Sparkle release.
+
+SHA-256: `421ba9bb34baaa9b5adf8014763f6e6c9ce4f53a96bedf38fa54da2423ad65b2`.
+
+## Cloud configuration and cost
+
+One server, `openstrudel-qa-20261012`, in Amsterdam: Ubuntu 24.04, 2 shared vCPUs, 4 GiB RAM and 40 GiB SSD. No backup or managed-service add-ons. The provider returned **$0.026/hour while on or off** and a $19 equivalent monthly price. This server was bought directly for acceptance, not through an embedded OpenStrudel checkout. Its removal was requested separately; no deletion is claimed while that answer is pending.
+
+## Verified behavior
+
+| Check | Result |
+| --- | --- |
+| Provisioning | Provider queue completed; allocated VM accepted the newly created test SSH key |
+| Native server setup | Address, root sign-in and SSH key; matching host fingerprint; Ubuntu/memory/storage preflight; installation progress; ready screen |
+| Published package | Both real installer extractors accepted the final artifact; independent HTTPS download from this Mac matched its SHA-256 |
+| Continue later | The test Mac app was quit during installation. The server completed independently; relaunch recovered the saved identity without asking for the SSH key again |
+| Connection | The native wizard verified authenticated HTTPS and added the server as an independent device |
+| Remote employee | An opt-in native integration test created an employee on the actual Kamatera Home; the local device's employee collection remained empty; the employee appeared in the real app sidebar |
+| Backup | Native HomeClient exported, previewed and restored the server archive. Existing IDs survived; repeating the same import returned the same imported IDs without duplicating them |
+| Reboot | Linux boot ID changed. Home restarted automatically; certificate, installation/node identity and the existing profile data persisted |
+| Authentication | An external request to employee data without a token returned 401 |
+| Runtime isolation | The shipped sandbox probe passed before and after reboot: workspace readable, private file inaccessible. AppArmor and metadata guard services were active after reboot |
+
+The corrected installation reused OS packages/Docker installed during the first failed attempt, but had no existing Home directory, containers or user data. The failed staging directory was preserved separately. A new isolated Mac QA profile performed the corrected installation. This is explicitly **not** a successful retry of the old Home 35 recovery record.
+
+## Regression protection
+
+`scripts/package-home.py` packages an explicit committed revision with the correct prefix, validates archive limits/types and required files, excludes the working tree, and refuses to overwrite an output. The new regression test runs the real archive through both shipped extractors and compares critical files with Git.
+
+All 40 tests in `home-release.test.ts`, `cloud-init.test.ts` and `server-installer.test.ts` passed. The native real-server test passed before reboot (creation/export) and after reboot (creation/export/restore/idempotent replay). The native integration fixture now accepts another server's address without overwriting the earlier local VM fixture.
+
+Use [the packaging procedure](home-release-packaging.md) for future Home releases. Publication retained rollback copies of the previous Home alias and manifest; previous immutable artifacts and the signed Sparkle feed were not changed.
+
+## Still unverified or unresolved
+
+- No ChatGPT account was enrolled on this new server. Its native sign-in screen was reached, but a real model reply on this VM was not tested. Existing review-server/model tests do not substitute for this check.
+- No integrated Kamatera purchase flow was added. OpenStrudel currently offers setup of an existing server and a separate DigitalOcean flow; provider provisioning in this test used the official API.
+- A pending install pins its release digest. An already failed Home 35 attempt does not recover merely because the public alias now points to 35.1. Explicit, identity-preserving recovery across a release change remains work; do not overwrite users' recovery records or data to bypass it.
+- The restored employees appear correctly, but the server currently appends the Russian suffix `(импорт)` even in the English client. This generated-name localization defect remains open; the screenshots are not evidence of complete English copy coverage.
+- This run does not close physical-iPhone dictation/interruptions, fresh Google OAuth, live-microphone quality, Windows/Linux desktop or long-running native memory checks. Prior evidence remains scoped in [release 35 acceptance](release-35-acceptance.md).
+- The proposed OpenRamble-based dictation direction is documented [separately](dictation-direction-2026-10-12.md); the Apple speech engine in shipped clients was not replaced.
+
+## Evidence and rollback
+
+Private receipts, provider queue/configuration, SSH test keys, installation fixture, archive, screenshots, publication receipt and native logs/results are under `.data/kamatera-acceptance-2026-10-12/`. They are intentionally excluded from Git. The first native result bundle is under `native/OpenStrudel/.data/kamatera-acceptance-2026-10-12/native-server.xcresult`; the restore result is in the main evidence directory.
+
+Publication rollback is `/var/www/openstrudel-home35-1-backup-20261012T130055Z` on `wai-web-prod`. The original failed cloud staging directory is retained on the test VM as `/var/lib/openstrudel-cloud-failed-35`; it contains private bootstrap material and must not be published.
