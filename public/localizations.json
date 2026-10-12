@@ -7292,5 +7292,131 @@
     "fr": "OpenStrudel ne peut pas accéder au trousseau. Déverrouillez ce Mac, réessayez et autorisez l’accès si macOS le demande.",
     "es": "OpenStrudel no puede acceder al llavero. Desbloquea este Mac, vuelve a intentarlo y permite el acceso si macOS lo solicita.",
     "he": "ל־OpenStrudel אין גישה לצרור המפתחות. יש לבטל את נעילת ה־Mac, לנסות שוב ולאשר גישה אם macOS מבקשת."
+  },
+  "Connect OpenStrudel": {
+    "en": "Connect OpenStrudel",
+    "ru": "Подключить OpenStrudel",
+    "fr": "Connecter OpenStrudel",
+    "es": "Conectar OpenStrudel",
+    "he": "חיבור OpenStrudel"
+  },
+  "Meet your assistants.": {
+    "en": "Meet your assistants.",
+    "ru": "Ваши сотрудники уже здесь.",
+    "fr": "Vos assistants vous attendent.",
+    "es": "Tus asistentes te esperan.",
+    "he": "העוזרים שלך מחכים לך."
+  },
+  "Connect the app to your server. Your assistants and chats will appear in the app.": {
+    "en": "Connect the app to your server. Your assistants and chats will appear in the app.",
+    "ru": "Подключите приложение к своему серверу. В нём появятся ваши сотрудники и чаты.",
+    "fr": "Connectez l’application à votre serveur pour retrouver vos assistants et vos conversations.",
+    "es": "Conecta la aplicación a tu servidor para acceder a tus asistentes y conversaciones.",
+    "he": "חברו את האפליקציה לשרת שלכם. העוזרים והשיחות יופיעו באפליקציה."
+  },
+  "Setup code": {
+    "en": "Setup code",
+    "ru": "Код подключения",
+    "fr": "Code de connexion",
+    "es": "Código de conexión",
+    "he": "קוד חיבור"
+  },
+  "From your server settings": {
+    "en": "From your server settings",
+    "ru": "Из настроек сервера",
+    "fr": "Depuis les réglages du serveur",
+    "es": "Desde los ajustes de tu servidor",
+    "he": "מתוך הגדרות השרת"
+  },
+  "Create connection link": {
+    "en": "Create connection link",
+    "ru": "Создать ссылку",
+    "fr": "Créer un lien de connexion",
+    "es": "Crear enlace de conexión",
+    "he": "יצירת קישור לחיבור"
+  },
+  "Open OpenStrudel": {
+    "en": "Open OpenStrudel",
+    "ru": "Открыть OpenStrudel",
+    "fr": "Ouvrir OpenStrudel",
+    "es": "Abrir OpenStrudel",
+    "he": "פתיחת OpenStrudel"
+  },
+  "Copy connection link": {
+    "en": "Copy connection link",
+    "ru": "Скопировать ссылку",
+    "fr": "Copier le lien de connexion",
+    "es": "Copiar enlace de conexión",
+    "he": "העתקת קישור החיבור"
+  },
+  "New connection link": {
+    "en": "New connection link",
+    "ru": "Новая ссылка",
+    "fr": "Nouveau lien de connexion",
+    "es": "Nuevo enlace de conexión",
+    "he": "קישור חיבור חדש"
+  },
+  "Download OpenStrudel": {
+    "en": "Download OpenStrudel",
+    "ru": "Скачать OpenStrudel",
+    "fr": "Télécharger OpenStrudel",
+    "es": "Descargar OpenStrudel",
+    "he": "הורדת OpenStrudel"
+  },
+  "This private link gives access to your chats. Keep it to yourself.": {
+    "en": "This private link gives access to your chats. Keep it to yourself.",
+    "ru": "Эта личная ссылка открывает доступ к вашим чатам. Не передавайте её другим.",
+    "fr": "Ce lien privé donne accès à vos conversations. Ne le partagez pas.",
+    "es": "Este enlace privado da acceso a tus conversaciones. No lo compartas.",
+    "he": "הקישור הפרטי הזה מאפשר גישה לשיחות שלכם. אין לשתף אותו עם אחרים."
+  },
+  "Preparing your connection…": {
+    "en": "Preparing your connection…",
+    "ru": "Готовим подключение…",
+    "fr": "Préparation de la connexion…",
+    "es": "Preparando la conexión…",
+    "he": "החיבור בהכנה…"
+  },
+  "Could not connect. Try again.": {
+    "en": "Could not connect. Try again.",
+    "ru": "Не удалось подключиться. Попробуйте ещё раз.",
+    "fr": "Connexion impossible. Réessayez.",
+    "es": "No se ha podido conectar. Inténtalo de nuevo.",
+    "he": "לא ניתן להתחבר. נסו שוב."
+  },
+  "Open your private setup link or enter the setup code.": {
+    "en": "Open your private setup link or enter the setup code.",
+    "ru": "Откройте личную ссылку подключения или введите код.",
+    "fr": "Ouvrez votre lien privé de connexion ou saisissez le code.",
+    "es": "Abre tu enlace privado de conexión o introduce el código.",
+    "he": "פתחו את קישור החיבור הפרטי שלכם או הזינו את הקוד."
+  },
+  "Your server is starting. Try again in a few seconds.": {
+    "en": "Your server is starting. Try again in a few seconds.",
+    "ru": "Сервер запускается. Попробуйте через несколько секунд.",
+    "fr": "Votre serveur démarre. Réessayez dans quelques secondes.",
+    "es": "Tu servidor se está iniciando. Vuelve a intentarlo en unos segundos.",
+    "he": "השרת מופעל כעת. נסו שוב בעוד כמה שניות."
+  },
+  "Link expires in {0}": {
+    "en": "Link expires in {0}",
+    "ru": "Ссылка действует ещё {0}",
+    "fr": "Le lien expire dans {0}",
+    "es": "El enlace caduca en {0}",
+    "he": "הקישור יפוג בעוד {0}"
+  },
+  "This link has expired. Create a new one.": {
+    "en": "This link has expired. Create a new one.",
+    "ru": "Срок действия ссылки истёк. Создайте новую.",
+    "fr": "Ce lien a expiré. Créez-en un nouveau.",
+    "es": "Este enlace ha caducado. Crea uno nuevo.",
+    "he": "תוקף הקישור פג. צרו קישור חדש."
+  },
+  "Open this page on the device with OpenStrudel, then choose Open OpenStrudel.": {
+    "en": "Open this page on the device with OpenStrudel, then choose Open OpenStrudel.",
+    "ru": "Откройте эту страницу на устройстве с OpenStrudel и нажмите «Открыть OpenStrudel».",
+    "fr": "Ouvrez cette page sur l’appareil où OpenStrudel est installé, puis choisissez « Ouvrir OpenStrudel ».",
+    "es": "Abre esta página en el dispositivo con OpenStrudel y pulsa «Abrir OpenStrudel».",
+    "he": "פתחו את הדף במכשיר שבו מותקנת OpenStrudel ובחרו באפשרות «פתיחת OpenStrudel»."
   }
 }

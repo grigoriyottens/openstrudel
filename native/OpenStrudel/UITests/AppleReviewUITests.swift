@@ -18,6 +18,7 @@ import XCTest
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let page = try XCTUnwrap(URL(string: XCTUnwrap(payload["url"] as? String)))
         let app = XCUIApplication()
+        app.launchArguments = ["-openstrudel.language", "en", "-AppleLanguages", "(en)"]
         app.launch()
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         if pastingPage {
@@ -28,13 +29,13 @@ import XCTest
             XCTAssertTrue(input.waitForExistence(timeout: 5))
             input.tap(); input.typeText(page.absoluteString)
             let openPage = app.buttons["continueConnection"]
-            XCTAssertEqual(openPage.label, "Открыть страницу")
+            XCTAssertEqual(openPage.label, "Open page")
             capture("review-pasted-page-ready", app)
             openPage.tap()
         } else {
             safari.open(page)
         }
-        let open = safari.links["Открыть OpenStrudel"]
+        let open = safari.links.matching(NSPredicate(format: "label IN %@", ["Open OpenStrudel", "Открыть OpenStrudel"])).firstMatch
         XCTAssertTrue(open.waitForExistence(timeout: 30), safari.debugDescription)
         // A clean iOS 26 simulator shows Safari's toolbar tutorial. Its overlay
         // consumes the first page tap, even when the link itself is visible.
@@ -56,7 +57,7 @@ import XCTest
         app.finishDevicePairing()
         let consent = app.buttons["acceptAIDataSharing"]
         if consent.waitForExistence(timeout: 5) { consent.tap() }
-        let input = app.textFields["Сообщение"]
+        let input = app.textFields["messageComposer"]
         XCTAssertTrue(input.waitForExistence(timeout: 30), app.debugDescription)
         let expected = "Review ready " + UUID().uuidString.prefix(6)
         input.tap()

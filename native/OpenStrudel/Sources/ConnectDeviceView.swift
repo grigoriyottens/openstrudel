@@ -38,6 +38,7 @@ struct ConnectDeviceView: View {
                 }.frame(width: 520, height: 500)
             }
         }.environmentObject(library)
+            .modifier(InterfaceLanguage())
     }
 
     private func choice(_ title: String, detail: String, icon: String, route next: Route) -> some View {
@@ -196,11 +197,13 @@ private struct OwnServerSetupView: View {
                     .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L("Server address")).font(.headline)
-                    TextField("203.0.113.10", text: $host).textFieldStyle(.roundedBorder).accessibilityIdentifier("serverAddress")
+                    TextField("203.0.113.10", text: $host).textFieldStyle(.roundedBorder)
+                        .environment(\.layoutDirection, .leftToRight).accessibilityIdentifier("serverAddress")
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L("Sign-in name")).font(.headline)
-                    TextField("root", text: $user).textFieldStyle(.roundedBorder).accessibilityIdentifier("serverUser")
+                    TextField("root", text: $user).textFieldStyle(.roundedBorder)
+                        .environment(\.layoutDirection, .leftToRight).accessibilityIdentifier("serverUser")
                 }
             } else {
                 Text(host).font(.title3.weight(.semibold))
@@ -210,7 +213,8 @@ private struct OwnServerSetupView: View {
             credentials
             if flow.installation == nil {
                 DisclosureGroup(L("SSH port")) {
-                    TextField("22", text: $port).textFieldStyle(.roundedBorder).frame(width: 100).padding(.top, 8)
+                    TextField("22", text: $port).textFieldStyle(.roundedBorder)
+                        .environment(\.layoutDirection, .leftToRight).frame(width: 100).padding(.top, 8)
                 }.foregroundStyle(AppTheme.secondaryText)
             }
             Button(L("Продолжить")) {

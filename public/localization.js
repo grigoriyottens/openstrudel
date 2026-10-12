@@ -51,7 +51,8 @@
     try { localStorage.setItem('openstrudel.language', root.i18n.language); } catch {}
     root.applyInterfaceLanguage();
   };
-  root.languageReady = fetch('/localizations.json', {credentials:'same-origin'}).then(async response => {
+  const catalogueURL = new URL('localizations.json', document.currentScript?.src || document.baseURI);
+  root.languageReady = fetch(catalogueURL, {credentials:'same-origin'}).then(async response => {
     if (!response.ok) throw new Error('Language resources could not load.');
     root.i18n = create(await response.json(), saved);
     root.applyInterfaceLanguage();
