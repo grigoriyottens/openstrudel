@@ -468,7 +468,8 @@
   }
 
   function codeBlock(block, doc, options) {
-    const wrap = doc.createElement('div'); wrap.className = 'code-block';
+    // Code is always left to right, so the copy button keeps the top-right corner in every interface language.
+    const wrap = doc.createElement('div'); wrap.className = 'code-block'; wrap.dir = 'ltr';
     const pre = doc.createElement('pre'); pre.dir = 'ltr';
     const code = doc.createElement('code'); code.textContent = block.text;
     if (block.language) code.setAttribute('data-language', block.language);

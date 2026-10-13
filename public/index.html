@@ -153,7 +153,7 @@
     .md a { color: var(--accent-text); text-decoration: underline; text-decoration-color: var(--secondary); text-decoration-thickness: 1px; text-underline-offset: 3px; transition: text-decoration-color .15s; }
     .md a:hover { text-decoration-color: currentColor; }
     .md code { font-family: var(--font-mono); font-size: 13px; }
-    .md :not(pre) > code { padding: 1px var(--space-1); border-radius: var(--radius-inline); background: var(--surface); box-shadow: inset 0 0 0 var(--stroke) var(--separator); }
+    .md :not(pre) > code { padding: 1px var(--space-1); line-height: 1; border-radius: var(--radius-inline); background: var(--surface); box-shadow: inset 0 0 0 var(--stroke) var(--separator); }
     .md ul, .md ol { list-style: none; padding: 0; }
     .md li { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: var(--space-2); }
     .md ol.wide > li { grid-template-columns: 24px minmax(0, 1fr); }
@@ -172,7 +172,8 @@
     .md .copy:active { transform: scale(.92); }
     .md .copy[data-copied] { color: var(--accent-text); }
     @media (hover: none) { .md .copy { opacity: 1; } }
-    .md .table-wrap { width: fit-content; max-width: 100%; overflow-x: auto; border-radius: var(--radius-card); box-shadow: inset 0 0 0 var(--stroke) var(--separator); }
+    /* A table sits on the edge its own text starts from; the increased-contrast stroke is a border so header cells never cover it. */
+    .md .table-wrap { width: fit-content; max-width: 100%; margin-inline-end: auto; overflow-x: auto; border-radius: var(--radius-card); border: var(--stroke) solid var(--separator); }
     .md table { border-collapse: collapse; }
     .md th, .md td { padding: var(--space-2) var(--space-3); text-align: start; vertical-align: top; }
     .md th { background: var(--surface); font-weight: var(--semibold); white-space: nowrap; }
@@ -561,6 +562,11 @@
     }
     function paintHelper(box, profile, working) {
       const [avatar, words] = box.children, look = JSON.stringify(profile ? agentAppearance(profile) : null);
+      // The helper sits where the latest reply starts, so English replies keep it on the left in Hebrew too.
+      const reply = state.messages.findLast(m => m.direction === 'outbound')?.text || '';
+      const strong = reply.match(/[A-Za-z\u00C0-\u024F\u0370-\u04FF\u0590-\u06FF]/)?.[0];
+      box.dir = strong ? (/[\u0590-\u06FF]/.test(strong) ? 'rtl' : 'ltr') : '';
+      words.dir = i18n.direction;
       if (avatar.dataset.look !== look) { avatar.replaceChildren(characterImage(profile ? agentAppearance(profile) : null, 24)); avatar.dataset.look = look; }
       avatar.classList.toggle('offline', isOffline(profile));
       const was = box.classList.contains('working');
