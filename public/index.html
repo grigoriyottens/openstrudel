@@ -330,6 +330,24 @@
     .tone-choice:active .tone-swatch { transform: scale(.9); }
         .tone-swatch svg.icon { width: 16px; height: 16px; stroke-width: 2.2; }
 
+    /* The invitation is the first screen: a welcome page on the canvas, not a dialog over an empty shell.
+       Character 96, display title, one ink capsule, centred at 40 % like the empty conversation. */
+    body.locked .app { visibility: hidden; }
+    body.locked .modal-backdrop.open { display: block; padding: 0; overflow-y: auto; background: var(--canvas); }
+    body.locked .modal { width: auto; min-height: 100%; max-height: none; overflow: visible; display: grid; grid-template-rows: 2fr auto 3fr; justify-items: center; padding: var(--space-8) var(--space-4) var(--space-7); border: 0; border-radius: 0; background: none; box-shadow: none; }
+    body.locked .page { grid-row: 2; width: min(100%, 400px); }
+    body.locked .page > .character { align-self: center; width: 96px; height: 96px; }
+    body.locked .page > h2 { margin-top: var(--space-5); padding: 0; font: var(--semibold) 28px/34px var(--font-display); text-align: center; text-wrap: balance; }
+    body.locked .page > .description { margin-top: var(--space-3); padding: 0; text-align: center; text-wrap: balance; }
+    body.locked .page > [role=alert] { margin-inline: 0; text-align: center; }
+    body.locked .page-content { padding: var(--space-6) 0 0; }
+    body.locked .page-content .field { min-height: 44px; padding: 11px var(--space-3); border-radius: var(--radius-card); }
+    body.locked .modal-actions { position: static; margin: 0; padding: var(--space-3) 0 0; background: none; }
+    body.locked .modal-actions > .primary { flex: 1; min-height: 44px; border-radius: var(--radius-composer); }
+    .language-line { align-self: center; display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-5); color: var(--secondary); }
+    .language-line .field { width: auto; border-color: transparent; color: var(--text); }
+    .language-line .field:hover { border-color: var(--separator); }
+
     @media (max-width: 700px) {
       :root { --gutter: 16px; --composer-edge: 20px; --modal-edge: var(--space-4); --modal-top: var(--space-4); }
       .sidebar { display: none; }

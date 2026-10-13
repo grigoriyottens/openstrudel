@@ -139,8 +139,10 @@ async function bootstrapWeb() {
     state.refreshTimer=setInterval(()=>{ if(!document.hidden && !state.loading) void refresh(); },5000);
   } catch(e) {
     const page=modalPage(t("Подключитесь к своей команде"),t("Откройте приглашение для браузера из настроек OpenStrudel на Mac или сервере с вашими сотрудниками."),{close:false,locked:true});
+    page.box.prepend(characterImage(null,96));
     const input=field(page.content,t("Ссылка с приглашением")); input.value=state.invitationDraft||''; input.type='url'; input.autocomplete='off';
-    languageField(page,()=>{state.invitationDraft=input.value;void bootstrapWeb();});
+    const language=languageField(page,()=>{state.invitationDraft=input.value;void bootstrapWeb();});
+    language.className='language-line'; page.box.append(language);
     if(key) page.report(e);
     action(page,t("Подключиться"),async()=>{
       const url=new URL(input.value.trim());
@@ -504,6 +506,7 @@ function languageField(page, afterChange) {
     renderAgents();renderMessages();paintHeader();renderImportedChats();
     afterChange();
   };
+  return label;
 }
 
 function accountPlan(plan) {
