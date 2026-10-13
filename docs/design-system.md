@@ -12,6 +12,7 @@ This is the contract for the Mac app, the iPhone and iPad app, and the local web
 4. **Hierarchy from weight and colour before size.** A screen uses at most four text sizes.
 5. **Shared edges.** Text in a column starts on one vertical line. Control edges line up with the column edges.
 6. **The characters carry the personality.** Everything around them stays plain.
+7. **Generous space.** Start with too much space and remove it, never the other way round. Elements breathe; nothing touches its neighbour or the window edge. Density is allowed only where scanning many items needs it.
 
 ## Type
 
@@ -39,10 +40,12 @@ One superfamily: SF Pro for the interface and reading, SF Pro Rounded for displa
 
 ## Space and shape
 
-- Layout gaps: **4, 8, 12, 16, 24, 32, 48.** The Mac window edge is 20; iOS margins are 16. Line heights (16, 20, 22, 24) are not spacing.
+- Layout gaps: **4, 8, 12, 16, 24, 32, 48, 64.** The Mac window edge is 20; iOS margins are 16. Line heights (16, 20, 22, 24) are not spacing.
+- Default to the larger step. An icon and its label: 8. An avatar and its text: 12. Related controls: 12. Groups: 24. Sections and turns: 32. A new topic or time cluster: 48.
+- Nothing sits closer than 16 to a window, sidebar or composer edge; content never runs under the bottom edge.
 - Text-box paddings are optical and listed per component below.
-- Radii (always `.continuous`): **8** dense controls; **12** code blocks, file chips, cards, tables, images; **20** message bubbles; **24** composer. Web only: **6** inline code. Nested shapes are concentric: inner radius = outer radius minus padding.
-- Avatars: **24** (toolbar, the helper), **32** (sidebar), **64** (details header), **96** (empty conversation, welcome).
+- Radii (always `.continuous`): **8** dense controls; **12** code blocks, file chips, cards, tables, images, sidebar selection on the web; **20** message bubbles; **24** composer. Web only: **6** inline code. Nested shapes are concentric: inner radius = outer radius minus padding.
+- Avatars: **24** (toolbar, the helper), **36** (sidebar), **64** (details header), **96** (empty conversation, welcome).
 
 ## Colour
 
@@ -75,10 +78,10 @@ Warm low-chroma neutrals and a richer plum. Values are light / dark / light incr
 ## Mac structure
 
 - **Window:** `NavigationSplitView` with the system glass sidebar and the conversation as detail. `.windowToolbarStyle(.unified(showsTitle: false))`; no hidden title bar. The canvas is set with `.containerBackground(AppTheme.canvas, for: .window)`. Minimum window 760 × 560. The per-device view identity lives on the detail column only, so switching devices never resets the sidebar.
-- **Sidebar:** `List(selection:)` over a `SidebarItem` enum (main, draft, employee, Telegram group per device), `.listStyle(.sidebar)`, width min 220 / ideal 260 / max 340. Row: avatar 32, 8 gap, name 13 Medium over preview 13 Regular secondary, one line each; no row backgrounds, padding or separators (the system draws selection). Context menu via `contextMenu(forSelectionType:)`; Delete key via `onDeleteCommand` on the list. Section headers per device only when there are several. Search: `.searchable(placement: .sidebar)` with ⌘F; no results use `ContentUnavailableView.search`. New employee: sidebar toolbar `plus`, ⌘N. Bottom inset: the hidden-employees row (only when some are hidden) and one device row that opens the Settings window, aligned with the rows above.
+- **Sidebar:** `List(selection:)` over a `SidebarItem` enum (main, draft, employee, Telegram group per device), `.listStyle(.sidebar)`, width min 220 / ideal 260 / max 340. Row: avatar 36, 12 gap, name 13 Medium over preview 13 Regular secondary with 2 between them, one line each, 10 vertical padding (a 56-pt row) and 4 between rows; no row backgrounds or separators (the system draws selection). 16 between the search field and the first row; 24 above a device section header. Context menu via `contextMenu(forSelectionType:)`; Delete key via `onDeleteCommand` on the list. Section headers per device only when there are several. Search: `.searchable(placement: .sidebar)` with ⌘F; no results use `ContentUnavailableView.search`. New employee: sidebar toolbar `plus`, ⌘N. Bottom inset: the hidden-employees row (only when some are hidden) and one device row that opens the Settings window, aligned with the rows above.
 - **Detail toolbar:** a navigation item with avatar 24 + name (13 Semibold, max width 240) that opens the employee's details (also ⌘I); the Telegram source menu as a primary action when the employee has Telegram chats. The system draws the glass. Content scrolls under the toolbar with the scroll-edge effect.
-- **Transcript column:** centred, max width **560**, at least 24 from the detail edges (about 71 Russian or 82 English characters per line at 15 pt; the primary audience reads Russian).
-- **Bars:** connection banner and OpenAI recovery notice in `safeAreaBar(edge: .top)`; Telegram hint, new-messages button and composer in `safeAreaBar(edge: .bottom)`. No custom fades or bar backgrounds.
+- **Transcript column:** centred, max width **560**, at least 32 from the detail edges (about 71 Russian or 82 English characters per line at 15 pt; the primary audience reads Russian). 32 between the toolbar and the first item; 24 between the last item and the composer.
+- **Bars:** connection banner and OpenAI recovery notice in `safeAreaBar(edge: .top)`; Telegram hint, new-messages button and composer in `safeAreaBar(edge: .bottom)`. No custom fades or bar backgrounds. The composer sits 24 above the window's bottom edge (20 on iOS above the safe area) and is never clipped.
 - **Settings window (⌘,):** `TabView` with `Tab(_:systemImage:value:)` panes Devices, Accounts, Backups, General; the selected pane persists in `@AppStorage` so other screens can route to a pane and call `openSettings`. Each pane is a `Form` with `.formStyle(.grouped)`, width 600, height between 360 and 720. Row contract: one `Section` per group with an optional footer; switches as `.toggleStyle(.switch).controlSize(.mini)`; two to five exclusive options as `.pickerStyle(.radioGroup)`; read-only values as `LabeledContent` with the value in secondary; actions as their own rows; destructive actions last with `role: .destructive`; Help and Privacy as `Link` rows in one section. No cards, no hand-made dividers or headings.
 - **Sheets:** multi-page sheets use `.presentationSizing(.form)` on the sheet's `NavigationStack` so pushes never resize them; single-page sheets use `.fitted`. Buttons go in `ToolbarItem(placement: .cancellationAction / .confirmationAction)`. Confirmations are `.alert` or `.confirmationDialog` with `role: .destructive`.
 
@@ -91,7 +94,7 @@ The current navigation stays: conversation as the root of a `NavigationStack`, t
 - **The person (one-to-one):** trailing bubble, `UserBubbleColor`, radius 20, padding 16 × 9 (one line is a 40-pt capsule), max width 75 % of the column (420).
 - **The employee:** open text on the canvas, leading-aligned, full column width. No bubble, no avatar per message, no author label.
 - **Multi-author conversations** (imported history, Telegram groups): other people's messages are leading-aligned on `SurfaceColor`, radius 20, with "Anna · 12:04" above in meta style.
-- **Rhythm:** 24 between turns, 8 between consecutive messages from the same side, 12 between paragraphs, 4 between list items, 16 above and 4 below a heading.
+- **Rhythm:** 32 between turns, 12 between consecutive messages from the same side, 12 between paragraphs, 6 between list items, 24 above and 8 below a heading, 48 above a time cluster header and 16 below it (none above the first).
 - **Time:** a centred cluster header in meta style when a new day starts or after a gap of 30 minutes or more ("Today, 12:02"; day only when a message has no time). Exact time: `.help` on Mac and `accessibilityValue` everywhere. Schedule and notice lines keep their time. Queued, failed and error states stay visible under their message.
 - **Markdown:** lists use a fixed marker column so bullets and right-aligned tabular numbers share one text edge. Quotes: 2-pt `SeparatorColor` rule, 12 gap, secondary text. Links: `AccentText`, underlined at rest (underline at 40 % accent); only `https`, `http` and `mailto` stay links, natively and on the web. Inline code: SF Mono 13 on `SurfaceColor`. Code blocks: `SurfaceColor`, radius 12, padding 12, copy button on hover (Mac) or always (iOS). Tables: `SurfaceColor` header, hairline rules, a column whose cells are all numbers is trailing-aligned with tabular figures; horizontal scroll when wider than the column.
 - **Files:** chips on `SurfaceColor`, radius 12, padding 12, icon 20, name 13 Medium, size in meta. Images radius 12, max 320 × 240.
@@ -111,7 +114,7 @@ Layout: `.smooth(duration: 0.25)`, no bounce, under 300 ms. Characters only: spr
 
 ## Web UI
 
-Mirror the Mac layout and tokens at 1 pt = 1 px: CSS custom properties for every colour in light, dark and `prefers-contrast: more`; the same sidebar, transcript, helper and composer; the same type scale (meta raised to the 12 px floor). Markdown is rendered by a DOM-only renderer (never `innerHTML` for message content): raw HTML is text, only `https`, `http` and `mailto` links, images become links. Each message is one `<article>`. Follow the latest message only when the reader is near the bottom. SVG icons, no text glyphs. Form controls inherit the font. Logical properties and `dir="auto"` for right to left. `prefers-reduced-motion` and `prefers-reduced-transparency` respected. Modals: title, content, a bottom bar with Cancel first and one primary action last.
+Mirror the Mac layout and tokens at 1 pt = 1 px: CSS custom properties for every colour in light, dark and `prefers-contrast: more`; the same sidebar (56-px rows, 36 avatars, 12 gaps, 12-px inner margin), transcript, helper and composer with the same generous spacing; the page fits the viewport exactly (`100dvh`, no clipped composer or sidebar footer); the same type scale (meta raised to the 12 px floor). Markdown is rendered by a DOM-only renderer (never `innerHTML` for message content): raw HTML is text, only `https`, `http` and `mailto` links, images become links. Each message is one `<article>`. Follow the latest message only when the reader is near the bottom. SVG icons, no text glyphs. Form controls inherit the font. Logical properties and `dir="auto"` for right to left. `prefers-reduced-motion` and `prefers-reduced-transparency` respected. Modals: title, content, a bottom bar with Cancel first and one primary action last.
 
 ## File ownership (for parallel work)
 
