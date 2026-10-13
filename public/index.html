@@ -103,7 +103,9 @@
     .topbar { flex: none; height: var(--bar); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--space-2); padding-inline: var(--space-4); position: relative; z-index: 1; transition: box-shadow .2s; }
     .scrolled .topbar { box-shadow: 0 1px 0 var(--separator); }
     .top-start { justify-self: start; display: flex; }
-    .top-title { grid-column: 2; display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+    .top-title { grid-column: 2; display: flex; align-items: center; gap: var(--space-3); min-width: 0; min-height: var(--control); padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); transition: background-color .15s; }
+    .top-title:hover:not(:disabled) { background: var(--hover); }
+    .top-title:active:not(:disabled) { background: var(--pressed); }
     #active-name { font-weight: var(--semibold); max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .top-actions { grid-column: 3; justify-self: end; display: flex; gap: var(--space-2); min-width: 0; }
     #mobile-agents { display: none; }
@@ -372,7 +374,7 @@
     <section class="conversation" id="conversation">
       <header class="topbar">
         <div class="top-start"><button class="icon-button" id="mobile-agents" data-i18n-aria-label="Список сотрудников" aria-label="Assistant list" data-i18n-title="Сотрудники" title="Assistants" data-icon="sidebar"></button></div>
-        <div class="top-title"><span class="avatar" id="active-avatar"></span><span id="active-name" dir="auto">OpenStrudel</span></div>
+        <button type="button" class="top-title" id="active-details" disabled><span class="avatar" id="active-avatar"></span><span id="active-name" dir="auto">OpenStrudel</span></button>
         <div class="top-actions"><select id="imported-chat" class="field" data-i18n-aria-label="Выбрать переписку" aria-label="Choose a conversation" hidden></select></div>
       </header>
       <div id="connection-notice" class="connection-notice" role="status" aria-live="polite"></div>
@@ -496,7 +498,8 @@
       avatar.classList.toggle('offline', isOffline(profile));
       const name = profile?.name || 'OpenStrudel';
       if ($('active-name').textContent !== name) $('active-name').textContent = name;
-      $('active-name').title = name;
+      $('active-details').disabled = !state.owner;
+      $('active-details').title = state.owner ? t("Открыть сотрудника «{0}»", name) : name;
       $('draft').placeholder = composerPlaceholder(name);
       syncDraft();
     }
@@ -732,6 +735,7 @@
     });
     $('composer').onsubmit = event => sendDraft(event);
     $('new-employee').onclick = () => openCreateAgent(); $('mobile-agents').onclick = () => openNavigation(); $('settings').onclick = () => openHomeSettings();
+    $('active-details').onclick = () => { state.fromSettings = false; void openCurrentAgent(); };
     function showModal(content) { if(!$('modal').classList.contains('open')) state.modalFocus=document.activeElement; $('modal-content').replaceChildren(content); $('modal-content').setAttribute('aria-label',content.querySelector('h2')?.textContent||'OpenStrudel');$('modal').classList.add('open');document.querySelector('main').inert=true; } function closeModal() { $('modal').classList.remove('open');document.body.classList.remove('locked');state.fromSettings=false;document.querySelector('main').inert=false;state.modalFocus?.focus(); }
 
     function renderImportedChats() {
