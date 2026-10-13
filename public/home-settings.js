@@ -134,7 +134,6 @@ async function bootstrapWeb() {
     if (transfer) await watchTransfer(transfer);
     state.refreshTimer=setInterval(()=>{ if(!document.hidden && !state.loading) void refresh(); },5000);
   } catch(e) {
-    $('status').textContent=t("Нужно приглашение");
     const page=modalPage(t("Подключитесь к своей команде"),t("Откройте приглашение для браузера из настроек OpenStrudel на Mac или сервере с вашими сотрудниками."),{close:false,locked:true});
     const input=field(page.content,t("Ссылка с приглашением")); input.value=state.invitationDraft||''; input.type='url'; input.autocomplete='off';
     languageField(page,()=>{state.invitationDraft=input.value;void bootstrapWeb();});
@@ -339,7 +338,7 @@ function openNavigation() {
   for(const profile of [null,...state.profiles]) {
     const avatar=element('span','','avatar'); avatar.append(characterImage(profile?agentAppearance(profile):null,36)); avatar.classList.toggle('offline',isOffline(profile));
     const current=(state.selected||null)===(profile?.id||null);
-    const button=row(list,profile?.name||'OpenStrudel',async()=>{closeModal();try{await selectAgent(profile?.id||null);}catch(e){$('status').textContent=e.message;}},{avatar,detail:isOffline(profile)?t("Не на связи"):profile?previewLine(profile.preview)||profile.purpose:t("Помощник для ваших задач"),className:'agent-row'+(current?' current':'')});
+    const button=row(list,profile?.name||'OpenStrudel',async()=>{closeModal();try{await selectAgent(profile?.id||null);}catch(e){notify(e.message);}},{avatar,detail:isOffline(profile)?t("Не на связи"):profile?previewLine(profile.preview)||profile.purpose:t("Помощник для ваших задач"),className:'agent-row'+(current?' current':'')});
     if(current) button.setAttribute('aria-current','page');
   }
   // Symbols sit in the avatar column so every title above and below starts on one edge.
@@ -350,26 +349,32 @@ function openNavigation() {
 }
 async function sendDraft(event) {
   event.preventDefault(); const text=$('draft').value.trim(); if(!text||state.loading) return;
-  let draft; try { draft = saveDraft(); } catch(e) { $('status').textContent=e.message; return; }
-  // The message shows in the transcript at once; the saved draft stays until the device accepts it.
-  const key=draftKey(), chat=state.chat||null, selected=state.selected||null;
-  state.loading=true; state.sending={...draft,profile:selected,conversationId:chat};
-  $('draft').value=''; syncDraft(); renderMessages(true);
+  let draft; try { draft = saveDraft(); } catch(e) { notify(e.message); return; }
+  $('draft').value=''; syncDraft();
+  await deliver({...draft,profile:state.selected||null,conversationId:state.chat||null});
+}
+/* The message shows in the transcript at once and its saved draft stays until the device accepts it. A message
+   that fails keeps its bubble with the reason and a retry under it; the same id lets the retry find it. */
+async function deliver(message) {
+  if(state.loading) return;
+  const {error,createdAt,...draft}=message, key=draftKey();
+  state.loading=true; notify('');
+  state.pending=[...state.pending.filter(item=>item.externalId!==draft.externalId),{...draft,createdAt:new Date().toISOString()}];
+  renderMessages(true);
   try {
     const result=await api('/v1/messages?async=true',{method:'POST',body:JSON.stringify({...draft,channel:'api',externalChatId:'home'})});
     if (result.operationId) {
       const queue=readOutbox(); if(!queue.some(item=>item.externalId===draft.externalId)) queue.push({...draft,operationId:result.operationId}); saveOutbox(queue);
     }
-    localStorage.removeItem(key); state.pendingDraft=null;
-    $('status').textContent=result.deliveryState==='waiting_for_device'?t("Ждёт подключения устройства"):t("Поручение принято");
+    if(JSON.parse(localStorage.getItem(key)||'null')?.externalId===draft.externalId) localStorage.removeItem(key);
     renderMessages(true);
     await refresh();
+    state.pending=state.pending.filter(item=>item.externalId!==draft.externalId);
   } catch(e) {
-    $('status').textContent=e.message;
-    try { localStorage.setItem(key,JSON.stringify(draft)); } catch {}
-    if((state.chat||null)===chat && (state.selected||null)===selected && !$('draft').value) $('draft').value=draft.text;
+    const reason=e.status&&e.status<500?e.message:t("Не удалось подтвердить доставку. Повтор проверит это же сообщение.");
+    state.pending=state.pending.map(item=>item.externalId===draft.externalId?{...item,error:reason}:item);
   }
-  finally {state.sending=null;state.loading=false;$('draft').dispatchEvent(new Event('input'));renderMessages();}
+  finally {state.loading=false;syncDraft();renderMessages();}
 }
 function draftKey() { return 'openstrudel.draft.' + (state.homeId || location.origin) + '.' + (state.chat || state.selected || 'main'); }
 function saveDraft() {
@@ -402,8 +407,8 @@ async function checkOutbox() {
   const updated=new Map(queue.map(item=>[item.operationId,item]));
   saveOutbox(readOutbox().filter(item=>!delivered.has(item.externalId)).map(item=>updated.get(item.operationId)||item));
 }
-$('draft').addEventListener('input',()=>{try{saveDraft();}catch(e){$('status').textContent=e.message;$('send').disabled=true;}});
-languageReady.then(()=>bootstrapWeb()).catch(()=>{ $('status').textContent='Couldn’t load the interface. Reload to try again.'; const retry=element('button','Reload','secondary');retry.onclick=()=>location.reload();$('connection-notice').replaceChildren(retry); });
+$('draft').addEventListener('input',()=>{try{saveDraft();}catch(e){notify(e.message);$('send').disabled=true;}});
+languageReady.then(()=>bootstrapWeb()).catch(()=>{ const retry=element('button','Reload','secondary');retry.onclick=()=>location.reload();$('connection-notice').replaceChildren(element('div','Couldn’t load the interface. Reload to try again.'),retry); });
 
 async function openDeviceSignOut() {
   const page=modalPage(t("Выйти на этом устройстве?"),t("Сотрудники, переписка, файлы и расписания сохранятся на ваших устройствах. Команда продолжит работать, пока её Mac или сервер включён. Для возвращения понадобится новое приглашение."),{close:'cancel'});

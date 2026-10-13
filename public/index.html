@@ -130,7 +130,8 @@
     .meta { color: var(--secondary); font-size: 12px; line-height: 16px; margin-top: var(--space-1); display: flex; align-items: center; gap: var(--space-1); font-variant-numeric: tabular-nums; }
     .meta.warning { color: var(--warning); }
     .meta svg.icon { width: 16px; height: 16px; }
-    .meta button { color: var(--accent-text); font-weight: var(--medium); margin-inline-start: var(--space-2); }
+    .message.person .meta { text-align: end; }
+    .meta button { flex: none; color: var(--accent-text); font-weight: var(--medium); margin-inline-start: var(--space-2); white-space: nowrap; }
     .meta button:hover { text-decoration: underline; }
     .note { color: var(--secondary); font-size: 12px; line-height: 16px; display: flex; align-items: center; gap: var(--space-1); font-variant-numeric: tabular-nums; }
     .files { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); max-width: 100%; }
@@ -338,7 +339,7 @@
     <aside class="sidebar">
       <div class="sidebar-bar"><button class="icon-button" id="new-employee" data-i18n-aria-label="Новый сотрудник" aria-label="New assistant" data-i18n-title="Новый сотрудник" title="New assistant" data-icon="plus"></button></div>
       <nav class="agent-list" id="agents" data-i18n-aria-label="Сотрудники" aria-label="Assistants"></nav>
-      <div class="side-bottom"><button class="device-row" id="settings" data-i18n-title="Настройки" title="Settings"><span class="device-icon" data-icon="gear"></span><span class="agent-copy"><span class="agent-name" data-i18n="Настройки">Settings</span><span class="agent-sub" id="status"><span data-i18n="Подключение…">Connecting…</span></span></span></button></div>
+      <div class="side-bottom"><button class="device-row" id="settings" data-i18n-title="Устройства и настройки" title="Devices and settings"><span class="device-icon" data-icon="gear"></span><span class="agent-copy"><span class="agent-name" id="device-name" dir="auto">OpenStrudel</span><span class="agent-sub" data-i18n="Устройства и настройки">Devices and settings</span></span></button></div>
     </aside>
     <section class="conversation" id="conversation">
       <header class="topbar">
@@ -356,7 +357,7 @@
   <script src="/markdown.js"></script>
   <script src="/agent-characters.js"></script>
   <script>const $ = (id) => document.getElementById(id);
-    const state = { profiles: [], selected: null, messages: [], telegram: null, loading: false };
+    const state = { profiles: [], selected: null, messages: [], pending: [], telegram: null, loading: false };
     const ICONS = {
       plus: ['M10 4.5v11M4.5 10h11'],
       gear: ['M7.98 4.14 8.59 2.02h2.82l.61 2.12.7.29 1.93-1.07 1.99 1.99-1.07 1.93.29.7 2.12.61v2.82l-2.12.61-.29.7 1.07 1.93-1.99 1.99-1.93-1.07-.7.29-.61 2.12H8.59l-.61-2.12-.7-.29-1.93 1.07-1.99-1.99 1.07-1.93-.29-.7-2.12-.61V8.59l2.12-.61.29-.7-1.07-1.93 1.99-1.99 1.93 1.07Z', 'M12.6 10a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 1 1 5.2 0Z'],
@@ -376,6 +377,9 @@
       return svg;
     }
     document.querySelectorAll('[data-icon]').forEach(node => node.append(icon(node.dataset.icon)));
+    /* Problems show under the toolbar at every width. A loading problem clears itself once the device answers
+       again; an action's problem stays until the next action. */
+    function notify(message, loading = false) { const notice = $('connection-notice'); notice.textContent = message; notice.toggleAttribute('data-loading', loading && Boolean(message)); }
     async function api(path, options = {}, binary = false) {
       const {onProgress, ...requestOptions} = options;
       const response = await fetch(path, { ...requestOptions, credentials:'same-origin', redirect:'error', headers: { 'content-type':'application/json', ...(options.method && options.method !== 'GET' ? {'idempotency-key':crypto.randomUUID()} : {}), ...(state.csrf ? {'x-openstrudel-csrf':state.csrf} : {}), ...(options.headers || {}) } });
@@ -452,6 +456,8 @@
         if (root.children[index] !== row) root.insertBefore(row, root.children[index] || null);
       });
       for (const [key, row] of agentRows) if (!seen.has(key)) { row.remove(); agentRows.delete(key); }
+      const device = (state.devices || []).find(d => d.id === state.nodeId)?.name || 'OpenStrudel';
+      if ($('device-name').textContent !== device) $('device-name').textContent = device;
     }
     function paintHeader() {
       const profile = activeProfile();
@@ -501,7 +507,7 @@
       const text = element('span'), name = element('span', attachment.name, 'file-name'); name.dir = 'auto';
       text.append(name); if (Number.isFinite(attachment.size)) text.append(element('span', fileSize(attachment.size), 'file-size'));
       button.append(icon('doc'), text);
-      button.onclick = async () => { try { const blob = await api('/v1/files/' + encodeURIComponent(attachment.id), {}, true); download(blob, attachment.name, attachment.mimeType); } catch (e) { $('status').textContent = e.message; } };
+      button.onclick = async () => { try { const blob = await api('/v1/files/' + encodeURIComponent(attachment.id), {}, true); download(blob, attachment.name, attachment.mimeType); } catch (e) { notify(e.message); } };
       return button;
     }
     const markdownOptions = { label: key => t(key), icon };
@@ -538,10 +544,20 @@
       const meta = element('div', '', item.error ? 'meta warning' : 'meta'); meta.append(element('span', item.error || t("Сообщение сохранено. Ждём подключения устройства.")));
       if (!item.error && state.owner) {
         const cancel = element('button', t("Отменить доставку")); cancel.type = 'button';
-        cancel.onclick = async () => { try { await api('/v1/home/requests/' + encodeURIComponent(item.operationId), { method: 'DELETE' }); await checkOutbox(); renderMessages(); } catch (e) { $('status').textContent = e.message; } };
+        cancel.onclick = async () => { try { await api('/v1/home/requests/' + encodeURIComponent(item.operationId), { method: 'DELETE' }); await checkOutbox(); renderMessages(); } catch (e) { notify(e.message); } };
         meta.append(cancel);
       }
       article.append(meta);
+      return article;
+    }
+    function pendingArticle(item) {
+      const article = element('article', '', 'message person'); article.dataset.id = 'sending:' + item.externalId;
+      const bubble = element('div', item.text, 'bubble'); bubble.dir = 'auto'; article.append(bubble);
+      if (item.error) {
+        const meta = element('div', '', 'meta warning'); meta.append(element('span', item.error));
+        const retry = element('button', t("Повторить")); retry.type = 'button'; retry.onclick = () => void deliver(item);
+        meta.append(retry); article.append(meta);
+      }
       return article;
     }
     function interactionCard(interaction) {
@@ -554,7 +570,7 @@
         input.oninput = () => { answers[q.id] = input.value; };
       }
       const button = element('button', t("Отправить ответ"), 'primary');
-      button.onclick = async () => { try { await api('/v1/interactions/' + encodeURIComponent(interaction.id), { method: 'POST', body: JSON.stringify({ conversationId: state.conversationID, answers }) }); await loadConversation(); } catch (e) { $('status').textContent = e.message; } };
+      button.onclick = async () => { try { await api('/v1/interactions/' + encodeURIComponent(interaction.id), { method: 'POST', body: JSON.stringify({ conversationId: state.conversationID, answers }) }); await loadConversation(); } catch (e) { notify(e.message); } };
       box.append(button);
       return box;
     }
@@ -592,27 +608,32 @@
       const near = follow || root.scrollHeight - root.scrollTop - root.clientHeight <= 60;
       const outbox = readOutbox().filter(p => (p.profile || null) === (state.selected || null) && (p.conversationId || null) === (state.chat || null));
       const interactions = state.interactions || [];
-      const pending = state.sending, delivered = pending && (state.messages.some(m => m.externalId === pending.externalId) || outbox.some(item => item.externalId === pending.externalId));
-      const sending = pending && !delivered && (pending.profile || null) === (state.selected || null) && (pending.conversationId || null) === (state.chat || null) ? pending : null;
+      const delivered = item => state.messages.some(m => m.externalId === item.externalId) || outbox.some(o => o.externalId === item.externalId);
+      const sending = state.pending.filter(item => !delivered(item) && (item.profile || null) === (state.selected || null) && (item.conversationId || null) === (state.chat || null));
       const items = [];
-      if (!state.messages.length && !outbox.length && !interactions.length && !sending) {
+      if (!state.messages.length && !outbox.length && !interactions.length && !sending.length) {
         items.push({ key: 'empty', sig: [language, profile?.id, profile?.name, profile?.purpose, profile?.instructions, JSON.stringify(profile?.appearance), isOffline(profile)].join('\u0000'), build: () => emptyState(profile) });
       } else {
         const authors = new Set(state.messages.filter(m => m.direction === 'inbound' && m.author).map(m => m.author));
         const multiAuthor = authors.size > 1 || (conversation.channel === 'telegram' && String(conversation.externalId || '').startsWith('-'));
-        const breaks = new Map(StrudelMarkdown.timeBreaks(state.messages).map(entry => [entry.index, entry]));
+        // A message being sent counts in the time clusters, so its header is there before the device accepts it.
+        const breaks = new Map(StrudelMarkdown.timeBreaks([...state.messages, ...sending]).map(entry => [entry.index, entry]));
+        const cluster = (index, key) => {
+          const entry = breaks.get(index); if (!entry) return;
+          const label = entry.hasTime ? dayLabel(entry.date) + ', ' + clock(entry.date) : dayLabel(entry.date);
+          items.push({ key: 'cluster:' + key, sig: label + language, build: () => { const header = element('div', '', 'cluster'); header.append(timeElement(entry, label)); return header; } });
+        };
         state.messages.forEach((message, index) => {
-          const entry = breaks.get(index);
-          if (entry) {
-            const label = entry.hasTime ? dayLabel(entry.date) + ', ' + clock(entry.date) : dayLabel(entry.date);
-            items.push({ key: 'cluster:' + message.id, sig: label + language, build: () => { const header = element('div', '', 'cluster'); header.append(timeElement(entry, label)); return header; } });
-          }
+          cluster(index, message.id);
           items.push({ key: message.id, sig: [message.text, message.status, message.error, message.kind, JSON.stringify(message.attachments || []), multiAuthor, message.author, language].join('\u0000'), build: () => messageArticle(message, { multiAuthor }) });
         });
         for (const item of outbox) items.push({ key: 'outbox:' + item.operationId, sig: [item.text, item.error, state.owner, language].join('\u0000'), build: () => outboxArticle(item) });
-        if (sending) items.push({ key: 'sending:' + sending.externalId, sig: sending.text, build: () => { const article = element('article', '', 'message person'); article.dataset.id = 'sending:' + sending.externalId; const bubble = element('div', sending.text, 'bubble'); bubble.dir = 'auto'; article.append(bubble); return article; } });
+        sending.forEach((item, index) => {
+          cluster(state.messages.length + index, 'sending:' + item.externalId);
+          items.push({ key: 'sending:' + item.externalId, sig: [item.text, item.error, language].join('\u0000'), build: () => pendingArticle(item) });
+        });
         for (const interaction of interactions) items.push({ key: 'interaction:' + interaction.id, sig: JSON.stringify(interaction) + language, build: () => interactionCard(interaction) });
-        const working = Boolean(sending) || state.messages.some(m => m.status === 'queued' || m.status === 'running');
+        const working = sending.some(item => !item.error) || state.messages.some(m => m.status === 'queued' || m.status === 'running');
         items.push({ key: 'helper', sig: 'helper', build: helperNode, update: node => paintHelper(node, profile, working) });
       }
       const existing = new Map();
@@ -642,11 +663,6 @@
     addEventListener('blur', () => document.body.classList.add('inactive'));
     addEventListener('focus', () => document.body.classList.remove('inactive'));
 
-    function renderStatus(ready) {
-      const status = $('status'), word = ready ? 'готов' : 'ожидает';
-      const label = element('span', t(word)); label.dataset.i18n = word;
-      status.replaceChildren(label);
-    }
     async function loadConversation() {
       const generation=state.conversationGeneration=(state.conversationGeneration||0)+1, selected=state.selected, chat=state.chat;
       const current=()=>generation===state.conversationGeneration && selected===state.selected && chat===state.chat;
@@ -659,8 +675,8 @@
       renderMessages(opened); paintHeader(); renderImportedChats();
       if (opened && !state.messages.length && matchMedia('(pointer: fine)').matches && !$('modal').classList.contains('open')) $('draft').focus({ preventScroll: true });
     }
-    async function selectAgent(id) { try { saveDraft(); state.chat = null; state.selected = id; state.messages=[]; state.interactions=[]; paintHeader(); restoreDraft(); renderImportedChats(); renderAgents(); await loadConversation(); } catch(e) { renderMessages(); $('status').textContent=e.message;$('connection-notice').textContent=e.message; } }
-    async function refresh() { try { const [health, profiles, integrations, devices] = await Promise.all([api('/health'), api('/v1/profiles'), api('/v1/integrations'), api('/v1/devices').catch(() => null)]); state.unreachable=false; state.homeId=health.homeId;state.nodeId=health.nodeId;state.archiveEncryption=health.agentArchiveEncryption; state.hostingOrigin=health.hostingOrigin; state.archiveVersion = health.agentArchiveVersion; state.appearanceVersion=health.agentAppearanceVersion; state.importedChats = profiles.importedConversations || []; state.profiles = profiles.profiles || []; state.telegram = integrations.telegram; if (devices?.devices) state.devices = devices.devices; renderStatus(health.ok); renderAgents(); paintHeader(); await loadConversation();$('connection-notice').textContent=''; } catch (error) { state.unreachable = !error.status || error.status >= 500; await checkOutbox();renderAgents();paintHeader();renderMessages();$('status').textContent = error.message;$('connection-notice').textContent=error.message; if(error.moved && !state.showedMoved) { state.showedMoved=true; const page=modalPage(t("Подключение изменилось"),t("Приложения переподключатся автоматически. Для браузера создайте новое приглашение на новом устройстве.")); const link=element('a',t("Открыть устройство")); const url=new URL(error.moved.url); if(url.protocol==='https:') { link.href=url.href;link.rel='noreferrer';page.content.append(link); } } } }
+    async function selectAgent(id) { notify(''); try { saveDraft(); state.chat = null; state.selected = id; state.messages=[]; state.interactions=[]; paintHeader(); restoreDraft(); renderImportedChats(); renderAgents(); await loadConversation(); } catch(e) { renderMessages(); notify(e.message, true); } }
+    async function refresh() { try { const [health, profiles, integrations, devices] = await Promise.all([api('/health'), api('/v1/profiles'), api('/v1/integrations'), api('/v1/devices').catch(() => null)]); state.unreachable=false; state.homeId=health.homeId;state.nodeId=health.nodeId;state.archiveEncryption=health.agentArchiveEncryption; state.hostingOrigin=health.hostingOrigin; state.archiveVersion = health.agentArchiveVersion; state.appearanceVersion=health.agentAppearanceVersion; state.importedChats = profiles.importedConversations || []; state.profiles = profiles.profiles || []; state.telegram = integrations.telegram; if (devices?.devices) state.devices = devices.devices; renderAgents(); paintHeader(); await loadConversation(); if ($('connection-notice').hasAttribute('data-loading')) notify(''); } catch (error) { state.unreachable = !error.status || error.status >= 500; await checkOutbox();renderAgents();paintHeader();renderMessages();notify(error.message, true); if(error.moved && !state.showedMoved) { state.showedMoved=true; const page=modalPage(t("Подключение изменилось"),t("Приложения переподключатся автоматически. Для браузера создайте новое приглашение на новом устройстве.")); const link=element('a',t("Открыть устройство")); const url=new URL(error.moved.url); if(url.protocol==='https:') { link.href=url.href;link.rel='noreferrer';page.content.append(link); } } } }
     /* The empty field follows the interface so its placeholder lines up; typed text takes its own direction. */
     function syncDraft() {
       const draft = $('draft');
@@ -681,7 +697,7 @@
       for (const chat of chats) { const option = document.createElement('option'); option.value = chat.id; option.textContent = chat.title; select.append(option); }
       select.value = state.chat || '';
     }
-    $('imported-chat').onchange = async () => { saveDraft(); state.chat = $('imported-chat').value || null; restoreDraft(); try { await loadConversation(); } catch(e) { $('status').textContent = e.message; } };
+    $('imported-chat').onchange = async () => { saveDraft(); state.chat = $('imported-chat').value || null; restoreDraft(); try { await loadConversation(); } catch(e) { notify(e.message, true); } };
     async function openSettings(deviceId) {
       const page = modalPage(t("Резервная копия сотрудников"), t("Сотрудники, переписка, файлы и расписания — в одном файле."), { close: false });
       page.box.querySelector('.description').id = 'backup-summary';
