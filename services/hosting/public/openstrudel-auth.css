@@ -1,1 +1,38 @@
-:root{color-scheme:light dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#242426;background:#faf9f6;font-synthesis:none}*{box-sizing:border-box}body{margin:0}main{max-width:440px;margin:clamp(32px,10vh,108px) auto;padding:0 28px 48px}.brand{font-size:16px;font-weight:650;letter-spacing:-.3px;margin-bottom:48px}h1{font-size:clamp(36px,9vw,48px);line-height:1.08;font-weight:600;letter-spacing:-1.8px;margin:0 0 24px}h2{font-size:28px;letter-spacing:-.6px;font-weight:600}p{font-size:16px;line-height:1.55;color:#656461}label{display:block;margin:20px 0;font-size:14px;font-weight:550}input{font:inherit;width:100%;display:block;margin-top:8px;padding:14px 16px;min-height:48px;border:1px solid #c8c7c3;border-radius:12px;background:transparent;color:inherit}.primary{display:block;text-align:center;width:100%;padding:15px 20px;border:0;border-radius:14px;background:#262628;color:#fff;font:inherit;font-weight:550;text-decoration:none;min-height:50px;cursor:pointer}.quiet{font:inherit;display:block;margin:12px auto 0;background:none;border:0;padding:12px 6px;color:#5c5b57;min-height:44px;cursor:pointer}.note{font-size:13px;margin-top:32px}#notice{font-size:14px;min-height:1.6em}code{display:block;overflow-wrap:anywhere;padding:18px;background:#eeede9;border-radius:12px;font-size:15px;line-height:1.6;margin:20px 0}button:disabled{opacity:.5;cursor:wait}:focus-visible{outline:3px solid #4277b8;outline-offset:4px}[hidden]{display:none!important}@media(prefers-color-scheme:dark){:root{background:#191918;color:#f4f3ef}p,.quiet{color:#bab9b4}input{border-color:#545451}.primary{background:#eeeDE7;color:#232321}code{background:#2b2b28}}@media(prefers-reduced-motion:no-preference){button,a,input{transition:background-color .15s ease,opacity .15s ease}}
+/* Tokens: docs/design-system.md, the same values as the app's web UI. Monochrome: the primary action is an
+   ink capsule with a canvas label, quiet actions are plain text, the graphite accent marks focus. */
+:root {
+  color-scheme: light dark;
+  --canvas: #F7F3EC; --surface: #EEE9E1; --text: rgb(0 0 0 / .85); --secondary: #615B57;
+  --accent: #3D3936; --ink: #262422; --control-border: #86808C;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, "Noto Sans", "Noto Sans Hebrew", "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  --font-display: ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font: 400 16px/1.5 var(--font-sans); color: var(--text); background: var(--canvas);
+  font-synthesis: none; -webkit-font-smoothing: antialiased;
+}
+@media (prefers-color-scheme: dark) { :root { --canvas: #1C1B1A; --surface: #262422; --text: rgb(255 255 255 / .85); --secondary: #ADA8A3; --accent: #6E6964; --ink: #EDEAE6; --control-border: #7C7781; } }
+@media (prefers-contrast: more) { :root { --canvas: #FFFDF8; --surface: #EFE9E1; --text: #000; --secondary: #45403C; --accent: #2B2826; --ink: #14120F; --control-border: #6F6A74; } }
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) { :root { --canvas: #121110; --surface: #211F1D; --text: #FFF; --secondary: #D2CEC9; --accent: #7A746F; --ink: #FFF; --control-border: #8F8A94; } }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 440px; margin: clamp(32px, 10vh, 108px) auto; padding: 0 24px 48px; }
+p { margin: 16px 0; font-size: 16px; line-height: 1.55; color: var(--secondary); }
+.brand { margin: 16px 0 48px; color: var(--text); font-weight: 590; }
+h1 { margin: 0 0 24px; font: 590 clamp(36px, 9vw, 48px)/1.08 var(--font-display); }
+h2 { margin: 32px 0 16px; font: 590 28px/34px var(--font-display); }
+label { display: block; margin: 24px 0; font-size: 14px; font-weight: 510; }
+input { display: block; width: 100%; min-height: 48px; margin-top: 8px; padding: 12px 16px; border: 1px solid var(--control-border); border-radius: 12px; background: transparent; color: inherit; font: inherit; font-weight: 400; }
+input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+.primary { display: block; width: 100%; min-height: 48px; padding: 12px 24px; border: 0; border-radius: 24px; background: var(--ink); color: var(--canvas); font: inherit; font-weight: 510; text-align: center; text-decoration: none; cursor: pointer; }
+.primary:hover { background: color-mix(in srgb, var(--ink), var(--canvas) 16%); }
+.quiet { display: block; min-height: 44px; margin: 12px auto 0; padding: 12px 8px; border: 0; background: none; color: var(--secondary); font: inherit; cursor: pointer; }
+.quiet:hover { color: var(--text); }
+.note { margin-top: 32px; font-size: 13px; }
+#notice { min-height: 1.6em; font-size: 14px; }
+strong { color: var(--text); font-weight: 590; }
+code { display: block; margin: 24px 0; padding: 16px; overflow-wrap: anywhere; border-radius: 12px; background: var(--surface); color: var(--text); font: 15px/1.6 var(--font-mono); }
+button:disabled { opacity: .5; cursor: wait; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+@media (prefers-contrast: more) { code { box-shadow: inset 0 0 0 1px var(--control-border); } }
+@media (prefers-reduced-motion: no-preference) { button, a, input { transition: background-color .15s ease, color .15s ease, opacity .15s ease; } }
