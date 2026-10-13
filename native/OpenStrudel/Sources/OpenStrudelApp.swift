@@ -41,6 +41,9 @@ struct OpenStrudelApp: App {
             }.tint(AppTheme.accent)
             .modifier(InterfaceLanguage())
         }.defaultSize(width: 1000, height: 760)
+        // It opens only from General's Servers row, which a build shows only when it has a hosting store.
+        .commandsRemoved()
+        .restorationBehavior(.disabled)
         Settings {
             Group {
                 if library.isErasing { LocalDataResetProgress() }

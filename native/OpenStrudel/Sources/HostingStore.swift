@@ -40,30 +40,25 @@ struct HostingStoreSettings: View {
     }
 }
 
+/// The Servers window. It opens only from General's Servers row, which needs a hosting origin.
 struct HostingStoreView: View {
-    @Environment(\.openWindow) private var openWindow
     @State private var loading = true
     @State private var error: String?
     @State private var reload = 0
     var body: some View {
-        Group {
-            if let origin = HostingStore.origin {
-                ZStack {
-                    HostingBrowser(origin: origin, reload: reload, loading: $loading, error: $error)
-                    if loading && error == nil { ProgressView(L("Открываем серверы…")) }
-                    if let error {
-                        ServersMessage(title: L("Не удалось открыть серверы"), message: L10n.serviceText(error), action: L("Попробовать ещё раз")) {
-                            self.error = nil; loading = true; reload += 1
-                        }
-                        .background(.background)
+        if let origin = HostingStore.origin {
+            ZStack {
+                HostingBrowser(origin: origin, reload: reload, loading: $loading, error: $error)
+                if loading && error == nil { ProgressView(L("Открываем серверы…")) }
+                if let error {
+                    ServersMessage(title: L("Не удалось открыть серверы"), message: L10n.serviceText(error), action: L("Попробовать ещё раз")) {
+                        self.error = nil; loading = true; reload += 1
                     }
-                }
-            } else {
-                ServersMessage(title: L("Создание серверов пока недоступно"), message: L("Вы можете продолжать работу со своей командой."), action: L("Открыть команду")) {
-                    openWindow(id: "home")
+                    .background(.background)
                 }
             }
-        }.frame(minWidth: 780, minHeight: 650)
+            .frame(minWidth: 780, minHeight: 650)
+        }
     }
 }
 
