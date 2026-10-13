@@ -50,6 +50,7 @@
 		38670454174D5126BB5A84D1 /* ChatMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C3D241925EF81E938247C15 /* ChatMedia.swift */; };
 		38A327481A17BCFCEAC3F116 /* LocalDataResetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F7D53298A142CDF1B276ABC /* LocalDataResetTests.swift */; };
 		396D0DCDA42F07B7B6AD8CDA /* ReleaseScenariosUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 269C829F112500B5E34127F7 /* ReleaseScenariosUITests.swift */; };
+		3A421DF73D8FD408D34046C2 /* SSHConnectionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42350752D1D111BAD14FC2E7 /* SSHConnectionReadiness.swift */; };
 		3A4F31F9396C14C867C86558 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A12DEA162BBC10A8CA136D /* Views.swift */; };
 		3B7C53804164BE37DA226B4D /* ApprovalSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0150A7686260E33ABC51F9 /* ApprovalSettingsView.swift */; };
 		3CEEE4913F9C75966E2902EA /* LocalDataReset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1CA4A01722F775952B9530 /* LocalDataReset.swift */; };
@@ -134,6 +135,7 @@
 		AF175297574377B16061325E /* MobileConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15270A8B1FADC16CBEE2AB86 /* MobileConnection.swift */; };
 		B57D15E58D05AC46BF315CE7 /* RemoteEmployeeCreationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73555041AB1BEE1B2C7226BA /* RemoteEmployeeCreationUITests.swift */; };
 		B5946DFBDF9D76520B6AFCB8 /* home-certificate.json in Resources */ = {isa = PBXBuildFile; fileRef = C4EA2EF5DDC9D052A757B498 /* home-certificate.json */; };
+		B606D16C6E247AE3E20CE3D1 /* SSHConnectionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42350752D1D111BAD14FC2E7 /* SSHConnectionReadiness.swift */; };
 		B94227E897A95830CFA06A03 /* MessageContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9FCFCC5FBCE6D6D6D612458 /* MessageContent.swift */; };
 		B9D7A34C02DCCE0BABC9C9E4 /* localizations.json in Resources */ = {isa = PBXBuildFile; fileRef = D1E1F7D5245EC3DD74BCD8C0 /* localizations.json */; };
 		BA4C2329101E4E5D8C2EABD1 /* AppUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25538EEFA0F0470CDF4958CC /* AppUpdater.swift */; };
@@ -167,12 +169,14 @@
 		EFDF18977D160A503A48D5BE /* LocalDataResetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B5A8A2A8A51E792A7C05A7F /* LocalDataResetView.swift */; };
 		F1930037590FB223FEAA6DC3 /* TelegramSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B92676161A3FD9E3889C48 /* TelegramSetupView.swift */; };
 		F6604979C497258E987E2193 /* AgentAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A54DEED2D78EBBD77B24825 /* AgentAppearance.swift */; };
+		F80AFA3802EBE1953E88724E /* SSHConnectionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42350752D1D111BAD14FC2E7 /* SSHConnectionReadiness.swift */; };
 		F92751B4CA90257CFDC92A40 /* DesignAccessibilityUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1AB12278F64C5C7247C698 /* DesignAccessibilityUITests.swift */; };
 		FA990FEF4C0EA7D7B16F790C /* PrimaryHomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E988F61680172334C63B12 /* PrimaryHomeTests.swift */; };
 		FAF196A470B7DCB88053E108 /* ExtensionsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 560A60BE1D2AAD42DC5C600D /* ExtensionsUITests.swift */; };
 		FC1A6EAFB981EE01A7B22807 /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7931B52BD35166C87C0FF19 /* Localization.swift */; };
 		FC61FB4F58F351C111D601E9 /* cloud-init.sh in Resources */ = {isa = PBXBuildFile; fileRef = B9A7842329C25226D34D8B1C /* cloud-init.sh */; };
 		FE16FE1017F5BA162CF34398 /* AgentTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97A6C72C5E00D5723795E8B1 /* AgentTransfer.swift */; };
+		FE8C4A78CD3C816919083231 /* SSHConnectionReadinessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6C96E0E732FE8B6FA28C254 /* SSHConnectionReadinessTests.swift */; };
 		FED472FDDD9D5774F84AD1A4 /* AttachmentImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718BE32FAB2706C4D8DB4C86 /* AttachmentImport.swift */; };
 /* End PBXBuildFile section */
 
@@ -211,6 +215,7 @@
 		3B1CA4A01722F775952B9530 /* LocalDataReset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalDataReset.swift; sourceTree = "<group>"; };
 		3D8AC19EC197C2FC60EBEB3D /* MobilePairingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePairingTests.swift; sourceTree = "<group>"; };
 		41969DD182FE17F98BBEEE17 /* MobileConnectionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileConnectionViews.swift; sourceTree = "<group>"; };
+		42350752D1D111BAD14FC2E7 /* SSHConnectionReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionReadiness.swift; sourceTree = "<group>"; };
 		44AC6C4633049EC913C5B5FF /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		452D1C62E5C23CB46B6FD978 /* AccountRecoveryUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRecoveryUITests.swift; sourceTree = "<group>"; };
 		4AF0B9DD514B9520C3BB378E /* wai-vds-v2.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "wai-vds-v2.json"; sourceTree = "<group>"; };
@@ -259,6 +264,7 @@
 		B16A581A5712D0014B612F21 /* ServerSetupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSetupTests.swift; sourceTree = "<group>"; };
 		B3B7E5BE411F858CB2DFC217 /* ComposerLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLayoutTests.swift; sourceTree = "<group>"; };
 		B49A5A4FE8FCDBCA5997D859 /* HomeMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeMenu.swift; sourceTree = "<group>"; };
+		B6C96E0E732FE8B6FA28C254 /* SSHConnectionReadinessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionReadinessTests.swift; sourceTree = "<group>"; };
 		B7931B52BD35166C87C0FF19 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		B9A7842329C25226D34D8B1C /* cloud-init.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "cloud-init.sh"; sourceTree = "<group>"; };
 		BD7DB4FB17EFAAD759697818 /* ConnectDeviceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectDeviceView.swift; sourceTree = "<group>"; };
@@ -359,6 +365,7 @@
 				E29C1F0D3A0FE125E35B565D /* PrivacyInfo.xcprivacy */,
 				72F0551049667E879C9F2AB4 /* ServerSetup.swift */,
 				A635A0DA48A1D907252A7BCB /* SetupViews.swift */,
+				42350752D1D111BAD14FC2E7 /* SSHConnectionReadiness.swift */,
 				31C40E4BEA4DD9523E6ADCA1 /* TelegramLink.swift */,
 				36B92676161A3FD9E3889C48 /* TelegramSetupView.swift */,
 				BEB733894E124793EDA9ACA3 /* TranscriptStack.swift */,
@@ -427,6 +434,7 @@
 				3D8AC19EC197C2FC60EBEB3D /* MobilePairingTests.swift */,
 				D6E988F61680172334C63B12 /* PrimaryHomeTests.swift */,
 				B16A581A5712D0014B612F21 /* ServerSetupTests.swift */,
+				B6C96E0E732FE8B6FA28C254 /* SSHConnectionReadinessTests.swift */,
 				E4AA20BE764618BEE63AF68D /* TelegramLinkTests.swift */,
 				16302AC88D0BE5545DFBFC7F /* UserFacingErrorTests.swift */,
 				3632EDAD60D7F3E6FD727338 /* VoiceCaptureTests.swift */,
@@ -692,6 +700,8 @@
 				066029DEC026A68A1379F314 /* MobilePairingTests.swift in Sources */,
 				A9E99DD5DF279B319C5FCE1A /* Models.swift in Sources */,
 				FA990FEF4C0EA7D7B16F790C /* PrimaryHomeTests.swift in Sources */,
+				F80AFA3802EBE1953E88724E /* SSHConnectionReadiness.swift in Sources */,
+				FE8C4A78CD3C816919083231 /* SSHConnectionReadinessTests.swift in Sources */,
 				7BE9A629D5B09FA528495F79 /* ServerSetup.swift in Sources */,
 				849AE228B80A871E9172A20B /* ServerSetupTests.swift in Sources */,
 				432170F591B888A7AAE071E6 /* TelegramLink.swift in Sources */,
@@ -745,6 +755,7 @@
 				A71AEB032AAB4C5DA49D5497 /* Models.swift in Sources */,
 				85C1C1D5EA678B5643F6884B /* OpenStrudelApp.swift in Sources */,
 				25CE0B6159318A64EDD2D1F2 /* PrimaryHomeSettings.swift in Sources */,
+				3A421DF73D8FD408D34046C2 /* SSHConnectionReadiness.swift in Sources */,
 				329833A765F0D4B7300A8494 /* ServerSetup.swift in Sources */,
 				DEEDEAD2AB25008C3CCAF7D7 /* SetupViews.swift in Sources */,
 				A79B998AC283916B7DEAB006 /* TelegramLink.swift in Sources */,
@@ -797,6 +808,7 @@
 				5E16737811633861DD72192E /* Models.swift in Sources */,
 				966082403049AA4A4D03B492 /* OpenStrudelApp.swift in Sources */,
 				929A1EC7F6CC34C5382DBE52 /* PrimaryHomeSettings.swift in Sources */,
+				B606D16C6E247AE3E20CE3D1 /* SSHConnectionReadiness.swift in Sources */,
 				0A6B2D38BEC73A4DBE2093F7 /* ServerSetup.swift in Sources */,
 				A164C5DB09FEADCF6861BF35 /* SetupViews.swift in Sources */,
 				9E26129063311A8AF124A802 /* TelegramLink.swift in Sources */,
@@ -1004,7 +1016,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = R4A779QVVY;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1102,7 +1114,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = R4A779QVVY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

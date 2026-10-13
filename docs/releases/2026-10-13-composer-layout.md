@@ -6,7 +6,7 @@ Build 37 is a macOS-only follow-up to [release 36](2026-10-13-server-recovery.md
 
 During an actual remote file-read acceptance check, the isolated Mac QA app sent its message successfully but stopped responding afterward. The server completed the request and preserved the reply. A three-second process sample showed the main thread repeatedly running SwiftUI layout and `ComposerTextField.sizeThatFits`, including changes to the live text container. The process used about one CPU core; this is not evidence that the earlier 30–40 GB report has the same cause.
 
-SwiftUI proposes several widths while measuring a view. The composer applied those proposals to the displayed `NSTextView` text container, changing its frame and triggering another layout. Measurement now uses a separate AppKit text layout, leaving the editor, selection and scroll state unchanged. The field still wraps, includes a trailing empty line, grows up to six lines and scrolls longer drafts.
+SwiftUI proposes several widths while measuring a view. The composer applied those proposals to the displayed `NSTextView` text container, changing its frame and triggering another layout. Measurement now uses a separate AppKit text layout, leaving the editor, selection and scroll state unchanged. The field still wraps, includes a trailing empty line, grows up to 126 points and scrolls longer drafts.
 
 ## Verification
 
@@ -17,3 +17,9 @@ SwiftUI proposes several widths while measuring a view. The composer applied tho
 - A 15-line draft with English, Russian, Hebrew, French and Spanish stayed editable. Four long/short replacement cycles followed by clearing returned the field to its compact state. The app remained responsive; afterward the observed process used 0% CPU and about 62 MiB RSS. This bounded observation is not a long-running memory guarantee.
 
 Private evidence is under `.data/release/2026-10-13-36/composer-fix/`, with the process sample and before/after test logs alongside it. Signing, public delivery and installation receipts for the Mac patch belong under `.data/release/2026-10-13-37/`.
+
+## Delivery
+
+PR #20 merged into `main` at `24137b06f89c29bdcd0475a2e54d850c3b1f114f`. The Developer ID-signed app and DMG were accepted by Apple's notarization service, stapled and accepted by Gatekeeper. The signed public Sparkle feed and stable Mac download serve build 37. An isolated build 36 app completed Sparkle's actual download, installation and relaunch to 37. Production Mac installation and health checks passed with the existing Home process and user data preserved. The rollback snapshot was marked healthy.
+
+DMG SHA256: `147107e4b9d794d8d170856a39767d58d711c0505c0641289be2be2717924f84`.
