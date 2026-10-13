@@ -12,7 +12,7 @@ This follows [Apple TN3179](https://developer.apple.com/documentation/technotes/
 
 ## Verification
 
-- All 170 native tests in 26 suites passed, including actual loopback connections, bounded failure, pending cancellation and cancellation before startup.
+- All 172 native tests in 26 suites passed, including actual loopback connections, bounded failure, pending cancellation and cancellation before startup. All 367 runtime tests and TypeScript typechecking passed after integrating account release 38.
 - A separately signed QA app with a distinct executable UUID reproduced the pending-permission case. After the user accepted the macOS prompt, the native wizard reached SSH identity confirmation, authentication and Ubuntu preflight, then began installing Home 36.
 - The displayed SSH fingerprint matched the server's independently inspected public host key.
 - A controlled restart of the disposable Lima VM regenerated its SSH host keys through cloud-init. The app correctly rejected that changed identity. This fixture behavior must not be counted as a successful native SSH retry or fixed by weakening host-key checks.
