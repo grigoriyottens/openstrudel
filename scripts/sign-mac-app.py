@@ -48,7 +48,8 @@ with tempfile.TemporaryDirectory(prefix="openstrudel-sign-") as temporary:
     sign(version / "XPCServices/Downloader.xpc", "--preserve-metadata=entitlements")
     sign(version / "Autoupdate")
     sign(version / "Updater.app")
-    sign(framework)
+    for embedded in sorted((app / "Contents/Frameworks").glob("*.framework")):
+        sign(embedded)
     sign(app, "--entitlements", str(app_entitlements))
 
 subprocess.run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)], check=True)
