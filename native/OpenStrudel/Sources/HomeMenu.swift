@@ -23,13 +23,17 @@ struct HomeMenu: View {
                 Label(client.displayName, systemImage: client.deviceSymbol)
                     .font(.body.weight(.semibold)).lineLimit(1)
                 Spacer(minLength: 8)
-                if busy {
-                    ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем состояние"))
-                } else {
-                    Button { Task { await refresh() } } label: { Image(systemName: "arrow.clockwise") }
-                        .buttonStyle(.borderless).foregroundStyle(AppTheme.secondaryText)
-                        .help(L("Обновить остатки")).accessibilityLabel(L("Обновить остатки"))
+                if let checked = accounts.compactMap({ UsageSummary.checked($0.usage) }).max() {
+                    Text(UsageSummary.updated(checked)).font(AppTypography.meta).monospacedDigit()
+                        .foregroundStyle(AppTheme.secondaryText).lineLimit(1)
                 }
+                Button { Task { await refresh() } } label: {
+                    Image(systemName: "arrow.clockwise").symbolEffect(.rotate, isActive: busy)
+                }
+                .buttonStyle(.borderless).foregroundStyle(AppTheme.secondaryText)
+                .disabled(busy)
+                .help(L("Обновить остатки"))
+                .accessibilityLabel(busy ? L("Обновляем состояние") : L("Обновить остатки"))
             }
             .frame(minHeight: 20)
             if library.visibleClients.count > 1 {
@@ -50,7 +54,7 @@ struct HomeMenu: View {
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { accountContentHeight = $0 }
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                .frame(height: min(accountContentHeight, 360))
+                .frame(height: min(accountContentHeight, 440))
             } else if busy {
                 Text(L("Загружаем аккаунты…")).foregroundStyle(AppTheme.secondaryText)
             } else if error == nil {
@@ -139,7 +143,7 @@ struct HomeMenu: View {
 private struct PopoverValueStyle: LabeledContentStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            configuration.label
+            VStack(alignment: .leading, spacing: 2) { configuration.label }
             Spacer(minLength: 8)
             configuration.content.foregroundStyle(AppTheme.secondaryText)
         }

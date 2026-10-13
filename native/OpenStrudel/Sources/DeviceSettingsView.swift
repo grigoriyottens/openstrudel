@@ -188,10 +188,13 @@ private struct DevicesPane: View {
                             MobilePairingSettings().environmentObject(device)
                         }
                     } label: {
-                        LabeledContent {
-                            Text(status(device)).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
-                        } label: {
-                            Label(device.displayName, systemImage: device.deviceSymbol)
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(device.displayName)
+                                Text(status(device)).font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                            }
+                        } icon: {
+                            Image(systemName: device.deviceSymbol)
                         }
                     }
                     .accessibilityIdentifier("deviceDetails")
@@ -269,10 +272,8 @@ private struct GeneralPane: View {
         HostingStoreSettings()
         #endif
         Section {
-            Link(L("Помощь"), destination: URL(string: "https://waiwai.is/openstrudel#help")!)
-                .foregroundStyle(AppTheme.accentText)
-            Link(L("Конфиденциальность"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
-                .foregroundStyle(AppTheme.accentText)
+            InkLink(title: L("Помощь"), destination: URL(string: "https://waiwai.is/openstrudel#help")!)
+            InkLink(title: L("Конфиденциальность"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
         }
         #if os(macOS)
         Section {
@@ -370,7 +371,7 @@ struct AddDeviceConfirmation: View {
         NavigationStack {
             VStack(spacing: 12) {
                 Image(systemName: connected ? "checkmark.circle.fill" : "desktopcomputer")
-                    .font(.system(size: 48)).foregroundStyle(AppTheme.accent)
+                    .font(.system(size: 48)).foregroundStyle(AppTheme.secondaryText)
                     .padding(.bottom, 4)
                     .accessibilityHidden(true)
                 Text(connected ? L("Устройство подключено") : L("Подключить «\(pairing.name)»?"))
@@ -472,7 +473,7 @@ struct DeviceAccountsView: View {
                         }
                     }
                     if let url = login.url {
-                        Link(L("Открыть OpenAI"), destination: url).foregroundStyle(AppTheme.accentText)
+                        InkLink(title: L("Открыть OpenAI"), destination: url)
                     }
                     Button(L("Отменить вход")) { perform {
                         let _: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + login.loginId), method: "DELETE")
@@ -503,7 +504,11 @@ struct DeviceAccountsView: View {
                     if refreshing { ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем остатки…")) }
                 }
             } footer: {
-                Text(L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
+                if let checked = accounts.compactMap({ UsageSummary.checked($0.usage) }).max() {
+                    Text(UsageSummary.updated(checked) + "\n" + L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
+                } else {
+                    Text(L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
+                }
             }
         }
         .task(id: deviceID) {
@@ -571,7 +576,6 @@ struct DeviceAccountsView: View {
             UsageSummary(usage: account.usage)
         } else if canManage && !account.account.isUnavailable {
             Button(L("Войти в OpenAI")) { perform { try await signIn(account.id) } }
-                .buttonStyle(.borderedProminent)
                 .disabled(login != nil || busy)
                 .accessibilityIdentifier("signInOpenAI")
         }
@@ -661,18 +665,24 @@ struct UsageSummary: View {
             Text(credits).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
         }
         if let resets = usage.resetCredits {
-            LabeledContent(L("Extra limit resets")) {
+            LabeledContent {
                 Text(String(resets.availableCount)).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
-            }
-            if let expires = resets.nextExpiresAt {
-                Text(L("Next expiry: \(Date(timeIntervalSince1970: expires).formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)))"))
-                    .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+            } label: {
+                Text(L("Extra limit resets"))
+                if let expires = resets.nextExpiresAt {
+                    Text(L("Next expiry: \(Date(timeIntervalSince1970: expires).formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)))"))
+                        .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                }
             }
         }
-        if let checked = ISO8601DateFormatter().date(from: usage.checkedAt) ?? DateFormatter.usageTimestamp.date(from: usage.checkedAt) {
-            Text(L("Updated \(checked.formatted(.dateTime.hour().minute().locale(L10n.locale)))"))
-                .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
-        }
+    }
+
+    /// When OpenAI last reported these numbers.
+    static func checked(_ usage: ManagedCodexAccount.Usage) -> Date? {
+        ISO8601DateFormatter().date(from: usage.checkedAt) ?? DateFormatter.usageTimestamp.date(from: usage.checkedAt)
+    }
+    static func updated(_ date: Date) -> String {
+        L("Updated \(date.formatted(.dateTime.hour().minute().locale(L10n.locale)))")
     }
 
     private var credits: String {
@@ -685,7 +695,7 @@ private struct UsageMeter: View {
     let window: ManagedCodexAccount.Usage.Window
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             LabeledContent(window.displayName) {
                 Text(caption).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
             }
