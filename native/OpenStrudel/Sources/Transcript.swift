@@ -288,6 +288,9 @@ struct ConversationHelper: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // The helper sits at the edge where the employee's replies start, so Russian or English
+        // replies in the Hebrew interface keep it under their first letters.
+        .paragraphDirection(of: client.messages.last { $0.direction == "outbound" }?.text ?? "")
         .animation(.easeInOut(duration: 0.15), value: working)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L("\(name) is working"))
