@@ -189,9 +189,12 @@ struct HomeUnavailableView: View {
                         SetupActionLabel(title: starting ? L("Готовим ваш Mac…") : L("Начать на этом Mac"))
                     }.primaryAction()
                         .disabled(starting).accessibilityIdentifier("setupThisMac")
-                    Text(L("Сотрудники и их файлы будут храниться здесь."))
-                        .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
-                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    // Only a first start needs to say where the work will live.
+                    if !reconnecting {
+                        Text(L("Сотрудники и их файлы будут храниться здесь."))
+                            .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    }
                 } else {
                     connectButton.primaryAction()
                 }
