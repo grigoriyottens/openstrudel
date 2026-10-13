@@ -39,6 +39,7 @@ struct ConnectDeviceView: View {
         .modifier(InterfaceLanguage())
     }
 
+    /// Three routes as one list: the same symbol column, title edge and chevron on every row.
     private var choices: some View {
         Form {
             Section {
@@ -49,15 +50,20 @@ struct ConnectDeviceView: View {
                     choice(ServerSetupFlow.shared.installation == nil ? L("Set up my server") : L("Continue server setup"),
                            detail: L("Already have a server? Enter its address and sign-in details."), symbol: "server.rack")
                 }.accessibilityIdentifier("setUpOwnServer")
+                // Cloud setup runs in its own stack, so this row opens it in place of the list.
+                Button { cloud = true } label: {
+                    HStack(spacing: 8) {
+                        choice(L("Get a server with DigitalOcean"), detail: L("Размещение оплачивается, пока вы не удалите его в DigitalOcean."), symbol: "cloud")
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.forward").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("getCloudServer")
             } footer: {
                 Text(L("Use assistants from your other devices here."))
-            }
-            Section {
-                Button { cloud = true } label: {
-                    Label { Text(L("Get a server with DigitalOcean")) } icon: { Image(systemName: "cloud").frame(width: 20) }
-                }
-                .buttonStyle(.borderless)
-                .accessibilityIdentifier("getCloudServer")
             }
         }
         .formStyle(.grouped)
@@ -98,21 +104,23 @@ private struct ConnectionLinkPage: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent(L("Ссылка подключения")) {
-                    HStack(spacing: 8) {
-                        SecureField(L("Ссылка подключения"), text: $invitation, prompt: Text(verbatim: "openstrudel://connect…")).labelsHidden()
-                            .environment(\.layoutDirection, .leftToRight)
-                            .accessibilityIdentifier("connectionInvitation")
-                            .onSubmit(confirm)
-                        PasteButton(payloadType: String.self) { values in
-                            if let value = values.first { invitation = value; error = nil }
-                        }.labelStyle(.titleOnly)
-                    }
+                // The link field takes the row; Paste sits beside it at the same control size.
+                HStack(spacing: 12) {
+                    SecureField(L("Ссылка подключения"), text: $invitation, prompt: Text(verbatim: "openstrudel://connect…")).labelsHidden()
+                        .environment(\.layoutDirection, .leftToRight)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("connectionInvitation")
+                        .onSubmit(confirm)
+                    PasteButton(payloadType: String.self) { values in
+                        if let value = values.first { invitation = value; error = nil }
+                    }.labelStyle(.titleOnly)
                 }
                 if let error {
                     Text(UserFacingError.text(error)).foregroundStyle(AppTheme.destructive)
                         .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("invitationError")
                 }
+            } header: {
+                Text(L("Ссылка подключения"))
             } footer: {
                 if let page = connectionPage {
                     Text(L("Откроется \(page.host ?? L("страница подключения")) в браузере. На странице нажмите «Открыть OpenStrudel»."))
@@ -246,7 +254,7 @@ private struct OwnServerSetupView: View {
             if flow.phase == .failed, flow.installation != nil { credentials }
             if flow.phase == .connected {
                 Section {
-                    Label { Text(flow.target?.host ?? "") } icon: { Image(systemName: "checkmark.circle.fill").foregroundStyle(AppTheme.accent) }
+                    Label { Text(flow.target?.host ?? "") } icon: { Image(systemName: "checkmark.circle.fill") }
                 } footer: { Text(L("Next, connect your ChatGPT account.")) }
             }
             if busy || localError != nil || flow.error != nil {
@@ -339,7 +347,7 @@ private struct OwnServerSetupView: View {
                 }
                 if let keyName {
                     Label { Text(keyName).lineLimit(1).truncationMode(.middle) } icon: {
-                        Image(systemName: "checkmark.circle").foregroundStyle(AppTheme.accent).frame(width: 20)
+                        Image(systemName: "checkmark.circle").frame(width: 20)
                     }.accessibilityIdentifier("selectedSSHKey")
                 }
                 SecureField(L("Key passphrase, if any"), text: $passphrase).accessibilityIdentifier("sshKeyPassphrase")
