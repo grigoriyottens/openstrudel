@@ -331,11 +331,12 @@
         .tone-swatch svg.icon { width: 16px; height: 16px; stroke-width: 2.2; }
 
     /* The invitation is the first screen: a welcome page on the canvas, not a dialog over an empty shell.
-       Character 96, display title, one ink capsule, centred at 40 % like the empty conversation. */
+       Character 96, display title, one ink capsule. Its centre sits at 40 % of the height: the first row is
+       80 % tall and centres the page, and grows to fit the page when the window is short. */
     body.locked .app { visibility: hidden; }
     body.locked .modal-backdrop.open { display: block; padding: 0; overflow-y: auto; background: var(--canvas); }
-    body.locked .modal { width: auto; min-height: 100%; max-height: none; overflow: visible; display: grid; grid-template-rows: 2fr auto 3fr; justify-items: center; padding: var(--space-8) var(--space-4) var(--space-7); border: 0; border-radius: 0; background: none; box-shadow: none; }
-    body.locked .page { grid-row: 2; width: min(100%, 400px); }
+    body.locked .modal { width: auto; min-height: 100%; max-height: none; overflow: visible; display: grid; grid-template-rows: minmax(80dvh, auto) 1fr; align-items: center; justify-items: center; padding: 0 var(--space-4); border: 0; border-radius: 0; background: none; box-shadow: none; }
+    body.locked .page { grid-row: 1; width: min(100%, 400px); padding-block: var(--space-6); }
     body.locked .page > .character { align-self: center; width: 96px; height: 96px; }
     body.locked .page > h2 { margin-top: var(--space-5); padding: 0; font: var(--semibold) 28px/34px var(--font-display); text-align: center; text-wrap: balance; }
     body.locked .page > .description { margin-top: var(--space-3); padding: 0; text-align: center; text-wrap: balance; }
