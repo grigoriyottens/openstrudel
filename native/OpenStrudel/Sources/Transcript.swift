@@ -342,48 +342,50 @@ struct InteractionCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // Groups 16 apart; a question sits 8 above its answer; the card's padding is 16.
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(interaction.title).font(AppTypography.interface.weight(.semibold))
                 if let detail = interaction.detail, !detail.isEmpty {
                     Text(detail).font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
             if let raw = interaction.url, let url = URL(string: raw) {
-                if interaction.questions.isEmpty {
-                    Button(L("Открыть подключение"), systemImage: "arrow.up.forward") { openURL(url) }.buttonStyle(.borderedProminent)
-                } else {
-                    Button(L("Открыть подключение"), systemImage: "arrow.up.forward") { openURL(url) }.buttonStyle(.bordered)
-                }
+                Button(L("Открыть подключение"), systemImage: "arrow.up.forward") { openURL(url) }
+                    .buttonStyle(CardButtonStyle(prominent: interaction.questions.isEmpty))
             }
             ForEach(interaction.questions) { question in
-                if !question.question.isEmpty { Text(question.question).font(AppTypography.interface) }
-                if question.options.isEmpty {
-                    TextField(L("Ваш ответ"), text: Binding(get: { answers[question.id] ?? "" }, set: { answers[question.id] = $0 }))
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel(question.question.isEmpty ? L("Ваш ответ") : question.question)
-                        .frame(minHeight: controlTarget)
-                } else {
-                    // Short choices sit side by side; long ones stack.
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 12) { options(for: question) }
-                        VStack(alignment: .leading, spacing: 12) { options(for: question) }
+                VStack(alignment: .leading, spacing: 8) {
+                    if !question.question.isEmpty { Text(question.question).font(AppTypography.interface) }
+                    if question.options.isEmpty {
+                        TextField(L("Ваш ответ"), text: Binding(get: { answers[question.id] ?? "" }, set: { answers[question.id] = $0 }))
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel(question.question.isEmpty ? L("Ваш ответ") : question.question)
+                            .frame(minHeight: controlTarget)
+                    } else {
+                        // Short choices sit side by side; long ones stack.
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 8) { options(for: question) }
+                            VStack(alignment: .leading, spacing: 8) { options(for: question) }
+                        }
                     }
                 }
             }
             if needsContinue || busy || error != nil {
-                HStack(spacing: 12) {
-                    if needsContinue {
-                        Button(L("Продолжить")) { submit() }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(busy || interaction.questions.contains { (answers[$0.id] ?? "").isEmpty })
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        if needsContinue {
+                            Button(L("Продолжить")) { submit() }
+                                .buttonStyle(CardButtonStyle(prominent: true))
+                                .disabled(busy || interaction.questions.contains { (answers[$0.id] ?? "").isEmpty })
+                        }
+                        if busy { ProgressView().controlSize(.small) }
                     }
-                    if busy { ProgressView().controlSize(.small) }
+                    if let error { Text(UserFacingError.text(error)).font(AppTypography.meta).foregroundStyle(AppTheme.warning) }
                 }
-                if let error { Text(UserFacingError.text(error)).font(AppTypography.meta).foregroundStyle(AppTheme.warning) }
             }
         }
-        .buttonBorderShape(.roundedRectangle(radius: Radius.control))
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .chatSurface(AppTheme.surface, radius: Radius.card)
@@ -391,15 +393,19 @@ struct InteractionCard: View {
 
     private func options(for question: ChatQuestion) -> some View {
         ForEach(question.options, id: \.self) { option in
+            let chosen = interaction.questions.count > 1 && answers[question.id] == option
             Button {
                 answers[question.id] = option
                 if interaction.questions.count == 1 { submit() }
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: 8) {
+                    if chosen { Image(systemName: "checkmark").font(AppTypography.meta.weight(.semibold)) }
                     Text(option).fixedSize(horizontal: false, vertical: true)
-                    if interaction.questions.count > 1 && answers[question.id] == option { Image(systemName: "checkmark") }
-                }.frame(minHeight: controlTarget)
-            }.buttonStyle(.bordered).disabled(busy)
+                }
+            }
+            .buttonStyle(CardButtonStyle(prominent: false))
+            .accessibilityAddTraits(chosen ? .isSelected : [])
+            .disabled(busy)
         }
     }
 
@@ -524,6 +530,44 @@ struct TranscriptRows: View {
 
     private func exactTime(_ message: HomeMessage) -> String {
         message.sentAt.map { ChatClock.exact($0, hasTime: message.hasTime) } ?? ""
+    }
+}
+
+/// Card actions at one height and radius. The one prominent action is ink with a canvas-coloured
+/// label; the others are a quiet tint of the text colour. Neither changes with window focus.
+private struct CardButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    let prominent: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+        configuration.label
+            .font(AppTypography.interface.weight(.medium))
+            .labelStyle(CardButtonLabel())
+            .foregroundStyle(label)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .frame(minHeight: controlTarget)
+            .background(fill(pressed: configuration.isPressed), in: shape)
+            .contentShape(shape)
+    }
+
+    private var label: AnyShapeStyle {
+        guard isEnabled else { return AnyShapeStyle(.tertiary) }
+        return prominent ? AnyShapeStyle(AppTheme.canvas) : AnyShapeStyle(.primary)
+    }
+
+    private func fill(pressed: Bool) -> AnyShapeStyle {
+        guard isEnabled else { return AnyShapeStyle(.primary.opacity(0.06)) }
+        if prominent { return AnyShapeStyle(pressed ? AppTheme.accentText.mix(with: AppTheme.canvas, by: 0.25) : AppTheme.accentText) }
+        return AnyShapeStyle(.primary.opacity(pressed ? 0.14 : 0.08))
+    }
+}
+
+/// An icon and its label: 8 apart.
+private struct CardButtonLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) { configuration.icon; configuration.title }
     }
 }
 
