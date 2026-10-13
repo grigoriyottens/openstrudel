@@ -132,27 +132,30 @@ async function bootstrapWeb() {
   if (key) history.replaceState(null,'',location.pathname);
   try {
     const session = key ? await api('/auth/session',{method:'POST',body:JSON.stringify({key})}) : await api('/auth/session');
+    if (!session.csrf) { showWelcome(); return; }
     state.csrf=session.csrf; state.owner=session.owner; state.authenticated=true; closeModal(); await refresh();
     restoreDraft();
     const transfer = JSON.parse(localStorage.getItem('openstrudel.transfer') || 'null');
     if (transfer) await watchTransfer(transfer);
     state.refreshTimer=setInterval(()=>{ if(!document.hidden && !state.loading) void refresh(); },5000);
-  } catch(e) {
-    const page=modalPage(t("Подключитесь к своей команде"),t("Откройте приглашение для браузера из настроек OpenStrudel на Mac или сервере с вашими сотрудниками."),{close:false,locked:true});
-    page.box.prepend(characterImage(null,96));
-    const input=field(page.content,t("Ссылка с приглашением")); input.value=state.invitationDraft||''; input.type='url'; input.autocomplete='off';
-    const language=languageField(page,()=>{state.invitationDraft=input.value;void bootstrapWeb();});
-    language.className='language-line'; page.box.append(language);
-    if(key) page.report(e);
-    action(page,t("Подключиться"),async()=>{
-      const url=new URL(input.value.trim());
-      if(url.origin!==location.origin) throw new Error(t("Это приглашение для другого устройства. Откройте его адрес в браузере."));
-      const invite=new URLSearchParams(url.hash.slice(1)).get('invite'); if(!invite) throw new Error(t("В ссылке нет приглашения."));
-      const session=await api('/auth/session',{method:'POST',body:JSON.stringify({key:invite})});
-      state.csrf=session.csrf; state.owner=session.owner; closeModal(); await bootstrapWeb();
-    },true);
-    input.focus();
-  }
+  } catch(e) { showWelcome(key ? e : null); }
+}
+/* The first screen for a browser that is not signed in. */
+function showWelcome(error) {
+  const page=modalPage(t("Подключитесь к своей команде"),t("Откройте приглашение для браузера из настроек OpenStrudel на Mac или сервере с вашими сотрудниками."),{close:false,locked:true});
+  page.box.prepend(characterImage(null,96));
+  const input=field(page.content,t("Ссылка с приглашением")); input.value=state.invitationDraft||''; input.type='url'; input.autocomplete='off';
+  const language=languageField(page,()=>{state.invitationDraft=input.value;showWelcome();$('interface-language').focus();});
+  language.className='language-line'; page.box.append(language);
+  if(error) page.report(error);
+  action(page,t("Подключиться"),async()=>{
+    const url=new URL(input.value.trim());
+    if(url.origin!==location.origin) throw new Error(t("Это приглашение для другого устройства. Откройте его адрес в браузере."));
+    const invite=new URLSearchParams(url.hash.slice(1)).get('invite'); if(!invite) throw new Error(t("В ссылке нет приглашения."));
+    const session=await api('/auth/session',{method:'POST',body:JSON.stringify({key:invite})});
+    state.csrf=session.csrf; state.owner=session.owner; closeModal(); await bootstrapWeb();
+  },true);
+  input.focus();
 }
 window.addEventListener('hashchange',()=>{ if(new URLSearchParams(location.hash.slice(1)).has('invite')) void bootstrapWeb(); });
 async function openHomeSettings() {
