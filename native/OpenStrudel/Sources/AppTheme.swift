@@ -9,9 +9,9 @@ enum AppTheme {
     static let userBubble = Color("UserBubbleColor")
     /// Hairlines and rules only, never an input border.
     static let separator = Color("SeparatorColor")
-    /// Fills, selection, focus and the send button. White labels read on it in every appearance.
+    /// The warm graphite system accent: selection, focus, switches and checkboxes.
     static let accent = Color("AccentColor")
-    /// Links and accent text on the canvas.
+    /// Ink: links (underlined), the send button and primary fills, whose labels use the canvas colour.
     static let accentText = Color("AccentText")
     static let secondaryText = Color("SecondaryText")
     static let warning = Color("WarningText")
@@ -101,7 +101,7 @@ enum Radius {
 
 enum AvatarSize {
     static let toolbar: CGFloat = 24
-    static let row: CGFloat = 32
+    static let row: CGFloat = 36
     static let header: CGFloat = 64
     static let hero: CGFloat = 96
 }
