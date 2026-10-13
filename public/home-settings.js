@@ -37,6 +37,8 @@ function action(page, title, work, kind = false) {
 function field(parent, label, type = 'text') {
   const wrapper = element('label',label); const input = element('input','','field'); input.type = type; if(type === 'password') input.autocomplete = 'new-password'; wrapper.append(input); parent.append(wrapper); return input;
 }
+/* A disclosure line with an SVG chevron that turns down when open. */
+function summaryLine(text) { const node = element('summary'); node.append(icon('chevron', true), element('span', text)); return node; }
 function group(parent) { const box = element('div', '', 'group'); parent.append(box); return box; }
 /* A list row: a navigation row when it has an action, a read-only row otherwise. */
 function row(parent, title, onclick, { detail, iconName, avatar, href, className } = {}) {
@@ -120,6 +122,7 @@ async function openTelegramSettings() {
 }
 async function bootstrapWeb() {
   await languageReady;
+  paintHeader();
   clearInterval(state.refreshTimer);
   const key = new URLSearchParams(location.hash.slice(1)).get('invite');
   if (key) history.replaceState(null,'',location.pathname);
@@ -264,7 +267,7 @@ async function openAccounts(deviceId, force=false) {
       if(data.accounts.filter(other=>other.account.email===entry.account.email&&other.account.planType===entry.account.planType).length>1)card.append(element('small',t('Connection {0}',entry.id.slice(-6))));
       if(i===0&&data.accounts.length>1)card.append(element('small',t('По умолчанию для новых поручений')));
       if(entry.account.connected) {
-      const limits=element('details');limits.append(element('summary',t('Limits and credits')));card.append(limits);
+      const limits=element('details');limits.append(summaryLine(t('Limits and credits')));card.append(limits);
       const usage=entry.usage || {windows:[],unavailable:true};
       if(usage.windows.length) for(const window of usage.windows) {
         const name=window.windowDurationMins===300?t('5 часов'):window.windowDurationMins===10080?t('Неделя'):window.windowDurationMins===1440?t('Сутки'):i18n.error(window.name);
@@ -278,7 +281,7 @@ async function openAccounts(deviceId, force=false) {
       if(usage.checkedAt)limits.append(element('small',t('Updated {0}',new Date(usage.checkedAt).toLocaleTimeString(i18n.language,{hour:'numeric',minute:'2-digit'}))));
       }
       if(data.canManage) {
-        const more=element('details'), summary=element('summary',t('Действия с аккаунтом'));more.append(summary);
+        const more=element('details'), summary=summaryLine(t('Действия с аккаунтом'));more.append(summary);
         const rename=element('button',t('Rename account…'),'secondary');
         rename.onclick=()=>{
           const edit=modalPage(t('Rename account'),t('Choose a name you recognise. Your OpenAI account stays the same.'),{close:'cancel'});
@@ -339,9 +342,11 @@ function openNavigation() {
     const button=row(list,profile?.name||'OpenStrudel',async()=>{closeModal();try{await selectAgent(profile?.id||null);}catch(e){$('status').textContent=e.message;}},{avatar,detail:isOffline(profile)?t("Не на связи"):profile?previewLine(profile.preview)||profile.purpose:t("Помощник для ваших задач"),className:'agent-row'+(current?' current':'')});
     if(current) button.setAttribute('aria-current','page');
   }
+  // Symbols sit in the avatar column so every title above and below starts on one edge.
+  const symbol=name=>{const box=element('span','','avatar symbol');box.append(icon(name));return box;};
   const more=group(page.content);
-  row(more,t("Настройки"),openHomeSettings,{iconName:'gear'});
-  row(more,t("Новый сотрудник"),openCreateAgent,{iconName:'plus'});
+  row(more,t("Настройки"),openHomeSettings,{avatar:symbol('gear')});
+  row(more,t("Новый сотрудник"),openCreateAgent,{avatar:symbol('plus')});
 }
 async function sendDraft(event) {
   event.preventDefault(); const text=$('draft').value.trim(); if(!text||state.loading) return;
