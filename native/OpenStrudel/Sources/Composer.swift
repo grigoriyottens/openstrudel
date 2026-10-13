@@ -72,8 +72,9 @@ struct Composer: View {
             guard voice.phase == .idle else { return false }
             importProviders(providers); return true
         }
-        .sheet(isPresented: $showDictation) { DictationSetupView { voice.start() } }
-        .sheet(item: $editingMessage) { message in QueuedMessageEditor(message: message).environmentObject(client) }
+        // Sheets start from the system's direction, so they take the interface language again.
+        .sheet(isPresented: $showDictation) { DictationSetupView { voice.start() }.modifier(InterfaceLanguage()) }
+        .sheet(item: $editingMessage) { message in QueuedMessageEditor(message: message).environmentObject(client).modifier(InterfaceLanguage()) }
         .photosPicker(isPresented: $showPhotos, selection: $photoSelection, maxSelectionCount: max(1, AttachmentImport.countLimit - files.count), matching: .images)
         .onChange(of: photoSelection) { _, selection in
             guard !selection.isEmpty else { return }
