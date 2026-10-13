@@ -217,6 +217,7 @@
     .send:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-text), var(--canvas) 16%); }
     .send:active:not(:disabled) { transform: scale(.92); }
     .send:disabled { background: var(--hover); color: var(--secondary); opacity: .55; }
+    .send[data-mode=stop] svg.icon { fill: currentColor; }
 
     /* Controls */
     .primary, .secondary, .destructive { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: var(--control); padding: 0 var(--space-3); border-radius: var(--radius-control); font-weight: var(--medium); text-align: center; text-decoration: none; transition: background-color .15s, transform .1s; }
@@ -390,6 +391,7 @@
       gear: ['M7.98 4.14 8.59 2.02h2.82l.61 2.12.7.29 1.93-1.07 1.99 1.99-1.07 1.93.29.7 2.12.61v2.82l-2.12.61-.29.7 1.07 1.93-1.99 1.99-1.93-1.07-.7.29-.61 2.12H8.59l-.61-2.12-.7-.29-1.93 1.07-1.99-1.99 1.07-1.93-.29-.7-2.12-.61V8.59l2.12-.61.29-.7-1.07-1.93 1.99-1.99 1.93 1.07Z', 'M12.6 10a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 1 1 5.2 0Z'],
       sidebar: ['M4.5 4h11A2.5 2.5 0 0 1 18 6.5v7a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 2 13.5v-7A2.5 2.5 0 0 1 4.5 4Z', 'M7.5 4.5v11'],
       arrowUp: ['M10 15.5V4.5', 'M5.5 9 10 4.5 14.5 9'],
+      stop: ['M7 6h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z'],
       check: ['M5 10.5 8.25 13.75 15 7'],
       copy: ['M8 7h7a1.5 1.5 0 0 1 1.5 1.5v7A1.5 1.5 0 0 1 15 17H8a1.5 1.5 0 0 1-1.5-1.5v-7A1.5 1.5 0 0 1 8 7Z', 'M3.5 12.5V5A1.5 1.5 0 0 1 5 3.5h7.5'],
       doc: ['M5.5 2.5h5.5l4 4v10a1 1 0 0 1-1 1h-8.5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Z', 'M11 2.5v4h4'],
@@ -704,15 +706,30 @@
       if (opened && !state.messages.length && matchMedia('(pointer: fine)').matches && !$('modal').classList.contains('open')) $('draft').focus({ preventScroll: true });
     }
     async function selectAgent(id) { notify(''); try { saveDraft(); state.chat = null; state.selected = id; state.messages=[]; state.interactions=[]; paintHeader(); restoreDraft(); renderImportedChats(); renderAgents(); await loadConversation(); } catch(e) { renderMessages(); notify(e.message, true); } }
-    async function refresh() { try { const [health, profiles, integrations, devices] = await Promise.all([api('/health'), api('/v1/profiles'), api('/v1/integrations'), api('/v1/devices').catch(() => null)]); state.unreachable=false; state.homeId=health.homeId;state.nodeId=health.nodeId;state.archiveEncryption=health.agentArchiveEncryption; state.hostingOrigin=health.hostingOrigin; state.archiveVersion = health.agentArchiveVersion; state.appearanceVersion=health.agentAppearanceVersion; state.importedChats = profiles.importedConversations || []; state.profiles = profiles.profiles || []; state.telegram = integrations.telegram; if (devices?.devices) state.devices = devices.devices; renderAgents(); paintHeader(); await loadConversation(); if ($('connection-notice').hasAttribute('data-loading')) notify(''); } catch (error) { state.unreachable = !error.status || error.status >= 500; await checkOutbox();renderAgents();paintHeader();renderMessages();notify(error.message, true); if(error.moved && !state.showedMoved) { state.showedMoved=true; const page=modalPage(t("Подключение изменилось"),t("Приложения переподключатся автоматически. Для браузера создайте новое приглашение на новом устройстве.")); const link=element('a',t("Открыть устройство")); const url=new URL(error.moved.url); if(url.protocol==='https:') { link.href=url.href;link.rel='noreferrer';page.content.append(link); } } } }
+    async function refresh() { try { const [health, profiles, integrations, devices] = await Promise.all([api('/health'), api('/v1/profiles'), api('/v1/integrations'), api('/v1/devices').catch(() => null)]); state.unreachable=false; state.homeId=health.homeId;state.nodeId=health.nodeId;state.archiveEncryption=health.agentArchiveEncryption; state.hostingOrigin=health.hostingOrigin; state.archiveVersion = health.agentArchiveVersion; state.appearanceVersion=health.agentAppearanceVersion; state.turnControl=health.turnControlVersion===1; state.importedChats = profiles.importedConversations || []; state.profiles = profiles.profiles || []; state.telegram = integrations.telegram; if (devices?.devices) state.devices = devices.devices; renderAgents(); paintHeader(); await loadConversation(); if ($('connection-notice').hasAttribute('data-loading')) notify(''); } catch (error) { state.unreachable = !error.status || error.status >= 500; await checkOutbox();renderAgents();paintHeader();renderMessages();notify(error.message, true); if(error.moved && !state.showedMoved) { state.showedMoved=true; const page=modalPage(t("Подключение изменилось"),t("Приложения переподключатся автоматически. Для браузера создайте новое приглашение на новом устройстве.")); const link=element('a',t("Открыть устройство")); const url=new URL(error.moved.url); if(url.protocol==='https:') { link.href=url.href;link.rel='noreferrer';page.content.append(link); } } } }
+    /* The reply the employee is working on now; an empty field turns Send into Stop for it, as on the Mac. */
+    const runningMessage = () => state.turnControl ? state.messages.find(m => m.channel === 'api' && m.direction === 'inbound' && m.status === 'running' && !m.replyToId) : null;
     /* The empty field follows the interface so its placeholder lines up; typed text takes its own direction. */
     function syncDraft() {
-      const draft = $('draft');
-      $('send').disabled = !draft.value.trim();
+      const draft = $('draft'), send = $('send'), stop = !draft.value.trim() && Boolean(runningMessage());
+      send.disabled = !draft.value.trim() && !stop;
+      if (send.dataset.mode !== (stop ? 'stop' : 'send')) {
+        send.dataset.mode = stop ? 'stop' : 'send';
+        send.dataset.i18nAriaLabel = stop ? "Остановить ответ" : "Отправить";
+        send.dataset.i18nTitle = stop ? "Остановить текущий ответ" : "Отправить";
+        send.setAttribute('aria-label', t(send.dataset.i18nAriaLabel)); send.title = t(send.dataset.i18nTitle);
+        send.replaceChildren(icon(stop ? 'stop' : 'arrowUp'));
+      }
       draft.dir = draft.value ? 'auto' : document.documentElement.dir || 'ltr';
       draft.style.height = 'auto'; draft.style.height = draft.scrollHeight + 'px';
     }
     $('draft').addEventListener('input', syncDraft);
+    /* Return sends and Shift+Return adds a line, as on the Mac. Touch keyboards keep Return as a new line. */
+    $('draft').addEventListener('keydown', event => {
+      if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229 || !matchMedia('(pointer: fine)').matches) return;
+      event.preventDefault();
+      if ($('draft').value.trim()) $('composer').requestSubmit();
+    });
     $('composer').onsubmit = event => sendDraft(event);
     $('new-employee').onclick = () => openCreateAgent(); $('mobile-agents').onclick = () => openNavigation(); $('settings').onclick = () => openHomeSettings();
     function showModal(content) { if(!$('modal').classList.contains('open')) state.modalFocus=document.activeElement; $('modal-content').replaceChildren(content); $('modal-content').setAttribute('aria-label',content.querySelector('h2')?.textContent||'OpenStrudel');$('modal').classList.add('open');document.querySelector('main').inert=true; } function closeModal() { $('modal').classList.remove('open');document.body.classList.remove('locked');state.fromSettings=false;document.querySelector('main').inert=false;state.modalFocus?.focus(); }

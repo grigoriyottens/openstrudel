@@ -356,7 +356,9 @@ function openNavigation() {
   row(more,t("Новый сотрудник"),openCreateAgent,{avatar:symbol('plus')});
 }
 async function sendDraft(event) {
-  event.preventDefault(); const text=$('draft').value.trim(); if(!text||state.loading) return;
+  event.preventDefault(); const text=$('draft').value.trim();
+  if(!text) { const running=runningMessage(); if(running) await stopReply(running); return; }
+  if(state.loading) return;
   let draft; try { draft = saveDraft(); } catch(e) { notify(e.message); return; }
   $('draft').value=''; syncDraft();
   await deliver({...draft,profile:state.selected||null,conversationId:state.chat||null});
@@ -383,6 +385,11 @@ async function deliver(message) {
     state.pending=state.pending.map(item=>item.externalId===draft.externalId?{...item,error:reason}:item);
   }
   finally {state.loading=false;syncDraft();renderMessages();}
+}
+async function stopReply(message) {
+  $('send').disabled=true;
+  try { await api(`/v1/conversations/${encodeURIComponent(state.conversationID)}/messages/${encodeURIComponent(message.id)}/cancel`,{method:'POST',body:'{}'}); await refresh(); }
+  catch(e) { notify(e.message); syncDraft(); }
 }
 function draftKey() { return 'openstrudel.draft.' + (state.homeId || location.origin) + '.' + (state.chat || state.selected || 'main'); }
 function saveDraft() {
