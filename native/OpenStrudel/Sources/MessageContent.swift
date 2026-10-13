@@ -41,9 +41,12 @@ enum ImportedTranscript {
     }
 }
 
-/// Imported history from other people: each passage on the surface, each file as a chip.
+/// Imported history: each passage on its bubble, each file as a chip.
 struct ImportedMessageText: View {
     let source: String
+    var fill: Color = AppTheme.surface
+    /// The owner's history sits on the trailing edge like the rest of their messages.
+    var alignment: HorizontalAlignment = .leading
     @State private var selected: Document?
     private struct Document: Identifiable {
         let id: Int
@@ -52,11 +55,11 @@ struct ImportedMessageText: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: alignment, spacing: 8) {
             ForEach(Array(ImportedTranscript.parts(source).enumerated()), id: \.offset) { index, part in
                 switch part {
                 case .text(let text):
-                    ChatBubble(text: text, fill: AppTheme.surface)
+                    ChatBubble(text: text, fill: fill)
                 case .file(let name, let text):
                     Button { selected = Document(id: index, name: name, text: text) } label: {
                         FileChip(icon: "doc.text", name: name, detail: L("Открыть текст из истории"))

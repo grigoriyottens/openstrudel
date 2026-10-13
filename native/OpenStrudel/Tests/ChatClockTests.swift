@@ -2,9 +2,9 @@ import Foundation
 import Testing
 
 struct ChatClockTests {
-    private func message(_ createdAt: String, imported: Bool? = nil, direction: String = "inbound") -> HomeMessage {
+    private func message(_ createdAt: String, imported: Bool? = nil, direction: String = "inbound", author: String? = nil) -> HomeMessage {
         HomeMessage(id: "m", conversationId: "c", channel: "api", direction: direction, replyToId: nil, text: "Привет",
-                    externalId: nil, createdAt: createdAt, status: "completed", error: nil, kind: "text", imported: imported)
+                    externalId: nil, createdAt: createdAt, status: "completed", error: nil, kind: "text", author: author, imported: imported)
     }
 
     private var utc: Calendar {
@@ -111,5 +111,25 @@ struct ChatClockTests {
         #expect(MessagePages.opensCluster(last.addingTimeInterval(29 * 60 + 59), after: last, calendar: utc) == false)
         #expect(MessagePages.opensCluster(last.addingTimeInterval(30 * 60), after: last, calendar: utc))
         #expect(MessagePages.opensCluster(last, after: nil, calendar: utc))
+    }
+
+    @Test func importedHistoryFromOnePersonReadsAsOneToOne() {
+        let history = [
+            message("2026-10-07T12:00:00Z", imported: true, author: "Mik"),
+            message("2026-10-07T12:01:00Z", imported: true, direction: "outbound", author: "Launch Manager"),
+            message("2026-10-07T12:02:00Z", imported: true, author: "Mik"),
+            message("2026-10-07T12:03:00Z", author: nil),
+        ]
+        #expect(!MessagePages.isMultiAuthor(history))
+        #expect(!MessagePages.isMultiAuthor([]))
+    }
+
+    @Test func importedHistoryFromSeveralPeopleShowsWhoWrote() {
+        let history = [
+            message("2026-10-07T12:00:00Z", imported: true, author: "Anna"),
+            message("2026-10-07T12:01:00Z", imported: true, direction: "outbound", author: "Launch Manager"),
+            message("2026-10-07T12:02:00Z", imported: true, author: "Boris"),
+        ]
+        #expect(MessagePages.isMultiAuthor(history))
     }
 }

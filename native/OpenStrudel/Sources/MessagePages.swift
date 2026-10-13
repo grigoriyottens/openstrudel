@@ -31,6 +31,17 @@ enum MessagePages {
         }
     }
 
+    /// Imported history with several people's messages shows who wrote each one; history from
+    /// one person reads like any one-to-one conversation.
+    static func isMultiAuthor(_ messages: [HomeMessage]) -> Bool {
+        var authors = Set<String>()
+        for message in messages where message.imported == true && message.direction == "inbound" {
+            if let author = message.author { authors.insert(author) }
+            if authors.count > 1 { return true }
+        }
+        return false
+    }
+
     /// Pages are ordered by the server, including messages with identical dates.
     static func merge(existing: [HomeMessage], page: [HomeMessage], updates: [HomeMessage] = [], prepend: Bool = false) -> [HomeMessage] {
         let existingIDs = Set(existing.map(\.id))

@@ -114,14 +114,15 @@ struct MessageBubble: View {
     @EnvironmentObject private var client: HomeClient
     @State private var previewURL: URL?
     let message: HomeMessage
-    /// Other people write here too, so inbound messages carry their author.
+    /// Other people write here too (a Telegram group or history from several people),
+    /// so inbound messages sit on the surface under their author.
     let shared: Bool
     let bubbleWidth: CGFloat
     /// A time heading above already shows this message's time.
     var headed = false
 
     private var isInbound: Bool { message.direction == "inbound" }
-    private var fromSomeoneElse: Bool { isInbound && (shared || message.imported == true) }
+    private var fromSomeoneElse: Bool { isInbound && shared }
 
     var body: some View {
         Group {
@@ -148,7 +149,9 @@ struct MessageBubble: View {
     private var person: some View {
         VStack(alignment: .trailing, spacing: 4) {
             VStack(alignment: .trailing, spacing: 8) {
-                if !message.text.isEmpty { ChatBubble(text: message.text) }
+                if message.text.isEmpty { EmptyView() }
+                else if message.imported == true { ImportedMessageText(source: message.text, fill: AppTheme.userBubble, alignment: .trailing) }
+                else { ChatBubble(text: message.text) }
                 attachments
             }
             if message.status == "queued" { Text(L("В очереди")).modifier(MetaLine()).padding(.trailing, 16) }
@@ -428,7 +431,7 @@ struct TranscriptRows: View {
     var body: some View {
         let rows = MessagePages.rows(client.messages)
         let pending = client.visiblePendingMessages
-        let shared = client.activeTelegramGroup != nil
+        let shared = client.activeTelegramGroup != nil || MessagePages.isMultiAuthor(client.messages)
         let bubbleWidth = (columnWidth * 0.75).rounded()
         let start: CGFloat = client.hasEarlierMessages ? Self.sameSide : 0
         // The side of the last item so far: person (inbound) or employee.
