@@ -12,6 +12,8 @@ struct OpenStrudelRootView: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var sidebarQuery = ""
     @FocusState private var searchFocused: Bool
+    /// The toolbar or title bar above this view; the window minimum includes it.
+    @State private var titleBarHeight: CGFloat = 0
     #else
     @State private var showSettings = false
     #endif
@@ -78,7 +80,9 @@ struct OpenStrudelRootView: View {
             Text(UserFacingError.text(client.errorMessage ?? ""))
         }
         #if os(macOS)
-        .frame(minWidth: 760, minHeight: 560)
+        // SwiftUI measures this view below the toolbar, so the window's 560 includes the toolbar.
+        .frame(minWidth: 760, minHeight: 560 - titleBarHeight)
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { titleBarHeight = $0 }
         .containerBackground(AppTheme.canvas, for: .window)
         #endif
     }
