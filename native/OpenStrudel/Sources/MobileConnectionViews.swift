@@ -399,7 +399,7 @@ struct ConnectionInvitationView: View {
     @Environment(\.openURL) private var openURL
     let onConfirm: (MacPairing) -> Void
     var onBack: (() -> Void)? = nil
-    @State private var invitation = UserDefaults.standard.string(forKey: "qa.invitation") ?? "" // QA-TEMP
+    @State private var invitation = ""
     @State private var error: String?
     @State private var openingPage = false
     @FocusState private var focused: Bool
