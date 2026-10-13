@@ -62,11 +62,14 @@ struct Sidebar: View {
                     }
                 }
             }
+        }
+        .listStyle(.sidebar)
+        // Over the list, so the system centres it in the empty sidebar.
+        .overlay {
             if !showsMain && library.visibleClients.allSatisfy({ people(on: $0).isEmpty && groups(on: $0).isEmpty }) {
                 ContentUnavailableView.search(text: searchTerm)
             }
         }
-        .listStyle(.sidebar)
         .focused($listFocused)
         // The system leaves 9.5 between the search field and the first selection; the contract asks for 16.
         .safeAreaPadding(.top, 6.5)
@@ -122,7 +125,9 @@ struct Sidebar: View {
                 .tag(SidebarItem.draft(client: source.id))
         }
         ForEach(people) { profile in
-            SidebarRow(name: profile.name, preview: profile.previewText.isEmpty ? profile.roleText : profile.previewText,
+            // Every row keeps two lines: the last message, the role, or the empty conversation's prompt.
+            SidebarRow(name: profile.name,
+                       preview: !profile.previewText.isEmpty ? profile.previewText : !profile.roleText.isEmpty ? profile.roleText : L("Напишите, что нужно."),
                        appearance: profile.resolvedAppearance, offline: source.isOffline(profile))
                 .tag(SidebarItem.employee(client: source.id, profile: profile.id))
                 .accessibilityIdentifier("employee-" + profile.id)
@@ -257,10 +262,10 @@ struct SidebarRow: View {
                 }
             }
         }
-        // The list adds 4 above and below and 6 at the leading edge, so each row is
-        // a 60-pt step whose selection keeps the character 12 from every edge.
-        .padding(.vertical, 8)
-        .padding(.leading, SidebarMetrics.leadingInset)
+        // The list adds 4 above and below and 6 at each side, so each row is a 56-pt step
+        // (the web's row) with 10 above and below the character and 12 inside the selection's sides.
+        .padding(.vertical, 6)
+        .padding(.horizontal, SidebarMetrics.leadingInset)
         .accessibilityElement(children: .combine)
     }
 }
