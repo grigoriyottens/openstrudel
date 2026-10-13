@@ -25,47 +25,25 @@ struct ConversationView: View {
             // The transcript runs under the toolbar and the composer; the system draws the scroll edges.
             transcript(proxy)
                 .safeAreaBar(edge: .top, spacing: 0) { topBar }
-                .safeAreaBar(edge: .bottom, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if hasNewMessages && !followsLatest {
-                            newMessagesButton(proxy).frame(maxWidth: .infinity)
-                        }
-                        telegramHint
-                        composer
-                    }
-                    .frame(maxWidth: Layout.column)
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 24)
-                    .frame(maxWidth: .infinity)
-                }
+                .safeAreaBar(edge: .bottom, spacing: 0) { bottomBar(proxy) }
             #else
             VStack(spacing: 0) {
                 if !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
                     ConversationSources()
-                        .padding(.horizontal, 8).padding(.vertical, 8)
+                        .padding(.horizontal, Layout.edge).padding(.vertical, 8)
                 }
                 if showsConnectionBanner {
-                    connectionBanner.padding(.horizontal, 8).padding(.vertical, 10)
+                    connectionBanner.padding(.horizontal, Layout.edge).padding(.vertical, 8)
                 }
                 if showsRecoveryNotice {
                     OpenAIRecoveryNotice()
-                        .padding(.horizontal, 8).padding(.vertical, 8)
+                        .padding(.horizontal, Layout.edge).padding(.vertical, 8)
                 }
+                // Animate scrolling, not pending-row replacement: an implicit
+                // layout animation can loop while the iPad keyboard is visible.
                 transcript(proxy)
-                    // Animate scrolling, not pending-row replacement: an implicit
-                    // layout animation can loop while the iPad keyboard is visible.
-                    .overlay(alignment: .bottom) {
-                        if hasNewMessages && !followsLatest {
-                            newMessagesButton(proxy).padding(.bottom, 8)
-                        }
-                    }
-                telegramHint
-                    .frame(maxWidth: Layout.column, alignment: .leading).padding(.horizontal, 8)
-                composer
-                    .frame(maxWidth: Layout.column)
-                    .padding(.horizontal, 8)
+                    .safeAreaBar(edge: .bottom, spacing: 0) { bottomBar(proxy) }
             }
-            .padding(.bottom, 8)
             #endif
         }
         .task { draft = library.draft(for: draftKey); pickedFiles = library.fileDrafts[draftKey] ?? [] }
@@ -147,16 +125,10 @@ struct ConversationView: View {
                 TranscriptRows(proxy: proxy, followsLatest: $followsLatest)
                     .frame(maxWidth: Layout.column, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    #if os(macOS)
-                    // 32 under the toolbar. The room above the composer is the transcript's own last
-                    // row, so following the latest message and scrolling to the end both leave 24.
-                    .padding(.horizontal, 32)
-                    .padding(.top, 32)
-                    #else
-                    .padding(.horizontal, 8)
-                    .padding(.top, 18)
-                    .padding(.bottom, 24)
-                    #endif
+                    // The room above the composer is the transcript's own last row, so
+                    // following the latest message and scrolling to the end both leave 24.
+                    .padding(.horizontal, Layout.edge)
+                    .padding(.top, Layout.belowToolbar)
             }
         }
         .scrollIndicators(.hidden)
@@ -209,6 +181,21 @@ struct ConversationView: View {
     private var showsConnectionBanner: Bool { client.connectionNeedsPairing || client.homeUnreachable || client.health == nil }
     private var showsRecoveryNotice: Bool { client.openAIAccount?.connected == false && !client.homeUnreachable && client.health != nil }
 
+    /// The new-messages button, the Telegram hint and the composer, on the transcript column's edges.
+    private func bottomBar(_ proxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if hasNewMessages && !followsLatest {
+                newMessagesButton(proxy).frame(maxWidth: .infinity)
+            }
+            telegramHint
+            composer
+        }
+        .frame(maxWidth: Layout.column)
+        .padding(.horizontal, Layout.edge)
+        .padding(.bottom, Layout.belowComposer)
+        .frame(maxWidth: .infinity)
+    }
+
     #if os(macOS)
     /// Connection state, the OpenAI notice and the archive name sit above the transcript in the column.
     @ViewBuilder private var topBar: some View {
@@ -223,7 +210,7 @@ struct ConversationView: View {
                 }
             }
             .frame(maxWidth: Layout.column, alignment: .leading)
-            .padding(.horizontal, 32)
+            .padding(.horizontal, Layout.edge)
             .padding(.top, 16)
             .frame(maxWidth: .infinity)
         }
@@ -528,3 +515,17 @@ struct ConversationSources: View {
     }
 }
 #endif
+
+/// The conversation's edges: 32 from the detail edges and under the Mac toolbar, the 16 margin on iOS;
+/// the composer 24 above the Mac window edge and 20 above the iOS safe area.
+private extension Layout {
+    #if os(macOS)
+    static let edge: CGFloat = 32
+    static let belowToolbar: CGFloat = 32
+    static let belowComposer: CGFloat = 24
+    #else
+    static let edge: CGFloat = 16
+    static let belowToolbar: CGFloat = 24
+    static let belowComposer: CGFloat = 20
+    #endif
+}
