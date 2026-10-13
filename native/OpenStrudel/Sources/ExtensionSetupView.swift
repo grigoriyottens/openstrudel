@@ -89,16 +89,15 @@ struct ConnectionCatalogView: View {
                     DetailsRow(title: L("Навык или плагин из файла"), symbol: "folder.badge.plus")
                 }.accessibilityIdentifier("addExtensionFile")
             } header: { Text(L("Другие способы")) } footer: {
-                let notes = [scope.sharedNotice, notice.map { L10n.serviceText($0) }].compactMap { $0 }
+                let notes = [scope.groupNote, scope.sharedNotice, notice.map { L10n.serviceText($0) }].compactMap { $0 }
                 if !notes.isEmpty { Text(notes.joined(separator: "\n")) }
             }
         }
+        // A subtitle would grow the title bar and resize the sheet; a group's scope sits in the footer.
         .navigationTitle(L("Добавить"))
-        .navigationSubtitle(scope.isGroup ? L("Для Telegram-группы «\(scope.title)»") : L("Для разговора в приложении"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { isPresented = false } } }
         .task { await refresh() }
         .task(id: waiting?.id) {
             guard waiting != nil else { return }
@@ -185,7 +184,9 @@ struct ExtensionSetupView: View {
                             .foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
                     }
                     Button(L("Выбрать другой пакет")) { self.preview = nil; files = []; importing = true }.disabled(busy)
-                } header: { Text(preview.kind == "skill" ? L("Навык") : L("Плагин")) }
+                } header: { Text(preview.kind == "skill" ? L("Навык") : L("Плагин")) } footer: {
+                    if let note = scope.groupNote { Text(note) }
+                }
             } else if source == .mcp {
                 Section {
                     TextField(L("Адрес MCP"), text: $address, prompt: Text(verbatim: "https://example.com/mcp"))
@@ -202,7 +203,7 @@ struct ExtensionSetupView: View {
                             .focused($focusedField, equals: .name)
                     }
                 } header: { Text(L("Сервис по адресу")) } footer: {
-                    Text(L("Вставьте адрес MCP из настроек нужного сервиса. Если потребуется вход, продолжите его в браузере."))
+                    Text(([L("Вставьте адрес MCP из настроек нужного сервиса. Если потребуется вход, продолжите его в браузере.")] + [scope.groupNote].compactMap { $0 }).joined(separator: "\n"))
                 }
             } else {
                 Section {
@@ -210,7 +211,7 @@ struct ExtensionSetupView: View {
                         Label { Text(L("Выбрать навык или плагин…")) } icon: { Image(systemName: "folder.badge.plus").frame(width: 20) }
                     }.disabled(busy)
                 } header: { Text(L("Из файла")) } footer: {
-                    Text(L("Выберите SKILL.md или папку пакета Codex. Сначала покажем, что будет добавлено."))
+                    Text(([L("Выберите SKILL.md или папку пакета Codex. Сначала покажем, что будет добавлено.")] + [scope.groupNote].compactMap { $0 }).joined(separator: "\n"))
                 }
             }
             if busy || error != nil || scope.sharedNotice != nil {
@@ -228,7 +229,6 @@ struct ExtensionSetupView: View {
         }
         .formStyle(.grouped)
         .navigationTitle(source == .mcp ? L("Подключить сервис") : L("Установить из файла"))
-        .navigationSubtitle(scope.isGroup ? L("Для Telegram-группы «\(scope.title)»") : L("Для разговора в приложении"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
@@ -284,6 +284,11 @@ struct ExtensionSetupView: View {
         focusedField = nil; busy = true; error = nil
         Task { defer { busy = false }; do { try await action() } catch is CancellationError { } catch { self.error = error.localizedDescription } }
     }
+}
+
+private extension ExtensionContext {
+    /// Where an addition applies, said only when it is not this conversation in the app.
+    var groupNote: String? { isGroup ? L("Для Telegram-группы «\(title)»") : nil }
 }
 
 enum ExtensionBundleReader {
