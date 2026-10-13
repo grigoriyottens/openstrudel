@@ -120,6 +120,15 @@ struct MessageContentTests {
         }
     }
 
+    @Test func linksAreInkWithAQuietUnderlineAtRest() throws {
+        let block = MessageContent(source: "Read [the guide](https://example.com) and [this](file:///private/x).").blocks[0]
+        let styled = MessageContent.styled(block.content)
+        let link = try #require(styled.runs.first { $0.link != nil })
+        #expect(link.foregroundColor == AppTheme.accentText)
+        #expect(link.underlineStyle == Text.LineStyle(pattern: .solid, color: AppTheme.secondaryText))
+        #expect(styled.runs.filter { $0.underlineStyle != nil }.count == 1)
+    }
+
     @Test func blocksFollowTheDirectionOfTheirFirstStrongLetter() {
         #expect(ParagraphDirection.of("שלום world") == .rightToLeft)
         #expect(ParagraphDirection.of("Hello שלום") == .leftToRight)

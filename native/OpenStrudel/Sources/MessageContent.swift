@@ -91,8 +91,8 @@ struct ImportedMessageText: View {
     }
 }
 
-/// A person's words on a rounded fill: the plum-tinted bubble for the owner, the surface
-/// for other people in a shared conversation. One line is a 40-pt capsule.
+/// A person's words on a rounded fill: the user bubble, a neutral step darker than the surface,
+/// for the owner, and the surface for other people in a shared conversation. One line is a 40-pt capsule.
 struct ChatBubble: View {
     let text: String
     var fill: Color = AppTheme.userBubble
@@ -326,7 +326,7 @@ struct MessageContent: View, Equatable {
         }
     }
 
-    /// Links read as links at rest: accent text with a 40 % accent underline. Inline code is SF Mono on the surface.
+    /// Links read as links at rest: ink with an underline in the secondary colour. Inline code is SF Mono on the surface.
     static func styled(_ source: AttributedString) -> AttributedString {
         var text = source
         for run in source.runs {
@@ -336,7 +336,7 @@ struct MessageContent: View, Equatable {
             }
             if run.link != nil {
                 text[run.range].foregroundColor = AppTheme.accentText
-                text[run.range].underlineStyle = Text.LineStyle(pattern: .solid, color: AppTheme.accentText.opacity(0.4))
+                text[run.range].underlineStyle = Text.LineStyle(pattern: .solid, color: AppTheme.secondaryText)
             }
         }
         return text
