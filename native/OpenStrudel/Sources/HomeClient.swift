@@ -306,6 +306,13 @@ final class HomeClient: ObservableObject, Identifiable {
     }
     #endif
 
+    /// Whether the device an employee runs on is out of reach. Nil means the main assistant.
+    func isOffline(_ profile: EmployeeProfile?) -> Bool {
+        if homeUnreachable || connectionNeedsPairing { return true }
+        guard let id = profile?.deviceId, let device = devices.first(where: { $0.id == id }) else { return false }
+        return !device.online
+    }
+
     var displayName: String {
         if isLocalConnection { return L("Этот Mac") }
         if connectionName != "OpenStrudel", connectionName != "ваш Mac или сервер" { return connectionName }

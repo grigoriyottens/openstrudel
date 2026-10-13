@@ -106,6 +106,15 @@ enum AvatarSize {
     static let hero: CGFloat = 96
 }
 
+extension View {
+    /// A character whose device is out of reach rests in grey and returns with the character spring.
+    func offlineCharacter(_ offline: Bool) -> some View {
+        saturation(offline ? 0 : 1)
+            .opacity(offline ? 0.6 : 1)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: offline)
+    }
+}
+
 /// The smallest comfortable hit target for a standalone control.
 var controlTarget: CGFloat {
     #if os(iOS)
