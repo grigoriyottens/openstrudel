@@ -9,12 +9,14 @@ private enum KeychainStore {
         return ["is.openstrudel.mac", "is.openstrudel.ios"].contains(bundle) ? "is.openstrudel.native" : bundle + ".credentials"
     }()
 
-    static func read(account: String = "home-api-token") -> String? {
+    static func read(account: String = "home-api-token", allowInteraction: Bool = false) throws -> String? {
         #if os(macOS)
         // Legacy macOS keychains can ignore kSecUseAuthenticationUIFail.
-        // Read silently at launch; an explicit pairing can unlock/save later.
-        SecKeychainSetUserInteractionAllowed(false)
-        defer { SecKeychainSetUserInteractionAllowed(true) }
+        // Launch is silent; only an explicit recovery may request access.
+        var allowed = DarwinBoolean(true)
+        SecKeychainGetUserInteractionAllowed(&allowed)
+        SecKeychainSetUserInteractionAllowed(allowInteraction)
+        defer { SecKeychainSetUserInteractionAllowed(allowed.boolValue) }
         #endif
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -24,15 +26,16 @@ private enum KeychainStore {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         #if os(iOS)
-        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        if !allowInteraction { query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail }
         #endif
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         #if DEBUG
         if status != errSecSuccess { NSLog("OpenStrudel credential lookup: %d", status) }
         #endif
-        guard status == errSecSuccess,
-              let data = result as? Data else { return nil }
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw HomeClientError.server(L("Allow OpenStrudel to access its saved connection in Keychain, then try again.")) }
+        guard let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
@@ -76,7 +79,11 @@ final class HomeClient: ObservableObject, Identifiable {
     static func invalidateForLocalErase() { eraseGeneration += 1 }
     let id: String
     private var credentialPrefix: String { id == "current" ? "" : id + "." }
-    private func readCredential(account: String = "home-api-token") -> String? { KeychainStore.read(account: credentialPrefix + account) }
+    private let credentialReader: @Sendable (String, Bool) throws -> String?
+    private func readCredential(account: String = "home-api-token") -> String? {
+        do { return try credentialReader(credentialPrefix + account, false) }
+        catch { connectionNeedsUnlock = true; return nil }
+    }
     private func saveCredential(_ value: String, account: String = "home-api-token") throws {
         guard acceptsOperations else { throw CancellationError() }
         try KeychainStore.save(value, account: credentialPrefix + account)
@@ -87,6 +94,8 @@ final class HomeClient: ObservableObject, Identifiable {
     @Published private(set) var isPairing = false
     @Published private(set) var connectionName = "OpenStrudel"
     @Published private(set) var connectionNeedsPairing = false
+    @Published private(set) var connectionNeedsUnlock = false
+    @Published private(set) var isUnlockingConnection = false
     private var connectionGeneration = 0
     @Published private(set) var mobileInvitation: MobileInvitation?
     @Published private(set) var mobileConnections = 0
@@ -165,8 +174,10 @@ final class HomeClient: ObservableObject, Identifiable {
     private var isDrainingSendQueue = false
     private var suspendedForErase = false
 
-    init(defaults: UserDefaults = .standard, session transport: URLSession = .shared, pendingDirectory: URL? = nil, connectionID: String = "current") {
+    init(defaults: UserDefaults = .standard, session transport: URLSession = .shared, pendingDirectory: URL? = nil, connectionID: String = "current",
+         credentialReader: (@Sendable (String, Bool) throws -> String?)? = nil) {
         self.id = connectionID
+        self.credentialReader = credentialReader ?? { try KeychainStore.read(account: $0, allowInteraction: $1) }
         self.createdBeforeErase = Self.eraseGeneration
         self.defaults = defaults
         self.pendingDirectory = pendingDirectory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appending(path: (Bundle.main.bundleIdentifier ?? "OpenStrudel") + "/Pending")
@@ -208,13 +219,14 @@ final class HomeClient: ObservableObject, Identifiable {
                 session = PinnedHomeSession(host: host, port: url.port ?? 443, pin: pin).session()
                 connectionName = defaults.string(forKey: "openstrudel.connectionName") ?? L("ваш Mac или сервер")
             } else {
-                // A URL alone is not a connection. Re-pair if its Keychain
-                // credentials are unavailable instead of using unpinned HTTPS.
-                baseURLString = ""
+                // Keep the destination for drafts, but no request may use it
+                // until its saved credential and certificate are available.
+                if !connectionNeedsUnlock { baseURLString = "" }
                 connectionNeedsPairing = true
                 homeUnreachable = true
             }
         }
+        if !connectionNeedsPairing { connectionNeedsUnlock = false }
         if isSignedOut {
             baseURLString = ""; token = nil; connectionName = "OpenStrudel"; session = transport
         } else if let cached = defaults.data(forKey: "openstrudel.employeeCatalog"),
@@ -243,6 +255,7 @@ final class HomeClient: ObservableObject, Identifiable {
     var isConnecting: Bool { health == nil && (connectionState == .connecting || isStartingLocalHome) }
 
     var isConfigured: Bool {
+        guard !connectionNeedsUnlock else { return false }
         guard let url = URL(string: normalizedBaseURL) else { return false }
         return ["http", "https"].contains(url.scheme) && url.host != nil
     }
@@ -352,7 +365,7 @@ final class HomeClient: ObservableObject, Identifiable {
         do {
             // Persist the attempt before redeeming the one-use invitation.
             let attemptKey = "pair-attempt-" + SHA256.hash(data: Data(pairing.key.utf8)).map { String(format: "%02x", $0) }.joined()
-            let attempt = readCredential(account: attemptKey) ?? UUID().uuidString
+            let attempt = try credentialReader(credentialPrefix + attemptKey, false) ?? UUID().uuidString
             try saveCredential(attempt, account: attemptKey)
             var request = URLRequest(url: URL(string: pairing.baseURL + "/pair")!)
             request.httpMethod = "POST"
@@ -402,6 +415,45 @@ final class HomeClient: ObservableObject, Identifiable {
         } catch {
             cloudSession.invalidateAndCancel()
             pairingError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// An explicit retry asks macOS for the existing credential, without
+    /// replacing it, issuing a new invitation or blocking the main thread.
+    @discardableResult func unlockSavedConnection() async -> Bool {
+        guard acceptsOperations, !isSignedOut, connectionNeedsPairing, connectionNeedsUnlock, !isUnlockingConnection else { return false }
+        isUnlockingConnection = true
+        defer { isUnlockingConnection = false }
+        let generation = connectionGeneration
+        let read = credentialReader, prefix = credentialPrefix
+        let savedURL = baseURLString, savedName = connectionName
+        do {
+            let connection = try await Task.detached(priority: .userInitiated) { () throws -> HomeConnection? in
+                if let saved = try read(prefix + "home-connection", true) {
+                    return try JSONDecoder().decode(HomeConnection.self, from: Data(saved.utf8))
+                }
+                guard let token = try read(prefix + "home-api-token", true),
+                      let pin = try read(prefix + "home-certificate-pin", true) else { return nil }
+                return HomeConnection(url: savedURL, token: token, pin: pin, name: savedName)
+            }.value
+            guard generation == connectionGeneration, acceptsOperations, !isSignedOut else { return false }
+            guard let connection else { connectionNeedsUnlock = false; return false }
+            guard let url = URL(string: connection.url), url.scheme == "https", let host = url.host,
+                  url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+                  !connection.token.isEmpty,
+                  connection.pin.range(of: "^(spki:)?[a-f0-9]{64}$", options: .regularExpression) != nil else { throw HomeClientError.invalidResponse }
+            if session !== URLSession.shared { session.invalidateAndCancel() }
+            session = PinnedHomeSession(host: host, port: url.port ?? 443, pin: connection.pin).session()
+            token = connection.token; baseURLString = connection.url; connectionName = connection.name
+            defaults.set(connection.url, forKey: "openstrudel.homeURL")
+            defaults.set(connection.name, forKey: "openstrudel.connectionName")
+            connectionNeedsPairing = false; connectionNeedsUnlock = false
+            homeUnreachable = false; connectionState = .connecting; errorMessage = nil
+            return true
+        } catch {
+            guard generation == connectionGeneration, acceptsOperations, !isSignedOut else { return false }
+            errorMessage = L("Allow OpenStrudel to access its saved connection in Keychain, then try again.")
             return false
         }
     }
@@ -478,7 +530,7 @@ final class HomeClient: ObservableObject, Identifiable {
         canManageOpenAI = false; openAILoginPending = false; openAIErrorMessage = nil
         hasOpenedConversation = false; checkingOpenAIAccount = false
         errorMessage = nil; syncError = nil; homeUnreachable = false
-        connectionNeedsPairing = false; isLoading = false
+        connectionNeedsPairing = false; connectionNeedsUnlock = false; isLoading = false
         canManageConnections = false; mobileConnections = 0; mobileInvitation = nil
     }
 
@@ -665,7 +717,7 @@ final class HomeClient: ObservableObject, Identifiable {
                 if let draftID = profileID, draftID.hasPrefix("draft:") {
                     isCreating = true
                     defer { isCreating = false }
-                    var creation: [String: Any] = ["creationId": String(draftID.dropFirst(6)), "domain": pending.draftDomain]
+                    var creation: [String: Any] = ["creationId": String(draftID.dropFirst(6)), "domain": pending.draftDomain, "defaultName": L("Новый сотрудник")]
                     if let appearance = pending.appearance { creation["appearance"] = appearance.payload }
                     if let device = pending.deviceID { creation["deviceId"] = device }
                     let body = try JSONSerialization.data(withJSONObject: creation)
@@ -1043,6 +1095,7 @@ final class HomeClient: ObservableObject, Identifiable {
         do {
             let body = try JSONSerialization.data(withJSONObject: [
                 "name": cleanName,
+                "defaultName": L("Новый сотрудник"),
                 "instructions": cleanInstructions
             ])
             let response: ProfileResponse = try await request("/v1/profiles", method: "POST", body: body)
@@ -1271,6 +1324,7 @@ final class HomeClient: ObservableObject, Identifiable {
 
     private func requestData(_ path: String, method: String = "GET", body: Data? = nil, mayRelocate: Bool = true, progress: (@MainActor @Sendable (Int64, Int64?) -> Void)? = nil, ifNoneMatch: String? = nil, responseETag: ((String?) -> Void)? = nil) async throws -> Data {
         guard acceptsOperations else { throw CancellationError() }
+        guard !connectionNeedsUnlock else { throw HomeClientError.authenticationExpired }
         let generation = connectionGeneration
         guard let url = URL(string: normalizedBaseURL + path) else { throw HomeClientError.invalidURL }
         guard (url.scheme == "http" && isLocalConnection)

@@ -34,6 +34,8 @@ struct ServerSetupView: View {
     @StateObject private var cloud = DigitalOceanCloud.shared
     @State private var connecting = false
     @State private var connectionError: String?
+    var onBack: (() -> Void)? = nil
+    var onConnected: ((HomeClient) -> Void)? = nil
 
     private var working: Bool {
         [.signingIn, .creating, .waitingForServer].contains(cloud.phase)
@@ -130,7 +132,7 @@ struct ServerSetupView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(working ? L("Продолжить позже") : L("Закрыть")) {
                         cloud.cancel()
-                        dismiss()
+                        if let onBack { onBack() } else { dismiss() }
                     }
                 }
             }
@@ -202,10 +204,77 @@ struct ServerSetupView: View {
         defer { connecting = false }
         let client = library.clients.first { $0.savedBaseURL == connection.url } ?? library.newConnection()
         if await client.connectToCloud(connection) {
-            library.add(client)
-            dismiss()
+            library.add(client, select: onConnected == nil)
+            if let onConnected { onConnected(client) } else { dismiss() }
         } else {
             connectionError = client.pairingError ?? L("Не удалось сохранить подключение. Разблокируйте устройство и попробуйте ещё раз.")
+        }
+    }
+}
+
+/// Both server routes finish with the same account step and first assistant.
+struct ServerAccountSetupView: View {
+    @EnvironmentObject private var client: HomeClient
+    @EnvironmentObject private var library: DeviceLibrary
+    @Environment(\.openURL) private var openURL
+    let onDone: () -> Void
+    private var connected: Bool { client.openAIAccount?.connected == true && !client.homeUnreachable }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    OpenStrudelMark(size: 64)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(connected ? L("Your server is ready") : L("Connect ChatGPT"))
+                            .font(.system(.largeTitle, design: .serif, weight: .medium))
+                        Text(connected
+                             ? L("Your assistants can now work here, even when your Mac is off.")
+                             : L("OpenStrudel is installed. Sign in to ChatGPT to let your assistants work on this server."))
+                            .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                        Label(client.displayName, systemImage: "server.rack").font(.callout)
+                    }
+                    if connected {
+                        if let account = client.openAIAccount {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label(account.email ?? "ChatGPT", systemImage: "checkmark.circle.fill")
+                                    .font(.headline).textSelection(.enabled)
+                                Text([account.planLabel, account.categoryLabel].compactMap { $0 }.joined(separator: " · "))
+                                    .font(.callout).foregroundStyle(AppTheme.secondaryText)
+                            }
+                        }
+                        Button {
+                            onDone()
+                            library.beginEmployee(on: client)
+                        } label: { SetupActionLabel(title: L("Create an assistant here"), icon: "plus") }
+                            .buttonStyle(.glassProminent).controlSize(.large)
+                            .accessibilityIdentifier("createFirstServerAssistant")
+                        Button(L("Open server")) { onDone(); library.select(client) }
+                            .buttonStyle(.plain).foregroundStyle(AppTheme.secondaryText)
+                    } else if client.homeUnreachable {
+                        Text(L("The server did not respond. Your installation is saved."))
+                            .foregroundStyle(AppTheme.secondaryText)
+                        Button(L("Повторить")) { Task { await client.load(quiet: true) } }
+                            .buttonStyle(.glassProminent)
+                    } else {
+                        OpenAISettingsCard(showIdentity: false)
+                    }
+                }.padding(32).frame(maxWidth: 470).frame(maxWidth: .infinity)
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("Продолжить позже")) { onDone(); library.select(client) }
+                }
+            }
+        }.frame(width: 540, height: 650)
+        .onChange(of: client.openAILogin) { _, login in if let url = login?.url { openURL(url) } }
+        .task(id: client.openAILogin?.loginId) {
+            await client.refreshOpenAIAccount()
+            while !Task.isCancelled && !connected && (client.openAILogin != nil || client.openAILoginPending) {
+                if client.openAILogin != nil { await client.pollOpenAILogin() }
+                else { await client.refreshOpenAIAccount() }
+                do { try await Task.sleep(for: .seconds(2)) } catch { break }
+            }
         }
     }
 }

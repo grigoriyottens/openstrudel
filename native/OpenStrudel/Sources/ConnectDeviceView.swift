@@ -8,14 +8,19 @@ struct ConnectDeviceView: View {
     @EnvironmentObject private var library: DeviceLibrary
     let onConfirm: (MacPairing) -> Void
     @State private var route: Route = .choice
-    private enum Route { case choice, link, server, cloud }
+    private enum Route { case choice, link, server, cloud, account }
+    @State private var connectedClient: HomeClient?
 
     var body: some View {
         Group {
             switch route {
             case .link: ConnectionInvitationView(onConfirm: onConfirm, onBack: { route = .choice })
-            case .server: OwnServerSetupView(onBack: { route = .choice }, onConnected: { dismiss() })
-            case .cloud: ServerSetupView()
+            case .server: OwnServerSetupView(onBack: { route = .choice }, onConnected: completeInstallation)
+            case .cloud: ServerSetupView(onBack: { route = .choice }, onConnected: completeInstallation)
+            case .account:
+                if let connectedClient {
+                    ServerAccountSetupView(onDone: { dismiss() }).environmentObject(connectedClient)
+                }
             case .choice:
                 NavigationStack {
                     VStack(alignment: .leading, spacing: 28) {
@@ -26,7 +31,7 @@ struct ConnectDeviceView: View {
                         VStack(spacing: 0) {
                             choice("Connect with a link", detail: "Add a device using its connection link.", icon: "desktopcomputer", route: .link)
                             Divider().padding(.leading, 52)
-                            choice(ServerSetupFlow.shared.installation == nil ? "Set up a server" : "Continue server setup", detail: "Enter its address. OpenStrudel takes care of installation.", icon: "server.rack", route: .server)
+                            choice(ServerSetupFlow.shared.installation == nil ? "Set up my server" : "Continue server setup", detail: "Already have a server? Enter its address and sign-in details.", icon: "server.rack", route: .server)
                         }
                         Button { route = .cloud } label: {
                             Label(L("Get a server with DigitalOcean"), systemImage: "cloud")
@@ -39,6 +44,11 @@ struct ConnectDeviceView: View {
             }
         }.environmentObject(library)
             .modifier(InterfaceLanguage())
+    }
+
+    private func completeInstallation(_ client: HomeClient) {
+        connectedClient = client
+        route = .account
     }
 
     private func choice(_ title: String, detail: String, icon: String, route next: Route) -> some View {
@@ -60,7 +70,7 @@ private struct OwnServerSetupView: View {
     @EnvironmentObject private var library: DeviceLibrary
     @StateObject private var flow = ServerSetupFlow.shared
     let onBack: () -> Void
-    let onConnected: () -> Void
+    let onConnected: (HomeClient) -> Void
     @State private var host = ""
     @State private var user = "root"
     @State private var port = "22"
@@ -81,7 +91,7 @@ private struct OwnServerSetupView: View {
         case .confirmIdentity: L("Confirm your server")
         case .ready: flow.installation == nil ? L("Ready to install") : L("Continue server setup")
         case .installing: L("Preparing your server")
-        case .connected: L("Your server is ready")
+        case .connected: L("OpenStrudel is installed")
         case .paused: L("Continue server setup")
         case .failed: flow.installation == nil ? L("Set up a server") : L("Setup needs attention")
         default: L("Set up a server")
@@ -158,9 +168,9 @@ private struct OwnServerSetupView: View {
                     }
                     if flow.phase == .connected {
                         Label(flow.target?.host ?? "", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                        Text(L("Sign in to ChatGPT on this device to create your first employee."))
+                        Text(L("Next, connect your ChatGPT account."))
                             .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                        Button(L("Open server")) { Task { await finish() } }
+                        Button(L("Продолжить")) { Task { await finish() } }
                             .buttonStyle(.glassProminent).controlSize(.large).disabled(saving)
                             .accessibilityIdentifier("openNewServer")
                     }
@@ -179,6 +189,9 @@ private struct OwnServerSetupView: View {
             flow.resume()
         }
         .onDisappear { flow.pause(); password = ""; passphrase = ""; key = nil }
+        .onChange(of: flow.phase, initial: true) { _, phase in
+            if phase == .connected { Task { await finish() } }
+        }
         .fileImporter(isPresented: $choosingKey, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
             do {
                 guard let url = try result.get().first else { return }
@@ -253,8 +266,10 @@ private struct OwnServerSetupView: View {
         saving = true; defer { saving = false }
         let client = library.clients.first { $0.savedBaseURL == connection.url } ?? library.newConnection()
         guard await client.connectToCloud(connection) else { localError = client.pairingError; return }
-        library.add(client)
-        do { try flow.finish(); onConnected() }
+        // Retain the sheet until account setup is complete. Selecting this
+        // client now would replace its presenting root and dismiss the flow.
+        library.add(client, select: false)
+        do { try flow.finish(); onConnected(client) }
         catch { localError = error.localizedDescription }
     }
 }

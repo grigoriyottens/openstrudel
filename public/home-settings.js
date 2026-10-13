@@ -273,7 +273,7 @@ async function openCreateAgent() {
   const creationId=crypto.randomUUID();
 
   action(page,t("Создать"),async()=>{
-    const result=await api('/v1/profiles',{method:'POST',headers:{'idempotency-key':creationId},body:JSON.stringify({name:name.value,instructions:description.value,deviceId:selector.value,creationId})});
+    const result=await api('/v1/profiles',{method:'POST',headers:{'idempotency-key':creationId},body:JSON.stringify({name:name.value,defaultName:t("Новый сотрудник"),instructions:description.value,deviceId:selector.value,creationId})});
     if(!result.profile) throw new Error(t("Создание ещё выполняется. Проверьте список сотрудников после подключения устройства."));
     closeModal(); await refresh(); await selectAgent(result.profile.id);
   },true);

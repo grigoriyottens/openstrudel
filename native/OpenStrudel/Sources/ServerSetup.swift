@@ -36,6 +36,7 @@ struct ServerInstallationStatus: Decodable {
     let installationID: String?
     let state: String
     let stage: String
+    var canUpdateRelease: Bool? = nil
     var problemWhenUnreachable: ServerSetupFailure? {
         if state == "failed" { return .installation }
         if state == "complete" || stage == "ready" { return .serviceUnreachable }
@@ -120,7 +121,8 @@ struct ServerInstallation: Codable, Sendable {
     let id: String
     let target: ServerTarget
     let hostKey: SSHHostKey
-    let releaseHash: String
+    var releaseHash: String
+    var previousReleaseHash: String?
     let privateKeyPEM: String
     let ownerToken: String
     var attempted = false
@@ -147,12 +149,14 @@ enum ServerSetupScripts {
         return try resource("server-setup") + Data("\n\(name)\n".utf8)
     }
     static func install(_ saved: ServerInstallation, installer: Data, script: String) throws -> String {
-        let payload = try JSONSerialization.data(withJSONObject: [
+        var values: [String: Any] = [
             "installationId": saved.id, "privateKeyPEM": saved.privateKeyPEM,
             "host": saved.target.host,
             "ownerTokenHash": SHA256.hash(data: Data(saved.ownerToken.utf8)).map { String(format: "%02x", $0) }.joined(),
             "releaseHash": saved.releaseHash, "installer": installer.base64EncodedString()
-        ], options: [.sortedKeys])
+        ]
+        if let previous = saved.previousReleaseHash { values["previousReleaseHash"] = previous }
+        let payload = try JSONSerialization.data(withJSONObject: values, options: [.sortedKeys])
         // A JSON string cannot terminate the fixed heredoc. Secrets travel only
         // over the pinned SSH channel's stdin, never in command arguments.
         return script + "\ninstall_server <<'OPENSTRUDEL_SETUP_INPUT'\n" + String(decoding: payload, as: UTF8.self) + "\nOPENSTRUDEL_SETUP_INPUT\n"
@@ -242,7 +246,12 @@ private final class SSHProcess: @unchecked Sendable {
     }
 }
 
-struct SSHServerTransport: Sendable {
+protocol ServerSSHTransport: Sendable {
+    func scan(_ target: ServerTarget) async throws -> SSHHostKey
+    func run(target: ServerTarget, key: SSHHostKey, access: ServerAccess, input: Data, elevated: Bool) async throws -> Data
+}
+
+struct SSHServerTransport: ServerSSHTransport {
     static func arguments(target: ServerTarget, knownHosts: String, keyFile: String?, access: ServerAccess, command: String) -> [String] {
         var args = ["-T", "-F", "/dev/null", "-p", String(target.port), "-l", target.user,
             "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile=\(knownHosts)", "-o", "GlobalKnownHostsFile=/dev/null",
@@ -344,13 +353,17 @@ extension ServerSetupStore {
     @Published private(set) var recoveryLoaded = false
     private let store: any ServerSetupStore
     private let probe: (ServerInstallation) async throws -> HomeConnection?
-    private let transport = SSHServerTransport()
+    private let transport: any ServerSSHTransport
+    private let currentReleaseHash: () async throws -> String
     private var operation: Task<Void, Never>?
     private var generation = UUID()
     private var unlocking = false
-    init(store: any ServerSetupStore = ServerSetupKeychain(), probe: ((ServerInstallation) async throws -> HomeConnection?)? = nil) {
+    init(store: any ServerSetupStore = ServerSetupKeychain(), probe: ((ServerInstallation) async throws -> HomeConnection?)? = nil,
+         transport: any ServerSSHTransport = SSHServerTransport(), releaseHash: (() async throws -> String)? = nil) {
         self.store = store
         self.probe = probe ?? Self.connect
+        self.transport = transport
+        self.currentReleaseHash = releaseHash ?? Self.releaseHash
         reloadRecovery()
     }
     func reloadRecovery() {
@@ -406,7 +419,7 @@ extension ServerSetupStore {
         guard let target, let key = hostKey else { return }
         start {
             self.phase = .checking
-            let data = try await self.transport.run(target: target, key: key, access: access, input: ServerSetupScripts.command("check_server"))
+            let data = try await self.transport.run(target: target, key: key, access: access, input: ServerSetupScripts.command("check_server"), elevated: false)
             try Task.checkCancellation()
             let check = try JSONDecoder().decode(ServerPreflight.self, from: data)
             self.preflight = check
@@ -423,13 +436,25 @@ extension ServerSetupStore {
         start {
             self.phase = .installing; self.stage = "connecting"
             var saved: ServerInstallation
-            if let pending = self.installation { saved = pending }
+            if let pending = self.installation {
+                saved = pending
+                let data = try await self.transport.run(target: target, key: key, access: access, input: ServerSetupScripts.command("server_status"), elevated: true)
+                let status = try JSONDecoder().decode(ServerInstallationStatus.self, from: data)
+                // The connection can drop before staging writes its identity.
+                // Replay the saved recipe; the remote script still refuses
+                // unrelated data, ownership or an existing installation.
+                guard status.installationID == nil || status.installationID == saved.id else { throw ServerSetupFailure.identity }
+                if status.installationID == saved.id && status.canUpdateRelease == true {
+                    let latest = try await self.currentReleaseHash()
+                    if latest != saved.releaseHash {
+                        saved.previousReleaseHash = saved.releaseHash
+                        saved.releaseHash = latest
+                    }
+                }
+            }
             else {
-                let session = DigitalOceanNoRedirects.session()
-                defer { session.invalidateAndCancel() }
-                let (data, response) = try await session.data(from: URL(string: "https://waiwai.is/openstrudel/downloads/SHA256SUMS")!)
-                guard (response as? HTTPURLResponse)?.statusCode == 200, data.count < 16384 else { throw ServerSetupFailure.installer }
-                saved = try ServerInstallation(target: target, hostKey: key, releaseHash: DigitalOceanQuote.releaseHash(from: String(decoding: data, as: UTF8.self)))
+                let hash = try await self.currentReleaseHash()
+                saved = try ServerInstallation(target: target, hostKey: key, releaseHash: hash)
             }
             try Task.checkCancellation()
             saved.attempted = true
@@ -438,6 +463,13 @@ extension ServerSetupStore {
             _ = try await self.transport.run(target: target, key: key, access: access, input: Data(input.utf8), elevated: true)
             try await self.waitForServer(saved, access: access)
         }
+    }
+    private static func releaseHash() async throws -> String {
+        let session = DigitalOceanNoRedirects.session()
+        defer { session.invalidateAndCancel() }
+        let (data, response) = try await session.data(from: URL(string: "https://waiwai.is/openstrudel/downloads/SHA256SUMS")!)
+        guard (response as? HTTPURLResponse)?.statusCode == 200, data.count < 16384 else { throw ServerSetupFailure.installer }
+        return try DigitalOceanQuote.releaseHash(from: String(decoding: data, as: UTF8.self))
     }
     func pause() {
         generation = UUID(); operation?.cancel(); operation = nil

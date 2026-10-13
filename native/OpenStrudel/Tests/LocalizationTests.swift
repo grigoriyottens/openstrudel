@@ -26,4 +26,12 @@ import Testing
         let english = L10n.text(key, language: .english)
         #expect(L10n.serviceText(english, language: .hebrew) == L10n.text(key, language: .hebrew))
     }
+
+    @Test func savedSignInFailureKeepsItsRecoveryActionInEveryLanguage() {
+        let key = "Вход в OpenAI истёк. Войдите ещё раз."
+        for (language, action) in [(AppLanguage.english, "Sign in again"), (.russian, "Войдите ещё раз"),
+                                   (.french, "Reconnectez-vous"), (.spanish, "Vuelve a iniciar sesión"), (.hebrew, "להתחבר שוב")] {
+            #expect(L10n.serviceText(key, language: language).contains(action))
+        }
+    }
 }

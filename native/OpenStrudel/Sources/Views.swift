@@ -300,7 +300,8 @@ private struct Sidebar: View {
                             if library.hasOtherDevices {
                                 HStack(spacing: 5) {
                                     Text(source.displayName)
-                                    if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
+                                    if source.connectionNeedsUnlock { Image(systemName: "lock").accessibilityLabel(L("Unlock connection")) }
+                                    else if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
                                 }.font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.secondaryText)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 5)
@@ -483,11 +484,13 @@ private struct ConversationView: View {
             if client.connectionNeedsPairing || client.homeUnreachable || client.health == nil {
                 HStack(spacing: 10) {
                     if client.isConnecting { ProgressView().controlSize(.small) }
-                    else { Image(systemName: "wifi.slash") }
-                    Text(client.connectionNeedsPairing ? L("Подключите «\(client.displayName)» снова. Переписка сохранена на устройстве.") : client.isConnecting ? L("Подключаемся к «\(client.displayName)»…") : L("«\(client.displayName)» не на связи. Переписка и черновики сохранены. Подключимся автоматически."))
+                    else { Image(systemName: client.connectionNeedsUnlock ? "lock" : "wifi.slash") }
+                    Text(client.connectionNeedsUnlock ? L("Unlock the saved connection to continue. Your chats and drafts are safe.") : client.connectionNeedsPairing ? L("Подключите «\(client.displayName)» снова. Переписка сохранена на устройстве.") : client.isConnecting ? L("Подключаемся к «\(client.displayName)»…") : L("«\(client.displayName)» не на связи. Переписка и черновики сохранены. Подключимся автоматически."))
                         .font(.callout)
                     Spacer(minLength: 0)
-                    if client.connectionNeedsPairing { Button(L("Подключить")) { showSettings = true } }
+                    if client.connectionNeedsUnlock {
+                        SavedConnectionUnlockButton(client: client)
+                    } else if client.connectionNeedsPairing { Button(L("Подключить")) { showSettings = true } }
                 }.foregroundStyle(AppTheme.secondaryText).padding(.horizontal, chatInset).padding(.vertical, 10)
             }
 
@@ -991,7 +994,7 @@ private struct MessageBubble: View {
                 if let error = message.error { Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.warning) }
             }.padding(.vertical, 4)
         } else if message.kind == "notice" {
-            Label(withTime(message.text), systemImage: "checkmark")
+            Label(withTime(L10n.text(message.text)), systemImage: "checkmark")
                 .font(.caption).foregroundStyle(AppTheme.secondaryText).padding(.vertical, 4)
         } else {
             HStack(alignment: .bottom) {
@@ -1827,7 +1830,7 @@ struct SectionTitle: View {
     }
 }
 
-private struct OpenAISettingsCard: View {
+struct OpenAISettingsCard: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
     @State private var copiedCode = false

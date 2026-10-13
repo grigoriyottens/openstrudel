@@ -203,7 +203,7 @@ struct PickedFile: Codable, Equatable, Identifiable, Sendable {
 }
 struct AttachmentEnvelope: Decodable { let attachment: ChatAttachment }
 
-/// Chat dates follow the Russian interface, whatever the system region.
+/// Chat dates follow the selected interface language.
 enum ChatClock {
     private static var locale: Locale { L10n.locale }
 

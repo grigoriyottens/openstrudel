@@ -74,7 +74,7 @@ struct WaiVDSClientTests {
         #expect(try !order("unknown").canRequestCheckout(at: date.addingTimeInterval(86_400)))
         #expect(try !order("pending").canClaim(at: date))
         #expect(try order("ready").canClaim(at: date))
-        #expect(try order("unknown").message == "Проверяем платёж. Повторно платить пока не нужно.")
+        #expect(try order("unknown").message == L("Проверяем платёж. Повторно платить пока не нужно."))
     }
     @Test func refundsAndContradictoryReadinessNeverOfferPaymentOrConnect() throws {
         for state in ["partially_paid", "partially_refunded", "refunded", "refund_review", "additional_payment_review", "unknown"] {
@@ -85,7 +85,7 @@ struct WaiVDSClientTests {
         let data = try fixture("ready") { var v = $0; v["home_state"] = "installing"; return v }
         #expect(try !WaiVDSContract.decode(WaiVDSOrder.self, from: data).canClaim(at: date))
         let refund = try fixture("ready") { var v = $0; v["order_status"] = "needs_refund"; v["payment_state"] = "refund_review"; return v }
-        #expect(try WaiVDSContract.decode(WaiVDSOrder.self, from: refund).message != "Возврат оформлен.")
+        #expect(try WaiVDSContract.decode(WaiVDSOrder.self, from: refund).message != L("Возврат оформлен."))
     }
     @Test func checkoutOnlyOpensVerifiedUnexpiredURLOnExactProcessorHost() throws {
         let pending = try WaiVDSContract.decode(WaiVDSCheckout.self, from: fixture("pending"))
