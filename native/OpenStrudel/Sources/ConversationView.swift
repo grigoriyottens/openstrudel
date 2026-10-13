@@ -161,13 +161,15 @@ struct ConversationView: View {
                     .frame(maxWidth: Layout.column, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .center)
                     #if os(macOS)
+                    // 32 under the toolbar. The room above the composer is the transcript's own last
+                    // row, so following the latest message and scrolling to the end both leave 24.
                     .padding(.horizontal, 32)
                     .padding(.top, 32)
                     #else
                     .padding(.horizontal, 8)
                     .padding(.top, 18)
-                    #endif
                     .padding(.bottom, 24)
+                    #endif
             }
         }
         .scrollIndicators(.hidden)

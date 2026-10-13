@@ -18,10 +18,12 @@ enum SidebarItem: Hashable {
 struct Sidebar: View {
     @EnvironmentObject private var library: DeviceLibrary
     @Environment(\.openSettings) private var openSettings
-    @State private var query = ""
-    @FocusState private var searchFocused: Bool
+    /// The sidebar search text; the window owns the field so ⌘F can reveal a collapsed sidebar.
+    @Binding var query: String
     /// The row the person just chose, shown until its device applies it.
     @State private var pendingSelection: SidebarItem?
+    /// A chosen row keeps the keyboard, so arrows, Delete and the context menu act on it.
+    @FocusState private var listFocused: Bool
     @State private var deletion: EmployeeDeletion?
     @State private var confirmDeletion = false
     @State private var deleting = false
@@ -48,13 +50,15 @@ struct Sidebar: View {
                 }
                 let groups = groups(on: source)
                 if !groups.isEmpty {
-                    Section(library.hasOtherDevices ? L("Conversations · \(source.displayName)") : L("Переписки")) {
+                    Section {
                         ForEach(groups) { group in
                             SidebarRow(name: group.title, preview: group.enabled == false ? L("Бот на паузе") : L("Группа в Telegram"),
                                        appearance: source.profiles.first { $0.id == group.profileId }?.resolvedAppearance)
                                 .tag(SidebarItem.group(client: source.id, conversation: group.conversationId ?? ""))
                                 .accessibilityIdentifier("telegramConversation-" + group.chatId)
                         }
+                    } header: {
+                        SidebarHeader { Text(library.hasOtherDevices ? L("Conversations · \(source.displayName)") : L("Переписки")) }
                     }
                 }
             }
@@ -63,10 +67,9 @@ struct Sidebar: View {
             }
         }
         .listStyle(.sidebar)
-        // The system leaves 11 between the search field and the first selection; the contract asks for 16.
-        .contentMargins(.top, 5, for: .scrollContent)
-        .searchable(text: $query, placement: .sidebar, prompt: L("Найти чат"))
-        .searchFocused($searchFocused)
+        .focused($listFocused)
+        // The system leaves 9.5 between the search field and the first selection; the contract asks for 16.
+        .safeAreaPadding(.top, 6.5)
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if items.count == 1, let target = employee(items.first) {
                 Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: target.profile, on: target.source) } }
@@ -90,12 +93,6 @@ struct Sidebar: View {
                 }
                 .help(L("Новый сотрудник (⌘N)"))
             }
-        }
-        .background {
-            // ⌘F reaches the sidebar search field from anywhere in the window.
-            Button(L("Найти чат")) { searchFocused = true }
-                .keyboardShortcut("f", modifiers: .command)
-                .hidden()
         }
         .alert(L("Удалить «\(deletion?.name ?? L("сотрудника"))»?"), isPresented: $confirmDeletion) {
             Button(L("Отмена"), role: .cancel) {}
@@ -133,10 +130,12 @@ struct Sidebar: View {
     }
 
     private func deviceHeader(_ source: HomeClient) -> some View {
-        HStack(spacing: 4) {
-            Text(source.displayName)
-            if source.connectionNeedsUnlock { Image(systemName: "lock").accessibilityLabel(L("Unlock connection")) }
-            else if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
+        SidebarHeader {
+            HStack(spacing: 4) {
+                Text(source.displayName)
+                if source.connectionNeedsUnlock { Image(systemName: "lock").accessibilityLabel(L("Unlock connection")) }
+                else if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
+            }
         }
     }
 
@@ -165,8 +164,8 @@ struct Sidebar: View {
             .help(L("Устройства и настройки OpenStrudel (⌘,)"))
         }
         .labelStyle(SidebarAccessoryLabelStyle())
-        // Rows carry 10 of their own, so the characters sit 16 from the bar's edges.
-        .padding(.horizontal, 16)
+        // The symbols share the characters' column, so the words share the rows' text edge.
+        .padding(.horizontal, SidebarMetrics.characterEdge)
         .padding(.vertical, 6)
     }
 
@@ -191,6 +190,7 @@ struct Sidebar: View {
                   let source = library.visibleClients.first(where: { $0.id == item.client }) else { return }
             query = ""
             pendingSelection = item
+            listFocused = true
             Task {
                 switch item {
                 case .main: await library.select(source, profile: nil)
@@ -257,11 +257,30 @@ struct SidebarRow: View {
                 }
             }
         }
-        // With the list's own 4, a 60-pt pitch: the system selection is 56 with the
-        // character 10 from its edges, and 4 between rows.
+        // The list adds 4 above and below and 6 at the leading edge, so each row is
+        // a 60-pt step whose selection keeps the character 12 from every edge.
         .padding(.vertical, 8)
+        .padding(.leading, SidebarMetrics.leadingInset)
         .accessibilityElement(children: .combine)
     }
+}
+
+/// A section title on the characters' edge with 24 above it; the list draws its style.
+private struct SidebarHeader<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        content()
+            // The list starts titles 8 before the character column and 16 under the row above.
+            .padding(.leading, 8)
+            .padding(.top, 8)
+    }
+}
+
+enum SidebarMetrics {
+    /// Row content inset added to the list's own 6, so the character sits 12 inside the selection.
+    static let leadingInset: CGFloat = 6
+    /// The list's selection starts 10 from the sidebar edge and its content 6 inside that.
+    static let characterEdge: CGFloat = 16 + leadingInset
 }
 
 /// Puts a symbol in the avatar column so text below the list starts on the row text edge.

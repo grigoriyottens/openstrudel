@@ -21,6 +21,9 @@ struct OpenStrudelApp: App {
                     .disabled(client.isCreating || library.isErasing)
                 EmployeeDetailsCommand()
             }
+            CommandGroup(after: .textEditing) { FindChatCommand() }
+            // View › Show Sidebar / Hide Sidebar, the menu equivalent of the toolbar button.
+            SidebarCommands()
             CommandGroup(after: .appInfo) {
                 Button(L("Аккаунты и остатки")) {
                     Task { @MainActor in
@@ -109,6 +112,18 @@ struct OpenStrudelApp: App {
 extension FocusedValues {
     /// Opens the selected employee's details from the menu bar.
     @Entry var showEmployeeDetails: (() -> Void)?
+    /// Shows the sidebar and focuses its search field.
+    @Entry var findChat: (() -> Void)?
+}
+
+private struct FindChatCommand: View {
+    @FocusedValue(\.findChat) private var findChat
+
+    var body: some View {
+        Button(L("Найти чат")) { findChat?() }
+            .keyboardShortcut("f", modifiers: .command)
+            .disabled(findChat == nil)
+    }
 }
 
 private struct EmployeeDetailsCommand: View {
