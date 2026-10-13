@@ -1,8 +1,8 @@
 const $=id=>document.getElementById(id);let attempt,csrf,mode='login',busy=false,magic=false;
 async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json',...(csrf?{'X-CSRF-Token':csrf}:{})}:{},...(body?{body:JSON.stringify(body)}:{})});const data=await r.json();if(!r.ok)throw Error(data.error||'Не удалось продолжить. Попробуйте ещё раз.');return data;}
-function notice(text){$('notice').textContent=text;}
+function notice(text,error=false){$('notice').textContent=text;$('notice').toggleAttribute('data-error',error);}
 function lock(value){busy=value;document.querySelectorAll('button').forEach(b=>b.disabled=value);}
-async function run(fn){if(busy)return;lock(true);notice('');try{await fn();}catch(e){notice(e.message);}finally{lock(false);}}
+async function run(fn){if(busy)return;lock(true);notice('');try{await fn();}catch(e){notice(e.message,true);}finally{lock(false);}}
 async function complete(approved=true){const r=await api('/oauth/complete',{request_id:attempt,approved});location.assign(r.redirect_uri);}
 function showForm(next){
  mode=next;$('remembered').hidden=true;$('recovery').hidden=true;$('email-sent').hidden=true;$('login').hidden=false;
