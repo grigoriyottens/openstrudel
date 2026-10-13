@@ -1,17 +1,5 @@
 import SwiftUI
 
-struct SectionTitle: View {
-    let title: String
-    let subtitle: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.headline)
-            Text(subtitle).font(.caption).foregroundStyle(AppTheme.secondaryText)
-        }
-        .padding(.top, 8)
-    }
-}
-
 struct OpenAISettingsCard: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
@@ -19,41 +7,32 @@ struct OpenAISettingsCard: View {
     var showIdentity = true
 
     var body: some View {
-        if showIdentity { content.settingsCard() }
-        else { content }
-    }
-
-    private var content: some View {
         let connected = client.openAIAccount?.connected == true
-        return VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             if showIdentity {
-            HStack(spacing: 12) {
-                AccountBadge(email: client.openAIAccount?.email, size: 36)
-                VStack(alignment: .leading, spacing: 3) {
+                LabeledContent {
+                    if client.openAIAccount?.isUnavailable != true { ConnectionStatus(connected: connected) }
+                } label: {
                     if let account = client.openAIAccount, account.connected {
-                        Text(account.email ?? "OpenAI").font(.subheadline.weight(.medium))
+                        Text(account.email ?? "OpenAI")
                             .accessibilityLabel(L("Аккаунт OpenAI")).accessibilityValue(account.email ?? "OpenAI").accessibilityIdentifier("openAIAccountIdentity")
                         Text([account.planLabel, account.categoryLabel].compactMap { $0 }.joined(separator: " · "))
-                            .font(.caption).foregroundStyle(AppTheme.secondaryText)
                     } else if client.openAIAccount?.isUnavailable == true {
-                        Text(L("Нет связи с OpenAI")).font(.subheadline.weight(.medium))
-                        Text(L("Повторный вход пока не нужен")).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        Text(L("Нет связи с OpenAI"))
+                        Text(L("Повторный вход пока не нужен"))
                     } else {
-                        Text(L("Аккаунт не подключён")).font(.subheadline.weight(.medium))
-                        Text(L("Войдите в свой аккаунт OpenAI")).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        Text(L("Аккаунт не подключён"))
+                        Text(L("Войдите в свой аккаунт OpenAI"))
                     }
-                    if client.openAIAccount?.isUnavailable != true { ConnectionStatus(connected: connected) }
                 }
-                Spacer()
-            }
             }
 
             if let error = client.openAIErrorMessage {
-                Text(UserFacingError.text(error)).font(.callout).foregroundStyle(AppTheme.secondaryText)
+                Text(UserFacingError.text(error)).foregroundStyle(AppTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if showIdentity && !connected && client.canManageOpenAI {
-                Text(client.openAIRecoveryMessage).font(.callout).foregroundStyle(AppTheme.secondaryText)
+                Text(client.openAIRecoveryMessage).foregroundStyle(AppTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if client.openAIAccount?.isUnavailable == true && client.openAILogin == nil && !client.openAILoginPending {
@@ -63,15 +42,15 @@ struct OpenAISettingsCard: View {
                     .accessibilityIdentifier("retryOpenAIAccount")
             } else if !client.canManageOpenAI {
                 if showIdentity {
-                Text(connected ? L("Используется аккаунт устройства, на котором работает сотрудник.")
-                     : client.openAIRecoveryMessage)
-                    .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                    Text(connected ? L("Используется аккаунт устройства, на котором работает сотрудник.")
+                         : client.openAIRecoveryMessage)
+                        .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
                 }
             } else if let login = client.openAILogin {
                 VStack(alignment: .leading, spacing: 8) {
                     if login.type == "device", let code = login.userCode {
-                        Text(L("Введите этот код на сайте OpenAI")).font(.callout).foregroundStyle(AppTheme.secondaryText)
-                        Text(code).font(.system(.title3, design: .monospaced).weight(.semibold)).textSelection(.enabled)
+                        Text(L("Введите этот код на сайте OpenAI")).foregroundStyle(AppTheme.secondaryText)
+                        Text(code).font(AppTypography.title.monospaced()).textSelection(.enabled)
                             .accessibilityLabel(L("Sign-in code: \(code)"))
                             .accessibilityIdentifier("openAIDeviceCode")
                         Button {
@@ -86,14 +65,16 @@ struct OpenAISettingsCard: View {
                             .adaptiveActionStyle(.glass).accessibilityIdentifier("copyOpenAICode")
                         DisclosureGroup(L("Не получается войти?")) {
                             Text(L("В ChatGPT откройте «Настройки», затем «Безопасность» и разрешите вход по коду устройства. Для рабочего аккаунта может понадобиться помощь администратора. Если код истёк, отмените вход здесь и начните снова."))
-                                .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                                .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
                         }.padding(.vertical, 4)
                     } else {
-                        Text(L("Откройте страницу OpenAI и завершите вход.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        Text(L("Откройте страницу OpenAI и завершите вход.")).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
                     }
                     if let url = login.url {
                         Button { openURL(url) } label: { SetupActionLabel(title: L("Открыть OpenAI"), icon: "arrow.up.right") }
-                            .adaptiveActionStyle(.glassProminent).accessibilityIdentifier("reopenOpenAILogin")
+                            .adaptiveActionStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+                            .tint(AppTheme.accentText).foregroundStyle(AppTheme.canvas)
+                            .accessibilityIdentifier("reopenOpenAILogin")
                     }
                     Button { Task { await client.cancelOpenAILogin() } } label: {
                         SetupActionLabel(title: L("Отменить вход"))
@@ -101,7 +82,7 @@ struct OpenAISettingsCard: View {
                 }
             } else if client.openAILoginPending {
                 Text(L("Вход открыт на другом устройстве. Завершите его на сайте OpenAI. Это окно обновится автоматически."))
-                    .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
             } else if connected {
                 Button { Task { await client.beginOpenAILogin() } } label: {
                     SetupActionLabel(title: client.isStartingOpenAILogin ? L("Открываем OpenAI…") : L("Сменить аккаунт"))
@@ -109,112 +90,86 @@ struct OpenAISettingsCard: View {
             } else if client.canManageOpenAI {
                 Button { Task { await client.beginOpenAILogin() } } label: {
                     SetupActionLabel(title: client.isStartingOpenAILogin ? L("Открываем OpenAI…") : L("Войти в OpenAI"), icon: "arrow.up.right")
-                }.adaptiveActionStyle(.glassProminent).controlSize(.large)
+                }.adaptiveActionStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+                    .tint(AppTheme.accentText).foregroundStyle(AppTheme.canvas)
                     .disabled(client.isStartingOpenAILogin)
                     .accessibilityIdentifier("signInOpenAI")
             }
         }
         .onChange(of: client.openAILogin?.id) { _, _ in copiedCode = false }
     }
-
 }
 
-struct TelegramSettingsCard: View {
-    @EnvironmentObject private var client: HomeClient
-    @Environment(\.dynamicTypeSize) private var textSize
-    @State private var showChats = false
-    @State private var confirmDisconnect = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "paperplane.fill").foregroundStyle(AppTheme.secondaryText)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(client.telegram?.botUsername.map { "@" + $0 } ?? "Telegram")
-                        .font(.subheadline.weight(.medium))
-                    if client.telegram?.configured == true { ConnectionStatus(connected: client.telegram?.running == true) }
-                }
-                Spacer()
-            }
-            if let telegram = client.telegram, telegram.configured {
-                if let url = client.telegramLink?.url {
-                    Link(destination: url) { AdaptiveActionLabel(title: L("Открыть Telegram")) }
-                        .adaptiveActionStyle(.borderedProminent)
-                    Text(L("В Telegram нажмите «Начать», чтобы продолжить разговор."))
-                        .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                }
-                if textSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 8) { telegramActions }
-                } else {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 8) { telegramActions.fixedSize(horizontal: true, vertical: false) }
-                        VStack(alignment: .leading, spacing: 8) { telegramActions }
-                    }
-                }
-            } else {
-                TelegramSetupView()
-            }
-        }
-        .settingsCard()
-        .sheet(isPresented: $showChats) { TelegramChatsView() }
-        .confirmationDialog(L("Отключить Telegram?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
-            Button(L("Отключить Telegram"), role: .destructive) { Task { await client.disconnectTelegram() } }
-            Button(L("Отмена"), role: .cancel) {}
-        } message: { Text(L("Сотрудники перестанут отвечать в Telegram. Переписка в OpenStrudel сохранится.")) }
-    }
-
-    @ViewBuilder private var telegramActions: some View {
-        Button { Task { await client.createTelegramLink() } } label: {
-            AdaptiveActionLabel(title: client.telegramLink == nil ? L("Продолжить в Telegram") : L("Обновить приглашение"))
-        }
-            .font(.body).adaptiveActionStyle(.bordered).controlSize(.large)
-        if !(client.telegram?.chats ?? []).isEmpty {
-            Button { showChats = true } label: { AdaptiveActionLabel(title: L("Чаты")) }
-                .font(.body).adaptiveActionStyle(.bordered).controlSize(.large)
-        }
-        Button(role: .destructive) { confirmDisconnect = true } label: { AdaptiveActionLabel(title: L("Отключить")) }
-            .font(.body).adaptiveActionStyle(.bordered).controlSize(.large)
-            .tint(AppTheme.destructive)
-    }
-}
-
-/// The same quiet status on every connection card.
+/// A connection's state as a word and a symbol; colour is never the only signal.
 struct ConnectionStatus: View {
     let connected: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle().fill(connected ? Color.green : Color.secondary.opacity(0.4)).frame(width: 7, height: 7)
-                .accessibilityHidden(true)
-            Text(connected ? L("Подключён") : L("Не подключён"))
+        Label {
+            Text(connected ? L("Подключён") : L("Не подключён")).foregroundStyle(AppTheme.secondaryText)
+        } icon: {
+            Image(systemName: connected ? "checkmark.circle.fill" : "circle.dashed")
+                .foregroundStyle(connected ? AppTheme.accentText : AppTheme.secondaryText)
         }
-        .font(.caption)
-        .foregroundStyle(AppTheme.secondaryText)
     }
 }
 
-struct AccountBadge: View {
-    let email: String?
-    let size: CGFloat
+/// A link in ink with a quiet underline, the way links read everywhere in the app.
+struct InkLink: View {
+    let title: String
+    let destination: URL
 
     var body: some View {
-        Circle()
-            .fill(.primary.opacity(0.14))
-            .frame(width: size, height: size)
-            .overlay {
-                Text(String((email ?? "O").prefix(1)).uppercased())
-                    .font(.system(size: size * 0.42, weight: .semibold))
-                    .foregroundStyle(AppTheme.secondaryText)
-            }
-            .accessibilityHidden(true)
+        Link(destination: destination) {
+            Text(title).underline(color: AppTheme.secondaryText)
+        }
+        .foregroundStyle(AppTheme.accentText)
+    }
+}
+
+extension EnvironmentValues {
+    /// A settings Form already groups its rows, so a card inside one drops its own surface.
+    @Entry var settingsCardIsPlain = false
+}
+
+private struct SettingsCard: ViewModifier {
+    @Environment(\.settingsCardIsPlain) private var plain
+    func body(content: Content) -> some View {
+        if plain {
+            content.frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            content.padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        }
     }
 }
 
 extension View {
-    func settingsCard() -> some View {
-        padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    func settingsCard() -> some View { modifier(SettingsCard()) }
+
+    /// Settings switches: mini on the Mac, so a row with a switch is as tall as any other row.
+    func settingsSwitch() -> some View {
+        #if os(macOS)
+        toggleStyle(.switch).controlSize(.mini)
+        #else
+        toggleStyle(.switch)
+        #endif
+    }
+
+    /// The one primary action of a screen: an ink capsule with a canvas-coloured label.
+    func inkButton() -> some View {
+        buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+            .tint(AppTheme.accentText).foregroundStyle(AppTheme.canvas)
+    }
+}
+
+extension HomeClient {
+    /// One symbol per device on every surface: this Mac, another Mac, or a server.
+    var deviceSymbol: String {
+        if isLocalConnection { return "laptopcomputer" }
+        if let platform = health?.platform, platform != "darwin" { return "server.rack" }
+        return "desktopcomputer"
     }
 }
 

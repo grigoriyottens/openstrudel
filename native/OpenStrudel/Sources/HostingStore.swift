@@ -23,27 +23,25 @@ enum HostingStore {
     }
 }
 
+/// A General settings section, shown only when this build has a hosting store.
 struct HostingStoreSettings: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
         if HostingStore.origin != nil {
-            Button { openWindow(id: "servers") } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "server.rack").font(.title2)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(L("Серверы")).font(.headline)
-                        Text(L("Создание, доступ и продление. Для команды и других проектов."))
-                            .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0); Image(systemName: "chevron.right")
-                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 18))
-            }.buttonStyle(.plain)
+            Section {
+                LabeledContent {
+                    Button(L("Открыть")) { openWindow(id: "servers") }
+                } label: {
+                    Text(L("Серверы"))
+                    Text(L("Создание, доступ и продление. Для команды и других проектов."))
+                }
+            }
         }
     }
 }
 
 struct HostingStoreView: View {
+    @Environment(\.openWindow) private var openWindow
     @State private var loading = true
     @State private var error: String?
     @State private var reload = 0
@@ -52,19 +50,51 @@ struct HostingStoreView: View {
             if let origin = HostingStore.origin {
                 ZStack {
                     HostingBrowser(origin: origin, reload: reload, loading: $loading, error: $error)
-                    if loading { ProgressView(L("Открываем серверы…")).padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18)) }
+                    if loading && error == nil { ProgressView(L("Открываем серверы…")) }
                     if let error {
-                        ContentUnavailableView {
-                            Label(L("Не удалось открыть серверы"), systemImage: "network.slash")
-                        } description: { Text(L10n.serviceText(error)) } actions: {
-                            Button(L("Попробовать ещё раз")) { self.error = nil; loading = true; reload += 1 }
-                        }.background(.background)
+                        ServersMessage(title: L("Не удалось открыть серверы"), message: L10n.serviceText(error), action: L("Попробовать ещё раз")) {
+                            self.error = nil; loading = true; reload += 1
+                        }
+                        .background(.background)
                     }
                 }
             } else {
-                ContentUnavailableView(L("Создание серверов пока недоступно"), systemImage: "server.rack", description: Text(L("Вы можете продолжать работу со своей командой.")))
+                ServersMessage(title: L("Создание серверов пока недоступно"), message: L("Вы можете продолжать работу со своей командой."), action: L("Открыть команду")) {
+                    openWindow(id: "home")
+                }
             }
         }.frame(minWidth: 780, minHeight: 650)
+    }
+}
+
+/// The character, one sentence and one action, optically centred at 40 % of the window.
+private struct ServersMessage: View {
+    let title: String
+    let message: String
+    let action: String
+    let perform: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            VStack(spacing: 16) {
+                Image("Agent-main").resizable().scaledToFit()
+                    .frame(width: AvatarSize.hero, height: AvatarSize.hero)
+                    .accessibilityHidden(true)
+                VStack(spacing: 8) {
+                    Text(title).font(AppTypography.display)
+                    Text(message).foregroundStyle(AppTheme.secondaryText).frame(maxWidth: 360)
+                }
+                .multilineTextAlignment(.center)
+                // The ink primary action. Spelled out because the test target builds this file without SharedViews.
+                Button(action, action: perform)
+                    .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+                    .tint(AppTheme.accentText).foregroundStyle(AppTheme.canvas)
+                    .padding(.top, 8)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .position(x: proxy.size.width / 2, y: proxy.size.height * 0.4)
+        }
     }
 }
 

@@ -50,57 +50,76 @@ struct AgentTransferSettings: View {
     private var targetID: String? { deviceID.isEmpty ? nil : deviceID }
     private var working: Bool { busy != nil || showingExport || pending != nil }
 
+    /// Rows only: the caller wraps them in a Form section.
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        Group {
             if client.devices.count > 1 && !localBackupOnly {
                 Picker(L("Сотрудники устройства"), selection: $deviceID) {
                     ForEach(client.devices) { Text($0.name).tag($0.id) }
                 }.disabled(working)
             }
-            Text(L("Сотрудники «\(targetName)», их переписка, файлы и расписания — в одном файле."))
-                .font(.callout).fixedSize(horizontal: false, vertical: true)
-            Text(L("Вход в OpenAI и сервисы в копию не входит."))
-                .font(.caption).foregroundStyle(AppTheme.secondaryText)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L("Сотрудники «\(targetName)», их переписка, файлы и расписания — в одном файле."))
+                Text(L("Вход в OpenAI и сервисы в копию не входит."))
+                    .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+            }
+            .fixedSize(horizontal: false, vertical: true)
             if client.canTransferAgents {
                 if client.health?.agentArchiveEncryption == true {
-                    Toggle(L("Защитить копию паролем"), isOn: $protected).disabled(working)
-                    if protected {
-                        SecureField(L("Пароль · не менее 12 символов"), text: $password).textFieldStyle(.roundedBorder).disabled(working)
-                        Text(L("Сохраните пароль: без него копию не открыть.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
-                    } else { Text(L("Файл без пароля. Храните его в безопасном месте.")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
-                } else { Text(L("Файл без пароля. Для защищённых копий обновите OpenStrudel на этом устройстве.")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
-                HStack(spacing: 12) {
-                    Button(L("Сохранить копию…"), action: export).buttonStyle(.borderedProminent)
-                        .disabled(working || protected && password.count < 12).accessibilityIdentifier("exportAgents")
-                    if !localBackupOnly {
-                        Button(L("Восстановить из копии…")) { error = nil; notice = nil; showingImport = true }
-                            .disabled(working).accessibilityIdentifier("importAgents")
+                    Toggle(isOn: $protected) {
+                        Text(L("Защитить копию паролем"))
+                        Text(protected ? L("Сохраните пароль: без него копию не открыть.") : L("Файл без пароля. Храните его в безопасном месте."))
                     }
+                    .settingsSwitch().disabled(working)
+                    if protected {
+                        SecureField(text: $password, prompt: Text(L("Пароль · не менее 12 символов"))) { Text(L("Пароль копии")) }
+                            .disabled(working)
+                    }
+                } else {
+                    Text(L("Файл без пароля. Для защищённых копий обновите OpenStrudel на этом устройстве."))
+                        .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                }
+                Button(L("Сохранить копию…"), action: export)
+                    .disabled(working || protected && password.count < 12).accessibilityIdentifier("exportAgents")
+                if !localBackupOnly {
+                    Button(L("Восстановить из копии…")) { error = nil; notice = nil; showingImport = true }
+                        .disabled(working).accessibilityIdentifier("importAgents")
                 }
             } else {
                 Text(client.health == nil || client.homeUnreachable ? L("Для копии нужно подключение к устройству с сотрудниками.") : L("Копии доступны владельцу устройства. Проверьте доступ и версию OpenStrudel."))
-                    .font(.callout).foregroundStyle(AppTheme.secondaryText)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
             if let busy {
-                VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
                     if let total, total > 0 {
-                        HStack {
-                            Text(L("Получаем копию с «\(targetName)»"))
-                            Spacer()
-                            Text("\(Int(min(1, Double(received) / Double(total)) * 100))%").monospacedDigit()
-                        }.font(.callout)
-                        ProgressView(value: Double(received), total: Double(total))
-                        Text(L("\(ByteCountFormatter.string(fromByteCount: received, countStyle: .file)) из \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"))
-                            .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                    } else { HStack(spacing: 10) { ProgressView().controlSize(.small); Text(busy).font(.callout) } }
+                        VStack(alignment: .leading, spacing: 4) {
+                            LabeledContent(L("Получаем копию с «\(targetName)»")) {
+                                Text("\(Int(min(1, Double(received) / Double(total)) * 100))%").monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                            }
+                            ProgressView(value: Double(received), total: Double(total))
+                            Text(L("\(ByteCountFormatter.string(fromByteCount: received, countStyle: .file)) из \(ByteCountFormatter.string(fromByteCount: total, countStyle: .file))"))
+                                .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                        }
+                    } else {
+                        ProgressView().controlSize(.small)
+                        Text(busy)
+                        Spacer(minLength: 0)
+                    }
                     Button(L("Отменить")) { operation?.cancel() }
-                }.padding(.vertical, 6)
+                }
             }
-            if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("agentTransferError") }
-            if let notice { Text(L10n.serviceText(notice)).font(.callout).textSelection(.enabled).accessibilityIdentifier("agentTransferNotice") }
-            #if os(macOS)
-            if let savedURL { Button(L("Показать в Finder")) { NSWorkspace.shared.activateFileViewerSelecting([savedURL]) } }
-            #endif
+            if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("agentTransferError") }
+            if let notice {
+                HStack(spacing: 12) {
+                    Text(L10n.serviceText(notice)).textSelection(.enabled).accessibilityIdentifier("agentTransferNotice")
+                    #if os(macOS)
+                    if let savedURL {
+                        Spacer(minLength: 0)
+                        Button(L("Показать в Finder")) { NSWorkspace.shared.activateFileViewerSelecting([savedURL]) }
+                    }
+                    #endif
+                }
+            }
         }
         .onAppear { deviceID = client.health?.nodeId ?? "" }
         .onDisappear { operation?.cancel(); password = ""; importPassword = "" }
@@ -130,28 +149,40 @@ struct AgentTransferSettings: View {
         }
         .sheet(isPresented: $askingPassword, onDismiss: { importPassword = ""; importData = nil; pending = unlockedImport; unlockedImport = nil }) {
             NavigationStack {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text(L("Введите пароль, заданный при сохранении копии.")).font(.callout)
-                    SecureField(L("Пароль копии"), text: $importPassword).textFieldStyle(.roundedBorder)
-                    if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.destructive) }
-                    Button(busy == nil ? L("Открыть копию") : L("Проверяем…")) {
-                        operation = Task {
-                            busy = L("Открываем копию…"); error = nil
-                            defer { busy = nil; operation = nil }
-                            do {
-                                guard let importData else { return }
-                                let data = try AgentTransferFile.protectedUpload(importData, password: importPassword)
-                                unlockedImport = try await client.previewAgentImport(data, deviceID: targetID)
-                                askingPassword = false
-                            } catch { report(error) }
-                        }
-                    }.buttonStyle(.borderedProminent).disabled(importPassword.isEmpty || busy != nil)
-                }.padding(24).navigationTitle(L("Защищённая копия"))
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { operation?.cancel(); askingPassword = false } } }
+                Form {
+                    Section {
+                        SecureField(text: $importPassword, prompt: Text(L("Пароль копии"))) { Text(L("Пароль копии")) }
+                    } footer: {
+                        Text(L("Введите пароль, заданный при сохранении копии."))
+                    }
+                    if let error {
+                        Section { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
+                    }
+                }
+                .formStyle(.grouped)
+                .navigationTitle(L("Защищённая копия"))
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { operation?.cancel(); askingPassword = false } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(busy == nil ? L("Открыть копию") : L("Проверяем…")) {
+                            operation = Task {
+                                busy = L("Открываем копию…"); error = nil
+                                defer { busy = nil; operation = nil }
+                                do {
+                                    guard let importData else { return }
+                                    let data = try AgentTransferFile.protectedUpload(importData, password: importPassword)
+                                    unlockedImport = try await client.previewAgentImport(data, deviceID: targetID)
+                                    askingPassword = false
+                                } catch { report(error) }
+                            }
+                        }.disabled(importPassword.isEmpty || busy != nil)
+                    }
+                }
             }
             #if os(macOS)
-            .frame(width: 440, height: 270)
+            .frame(width: 440, height: error == nil ? 200 : 260)
             #endif
+            .presentationSizing(.fitted)
         }
         .sheet(item: $pending) { item in
             AgentImportReview(pending: item) { result in
@@ -192,34 +223,56 @@ private struct AgentImportReview: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if pending.preview.alreadyImported {
-                        Label(L("Эта команда уже добавлена"), systemImage: "checkmark.circle")
-                            .font(.title2.weight(.medium))
+            Form {
+                if pending.preview.alreadyImported {
+                    Section {
+                        Label {
+                            Text(L("Эта команда уже добавлена"))
+                        } icon: {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(AppTheme.accentText)
+                        }
+                    } footer: {
                         Text(L("Повторный импорт этого файла не создаст дубликаты."))
-                    } else {
-                        Text(L("Текущие сотрудники и их файлы сохранятся. Сотрудники из файла появятся рядом с ними."))
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(Array(pending.preview.employees.enumerated()), id: \.offset) { _, employee in
-                                HStack(alignment: .top, spacing: 10) {
-                                    Image(systemName: "person.crop.circle").accessibilityHidden(true)
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(employee.importedName).font(.body.weight(.medium))
-                                        if employee.name != employee.importedName {
-                                            Text(L("Имя изменено, чтобы не путать с существующим сотрудником."))
-                                                .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                                        }
-                                    }
+                    }
+                } else {
+                    Section {
+                        ForEach(Array(pending.preview.employees.enumerated()), id: \.offset) { _, employee in
+                            Label {
+                                Text(employee.importedName)
+                                if employee.name != employee.importedName {
+                                    Text(L("Имя изменено, чтобы не путать с существующим сотрудником."))
+                                        .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
                                 }
+                            } icon: {
+                                Image(systemName: "person.crop.circle").foregroundStyle(AppTheme.secondaryText)
                             }
                         }
+                    } footer: {
+                        Text(L("Текущие сотрудники и их файлы сохранятся. Сотрудники из файла появятся рядом с ними."))
+                    }
+                    Section {
                         Text(L("Чаты: \(pending.preview.counts.conversations) · Сообщения: \(pending.preview.counts.messages)\nФайлы: \(pending.preview.counts.files) · Расписания: \(pending.preview.counts.schedules)"))
-                            .font(.callout).foregroundStyle(AppTheme.secondaryText)
+                            .monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                    } footer: {
                         Text(L("Расписания будут на паузе, отправка в Telegram отключена. Проверьте их перед включением. Подключённые сервисы нужно будет авторизовать заново."))
-                            .font(.callout).fixedSize(horizontal: false, vertical: true)
-                        if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive).accessibilityFocused($errorFocused) }
-                        Button {
+                    }
+                    if let error {
+                        Section { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive).accessibilityFocused($errorFocused) }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(L("Восстановление сотрудников"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                if pending.preview.alreadyImported {
+                    ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } }
+                } else {
+                    ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.disabled(importing) }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(importing ? L("Добавляем сотрудников…") : L("Добавить сотрудников: \(pending.preview.counts.employees)")) {
                             importing = true; error = nil
                             Task {
                                 defer { importing = false }
@@ -229,26 +282,16 @@ private struct AgentImportReview: View {
                                     errorFocused = true
                                 }
                             }
-                        } label: {
-                            HStack(spacing: 10) {
-                                if importing { ProgressView().controlSize(.small) }
-                                Text(importing ? L("Добавляем сотрудников…") : L("Добавить сотрудников: \(pending.preview.counts.employees)"))
-                            }.frame(maxWidth: .infinity, minHeight: 44)
-                        }.buttonStyle(.borderedProminent).disabled(importing).accessibilityIdentifier("confirmAgentImport")
+                        }
+                        .disabled(importing).accessibilityIdentifier("confirmAgentImport")
                     }
-                }.padding(24).frame(maxWidth: 580, alignment: .leading).frame(maxWidth: .infinity)
+                }
             }
-            .navigationTitle(L("Восстановление сотрудников"))
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar { ToolbarItem(placement: .cancellationAction) {
-                Button(pending.preview.alreadyImported ? L("Готово") : L("Отмена")) { dismiss() }.disabled(importing)
-            } }
         }
         .interactiveDismissDisabled(importing)
         #if os(macOS)
-        .frame(minWidth: 520, minHeight: 480)
+        .frame(width: 520).frame(minHeight: 320, idealHeight: 480, maxHeight: 640)
         #endif
+        .presentationSizing(.fitted)
     }
 }
