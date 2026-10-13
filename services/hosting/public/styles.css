@@ -263,7 +263,6 @@ dialog p.field-help { font-size: .8125rem; margin: .75rem 0; }
 }
 @media(prefers-color-scheme:dark) {
   :root { --page: #1C1B1A; --surface: #1C1B1A; --subtle: #262422; --selected: #262422; --ink: rgb(255 255 255 / .85); --muted: #ADA8A3; --line: #3A3633; --control-line: #7C7781; --accent: #6E6964; --link: #EDEAE6; --warning: #DFB681; --danger: #FF8A91; --button: #EDEAE6; --scrim: rgb(0 0 0 / .5); }
-  .brand img { border-radius: 5px; }
 }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation: none!important; transition: none!important; scroll-behavior: auto!important; } .btn:active { transform: none; } }
 @media(prefers-reduced-transparency:reduce) { dialog::backdrop { backdrop-filter: none; background: rgb(28 27 26 / .7); } }

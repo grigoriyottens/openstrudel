@@ -18,6 +18,7 @@ body { margin: 0; }
 main { max-width: 440px; margin: clamp(32px, 10vh, 108px) auto; padding: 0 24px 48px; }
 p { margin: 16px 0; font-size: 16px; line-height: 1.55; color: var(--secondary); }
 .brand { margin: 16px 0 48px; color: var(--text); font-weight: 590; }
+.mark { display: block; margin: 0 0 24px; }
 h1 { margin: 0 0 24px; font: 590 clamp(36px, 9vw, 48px)/1.08 var(--font-display); }
 h2 { margin: 32px 0 16px; font: 590 28px/34px var(--font-display); }
 label { display: block; margin: 24px 0; font-size: 14px; font-weight: 510; }

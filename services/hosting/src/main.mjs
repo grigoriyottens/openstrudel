@@ -81,7 +81,7 @@ export function createServer(service) {
         }
         throw s.err(404,'Не найдено.');
       }
-      if(method==='GET'&&['/','/app.js','/styles.css','/favicon.svg','/strudel-cream.png','/strudel-graphite.png'].includes(path)) {
+      if(method==='GET'&&['/','/app.js','/styles.css','/favicon.svg','/strudel.png','/strudel-cream.png','/strudel-graphite.png'].includes(path)) {
         const file=path==='/'?'index.html':path.slice(1);res.writeHead(200,{'Content-Type':file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':'text/html; charset=utf-8'});res.end(file==='index.html'?html():readFileSync(join(PUBLIC,file)));return;
       }
       throw s.err(404,'Страница не найдена.');
