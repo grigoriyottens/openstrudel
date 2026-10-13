@@ -82,6 +82,16 @@ struct OpenStrudelRootView: View {
         #endif
     }
 
+    #if os(macOS)
+    /// A draft on this device when it can take one, otherwise on the first device that can.
+    private var newEmployee: (() -> Void)? {
+        let available = library.employeeDestinations.filter(\.available)
+        if available.contains(where: { $0.client === client }) { return { library.beginEmployee() } }
+        guard let other = available.first else { return nil }
+        return { library.beginEmployee(on: other.client, deviceID: other.deviceID) }
+    }
+    #endif
+
     @ViewBuilder private var screens: some View {
         #if os(macOS)
         state.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -124,6 +134,8 @@ struct OpenStrudelRootView: View {
                 columnVisibility = .all
                 searchFocused = true
             }
+            // File › New Employee (⌘N) works only where the plus button can create one.
+            .focusedSceneValue(\.newEmployee, newEmployee)
             // A new employee (⌘N, the plus button or the menu) shows its draft row and takes the typing focus.
             .onChange(of: client.isEmployeeDraft) { _, draft in
                 guard draft else { return }

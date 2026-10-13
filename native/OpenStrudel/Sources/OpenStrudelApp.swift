@@ -16,9 +16,7 @@ struct OpenStrudelApp: App {
         .defaultSize(width: 1120, height: 760)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button(L("Новый сотрудник")) { library.beginEmployee() }
-                    .keyboardShortcut("n", modifiers: .command)
-                    .disabled(client.isCreating || library.isErasing)
+                NewEmployeeCommand(busy: client.isCreating)
                 EmployeeDetailsCommand()
             }
             CommandGroup(after: .textEditing) { FindChatCommand() }
@@ -110,10 +108,23 @@ struct OpenStrudelApp: App {
 
 #if os(macOS)
 extension FocusedValues {
+    /// Starts a new employee. Only the workspace publishes it, so the welcome screens disable ⌘N.
+    @Entry var newEmployee: (() -> Void)?
     /// Opens the selected employee's details from the menu bar.
     @Entry var showEmployeeDetails: (() -> Void)?
     /// Shows the sidebar and focuses its search field.
     @Entry var findChat: (() -> Void)?
+}
+
+private struct NewEmployeeCommand: View {
+    @FocusedValue(\.newEmployee) private var newEmployee
+    let busy: Bool
+
+    var body: some View {
+        Button(L("Новый сотрудник")) { newEmployee?() }
+            .keyboardShortcut("n", modifiers: .command)
+            .disabled(newEmployee == nil || busy)
+    }
 }
 
 private struct FindChatCommand: View {
