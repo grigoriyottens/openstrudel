@@ -128,7 +128,7 @@
     .bubble { max-width: 75%; padding: 9px var(--space-4); border-radius: var(--radius-bubble); background: var(--user-bubble); white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: inset 0 0 0 var(--stroke) var(--separator); }
     .message.other .bubble { background: var(--surface); }
     .author { color: var(--secondary); font-size: 12px; line-height: 16px; margin: 0 0 var(--space-1); font-variant-numeric: tabular-nums; }
-    .message .md { width: 100%; overflow-wrap: break-word; }
+    .message .md { width: 100%; overflow-wrap: break-word; container-type: inline-size; }
     .meta { color: var(--secondary); font-size: 12px; line-height: 16px; margin-top: var(--space-1); display: flex; align-items: center; gap: var(--space-1); font-variant-numeric: tabular-nums; }
     .meta.warning { color: var(--warning); }
     .meta svg.icon { width: 16px; height: 16px; }
@@ -182,6 +182,9 @@
     .md th { background: var(--surface); font-weight: var(--semibold); white-space: nowrap; }
     .md tbody tr { border-top: 1px solid var(--separator); }
     .md .numeric { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* As on the Mac: when the columns can't each have 120 px, the table takes 120 per column and scrolls
+       instead of breaking text into single words. --columns comes from the renderer; 100cqi is the message width. */
+    .md table { min-width: clamp(0px, (var(--columns) * 120px - 100cqi) * 1000, var(--columns) * 120px); }
     .md .align-left { text-align: left; } .md .align-center { text-align: center; } .md .align-right { text-align: right; }
 
     /* The helper sits at the "now" edge; it proofs like rising dough while the employee works. */

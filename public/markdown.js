@@ -311,7 +311,7 @@
     const align = delimiterRow(lines[i + 1]);
     return align && cells(lines[i]).length === align.length ? align : null;
   }
-  const NUMBER = /^[+\-−±]?[$€£¥₽₪]?\s?\d[\d\s.,’'  ]*\s?(?:%|‰|[$€£¥₽₪]|[a-zа-яё]{1,4}\.?)?$/i;
+  const NUMBER = /^[+\-−±]?[$€£¥₽₪]?\s?\d[\d\s.,’'  ]*\s?(?:%|‰|[$€£¥₽₪])?$/i;
   function startsBlock(lines, i) {
     const line = lines[i];
     if (fence(line) || heading(line) || rule(line) || quote(line)) return true;
@@ -503,6 +503,7 @@
   function table(block, doc) {
     const wrap = doc.createElement('div'); wrap.className = 'table-wrap';
     const element = doc.createElement('table');
+    element.style.setProperty('--columns', String(block.align.length));
     const cellClass = column => [block.numeric[column] ? 'numeric' : '', block.align[column] ? 'align-' + block.align[column] : ''].filter(Boolean).join(' ');
     const head = doc.createElement('thead'), headRow = doc.createElement('tr');
     block.header.forEach((cell, column) => {

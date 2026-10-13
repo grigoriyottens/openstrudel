@@ -16,7 +16,7 @@ class FakeNode {
   attributes: Record<string, string> = {};
   data = "";
   dataset: Record<string, string> = {};
-  style: Record<string, string> = {};
+  style: Record<string, unknown> = { setProperty(this: Record<string, string>, name: string, value: string) { this[name] = value; } };
   className = "";
   onclick: unknown = null;
   constructor(public tagName: string, public nodeType = 1) {}
@@ -136,11 +136,15 @@ describe("message markdown", () => {
     expect(table.type).toBe("table");
     expect(table.header.map((cell: { text: string }[]) => cell[0]!.text)).toEqual(["Venue", "Capacity", "Price", "Distance"]);
     expect(table.rows).toHaveLength(3);
-    expect(table.numeric).toEqual([false, true, true, true]);
+    expect(table.numeric).toEqual([false, true, true, false]);
     expect(table.align).toEqual([null, null, null, "center"]);
+    // The same cases as native MessageContentTests: only plain figures, currency and percent count as numbers.
+    const native = md.parse("| Venue | Capacity | Price | Share | Distance | Note |\n| --- | --- | --- | --- | --- | --- |\n| Hangar 9 | 120 | €4,200 | 12.5% | 12 min | |\n| Glasshouse | 1 200 | $3,100.50 | −3% | 25 min | |\n| Mill | | 5 600 ₽ | +0.1 % | — | |")[0];
+    expect(native.numeric).toEqual([false, true, true, true, false, false]);
     const root = render("| a | b |\n|---|---|\n| x | 2 |");
     expect(all(root, "TH")).toHaveLength(2);
     expect(all(root, "TD")[1]!.className).toContain("numeric");
+    expect(all(root, "TABLE")[0]!.style["--columns"]).toBe("2");
   });
 
   it("falls back to plain text above 100 000 characters", () => {
