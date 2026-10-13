@@ -29,7 +29,7 @@ struct ComputerUseSettingsView: View {
                     }
                 } else if let settings, settings.platform == "darwin", settings.available {
                     Button(L("Подключить Computer Use")) { Task { await change("POST") } }
-                        .buttonStyle(.borderedProminent).disabled(!canManage)
+                        .disabled(!canManage)
                         .accessibilityIdentifier("connectComputerUse")
                 }
             } label: {
@@ -40,8 +40,7 @@ struct ComputerUseSettingsView: View {
                 if isGroup { Text(L("Доступ будет у сотрудника в этой группе Telegram. Участники смогут поручать ему действия на компьютере.")) }
                 if !settings.available {
                     Text(L("На этом Mac откройте ChatGPT и включите плагин Computer Use. Затем вернитесь сюда."))
-                    Link(L("Как включить Computer Use"), destination: URL(string: "https://learn.chatgpt.com/docs/computer-use")!)
-                        .foregroundStyle(AppTheme.accentText)
+                    InkLink(title: L("Как включить Computer Use"), destination: URL(string: "https://learn.chatgpt.com/docs/computer-use")!)
                     Button(L("Проверить снова")) { Task { await load() } }.disabled(busy)
                 }
             }

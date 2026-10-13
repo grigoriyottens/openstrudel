@@ -83,7 +83,6 @@ struct ModelSettingsView: View {
                     Spacer(minLength: 0)
                     if settings.canManage && changed {
                         Button(saving ? L("Сохраняем…") : L("Применить")) { Task { await save() } }
-                            .buttonStyle(.borderedProminent)
                             .disabled(saving || selected == nil || ((agentID == nil || !model.isEmpty) && selected?.speeds.contains(where: { $0.id == speed }) != true))
                             .accessibilityIdentifier("saveModelSelection")
                     }

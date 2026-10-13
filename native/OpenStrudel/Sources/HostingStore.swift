@@ -82,12 +82,13 @@ private struct ServersMessage: View {
                     .accessibilityHidden(true)
                 VStack(spacing: 8) {
                     Text(title).font(AppTypography.display)
-                    Text(message).foregroundStyle(AppTheme.secondaryText)
+                    Text(message).foregroundStyle(AppTheme.secondaryText).frame(maxWidth: 360)
                 }
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
+                // The ink primary action. Spelled out because the test target builds this file without SharedViews.
                 Button(action, action: perform)
                     .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+                    .tint(AppTheme.accentText).foregroundStyle(AppTheme.canvas)
                     .padding(.top, 8)
             }
             .padding(24)

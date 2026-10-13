@@ -84,16 +84,18 @@ struct TelegramSetupView: View {
                 linking = false
             }
         }
-        .buttonStyle(.borderedProminent).disabled(linking).accessibilityIdentifier("openPersonalTelegram")
+        .disabled(linking).accessibilityIdentifier("openPersonalTelegram")
         if client.telegramLink != nil && !linked {
             Text(L("Нажмите «Начать» в Telegram. Здесь появится подтверждение подключения."))
                 .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
         }
         if linked && !contextual, let name = client.telegram?.botUsername, let url = URL(string: "https://t.me/" + name + "?startgroup=choose") {
-            Button { openTelegram(url) } label: { Label(L("Добавить бота в группу"), systemImage: "person.2.badge.plus") }
-                .accessibilityIdentifier("addTelegramGroup")
-            Text(L("Добавьте бота в группу и упомяните его. Он ответит сам или подключит подходящего сотрудника."))
-                .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+            LabeledContent {
+                Button(L("Добавить бота в группу")) { openTelegram(url) }
+                    .accessibilityIdentifier("addTelegramGroup")
+            } label: {
+                Text(L("Добавьте бота в группу и упомяните его. Он ответит сам или подключит подходящего сотрудника."))
+            }
         }
         if !contextual {
             HStack(spacing: 8) {
@@ -132,7 +134,6 @@ struct TelegramSetupView: View {
                     busy = false
                 }
             }
-            .buttonStyle(.borderedProminent)
             .disabled(busy || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityIdentifier("connectTelegramBot")
         }

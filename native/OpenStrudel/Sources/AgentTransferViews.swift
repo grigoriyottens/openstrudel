@@ -80,7 +80,6 @@ struct AgentTransferSettings: View {
                         .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
                 }
                 Button(L("Сохранить копию…"), action: export)
-                    .buttonStyle(.borderedProminent)
                     .disabled(working || protected && password.count < 12).accessibilityIdentifier("exportAgents")
                 if !localBackupOnly {
                     Button(L("Восстановить из копии…")) { error = nil; notice = nil; showingImport = true }

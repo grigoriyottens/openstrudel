@@ -110,13 +110,14 @@ struct LocalDataResetProgress: View {
                         }
                     } else if library.erased {
                         Button(L("Начать заново")) { library.startAfterErase() }
-                            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+                            .inkButton()
                             .accessibilityIdentifier("startAfterErase")
                     } else {
-                        HStack(spacing: 12) {
-                            Button(L("Закрыть OpenStrudel")) { NSApp.terminate(nil) }.controlSize(.large)
+                        VStack(spacing: 12) {
                             Button(L("Продолжить сброс")) { Task { await library.eraseThisMac() } }
-                                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+                                .inkButton()
+                            Button(L("Закрыть OpenStrudel")) { NSApp.terminate(nil) }
+                                .buttonStyle(.plain).foregroundStyle(AppTheme.accentText)
                         }
                     }
                 }

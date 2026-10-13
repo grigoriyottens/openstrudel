@@ -28,11 +28,11 @@ struct OpenAISettingsCard: View {
             }
 
             if let error = client.openAIErrorMessage {
-                Text(UserFacingError.text(error)).font(.callout).foregroundStyle(AppTheme.secondaryText)
+                Text(UserFacingError.text(error)).foregroundStyle(AppTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if showIdentity && !connected && client.canManageOpenAI {
-                Text(client.openAIRecoveryMessage).font(.callout).foregroundStyle(AppTheme.secondaryText)
+                Text(client.openAIRecoveryMessage).foregroundStyle(AppTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if client.openAIAccount?.isUnavailable == true && client.openAILogin == nil && !client.openAILoginPending {
@@ -44,13 +44,13 @@ struct OpenAISettingsCard: View {
                 if showIdentity {
                     Text(connected ? L("Используется аккаунт устройства, на котором работает сотрудник.")
                          : client.openAIRecoveryMessage)
-                        .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
                 }
             } else if let login = client.openAILogin {
                 VStack(alignment: .leading, spacing: 8) {
                     if login.type == "device", let code = login.userCode {
-                        Text(L("Введите этот код на сайте OpenAI")).font(.callout).foregroundStyle(AppTheme.secondaryText)
-                        Text(code).font(.system(.title3, design: .monospaced).weight(.semibold)).textSelection(.enabled)
+                        Text(L("Введите этот код на сайте OpenAI")).foregroundStyle(AppTheme.secondaryText)
+                        Text(code).font(AppTypography.title.monospaced()).textSelection(.enabled)
                             .accessibilityLabel(L("Sign-in code: \(code)"))
                             .accessibilityIdentifier("openAIDeviceCode")
                         Button {
@@ -65,14 +65,16 @@ struct OpenAISettingsCard: View {
                             .adaptiveActionStyle(.glass).accessibilityIdentifier("copyOpenAICode")
                         DisclosureGroup(L("Не получается войти?")) {
                             Text(L("В ChatGPT откройте «Настройки», затем «Безопасность» и разрешите вход по коду устройства. Для рабочего аккаунта может понадобиться помощь администратора. Если код истёк, отмените вход здесь и начните снова."))
-                                .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                                .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
                         }.padding(.vertical, 4)
                     } else {
-                        Text(L("Откройте страницу OpenAI и завершите вход.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        Text(L("Откройте страницу OpenAI и завершите вход.")).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
                     }
                     if let url = login.url {
                         Button { openURL(url) } label: { SetupActionLabel(title: L("Открыть OpenAI"), icon: "arrow.up.right") }
-                            .adaptiveActionStyle(.glassProminent).accessibilityIdentifier("reopenOpenAILogin")
+                            .adaptiveActionStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+                            .tint(AppTheme.accentText).foregroundStyle(AppTheme.canvas)
+                            .accessibilityIdentifier("reopenOpenAILogin")
                     }
                     Button { Task { await client.cancelOpenAILogin() } } label: {
                         SetupActionLabel(title: L("Отменить вход"))
@@ -80,7 +82,7 @@ struct OpenAISettingsCard: View {
                 }
             } else if client.openAILoginPending {
                 Text(L("Вход открыт на другом устройстве. Завершите его на сайте OpenAI. Это окно обновится автоматически."))
-                    .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
             } else if connected {
                 Button { Task { await client.beginOpenAILogin() } } label: {
                     SetupActionLabel(title: client.isStartingOpenAILogin ? L("Открываем OpenAI…") : L("Сменить аккаунт"))
@@ -88,7 +90,8 @@ struct OpenAISettingsCard: View {
             } else if client.canManageOpenAI {
                 Button { Task { await client.beginOpenAILogin() } } label: {
                     SetupActionLabel(title: client.isStartingOpenAILogin ? L("Открываем OpenAI…") : L("Войти в OpenAI"), icon: "arrow.up.right")
-                }.adaptiveActionStyle(.glassProminent).controlSize(.large)
+                }.adaptiveActionStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+                    .tint(AppTheme.accentText).foregroundStyle(AppTheme.canvas)
                     .disabled(client.isStartingOpenAILogin)
                     .accessibilityIdentifier("signInOpenAI")
             }
@@ -108,6 +111,19 @@ struct ConnectionStatus: View {
             Image(systemName: connected ? "checkmark.circle.fill" : "circle.dashed")
                 .foregroundStyle(connected ? AppTheme.accentText : AppTheme.secondaryText)
         }
+    }
+}
+
+/// A link in ink with a quiet underline, the way links read everywhere in the app.
+struct InkLink: View {
+    let title: String
+    let destination: URL
+
+    var body: some View {
+        Link(destination: destination) {
+            Text(title).underline(color: AppTheme.secondaryText)
+        }
+        .foregroundStyle(AppTheme.accentText)
     }
 }
 
@@ -139,6 +155,12 @@ extension View {
         #else
         toggleStyle(.switch)
         #endif
+    }
+
+    /// The one primary action of a screen: an ink capsule with a canvas-coloured label.
+    func inkButton() -> some View {
+        buttonStyle(.borderedProminent).buttonBorderShape(.capsule).controlSize(.large)
+            .tint(AppTheme.accentText).foregroundStyle(AppTheme.canvas)
     }
 }
 
