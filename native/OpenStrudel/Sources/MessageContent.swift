@@ -349,11 +349,6 @@ struct MessageContent: View, Equatable {
     }
 }
 
-enum ChatTypography {
-    static var body: Font { AppTypography.reading }
-    static var code: Font { AppTypography.code }
-}
-
 /// A list item with a fixed marker column: bullets and right-aligned tabular numbers end on one
 /// edge, so every item's text starts on one line. Nested items start under their parent's text.
 private struct ListItem: View {
