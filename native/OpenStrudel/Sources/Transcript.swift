@@ -49,8 +49,6 @@ struct EmptyChat: View {
                 .accessibilityLabel(L("Где будет работать сотрудник"))
                 .accessibilityValue(client.executionDeviceName)
                 .accessibilityIdentifier("employeeCreationDevice")
-            } else {
-                line(L("Works on “\(client.executionDeviceName)”."), limit: 2)
             }
         } else if client.homeUnreachable || client.connectionNeedsPairing {
             line(L("История появится после подключения к устройству."), limit: 2)
