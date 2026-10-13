@@ -166,7 +166,7 @@ struct ConversationBrowser: View {
     }
 }
 
-/// A row like the Mac sidebar: the character at 32, the name over one line of preview.
+/// A row like the Mac sidebar: the character at 36, 12 to the name, the name over one line of preview.
 /// An employee whose device is out of reach rests in grey and says so in words.
 struct EmployeePickerRow: View {
     @Environment(\.dynamicTypeSize) private var textSize
@@ -181,16 +181,16 @@ struct EmployeePickerRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 if !textSize.isAccessibilitySize {
                     if let symbol {
-                        Image(systemName: symbol).font(.title3).foregroundStyle(AppTheme.accent)
+                        Image(systemName: symbol).font(.title3).foregroundStyle(AppTheme.secondaryText)
                             .frame(width: AvatarSize.row, height: AvatarSize.row)
                     } else {
                         AgentAvatar(appearance: appearance, size: AvatarSize.row).offlineCharacter(offline)
                     }
                 }
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(name).font(AppTypography.interface.weight(.medium)).foregroundStyle(Color.primary)
                         .lineLimit(textSize.isAccessibilitySize ? nil : 1)
                     if !preview.isEmpty {

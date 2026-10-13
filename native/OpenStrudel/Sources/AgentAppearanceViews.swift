@@ -83,6 +83,7 @@ struct AgentAppearanceShuffle: View {
         .buttonStyle(.borderless)
         .font(AppTypography.interface)
         .foregroundStyle(AppTheme.secondaryText)
+        .textCase(nil)
         .fixedSize()
         .accessibilityLabel(L("Случайный образ"))
         .accessibilityIdentifier("shuffleAgentAppearance")
