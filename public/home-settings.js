@@ -413,12 +413,47 @@ function openNavigation() {
   row(more,t("Новый сотрудник"),openCreateAgent,{avatar:symbol('plus')});
 }
 async function sendDraft(event) {
-  event.preventDefault(); const text=$('draft').value.trim();
-  if(!text) { const running=runningMessage(); if(running) await stopReply(running); return; }
+  event.preventDefault(); const text=$('draft').value.trim(), files=state.attachments;
+  if(files.some(file=>!file.id)) return;
+  const running=runningMessage();
+  if(!text && !files.length) { if(running) await stopReply(running); return; }
   if(state.loading) return;
   let draft; try { draft = saveDraft(); } catch(e) { notify(e.message); return; }
-  $('draft').value=''; syncDraft();
-  await deliver({...draft,profile:state.selected||null,conversationId:state.chat||null});
+  $('draft').value=''; state.attachments=[]; renderAttachments(); syncDraft();
+  await deliver({...draft,profile:state.selected||null,conversationId:state.chat||null,...(running?{mode:state.sendMode}:{})});
+}
+/* The plus attaches up to six files of 25 MB. Each one uploads to the conversation at once and shows as a tile
+   inside the glass; Send waits until every tile has its id. The browser has no speech engine, so there is no microphone. */
+$('attach').onclick=()=>{ const picker=document.createElement('input'); picker.type='file'; picker.multiple=true; picker.onchange=()=>void attachFiles([...picker.files]); picker.click(); };
+$('send-mode').onclick=()=>{ state.sendMode=state.sendMode==='queue'?'steer':'queue'; syncDraft(); };
+async function attachFiles(files) {
+  const list=state.attachments, conversationId=state.conversationID, room=6-list.length;
+  if(!conversationId) return;
+  if(files.length>room) notify(t("Можно прикрепить до шести файлов."));
+  const uploads=[];
+  for(const file of files.slice(0,Math.max(0,room))) {
+    if(!file.size || file.size>25*1024*1024) { notify(t("Выберите файл до 25 МБ")); continue; }
+    const entry={name:file.name,size:file.size,mimeType:file.type||'application/octet-stream'}; list.push(entry); uploads.push([entry,file]);
+  }
+  renderAttachments(); syncDraft();
+  await Promise.all(uploads.map(async([entry,file])=>{
+    try {
+      const contentBase64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});
+      const result=await api('/v1/conversations/'+encodeURIComponent(conversationId)+'/files',{method:'POST',body:JSON.stringify({id:crypto.randomUUID(),name:entry.name,mimeType:file.type||undefined,contentBase64})});
+      entry.id=result.attachment.id; entry.mimeType=result.attachment.mimeType;
+    } catch(e) { list.splice(list.indexOf(entry),1); notify(e.message||t("Не удалось добавить файл")); }
+    if(list===state.attachments) { renderAttachments(); try { saveDraft(); } catch(e) { notify(e.message); } syncDraft(); }
+  }));
+}
+function renderAttachments() {
+  const box=$('composer-files'); box.hidden=!state.attachments.length;
+  box.replaceChildren(...state.attachments.map(file=>{
+    const tile=element('div','','attachment'+(file.id?'':' uploading')), text=element('span','','attachment-text'), name=element('span',file.name,'file-name'); name.dir='auto';
+    text.append(name,element('span',file.id?fileSize(file.size):t("Добавляем файлы"),'file-size'));
+    const remove=element('button','','remove'); remove.type='button'; remove.setAttribute('aria-label',t("Remove {0}",file.name)); remove.title=t("Remove {0}",file.name); remove.append(icon('xmark'));
+    remove.onclick=()=>{ state.attachments=state.attachments.filter(other=>other!==file); renderAttachments(); try { saveDraft(); } catch(e) { notify(e.message); } syncDraft(); $('draft').focus(); };
+    tile.append(icon('doc'),text,remove); return tile;
+  }));
 }
 /* The message shows in the transcript at once and its saved draft stays until the device accepts it. A message
    that fails keeps its bubble with the reason and a retry under it; the same id lets the retry find it. */
@@ -429,7 +464,7 @@ async function deliver(message) {
   state.pending=[...state.pending.filter(item=>item.externalId!==draft.externalId),{...draft,createdAt:new Date().toISOString()}];
   renderMessages(true);
   try {
-    const result=await api('/v1/messages?async=true',{method:'POST',body:JSON.stringify({...draft,channel:'api',externalChatId:'home'})});
+    const result=await api('/v1/messages?async=true',{method:'POST',body:JSON.stringify({...draft,attachments:draft.attachments?.length?draft.attachments.map(file=>file.id):undefined,channel:'api',externalChatId:'home'})});
     if (result.operationId) {
       const queue=readOutbox(); if(!queue.some(item=>item.externalId===draft.externalId)) queue.push({...draft,operationId:result.operationId}); saveOutbox(queue);
     }
@@ -450,14 +485,16 @@ async function stopReply(message) {
 }
 function draftKey() { return 'openstrudel.draft.' + (state.homeId || location.origin) + '.' + (state.chat || state.selected || 'main'); }
 function saveDraft() {
-  const text=$('draft').value;
+  const text=$('draft').value, attachments=state.attachments.filter(file=>file.id).map(({id,name,size,mimeType})=>({id,name,size,mimeType}));
   const previous=JSON.parse(localStorage.getItem(draftKey()) || 'null');
-  const draft=previous?.text===text ? previous : { text, profile:state.selected, conversationId:state.chat, externalId:crypto.randomUUID() };
+  const same=previous?.text===text && JSON.stringify(previous.attachments||[])===JSON.stringify(attachments);
+  const draft=same ? previous : { text, attachments, profile:state.selected, conversationId:state.chat, externalId:crypto.randomUUID() };
   try { localStorage.setItem(draftKey(),JSON.stringify(draft)); } catch { throw new Error(t("Не удалось сохранить черновик в браузере. Освободите место перед отправкой.")); }
   return draft;
 }
 function restoreDraft() {
   const draft=JSON.parse(localStorage.getItem(draftKey()) || 'null'); $('draft').value=draft?.text || '';
+  state.attachments=(draft?.attachments||[]).map(file=>({...file})); renderAttachments();
   syncDraft();
 }
 function outboxKey() { return 'openstrudel.outbox.' + (state.homeId || location.origin); }

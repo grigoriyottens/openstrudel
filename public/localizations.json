@@ -4241,6 +4241,13 @@
     "he": "צירוף תמונה או קובץ עד 25 MB",
     "ru": "Прикрепить фото или файл до 25 МБ"
   },
+  "Выберите файл до 25 МБ": {
+    "en": "Choose a file up to 25 MB",
+    "fr": "Choisissez un fichier de 25 Mo maximum",
+    "es": "Elige un archivo de hasta 25 MB",
+    "he": "יש לבחור קובץ עד 25 MB",
+    "ru": "Выберите файл до 25 МБ"
+  },
   "Сообщение": {
     "en": "Message",
     "fr": "Message",

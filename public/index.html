@@ -76,8 +76,9 @@
     .sidebar { flex: 0 0 var(--sidebar); min-width: 0; display: flex; flex-direction: column; border-inline-end: 1px solid var(--separator); }
     .sidebar-bar { flex: none; height: var(--bar); display: flex; align-items: center; justify-content: flex-end; padding-inline: var(--space-3); }
     .icon-button { width: var(--control); height: var(--control); display: grid; place-items: center; border-radius: var(--radius-control); color: var(--secondary); transition: background-color .15s, transform .1s; }
-    .icon-button:hover { background: var(--hover); color: var(--text); }
-    .icon-button:active { background: var(--pressed); transform: scale(.94); }
+    .icon-button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+    .icon-button:active:not(:disabled) { background: var(--pressed); transform: scale(.94); }
+    .icon-button:disabled { opacity: .45; }
     .agent-list { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-2) var(--space-3); display: flex; flex-direction: column; gap: var(--space-1); }
     .agent { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 56px; padding: 10px var(--space-3); border-radius: var(--radius-card); text-align: start; transition: background-color .15s; }
     .agent:hover { background: var(--hover); }
@@ -213,9 +214,9 @@
 
     /* Composer: Liquid Glass on the column edges, one tinted control. */
     .composer-wrap { position: absolute; inset-inline: 0; bottom: 0; padding: 0 max(var(--gutter), calc((100% - var(--column)) / 2)) var(--composer-edge); pointer-events: none; }
-    .composer { pointer-events: auto; display: flex; align-items: flex-end; gap: var(--space-2); min-height: 48px; padding: var(--space-2); border-radius: var(--radius-composer); background: var(--glass); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); box-shadow: inset 0 0 0 1px var(--glass-edge), var(--shadow); transition: box-shadow .15s; }
+    .composer { pointer-events: auto; display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); min-height: 48px; padding: var(--space-2); border-radius: var(--radius-composer); background: var(--glass); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); box-shadow: inset 0 0 0 1px var(--glass-edge), var(--shadow); transition: box-shadow .15s; }
     .composer:focus-within { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), var(--shadow); }
-    .composer textarea { flex: 1; min-width: 0; height: var(--control); max-height: 186px; padding: 5px var(--space-2); margin: 0; border: 0; outline: 0; resize: none; background: transparent; font-size: 15px; line-height: 22px; }
+    .composer textarea { flex: 1 1 0; min-width: 0; height: var(--control); max-height: 186px; padding: 5px var(--space-2); margin: 0; border: 0; outline: 0; resize: none; background: transparent; font-size: 15px; line-height: 22px; }
     .composer textarea::placeholder { color: var(--secondary); opacity: 1; white-space: nowrap; }
     .send { flex: none; width: var(--control); height: var(--control); display: grid; place-items: center; border-radius: 50%; background: var(--accent-text); color: var(--canvas); transition: background-color .15s, color .15s, transform .1s; }
     .send svg.icon { width: 18px; height: 18px; stroke-width: 2.2; }
@@ -223,6 +224,18 @@
     .send:active:not(:disabled) { transform: scale(.92); }
     .send:disabled { background: var(--hover); color: var(--secondary); opacity: .55; }
     .send[data-mode=stop] svg.icon { fill: currentColor; }
+    /* Attachments sit inside the glass above the text: 48-px tiles, 12 from the glass so their corners are concentric. */
+    .composer-files { flex: 1 0 100%; display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-1) var(--space-1) 0; scrollbar-width: none; }
+    .attachment { position: relative; flex: none; display: flex; align-items: center; gap: var(--space-2); height: 48px; max-width: 220px; padding-inline: var(--space-3) var(--space-4); border-radius: var(--radius-card); background: var(--surface); box-shadow: inset 0 0 0 var(--stroke) var(--separator); }
+    .attachment > svg.icon { color: var(--secondary); }
+    .attachment-text { min-width: 0; display: flex; flex-direction: column; }
+    .attachment .file-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .attachment.uploading .file-size { animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .5; } }
+    @media (prefers-reduced-motion: reduce) { .attachment.uploading .file-size { animation: none; } }
+    .attachment .remove { position: absolute; top: -4px; inset-inline-end: -4px; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; background: var(--secondary); color: var(--canvas); box-shadow: 0 0 0 1.5px var(--canvas); }
+    .attachment .remove::before { content: ""; position: absolute; inset: -8px; }
+    .attachment .remove svg.icon { width: 10px; height: 10px; stroke-width: 2.6; }
 
     /* Controls */
     .primary, .secondary, .destructive { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: var(--control); padding: 0 var(--space-3); border-radius: var(--radius-control); font-weight: var(--medium); text-align: center; text-decoration: none; transition: background-color .15s, transform .1s; }
@@ -397,7 +410,7 @@
       </header>
       <div id="connection-notice" class="connection-notice" role="status" aria-live="polite"></div>
       <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
-      <div class="composer-wrap" id="composer-wrap"><form class="composer" id="composer"><textarea dir="auto" id="draft" rows="1"></textarea><button class="send" id="send" data-i18n-aria-label="Отправить" aria-label="Send" data-i18n-title="Отправить" title="Send" data-icon="arrowUp" disabled></button></form></div>
+      <div class="composer-wrap" id="composer-wrap"><form class="composer" id="composer"><div class="composer-files" id="composer-files" hidden></div><button type="button" class="icon-button" id="attach" data-i18n-aria-label="Прикрепить файл" aria-label="Attach file" data-i18n-title="Прикрепить фото или файл до 25 МБ" title="Attach a photo or file up to 25 MB" data-icon="plus" disabled></button><textarea dir="auto" id="draft" rows="1"></textarea><button type="button" class="icon-button" id="send-mode" hidden></button><button class="send" id="send" data-i18n-aria-label="Отправить" aria-label="Send" data-i18n-title="Отправить" title="Send" data-icon="arrowUp" disabled></button></form></div>
     </section>
   </main>
   <div class="modal-backdrop" id="modal"><div class="modal" id="modal-content" role="dialog" aria-modal="true" data-i18n-aria-label="Настройки" aria-label="Settings"></div></div>
@@ -405,7 +418,7 @@
   <script src="/markdown.js"></script>
   <script src="/agent-characters.js"></script>
   <script>const $ = (id) => document.getElementById(id);
-    const state = { profiles: [], selected: null, messages: [], pending: [], telegram: null, loading: false };
+    const state = { profiles: [], selected: null, messages: [], pending: [], attachments: [], sendMode: 'steer', telegram: null, loading: false };
     const ICONS = {
       plus: ['M10 4.5v11M4.5 10h11'],
       gear: ['M7.98 4.14 8.59 2.02h2.82l.61 2.12.7.29 1.93-1.07 1.99 1.99-1.07 1.93.29.7 2.12.61v2.82l-2.12.61-.29.7 1.07 1.93-1.99 1.99-1.93-1.07-.7.29-.61 2.12H8.59l-.61-2.12-.7-.29-1.93 1.07-1.99-1.99 1.07-1.93-.29-.7-2.12-.61V8.59l2.12-.61.29-.7-1.07-1.93 1.99-1.99 1.93 1.07Z', 'M12.6 10a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 1 1 5.2 0Z'],
@@ -418,6 +431,8 @@
       chevron: ['M8 5l5 5-5 5'],
       back: ['M12 5l-5 5 5 5'],
       clock: ['M10 3a7 7 0 1 1 0 14 7 7 0 1 1 0-14Z', 'M10 6.5V10l2.5 1.5'],
+      steer: ['M5.5 4v5.5A3.5 3.5 0 0 0 9 13h6.5', 'M12.5 10l3 3-3 3'],
+      xmark: ['M6.5 6.5l7 7M13.5 6.5l-7 7'],
     };
     function icon(name, directional = false) {
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -603,7 +618,8 @@
     }
     function pendingArticle(item) {
       const article = element('article', '', 'message person'); article.dataset.id = 'sending:' + item.externalId;
-      const bubble = element('div', item.text, 'bubble'); bubble.dir = 'auto'; article.append(bubble);
+      if (item.text) { const bubble = element('div', item.text, 'bubble'); bubble.dir = 'auto'; article.append(bubble); }
+      if (item.attachments?.length) { const files = element('div', '', 'files'); files.append(...item.attachments.map(attachmentChip)); article.append(files); }
       if (item.error) {
         const meta = element('div', '', 'meta warning'); meta.append(element('span', item.error));
         const retry = element('button', t("Повторить")); retry.type = 'button'; retry.onclick = () => void deliver(item);
@@ -681,7 +697,7 @@
         for (const item of outbox) items.push({ key: 'outbox:' + item.operationId, sig: [item.text, item.error, state.owner, language].join('\u0000'), build: () => outboxArticle(item) });
         sending.forEach((item, index) => {
           cluster(state.messages.length + index, 'sending:' + item.externalId);
-          items.push({ key: 'sending:' + item.externalId, sig: [item.text, item.error, language].join('\u0000'), build: () => pendingArticle(item) });
+          items.push({ key: 'sending:' + item.externalId, sig: [item.text, item.error, JSON.stringify(item.attachments || []), language].join('\u0000'), build: () => pendingArticle(item) });
         });
         for (const interaction of interactions) items.push({ key: 'interaction:' + interaction.id, sig: JSON.stringify(interaction) + language, build: () => interactionCard(interaction) });
         const working = sending.some(item => !item.error) || state.messages.some(m => m.status === 'queued' || m.status === 'running');
@@ -730,10 +746,21 @@
     async function refresh() { try { const [health, profiles, integrations, devices] = await Promise.all([api('/health'), api('/v1/profiles'), api('/v1/integrations'), api('/v1/devices').catch(() => null)]); state.unreachable=false; state.homeId=health.homeId;state.nodeId=health.nodeId;state.archiveEncryption=health.agentArchiveEncryption; state.hostingOrigin=health.hostingOrigin; state.archiveVersion = health.agentArchiveVersion; state.appearanceVersion=health.agentAppearanceVersion; state.turnControl=health.turnControlVersion===1; state.importedChats = profiles.importedConversations || []; state.profiles = profiles.profiles || []; state.telegram = integrations.telegram; if (devices?.devices) state.devices = devices.devices; renderAgents(); paintHeader(); await loadConversation(); if ($('connection-notice').hasAttribute('data-loading')) notify(''); } catch (error) { state.unreachable = !error.status || error.status >= 500; await checkOutbox();renderAgents();paintHeader();renderMessages();notify(error.message, true); if(error.moved && !state.showedMoved) { state.showedMoved=true; const page=modalPage(t("Подключение изменилось"),t("Приложения переподключатся автоматически. Для браузера создайте новое приглашение на новом устройстве.")); const link=element('a',t("Открыть устройство")); const url=new URL(error.moved.url); if(url.protocol==='https:') { link.href=url.href;link.rel='noreferrer';page.content.append(link); } } } }
     /* The reply the employee is working on now; an empty field turns Send into Stop for it, as on the Mac. */
     const runningMessage = () => state.turnControl ? state.messages.find(m => m.channel === 'api' && m.direction === 'inbound' && m.status === 'running' && !m.replyToId) : null;
-    /* The empty field follows the interface so its placeholder lines up; typed text takes its own direction. */
+    /* The empty field follows the interface so its placeholder lines up; typed text takes its own direction.
+       With content while the employee answers, a toggle before Send chooses: clarify now, or after the reply. */
     function syncDraft() {
-      const draft = $('draft'), send = $('send'), stop = !draft.value.trim() && Boolean(runningMessage());
-      send.disabled = !draft.value.trim() && !stop;
+      const draft = $('draft'), send = $('send'), files = state.attachments, content = Boolean(draft.value.trim()) || files.length > 0;
+      const running = Boolean(runningMessage()), stop = !content && running;
+      send.disabled = (!content && !stop) || files.some(file => !file.id);
+      $('attach').disabled = !state.conversationID || files.length >= 6;
+      const mode = $('send-mode'), steer = state.sendMode !== 'queue';
+      mode.hidden = !(content && running);
+      if (mode.dataset.mode !== state.sendMode) {
+        mode.dataset.mode = state.sendMode;
+        mode.dataset.i18nAriaLabel = mode.dataset.i18nTitle = steer ? "Уточнить сейчас" : "После ответа";
+        mode.setAttribute('aria-label', t(mode.dataset.i18nAriaLabel)); mode.title = t(mode.dataset.i18nTitle);
+        mode.replaceChildren(icon(steer ? 'steer' : 'clock', steer));
+      }
       if (send.dataset.mode !== (stop ? 'stop' : 'send')) {
         send.dataset.mode = stop ? 'stop' : 'send';
         send.dataset.i18nAriaLabel = stop ? "Остановить ответ" : "Отправить";
@@ -749,7 +776,7 @@
     $('draft').addEventListener('keydown', event => {
       if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229 || !matchMedia('(pointer: fine)').matches) return;
       event.preventDefault();
-      if ($('draft').value.trim()) $('composer').requestSubmit();
+      if ($('draft').value.trim() || state.attachments.length) $('composer').requestSubmit();
     });
     $('composer').onsubmit = event => sendDraft(event);
     $('new-employee').onclick = () => openCreateAgent(); $('mobile-agents').onclick = () => openNavigation(); $('settings').onclick = () => openHomeSettings();
