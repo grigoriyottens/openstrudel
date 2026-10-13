@@ -403,7 +403,7 @@ function openNavigation() {
   for(const profile of [null,...state.profiles]) {
     const avatar=element('span','','avatar'); avatar.append(characterImage(profile?agentAppearance(profile):null,36)); avatar.classList.toggle('offline',isOffline(profile));
     const current=(state.selected||null)===(profile?.id||null);
-    const button=row(list,profile?.name||'OpenStrudel',async()=>{closeModal();try{await selectAgent(profile?.id||null);}catch(e){notify(e.message);}},{avatar,detail:isOffline(profile)?t("Не на связи"):profile?previewLine(profile.preview)||profile.purpose:t("Помощник для ваших задач"),className:'agent-row'+(current?' current':'')});
+    const button=row(list,profile?.name||'OpenStrudel',async()=>{closeModal();try{await selectAgent(profile?.id||null);}catch(e){notify(e.message);}},{avatar,detail:isOffline(profile)?t("Нет связи"):profile?previewLine(profile.preview)||profile.purpose||t("Напишите, что нужно."):t("Помощник для ваших задач"),className:'agent-row'+(current?' current':'')});
     if(current) button.setAttribute('aria-current','page');
   }
   // Symbols sit in the avatar column so every title above and below starts on one edge.

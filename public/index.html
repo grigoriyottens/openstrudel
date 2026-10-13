@@ -496,7 +496,7 @@
     const agentRows = new Map();
     function renderAgents() {
       const root = $('agents');
-      const entries = [{ id: null, name: 'OpenStrudel', preview: t("Помощник для ваших задач"), appearance: null }, ...state.profiles.map(profile => ({ id: profile.id, name: profile.name, profile, appearance: agentAppearance(profile), preview: previewLine(profile.preview) || profile.purpose || '' }))];
+      const entries = [{ id: null, name: 'OpenStrudel', preview: t("Помощник для ваших задач"), appearance: null }, ...state.profiles.map(profile => ({ id: profile.id, name: profile.name, profile, appearance: agentAppearance(profile), preview: previewLine(profile.preview) || profile.purpose || t("Напишите, что нужно.") }))];
       const seen = new Set();
       entries.forEach((entry, index) => {
         const key = entry.id || 'main'; seen.add(key);
@@ -514,7 +514,7 @@
         if (avatar.dataset.look !== look) { avatar.replaceChildren(characterImage(entry.appearance, 36)); avatar.dataset.look = look; }
         avatar.classList.toggle('offline', offline);
         if (name.textContent !== entry.name) name.textContent = entry.name;
-        const preview = offline ? t("Не на связи") : entry.preview;
+        const preview = offline ? t("Нет связи") : entry.preview;
         if (sub.textContent !== preview) sub.textContent = preview;
         const current = (state.selected || null) === entry.id;
         if (current) row.setAttribute('aria-current', 'page'); else row.removeAttribute('aria-current');
