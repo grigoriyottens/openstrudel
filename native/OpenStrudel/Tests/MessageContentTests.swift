@@ -95,4 +95,56 @@ struct MessageContentTests {
         #expect(blocks.map(\.kind) == ["paragraph", "rule", "heading"])
         #expect(String(blocks[0].content.characters) == "**Буквальные звёздочки**")
     }
+    @Test func onlyWebAndMailLinksStayLinks() {
+        let source = "[a](file:///Applications/Calculator.app) [b](openstrudel://pair?code=1) [c](javascript:alert(1)) [d](x-apple.systempreferences:com.apple.preference.security) [e](relative/path) [f](https://example.com) [g](http://example.com) [h](mailto:team@example.com) [i](HTTPS://EXAMPLE.COM/A)"
+        let block = MessageContent(source: source).blocks[0]
+        #expect(String(block.content.characters) == "a b c d e f g h i")
+        #expect(block.content.runs.compactMap { $0.link?.absoluteString } == ["https://example.com", "http://example.com", "mailto:team@example.com", "HTTPS://EXAMPLE.COM/A"])
+    }
+
+    @Test func unsafeLinksInTablesKeepTheirText() throws {
+        let block = MessageContent(source: "| Файл | Сайт |\n| --- | --- |\n| [отчёт](file:///private/report.pdf) | [OpenAI](https://openai.com) |").blocks[0]
+        let table = try #require(block.table)
+        #expect(String(table.rows[1][0].characters) == "отчёт")
+        #expect(table.rows[1][0].runs.allSatisfy { $0.link == nil })
+        #expect(table.rows[1][1].runs.first?.link?.host() == "openai.com")
+    }
+
+    @Test func openingALinkAllowsOnlyWebAndMail() throws {
+        for allowed in ["https://example.com", "http://example.com", "mailto:team@example.com"] {
+            #expect(MessageContent.allowsLink(try #require(URL(string: allowed))))
+        }
+        for blocked in ["file:///Applications/Calculator.app", "openstrudel://pair?code=1", "javascript:alert(1)",
+                        "x-apple.systempreferences:com.apple.preference.security", "relative/path", "ftp://example.com"] {
+            #expect(!MessageContent.allowsLink(try #require(URL(string: blocked))))
+        }
+    }
+
+    @Test func blocksFollowTheDirectionOfTheirFirstStrongLetter() {
+        #expect(ParagraphDirection.of("שלום world") == .rightToLeft)
+        #expect(ParagraphDirection.of("Hello שלום") == .leftToRight)
+        #expect(ParagraphDirection.of("1. «مرحبا» again") == .rightToLeft)
+        #expect(ParagraphDirection.of("Привет, שלום") == .leftToRight)
+        #expect(ParagraphDirection.of("2026 — 15% (!)") == nil)
+        #expect(ParagraphDirection.of("") == nil)
+    }
+
+    @Test func numberColumnsAlignToTheirFigures() throws {
+        let source = "| Venue | Capacity | Price | Share | Distance | Note |\n| --- | --- | --- | --- | --- | --- |\n| Hangar 9 | 120 | €4,200 | 12.5% | 12 min | |\n| Glasshouse | 1 200 | $3,100.50 | −3% | 25 min | |\n| Mill | | 5 600 ₽ | +0.1 % | — | |"
+        let table = try #require(MessageContent(source: source).blocks[0].table)
+        #expect((0..<6).map(table.isNumeric) == [false, true, true, true, false, false])
+        #expect((0..<6).map(table.alignment) == [.leading, .trailing, .trailing, .trailing, .leading, .leading])
+    }
+
+    @Test func explicitTableAlignmentWins() throws {
+        let table = try #require(MessageContent(source: "| Name | Count | Code |\n| :---: | ---: | --- |\n| 10 | x | 42 |").blocks[0].table)
+        #expect((0..<3).map(table.alignment) == [.center, .trailing, .trailing])
+    }
+
+    @Test func blocksKeepTheReadingRhythm() {
+        let blocks = MessageContent(source: "Intro\n\nSecond\n\n## Heading\n\n- One\n- Two\n\nAfter\n\n```\ncode\n```").blocks
+        #expect(blocks.map(\.kind) == ["paragraph", "paragraph", "heading", "list", "list", "paragraph", "code"])
+        let gaps = blocks.indices.map { MessageContent.spacing(before: blocks[$0], after: $0 == 0 ? nil : blocks[$0 - 1]) }
+        #expect(gaps == [0, 12, 24, 8, 6, 12, 12])
+    }
 }

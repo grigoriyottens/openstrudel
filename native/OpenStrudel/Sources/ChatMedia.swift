@@ -16,26 +16,20 @@ struct ChatImage: View {
     var body: some View {
         Group {
             if let thumbnail {
-                Button { previewURL = fileURL } label: {
-                    Image(decorative: thumbnail, scale: 1)
-                        .resizable().scaledToFit()
-                        .frame(maxWidth: 440, maxHeight: 360)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L("Open image: \(name.isEmpty ? L("Фото") : name)"))
+                Button { previewURL = fileURL } label: { ChatPicture(image: thumbnail) }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L("Open image: \(name.isEmpty ? L("Фото") : name)"))
             } else {
-                VStack(spacing: 10) {
+                VStack(spacing: 8) {
                     if failed {
-                        Image(systemName: "photo").font(.title2).foregroundStyle(.secondary)
-                        Button(L("Загрузить изображение")) { attempt += 1 }.font(.callout)
+                        Image(systemName: "photo").font(.title2).foregroundStyle(AppTheme.secondaryText)
+                        Button(L("Загрузить изображение")) { attempt += 1 }.font(AppTypography.interface)
                     } else {
                         ProgressView().controlSize(.small)
                     }
                 }
-                .frame(maxWidth: 360, minHeight: 140)
-                .background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+                .frame(width: 240, height: 180)
+                .chatSurface(AppTheme.surface, radius: Radius.card)
             }
         }
         .quickLookPreview($previewURL)
@@ -52,6 +46,58 @@ struct ChatImage: View {
     }
 }
 
+/// A picture at its own aspect ratio, at most 320 × 240 and never wider than its column.
+struct ChatPicture: View {
+    let image: CGImage
+
+    var body: some View {
+        let size = ChatMedia.fitted(CGSize(width: image.width, height: image.height))
+        Image(decorative: image, scale: 1)
+            .resizable()
+            .frame(maxWidth: size.width, maxHeight: size.height)
+            .aspectRatio(size.width / max(size.height, 1), contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+    }
+}
+
+/// A file in the transcript: its kind, its name and a quiet detail line.
+struct FileChip: View {
+    let icon: String
+    let name: String
+    let detail: String
+    @ScaledMetric(relativeTo: .body) private var iconBox: CGFloat = 20
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(iconFont)
+                .foregroundStyle(AppTheme.secondaryText)
+                .frame(width: iconBox, height: iconBox)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(AppTypography.interface.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Text(detail)
+                    .font(AppTypography.meta)
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .monospacedDigit()
+            }
+        }
+        .padding(12)
+        .chatSurface(AppTheme.surface, radius: Radius.card)
+        .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+    }
+
+    private var iconFont: Font {
+        #if os(macOS)
+        .system(size: 16)
+        #else
+        .body
+        #endif
+    }
+}
+
 enum ChatMedia {
     private static let publicImages: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
@@ -59,6 +105,13 @@ enum ChatMedia {
         configuration.urlCredentialStorage = nil
         return URLSession(configuration: configuration)
     }()
+    /// Pictures keep their aspect ratio inside 320 × 240.
+    static func fitted(_ size: CGSize) -> CGSize {
+        guard size.width > 0, size.height > 0 else { return CGSize(width: 320, height: 240) }
+        let scale = min(1, 320 / size.width, 240 / size.height)
+        return CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
+    }
+
     static func thumbnail(_ url: URL, maxPixels: Int = 1200) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         return CGImageSourceCreateThumbnailAtIndex(source, 0, [
