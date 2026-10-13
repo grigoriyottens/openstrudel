@@ -7635,5 +7635,33 @@
     "es": "Mensaje para {0}",
     "he": "הודעה אל {0}",
     "ru": "Сообщение для «{0}»"
+  },
+  "Перезапустить OpenStrudel?": {
+    "en": "Relaunch OpenStrudel?",
+    "fr": "Relancer OpenStrudel ?",
+    "es": "¿Reiniciar OpenStrudel?",
+    "he": "להפעיל מחדש את OpenStrudel?",
+    "ru": "Перезапустить OpenStrudel?"
+  },
+  "Направление интерфейса сменится после перезапуска.": {
+    "en": "The layout changes direction after a relaunch.",
+    "fr": "Le sens de l’interface change après une relance.",
+    "es": "La dirección de la interfaz cambia al reiniciar.",
+    "he": "כיוון הממשק ישתנה אחרי הפעלה מחדש.",
+    "ru": "Направление интерфейса сменится после перезапуска."
+  },
+  "Перезапустить": {
+    "en": "Relaunch",
+    "fr": "Relancer",
+    "es": "Reiniciar",
+    "he": "הפעלה מחדש",
+    "ru": "Перезапустить"
+  },
+  "Позже": {
+    "en": "Later",
+    "fr": "Plus tard",
+    "es": "Más tarde",
+    "he": "אחר כך",
+    "ru": "Позже"
   }
 }

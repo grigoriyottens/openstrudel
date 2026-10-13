@@ -77,10 +77,12 @@ extension String {
 /// The first-run language menu: the globe and the current language in the quiet colour. It follows
 /// the interface direction, so in Hebrew it sits at the window's left.
 struct LanguagePicker: View {
+    @State private var relaunch = false
+
     var body: some View {
         let language = L10n.shared.language
         Menu {
-            Picker(L("Language"), selection: Binding(get: { L10n.shared.language }, set: { L10n.shared.language = $0 })) {
+            Picker(L("Language"), selection: LanguageChoice.binding(relaunch: $relaunch)) {
                 ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.inline)
@@ -99,7 +101,52 @@ struct LanguagePicker: View {
         .accessibilityLabel(L("Language"))
         .accessibilityValue(language.title)
         .accessibilityIdentifier("interfaceLanguage")
+        .modifier(LanguageChoice.RelaunchAlert(isPresented: $relaunch))
     }
+}
+
+/// Choosing the interface language. Text follows at once. A Mac window mirrors only when the app opens,
+/// so a language that reads the other way offers a relaunch instead of half-mirroring the window.
+enum LanguageChoice {
+    static func binding(relaunch: Binding<Bool>) -> Binding<AppLanguage> {
+        Binding {
+            L10n.shared.language
+        } set: { language in
+            L10n.shared.language = language
+            #if os(macOS)
+            if language.isRightToLeft != (NSApp.userInterfaceLayoutDirection == .rightToLeft) { relaunch.wrappedValue = true }
+            #endif
+        }
+    }
+
+    struct RelaunchAlert: ViewModifier {
+        @Binding var isPresented: Bool
+
+        func body(content: Content) -> some View {
+            #if os(macOS)
+            content.alert(L("Перезапустить OpenStrudel?"), isPresented: $isPresented) {
+                Button(L("Позже"), role: .cancel) {}
+                Button(L("Перезапустить")) { relaunch() }.keyboardShortcut(.defaultAction)
+            } message: {
+                Text(L("Направление интерфейса сменится после перезапуска."))
+            }
+            #else
+            content
+            #endif
+        }
+    }
+
+    #if os(macOS)
+    /// Opens a fresh copy once this one has quit, so two copies never run side by side.
+    private static func relaunch() {
+        let reopen = Process()
+        reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
+        reopen.arguments = ["-c", "while /bin/kill -0 \"$1\" 2>/dev/null; do /bin/sleep 0.2; done; /usr/bin/open \"$2\"",
+                            "relaunch", String(ProcessInfo.processInfo.processIdentifier), Bundle.main.bundlePath]
+        guard (try? reopen.run()) != nil else { return }
+        NSApp.terminate(nil)
+    }
+    #endif
 }
 
 /// The main character and the display title.

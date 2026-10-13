@@ -248,13 +248,15 @@ private struct GeneralPane: View {
     #if os(macOS)
     @AppStorage("openstrudel.showMenuBar") private var showMenuBar = true
     #endif
+    @State private var relaunch = false
 
     var body: some View {
         Section {
-            Picker(L("Language"), selection: Binding(get: { L10n.shared.language }, set: { L10n.shared.language = $0 })) {
+            Picker(L("Language"), selection: LanguageChoice.binding(relaunch: $relaunch)) {
                 ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
             }
             .accessibilityIdentifier("interfaceLanguage")
+            .modifier(LanguageChoice.RelaunchAlert(isPresented: $relaunch))
             #if os(macOS)
             Toggle(L("Показывать в строке меню"), isOn: $showMenuBar).settingsSwitch()
             #endif

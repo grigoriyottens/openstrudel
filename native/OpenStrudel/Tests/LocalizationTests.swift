@@ -8,9 +8,12 @@ import Testing
         let preference = L10n(suiteName: suite)
         #expect(preference.language == .english)
         #expect(UserDefaults(suiteName: suite)?.stringArray(forKey: "AppleLanguages") == ["en"])
+        #expect(UserDefaults(suiteName: suite)?.object(forKey: "AppleTextDirection") as? Bool == false)
         preference.language = .hebrew
         #expect(L10n(suiteName: suite).language == .hebrew)
         #expect(UserDefaults(suiteName: suite)?.stringArray(forKey: "AppleLanguages") == ["he"])
+        // AppKit mirrors the window from this flag, not from the language alone.
+        #expect(UserDefaults(suiteName: suite)?.object(forKey: "AppleTextDirection") as? Bool == true)
     }
     @Test func localizesServiceCopyWithoutReplacingInterpolatedNames() {
         #expect(L10n.serviceText("Удалить «Работа {1}»?", language: .english) == "Delete “Работа {1}”?")

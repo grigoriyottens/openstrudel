@@ -5,7 +5,6 @@ import SwiftUI
 struct OpenStrudelRootView: View {
     @EnvironmentObject private var library: DeviceLibrary
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.layoutDirection) private var layoutDirection
     @EnvironmentObject private var client: HomeClient
     #if os(macOS)
     // Above the per-device identity, so switching devices keeps the sidebar as it is.
@@ -120,12 +119,10 @@ struct OpenStrudelRootView: View {
             #if os(macOS)
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 Sidebar(query: $sidebarQuery)
-                    .environment(\.layoutDirection, layoutDirection)
                     .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
             } detail: {
                 // Each device keeps its own draft, files and reading position.
                 ConversationView().id(client.id)
-                    .environment(\.layoutDirection, layoutDirection)
             }
             .searchable(text: $sidebarQuery, placement: .sidebar, prompt: L("Найти чат"))
             .searchFocused($searchFocused)
@@ -142,9 +139,6 @@ struct OpenStrudelRootView: View {
                 sidebarQuery = ""
                 searchFocused = false
             }
-            // The split view and the toolbar are AppKit's, so they follow AppKit's direction.
-            // Mixing directions misplaces the columns; the content inside still reads in the chosen language.
-            .environment(\.layoutDirection, NSApp.userInterfaceLayoutDirection == .rightToLeft ? .rightToLeft : .leftToRight)
             #else
             NavigationStack { ConversationView(showSettings: $showSettings).background(HomeBackground()) }
             #endif
