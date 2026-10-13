@@ -256,7 +256,7 @@ struct ConversationHelper: View {
         HStack(spacing: 12) {
             character
             if working {
-                Text(textSize.isAccessibilitySize ? L("Готовим ответ…") : L("\(name) is working"))
+                Text(textSize.isAccessibilitySize ? L("Готовим ответ…") : L("\(name) is working…"))
                     .modifier(MetaLine())
                     .transition(.opacity)
             }
@@ -267,7 +267,7 @@ struct ConversationHelper: View {
         .paragraphDirection(of: client.messages.last { $0.direction == "outbound" }?.text ?? "")
         .animation(.easeInOut(duration: 0.15), value: working)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L("\(name) is working"))
+        .accessibilityLabel(L("\(name) is working…"))
         .accessibilityHidden(!working)
         .onAppear { awaitingReply = working }
         .onChange(of: working) { _, now in if now { awaitingReply = true } }

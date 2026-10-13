@@ -6775,12 +6775,12 @@
     "es": "Abrir {0}",
     "he": "פתיחת {0}"
   },
-  "{0} is working": {
-    "en": "{0} is working",
-    "ru": "{0} работает",
-    "fr": "{0} travaille",
-    "es": "{0} está trabajando",
-    "he": "{0} עובד"
+  "{0} is working…": {
+    "en": "{0} is working…",
+    "ru": "{0} готовит ответ…",
+    "fr": "{0} travaille…",
+    "es": "{0} está trabajando…",
+    "he": "{0} עובד…"
   },
   "Remove {0}": {
     "en": "Remove {0}",

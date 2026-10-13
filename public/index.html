@@ -650,7 +650,7 @@
       avatar.classList.toggle('offline', isOffline(profile));
       const was = box.classList.contains('working');
       box.classList.toggle('working', working);
-      words.textContent = working ? t("{0} is working", profile?.name || 'OpenStrudel') + '…' : '';
+      words.textContent = working ? t("{0} is working…", profile?.name || 'OpenStrudel') : '';
       if (was && !working) { const character = avatar.firstElementChild; character.classList.remove('plop'); void character.offsetWidth; character.classList.add('plop'); character.addEventListener('animationend', () => character.classList.remove('plop'), { once: true }); }
     }
     function renderMessages(follow = false) {
