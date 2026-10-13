@@ -237,7 +237,7 @@ struct Composer: View {
     }
 
     private var placeholder: String {
-        client.isEmployeeDraft ? L("Сообщение") : L("Сообщение для «\(client.activeAgentName)»")
+        client.isEmployeeDraft ? L("Сообщение") : L("Message \(client.activeAgentName)")
     }
 
     @ViewBuilder private var draftField: some View {
