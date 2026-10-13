@@ -1,7 +1,7 @@
-# One OpenAI account per Home
+# ChatGPT accounts on each device
 
 The Home is the Mac or server that runs the agents. Its owner explicitly starts
-OpenAI sign-in and authorizes their account on OpenAI's page. A fresh installation
+OpenAI sign-in and authorizes each account on OpenAI's page. Accounts have a device-wide priority; an assistant can use a specific selection. A fresh installation
 never adopts `~/.codex` or an unrelated `CODEX_HOME`. Paired clients hold only a
 Home connection credential and TLS pin, not OpenAI OAuth credentials.
 
@@ -15,7 +15,10 @@ Home connection credential and TLS pin, not OpenAI OAuth credentials.
 | OpenAI is temporarily unavailable | Show a retry notice and check again. Do not classify the outage as revoked pairing or delete credentials. |
 | Another owner device starts login | Join the pending Home login instead of canceling it. |
 | Login is canceled, expires or is lost on restart | End the pending UI state and allow another attempt. A canceled account switch preserves the prior account. |
-| The same account signs in again | Restart workers with the renewed account and preserve thread IDs and chat history. |
+| The same account signs in again | Refresh its existing connection. A second copy is not added. Equality requires both the OpenAI user subject and workspace ID; the email address alone is not enough. |
+| Earlier releases already added a duplicate | Wait for both connections to be idle, retain the existing name and priority, transfer the freshest credentials under the authentication queues, and remap assistant choices. Remove only the duplicate's local credentials; do not send an OAuth logout. Chat records remain; a retired connection's thread restarts with its saved history. |
+| Rename an account | Save its display name on the execution device. Keep the email, subscription, identity, credentials and priority. All clients read the same name. |
+| OpenAI cannot be reached | Retain the last known email and subscription with an unavailable state. A failed status request does not remove a connection. |
 | A different account signs in | Keep chat records, but start new Codex threads for the new identity. |
 | A Home pairing credential is revoked | Request a new Home invitation. This is separate from OpenAI sign-in. |
 
@@ -43,6 +46,10 @@ Native clients refresh shared account status every 10 seconds. The Home coalesce
 reads and caches healthy status for up to 30 seconds (failure for 5 seconds).
 Login completion and authentication errors invalidate that cache. Explicit retry
 bypasses the cache. A recovery on one owner device therefore propagates to the others.
+The open account settings and Mac menu refresh every 15 seconds. Native login
+completion refreshes the list before clearing the login task, so cancellation of
+that task cannot discard the newly connected account. Stale status and catalogue
+responses cannot replace a later sign-in or rename.
 
 An interrupted or rejected agent turn remains failed with a readable error. Signing
 in does not automatically repeat it, because an external action may have already

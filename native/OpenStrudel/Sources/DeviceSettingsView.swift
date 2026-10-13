@@ -248,6 +248,11 @@ struct DeviceAccountsView: View {
     @State private var loginAccount = ""
     @State private var logout: ManagedCodexAccount?
     @State private var copiedCode = false
+    @State private var renaming: ManagedCodexAccount?
+    @State private var accountName = ""
+    @State private var notice: String?
+    @State private var requestID = UUID()
+    @State private var expandedAccounts: Set<String> = []
     private var query: String { deviceID.isEmpty ? "" : "?deviceId=" + deviceID }
     private func path(_ id: String, _ action: String) -> String { "/v1/accounts/" + id + "/" + action + query }
 
@@ -266,29 +271,35 @@ struct DeviceAccountsView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(account.account.email ?? (account.id == "default" && account.name == "Основной" ? "ChatGPT" : account.name)).font(.headline).textSelection(.enabled)
-                            Text(account.account.connected ? account.account.planLabel : account.account.isUnavailable ? L("Не удалось проверить аккаунт") : L("Нужен вход в OpenAI")).font(.caption).foregroundStyle(AppTheme.secondaryText)
-                            if account.account.connected, let category = account.account.categoryLabel {
-                                Text(category).font(.caption).foregroundStyle(AppTheme.secondaryText)
-                            }
-                            if accounts.filter({ $0.account.email == account.account.email && $0.account.planType == account.account.planType }).count > 1 {
+                            Text(account.title).font(.headline).textSelection(.enabled)
+                            if let email = account.emailDetail { Text(email).font(.callout).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled) }
+                            Text(account.account.connected ? [account.account.planLabel, account.account.categoryLabel].compactMap { $0 }.joined(separator: " · ") : account.account.isUnavailable ? L("Не удалось проверить аккаунт") : L("Нужен вход в OpenAI")).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                            if accounts.filter({ $0.title == account.title && $0.account.planType == account.account.planType }).count > 1 {
                                 Text(L("Connection \(String(account.id.suffix(6)))")).font(.caption.monospaced()).foregroundStyle(AppTheme.secondaryText)
                             }
                         }
                         Spacer()
-                        if canManage && account.account.connected {
+                        if canManage {
                             Menu {
-                                if index > 0 { Button(L("Использовать по умолчанию")) { perform {
+                                Button(L("Rename account…")) { accountName = account.title; renaming = account }
+                                if index > 0 && account.account.connected { Button(L("Использовать по умолчанию")) { perform {
                                     let _: HomeActionResult = try await client.management(path(account.id, "priority"), method: "POST", payload: [:])
                                     await refresh()
                                 } } }
-                                Button(L("Выйти из аккаунта…"), role: .destructive) { logout = account }
+                                if account.account.connected { Button(L("Выйти из аккаунта…"), role: .destructive) { logout = account }
                                     .disabled(account.activeRuns > 0)
+                                }
                             } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize()
                                 .accessibilityLabel(L("Действия с аккаунтом"))
+                                .accessibilityIdentifier("accountActions-" + account.id)
                         }
                     }
-                    if account.account.connected { UsageSummary(usage: account.usage) }
+                    if account.account.connected {
+                        DisclosureGroup(L("Limits and credits"), isExpanded: Binding(get: { expandedAccounts.contains(account.id) }, set: { expanded in
+                            if expanded { expandedAccounts.insert(account.id) } else { expandedAccounts.remove(account.id) }
+                        })) { UsageSummary(usage: account.usage).padding(.top, 8) }
+                            .accessibilityIdentifier("accountLimits-" + account.id)
+                    }
                     else if canManage && !account.account.isUnavailable {
                         Button { perform { try await signIn(account.id) } } label: { AdaptiveActionLabel(title: L("Войти в OpenAI")) }
                             .adaptiveActionStyle(.borderedProminent).disabled(login != nil || busy).accessibilityIdentifier("signInOpenAI")
@@ -297,6 +308,7 @@ struct DeviceAccountsView: View {
                 }
                 Divider()
             }
+            if let notice { Text(notice).font(.callout).foregroundStyle(AppTheme.secondaryText) }
             if let login {
                 Text(L("Завершите вход на сайте OpenAI")).font(.headline)
                 if let code = login.userCode {
@@ -319,6 +331,7 @@ struct DeviceAccountsView: View {
                 } }.accessibilityIdentifier("cancelOpenAILogin")
             } else if canManage && !accounts.isEmpty {
                 Button(L("Добавить аккаунт OpenAI")) { perform {
+                    notice = nil
                     struct Added: Decodable { let id: String }
                     let result: Added = try await client.management("/v1/accounts" + query, method: "POST", payload: ["name": "OpenAI"])
                     try await signIn(result.id)
@@ -331,7 +344,12 @@ struct DeviceAccountsView: View {
         .task(id: deviceID) {
             if deviceID.isEmpty, let localDeviceID = client.health?.nodeId {
                 deviceID = localDeviceID
-            } else { await refresh() }
+            } else {
+                while !Task.isCancelled {
+                    if login == nil && !busy { await refresh() }
+                    do { try await Task.sleep(for: .seconds(15)) } catch { break }
+                }
+            }
         }
         .task(id: login?.loginId) {
             copiedCode = false
@@ -340,7 +358,15 @@ struct DeviceAccountsView: View {
                 do {
                     try await Task.sleep(for: .seconds(2))
                     let status: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + current.loginId))
-                    if status.status == "completed" { login = nil; await refresh(force: true); await client.refreshOpenAIAccount(force: true) }
+                    if status.status == "completed" {
+                        // Clearing login cancels this .task. Finish both refreshes
+                        // before changing its identity so their result is applied.
+                        await refresh(force: true)
+                        await client.refreshOpenAIAccount(force: true)
+                        notice = status.alreadyConnected == true ? L("Already connected. Your account has been refreshed.") : L("Account connected.")
+                        login = nil
+                        break
+                    }
                     if ["failed", "canceled"].contains(status.status) { login = nil; error = L("Вход не завершён. Попробуйте ещё раз.") }
                 } catch is CancellationError { break }
                 catch { self.error = L("Не удалось проверить вход. Повторим, когда появится связь.") }
@@ -352,17 +378,31 @@ struct DeviceAccountsView: View {
                 logout = nil; await refresh()
             } } }
         } message: { Text(L("Сотрудники и переписка сохранятся. Для новых поручений понадобится вход.")) }
+        .alert(L("Rename account"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField(L("Название аккаунта"), text: $accountName)
+            Button(L("Отмена"), role: .cancel) { renaming = nil }
+            Button(L("Сохранить")) {
+                guard let account = renaming else { return }
+                let name = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+                perform {
+                    let _: HomeActionResult = try await client.management("/v1/accounts/" + account.id + query, method: "POST", payload: ["name": name])
+                    renaming = nil
+                    await refresh()
+                }
+            }.disabled(accountName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || accountName.count > 80)
+        } message: { Text(L("Choose a name you recognise. Your OpenAI account stays the same.")) }
     }
     private func refresh(force: Bool = false) async {
-        let selected = deviceID
+        let selected = deviceID, token = UUID()
+        requestID = token
         if loadedDeviceID != selected { accounts = []; canManage = false; loadedDeviceID = selected }
         loading = true; error = nil
-        defer { if selected == deviceID { loading = false } }
+        defer { if selected == deviceID && requestID == token { loading = false } }
         do {
             let result: ManagedCodexAccounts = try await client.management("/v1/accounts" + query + (query.isEmpty ? "?" : "&") + "refresh=" + String(force))
-            guard selected == deviceID, !Task.isCancelled else { return }
+            guard selected == deviceID, requestID == token, !Task.isCancelled else { return }
             accounts = result.accounts; canManage = result.canManage
-        } catch { if !Task.isCancelled && selected == deviceID { self.error = UserFacingError.text(error.localizedDescription) } }
+        } catch { if !Task.isCancelled && selected == deviceID && requestID == token { self.error = UserFacingError.text(error.localizedDescription) } }
     }
     private func signIn(_ id: String) async throws {
         loginAccount = id

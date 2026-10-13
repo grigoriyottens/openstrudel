@@ -226,12 +226,14 @@ export class HttpApi {
       }
       const accountAction = path.match(/^\/v1\/accounts\/([^/]+)(?:\/(priority|login|logout|usage)(?:\/([^/]+))?)?$/);
       if (accountAction && this.accounts) {
-        const id = decodeURIComponent(accountAction[1]!), service = this.accounts.get(id), action = accountAction[2];
+        const id = decodeURIComponent(accountAction[1]!), action = accountAction[2];
+        if (action === "login" && request.method === "GET" && accountAction[3]) { this.send(response, 200, await this.accounts.loginStatus(id, decodeURIComponent(accountAction[3]))); return; }
+        const service = this.accounts.get(id);
+        if (!action && request.method === "POST") { this.accounts.rename(id, String((await this.body(request)).name ?? "")); this.send(response, 200, { ok: true }); return; }
         if (!action && request.method === "DELETE") { await this.accounts.remove(id); this.send(response, 200, { ok: true }); return; }
         if (action === "priority" && request.method === "POST") { this.accounts.prioritize(id); this.send(response, 200, { ok: true }); return; }
         if (action === "usage" && request.method === "GET") { this.send(response, 200, await service.usage(url.searchParams.get("refresh") === "true")); return; }
         if (action === "login" && request.method === "POST" && !accountAction[3]) { this.send(response, 201, await this.accounts.withIdle(id, () => service.startLogin("device"))); return; }
-        if (action === "login" && request.method === "GET" && accountAction[3]) { this.send(response, 200, await service.status(decodeURIComponent(accountAction[3]))); return; }
         if (action === "login" && request.method === "DELETE" && accountAction[3]) { this.send(response, 200, await service.cancel(decodeURIComponent(accountAction[3]))); return; }
         if (action === "logout" && request.method === "POST") { await this.accounts.withIdle(id, () => service.logout()); this.send(response, 200, { ok: true }); return; }
       }
@@ -302,8 +304,8 @@ export class HttpApi {
         return;
       }
       if (request.method === "GET" && path === "/v1/account") {
-        if (url.searchParams.has("agentId") && this.accounts) {
-          this.send(response, 200, { ...await this.accounts.statusFor(url.searchParams.get("agentId")!, url.searchParams.get("refresh") === "true"), canManage: canManageAccount }); return;
+        if (this.accounts) {
+          this.send(response, 200, { ...await this.accounts.statusFor(url.searchParams.get("agentId") ?? "main", url.searchParams.get("refresh") === "true"), canManage: canManageAccount }); return;
         }
         this.send(response, 200, { account: this.account ? await this.account.read(url.searchParams.get("refresh") === "true") : { connected: false, email: null, planType: null, managed: false }, canManage: canManageAccount, loginPending: this.account?.loginPending ?? false });
         return;
@@ -320,7 +322,8 @@ export class HttpApi {
       const cancelLoginMatch = path.match(/^\/v1\/account\/login\/([^/]+)\/cancel$/);
       if (loginMatch && request.method === "GET") {
         if (!this.account) throw new Error("account service unavailable");
-        this.send(response, 200, await this.account.status(decodeURIComponent(loginMatch[1] ?? "")));
+        const loginId = decodeURIComponent(loginMatch[1] ?? "");
+        this.send(response, 200, await (this.accounts ? this.accounts.loginStatus("default", loginId) : this.account.status(loginId)));
         return;
       }
       if (cancelLoginMatch && request.method === "POST") {
