@@ -12,19 +12,26 @@ struct HomeMenu: View {
     @State private var requestID = UUID()
     private var connectionKey: String { client.id + "|" + client.normalizedBaseURL + "|" + String(describing: client.connectionState) }
     @State private var accounts: [ManagedCodexAccount] = []
-    @State private var accountContentHeight: CGFloat = 180
+    @State private var accountContentHeight: CGFloat = 200
     @State private var canManage = false
     @State private var busy = false
     @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("OpenStrudel").font(.headline)
-                Spacer()
-                if busy { ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем состояние")) }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Label(client.displayName, systemImage: client.deviceSymbol)
+                    .font(.body.weight(.semibold)).lineLimit(1)
+                Spacer(minLength: 8)
+                if busy {
+                    ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем состояние"))
+                } else {
+                    Button { Task { await refresh() } } label: { Image(systemName: "arrow.clockwise") }
+                        .buttonStyle(.borderless).foregroundStyle(AppTheme.secondaryText)
+                        .help(L("Обновить остатки")).accessibilityLabel(L("Обновить остатки"))
+                }
             }
-            Label(client.displayName, systemImage: "desktopcomputer").font(.callout)
+            .frame(minHeight: 20)
             if library.visibleClients.count > 1 {
                 Picker(L("Устройство"), selection: Binding(get: { client.id }, set: { id in
                     if let selected = library.visibleClients.first(where: { $0.id == id }) { library.select(selected) }
@@ -33,44 +40,36 @@ struct HomeMenu: View {
                 }
             }
             if !accounts.isEmpty {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(account.title).font(.callout.weight(.medium)).textSelection(.enabled)
-                            if let email = account.emailDetail { Text(email).font(.caption).foregroundStyle(.secondary) }
-                            Text(account.account.planLabel).font(.caption).foregroundStyle(.secondary)
-                            Text(account.account.connected ? (index == 0 ? L("Первый для новых поручений") : L("Резервный по приоритету")) : account.account.isUnavailable ? L("Не удалось проверить аккаунт") : L("Нужен вход в OpenAI"))
-                                .font(.caption).foregroundStyle(.secondary)
-                            if account.account.connected { UsageSummary(usage: account.usage) }
-                            if account.activeRuns > 0 { Text(L("В работе: \(account.activeRuns)")).font(.caption) }
-                            if canManage && index > 0 && account.account.connected {
-                                Button(L("Использовать первым")) { Task {
-                                    do {
-                                        let _: HomeActionResult = try await client.management("/v1/accounts/" + account.id + "/priority?deviceId=" + deviceID, method: "POST", payload: [:])
-                                        await reloadAccounts()
-                                    } catch { self.error = error.localizedDescription }
-                                } }.disabled(busy)
-                            }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
+                            accountView(account, index: index)
                         }
                     }
-                }.frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { accountContentHeight = $0 }
-            }.frame(height: min(accountContentHeight, 330))
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(height: min(accountContentHeight, 360))
             } else if busy {
-                Text(L("Загружаем аккаунты…")).font(.callout).foregroundStyle(.secondary)
+                Text(L("Загружаем аккаунты…")).foregroundStyle(AppTheme.secondaryText)
             } else if error == nil {
-                Text(L("Подключите аккаунт OpenAI в настройках, чтобы видеть остатки.")).font(.callout).foregroundStyle(.secondary)
+                Text(L("Подключите аккаунт OpenAI в настройках, чтобы видеть остатки.")).foregroundStyle(AppTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            if let error { Text(L10n.serviceText(error)).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+            if let error {
+                Text(L10n.serviceText(error)).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Divider()
-            HStack {
-                Button(L("Открыть"), action: openApplication)
-                Button(L("Настройки"), action: openPreferences)
-                Spacer()
-                Button { Task { await refresh() } } label: { Image(systemName: "arrow.clockwise") }.accessibilityLabel(L("Обновить остатки")).disabled(busy)
+            HStack(spacing: 8) {
+                Button(L("Настройки"), action: openPreferences).tint(nil)
+                Spacer(minLength: 0)
+                Button(L("Open OpenStrudel"), action: openApplication).keyboardShortcut(.defaultAction)
             }
-        }.padding(18).frame(width: 350)
+        }
+        .labeledContentStyle(PopoverValueStyle())
+        .padding(16).frame(width: 320)
         .task(id: connectionKey) {
             accounts = []; error = nil
             while !Task.isCancelled {
@@ -78,6 +77,43 @@ struct HomeMenu: View {
                 do { try await Task.sleep(for: .seconds(15)) } catch { break }
             }
         }
+    }
+
+    private func accountView(_ account: ManagedCodexAccount, index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(account.title).fontWeight(.medium).lineLimit(1).textSelection(.enabled)
+                    Spacer(minLength: 0)
+                    if let status = status(account, index: index) {
+                        Text(status).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText).lineLimit(1)
+                    }
+                }
+                let detail = [account.emailDetail, account.account.connected ? account.account.planLabel : nil].compactMap { $0 }.joined(separator: " · ")
+                if !detail.isEmpty {
+                    Text(detail).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText).lineLimit(1)
+                }
+            }
+            if account.account.connected { UsageSummary(usage: account.usage) }
+            if account.activeRuns > 0 {
+                Text(L("В работе: \(account.activeRuns)")).font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+            }
+            if canManage && index > 0 && account.account.connected {
+                Button(L("Использовать первым")) { Task {
+                    do {
+                        let _: HomeActionResult = try await client.management("/v1/accounts/" + account.id + "/priority?deviceId=" + deviceID, method: "POST", payload: [:])
+                        await reloadAccounts()
+                    } catch { self.error = error.localizedDescription }
+                } }.tint(nil).disabled(busy)
+            }
+        }
+    }
+
+    /// Priority only matters with several accounts; problems always show.
+    private func status(_ account: ManagedCodexAccount, index: Int) -> String? {
+        if !account.account.connected { return account.account.isUnavailable ? L("Не удалось проверить аккаунт") : L("Нужен вход в OpenAI") }
+        guard accounts.count > 1 else { return nil }
+        return index == 0 ? L("Первый для новых поручений") : L("Резервный по приоритету")
     }
     private func refresh() async {
         let source = client, key = connectionKey, token = UUID()
@@ -97,6 +133,17 @@ struct HomeMenu: View {
         }
     }
     private func reloadAccounts() async { await refresh() }
+}
+
+/// Label and value on one line, the value in secondary, as LabeledContent reads in a grouped Form.
+private struct PopoverValueStyle: LabeledContentStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            configuration.label
+            Spacer(minLength: 8)
+            configuration.content.foregroundStyle(AppTheme.secondaryText)
+        }
+    }
 }
 
 /// An AppKit status item keeps menu lifetime separate from the SwiftUI scene
@@ -149,6 +196,8 @@ final class HomeStatusItem: NSObject, NSPopoverDelegate {
         }, openPreferences: { [weak self] in
             self?.popover.close(); self?.openPreferences?(); NSApp.activate(ignoringOtherApps: true)
         }).environmentObject(library)
+            .tint(AppTheme.accent)
+            .modifier(InterfaceLanguage())
         let controller = NSHostingController(rootView: content)
         controller.sizingOptions = [.preferredContentSize]
         popover.contentViewController = controller

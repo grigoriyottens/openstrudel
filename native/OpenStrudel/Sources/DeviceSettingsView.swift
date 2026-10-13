@@ -17,47 +17,206 @@ struct SavedConnectionUnlockButton: View {
     }
 }
 
+/// The Settings window on the Mac (toolbar tabs) and the settings sheet on iOS (a section menu).
+/// Every pane is a grouped Form made of the same rows on both platforms.
 struct SettingsView: View {
     enum Section: String, CaseIterable {
         case devices, accounts, backups, application
+        /// The iOS section menu keeps these names.
         var title: String {
             switch self { case .devices: L("Устройства"); case .accounts: L("Аккаунты"); case .backups: L("Копии"); case .application: L("Приложение") }
         }
+        /// Mac tab names; the window title follows the selected tab.
+        var tabTitle: String { self == .application ? L("Основные") : title }
+        var symbol: String {
+            switch self {
+            case .devices: "laptopcomputer.and.iphone"
+            case .accounts: "person.crop.circle"
+            case .backups: "clock.arrow.circlepath"
+            case .application: "gearshape"
+            }
+        }
     }
+    /// Other screens open a pane by writing its raw value here and then calling `openSettings`.
+    static let tabKey = "openstrudel.settingsTab"
+
     @EnvironmentObject private var library: DeviceLibrary
     @EnvironmentObject private var client: HomeClient
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.isPresented) private var isPresented
-    @State private var section: Section = .devices
+    @AppStorage(SettingsView.tabKey) private var tab: Section = .devices
+    @State private var section: Section
     @State private var selectedID = ""
+    private let initialSection: Section?
+    private let standalone: Bool
+    private var selected: HomeClient { library.clients.first { $0.id == selectedID } ?? client }
+
+    init(initialSection: Section? = nil, standalone: Bool = false) {
+        self.initialSection = initialSection
+        self.standalone = standalone
+        _section = State(initialValue: initialSection ?? .devices)
+    }
+
+    var body: some View {
+        settings
+            .environment(\.settingsCardIsPlain, true)
+            .modifier(InterfaceLanguage())
+            .onAppear {
+                selectedID = client.id
+                if let initialSection { tab = initialSection }
+            }
+    }
+
+    #if os(macOS)
+    @ViewBuilder private var settings: some View {
+        if standalone { tabs }
+        else {
+            // Presented as a sheet until every entry point opens the Settings window.
+            tabs.toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } } }
+        }
+    }
+
+    private var tabs: some View {
+        TabView(selection: $tab) {
+            ForEach(Section.allCases, id: \.self) { section in
+                Tab(section.tabTitle, systemImage: section.symbol, value: section) {
+                    SettingsPane { pane(section) }
+                }
+            }
+        }
+    }
+    #else
+    private var settings: some View {
+        NavigationStack {
+            Form {
+                SwiftUI.Section {
+                    Picker(L("Настройки"), selection: $section) {
+                        ForEach(Section.allCases, id: \.self) { Text($0.title) }
+                    }
+                    .pickerStyle(.menu).labelsHidden()
+                    .accessibilityIdentifier("settingsSection")
+                }
+                pane(section)
+            }
+            .navigationTitle(L("Настройки"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } } }
+        }
+    }
+    #endif
+
+    @ViewBuilder private func pane(_ section: Section) -> some View {
+        switch section {
+        case .devices:
+            DevicesPane()
+        case .accounts:
+            DevicePickerSection(title: L("Устройство"), selection: $selectedID)
+            DeviceAccountsView().environmentObject(selected).id(selected.id)
+            SwiftUI.Section(L("Telegram на «\(selected.executionDeviceName)»")) {
+                TelegramSetupView().environmentObject(selected)
+            }.id("telegram-" + selected.id)
+        case .backups:
+            DevicePickerSection(title: L("Устройство"), selection: $selectedID)
+            SwiftUI.Section(L("Резервная копия сотрудников")) {
+                AgentTransferSettings().environmentObject(selected)
+            }.id("backup-" + selected.id)
+        case .application:
+            GeneralPane(selectedID: $selectedID, selected: selected)
+        }
+    }
+}
+
+#if os(macOS)
+/// A Settings window pane: a grouped Form 600 wide whose height follows its rows between 360 and 720,
+/// so the window fits each tab and scrolls only when a pane is long.
+private struct SettingsPane<Content: View>: View {
+    @ViewBuilder let content: Content
+    @State private var height: CGFloat = 360
+
+    var body: some View {
+        Form { content }
+            .formStyle(.grouped)
+            .tint(nil)
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height + $0.contentInsets.top + $0.contentInsets.bottom } action: { _, value in
+                height = value
+            }
+            .frame(width: 600, height: min(max(height, 360), 720))
+    }
+}
+#endif
+
+/// The first section of a device-scoped pane when several devices are connected.
+private struct DevicePickerSection: View {
+    @EnvironmentObject private var library: DeviceLibrary
+    let title: String
+    @Binding var selection: String
+
+    var body: some View {
+        if library.visibleClients.count > 1 {
+            Section {
+                Picker(title, selection: $selection) {
+                    ForEach(library.visibleClients) { Text($0.displayName).tag($0.id) }
+                }
+            }
+        }
+    }
+}
+
+private struct DevicesPane: View {
+    @EnvironmentObject private var library: DeviceLibrary
     @State private var adding = false
     @State private var pairing: MacPairing?
     @State private var confirmingPairing: MacPairing?
     @State private var localStarting = false
     @State private var expandedDeviceID: String?
-    @AppStorage("openstrudel.showMenuBar") private var showMenuBar = true
-    private var selected: HomeClient { library.clients.first { $0.id == selectedID } ?? client }
-    private let standalone: Bool
-
-    init(initialSection: Section = .devices, standalone: Bool = false) {
-        _section = State(initialValue: initialSection)
-        self.standalone = standalone
-    }
+    @State private var removing: HomeClient?
 
     var body: some View {
         Group {
-            #if os(macOS)
-            if standalone { settingsContent }
-            else { settingsNavigation }
-            #else
-            settingsNavigation
-            #endif
+            ForEach(library.visibleClients) { device in
+                Section {
+                    DisclosureGroup(isExpanded: Binding(
+                        get: { expandedDeviceID == device.id },
+                        set: { expandedDeviceID = $0 ? device.id : nil }
+                    )) {
+                        if device.connectionNeedsUnlock {
+                            LabeledContent {
+                                SavedConnectionUnlockButton(client: device)
+                            } label: {
+                                Text(L("Unlock the saved connection to continue. Your chats and drafts are safe."))
+                            }
+                        } else {
+                            MobilePairingSettings().environmentObject(device)
+                        }
+                    } label: {
+                        LabeledContent {
+                            Text(status(device)).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                        } label: {
+                            Label(device.displayName, systemImage: device.deviceSymbol)
+                        }
+                    }
+                    .accessibilityIdentifier("deviceDetails")
+                    Button(L("Убрать подключение…"), role: .destructive) { removing = device }
+                        .foregroundStyle(AppTheme.destructive)
+                        .accessibilityIdentifier("signOutThisDevice")
+                        .accessibilityLabel(L("Убрать подключение к «\(device.displayName)»"))
+                }
+            }
+            Section {
+                Button(L("Подключить устройство…")) { adding = true }
+                    .accessibilityIdentifier("addDevice")
+                HiddenEmployeesButton()
+                #if os(macOS)
+                if !library.visibleClients.contains(where: \.isLocalConnection), LocalHome.isAvailable {
+                    Button(localStarting ? L("Запускаем этот Mac…") : L("Работать также на этом Mac")) {
+                        localStarting = true
+                        Task { await library.openLocal(); localStarting = false }
+                    }.disabled(localStarting)
+                }
+                #endif
+            } footer: {
+                Text(L("Сотрудники работают там, где вы их создали. Здесь можно подключить ещё один Mac или сервер."))
+            }
         }
-        #if os(macOS)
-        .frame(width: 620, height: 600)
-        #endif
-        .modifier(InterfaceLanguage())
-        .onAppear { selectedID = client.id }
         .sheet(isPresented: $adding, onDismiss: {
             if let pairing { confirmingPairing = pairing; self.pairing = nil }
         }) {
@@ -68,129 +227,135 @@ struct SettingsView: View {
             #endif
         }
         .sheet(item: $confirmingPairing) { AddDeviceConfirmation(pairing: $0).environmentObject(library) }
-    }
-
-    private var settingsContent: some View {
-            VStack(spacing: 0) {
-                Picker(L("Настройки"), selection: $section) {
-                    ForEach(Section.allCases, id: \.self) { Text($0.title) }
-                }
-                #if os(macOS)
-                .pickerStyle(.segmented)
-                #else
-                .pickerStyle(.menu).font(.headline)
-                #endif
-                .labelsHidden().padding(24).padding(.bottom, -8)
-                .accessibilityIdentifier("settingsSection")
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        if section != .devices && section != .application && library.visibleClients.count > 1 {
-                            Picker(L("Устройство"), selection: $selectedID) {
-                                ForEach(library.visibleClients) { Text($0.displayName).tag($0.id) }
-                            }
-                        }
-                        switch section {
-                        case .devices: deviceList
-                        case .accounts:
-                            DeviceAccountsView().environmentObject(selected).id(selected.id)
-                            Divider()
-                            TelegramSetupView().environmentObject(selected).id("telegram-" + selected.id)
-                        case .backups:
-                            Text(L("Резервная копия сотрудников")).font(.title3.weight(.semibold))
-                            AgentTransferSettings().environmentObject(selected).id(selected.id)
-                        case .application:
-                            LanguagePicker()
-                            Divider()
-                            if library.visibleClients.count > 1 {
-                                Picker(L("Сотрудники на устройстве"), selection: $selectedID) {
-                                    ForEach(library.visibleClients) { Text($0.displayName).tag($0.id) }
-                                }
-                            }
-                            ModelSettingsView().environmentObject(selected).id("models-" + selected.id)
-                            Divider()
-                            ApprovalSettingsView().environmentObject(selected).id("approvals-" + selected.id)
-                            Divider()
-                            DictationSettings()
-                            Divider()
-                            #if os(macOS)
-                            Toggle(L("Показывать в строке меню"), isOn: $showMenuBar)
-                            UpdateSettings()
-                            HostingStoreSettings()
-                            #endif
-                            Link(L("Помощь"), destination: URL(string: "https://waiwai.is/openstrudel#help")!)
-                            Link(L("Конфиденциальность"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
-                            #if os(macOS)
-                            LocalDataResetButton()
-                            #endif
-                        }
-                    }.padding(24).frame(maxWidth: 640, alignment: .leading).frame(maxWidth: .infinity)
-                }
-            }.background(HomeBackground())
-    }
-
-    private var settingsNavigation: some View {
-        NavigationStack {
-            settingsContent
-                .navigationTitle(L("Настройки"))
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) {
-                    #if os(macOS)
-                    if isPresented { dismiss() } else { NSApp.keyWindow?.close() }
-                    #else
-                    dismiss()
-                    #endif
-                } } }
+        .sheet(item: $removing) { device in
+            DeviceSignOutView { removing = nil }.environmentObject(device).environmentObject(library)
         }
     }
 
-    private var deviceList: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            Text(L("Сотрудники работают там, где вы их создали. Здесь можно подключить ещё один Mac или сервер."))
-                .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-            ForEach(library.visibleClients) { device in
-                DisclosureGroup(isExpanded: Binding(
-                    get: { expandedDeviceID == device.id },
-                    set: { expandedDeviceID = $0 ? device.id : nil }
-                )) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if device.connectionNeedsUnlock {
-                            Text(L("Unlock the saved connection to continue. Your chats and drafts are safe."))
-                                .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                            SavedConnectionUnlockButton(client: device)
-                        } else {
-                            MobilePairingSettings().environmentObject(device)
-                        }
-                    }.padding(.top, 12)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: device.isLocalConnection ? "laptopcomputer" : "desktopcomputer").font(.title2)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(device.displayName).font(.headline)
-                            Text(device.connectionNeedsUnlock ? L("Unlock connection") : device.homeUnreachable || device.health == nil ? L("Нет связи · попробуем снова") : L("На связи · сотрудников: \(device.profiles.count)"))
-                                .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                        }
-                        Spacer()
-                    }.padding(.vertical, 6)
-                }.accessibilityIdentifier("deviceDetails")
-                DeviceSignOutButton {}.environmentObject(device)
-                if device.id != library.visibleClients.last?.id { Divider() }
+    private func status(_ device: HomeClient) -> String {
+        if device.connectionNeedsUnlock { return L("Unlock connection") }
+        if device.homeUnreachable || device.health == nil { return L("Нет связи · попробуем снова") }
+        return L("На связи · сотрудников: \(device.profiles.count)")
+    }
+}
+
+private struct GeneralPane: View {
+    @Binding var selectedID: String
+    let selected: HomeClient
+    #if os(macOS)
+    @AppStorage("openstrudel.showMenuBar") private var showMenuBar = true
+    #endif
+
+    var body: some View {
+        Section {
+            Picker(L("Language"), selection: Binding(get: { L10n.shared.language }, set: { L10n.shared.language = $0 })) {
+                ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
             }
-            Button(L("Подключить устройство…")) { adding = true }.buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("addDevice")
-            HiddenEmployeesButton()
+            .accessibilityIdentifier("interfaceLanguage")
             #if os(macOS)
-            if !library.visibleClients.contains(where: \.isLocalConnection), LocalHome.isAvailable {
-                Button(localStarting ? L("Запускаем этот Mac…") : L("Работать также на этом Mac")) {
-                    localStarting = true
-                    Task { await library.openLocal(); localStarting = false }
-                }.disabled(localStarting)
-            }
+            Toggle(L("Показывать в строке меню"), isOn: $showMenuBar).settingsSwitch()
             #endif
+        }
+        DevicePickerSection(title: L("Сотрудники на устройстве"), selection: $selectedID)
+        Section(L("Модель и скорость")) {
+            ModelSettingsView().environmentObject(selected)
+        }.id("models-" + selected.id)
+        Section(L("Действия сотрудников")) {
+            ApprovalSettingsView().environmentObject(selected)
+        }.id("approvals-" + selected.id)
+        DictationSection()
+        #if os(macOS)
+        UpdatesSection()
+        HostingStoreSettings()
+        #endif
+        Section {
+            Link(L("Помощь"), destination: URL(string: "https://waiwai.is/openstrudel#help")!)
+                .foregroundStyle(AppTheme.accentText)
+            Link(L("Конфиденциальность"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
+                .foregroundStyle(AppTheme.accentText)
+        }
+        #if os(macOS)
+        Section {
+            LocalDataResetButton()
+        } footer: {
+            Text(L("Удалить местных сотрудников, переписку и настройки и начать заново."))
+        }
+        #endif
+    }
+}
+
+private struct DictationSection: View {
+    @ObservedObject private var assets = DictationAssets.shared
+
+    var body: some View {
+        Section {
+            switch assets.state {
+            case .checking:
+                LabeledContent(L("Checking the local model…")) { ProgressView().controlSize(.small) }
+            case .ready:
+                Label {
+                    Text(L("Ready for offline dictation"))
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(AppTheme.accentText)
+                }
+                .accessibilityIdentifier("dictationReady")
+            case .downloading:
+                if let progress = assets.progress {
+                    ProgressView(value: progress) {
+                        Text(progress < 1 ? L("Downloading the model…") : L("Checking the download…"))
+                    } currentValueLabel: {
+                        Text(progress, format: .percent.precision(.fractionLength(0))).monospacedDigit()
+                    }
+                } else {
+                    ProgressView(L("Preparing the download…"))
+                }
+                Button(L("Cancel download")) { assets.cancel() }
+                    .accessibilityIdentifier("cancelDictationDownload")
+            case .available, .failed:
+                if let error = assets.error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
+                LabeledContent {
+                    Button(L("Download model")) { assets.download() }
+                        .accessibilityIdentifier("downloadDictationModel")
+                } label: {
+                    Text(L("Download Parakeet once (740 MB). After that, dictation works offline."))
+                }
+            }
+        } header: {
+            Text(L("Dictation"))
+        } footer: {
+            Text(L("Speak naturally. Your language is recognized automatically, on this device.") + " "
+                 + L("25 languages, including English, Russian, French and Spanish. Hebrew is not supported."))
+        }
+        .task { await assets.check() }
+    }
+}
+
+#if os(macOS)
+private struct UpdatesSection: View {
+    @ObservedObject private var updater = AppUpdater.shared
+    private var version: String {
+        let info = Bundle.main.infoDictionary
+        return L("Версия \(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? ""))")
+    }
+
+    var body: some View {
+        Section {
+            LabeledContent("OpenStrudel") { Text(version).monospacedDigit().foregroundStyle(AppTheme.secondaryText) }
+            Toggle(isOn: Binding(get: { updater.automaticChecksEnabled }, set: { updater.automaticChecksEnabled = $0 })) {
+                Text(L("Проверять обновления автоматически"))
+                Text(L("Сообщим о новой версии. Установка начнётся только после вашего подтверждения."))
+            }
+            .settingsSwitch()
+            if let failure = updater.startupFailure {
+                Text(L10n.serviceText(failure)).foregroundStyle(AppTheme.warning)
+            }
+            Button(L("Проверить обновления…"), action: updater.checkForUpdates)
+                .disabled(!updater.canCheckForUpdates)
+                .accessibilityIdentifier("checkForUpdates")
         }
     }
 }
+#endif
 
 struct AddDeviceConfirmation: View {
     @EnvironmentObject private var library: DeviceLibrary
@@ -203,37 +368,54 @@ struct AddDeviceConfirmation: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Image(systemName: connected ? "checkmark.circle.fill" : "desktopcomputer").font(.system(size: 48)).foregroundStyle(AppTheme.accent)
+            VStack(spacing: 12) {
+                Image(systemName: connected ? "checkmark.circle.fill" : "desktopcomputer")
+                    .font(.system(size: 48)).foregroundStyle(AppTheme.accent)
+                    .padding(.bottom, 4)
+                    .accessibilityHidden(true)
                 Text(connected ? L("Устройство подключено") : L("Подключить «\(pairing.name)»?"))
-                    .font(.title2.weight(.semibold)).multilineTextAlignment(.center)
+                    .font(AppTypography.title)
                 Text(connected ? (candidate?.homeUnreachable == true ? L("Подключение сохранено. Ждём ответа устройства — сотрудники появятся, когда оно выйдет на связь.") : L("Сотрудники этого устройства теперь доступны в списке чатов.")) : L("Вы сможете общаться с его сотрудниками и создавать новых. Они продолжат работать на «\(pairing.name)»."))
-                    .font(.callout).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
-                if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("pairingError") }
-                Button {
-                    if connected { if let candidate { library.select(candidate) }; dismiss(); return }
-                    busy = true; error = nil
-                    let target = candidate ?? library.connection(for: pairing); candidate = target
-                    Task {
-                        if await target.connectToMac(pairing) { library.add(target, select: false); connected = true }
-                        else { error = target.pairingError }
-                        busy = false
+                    .foregroundStyle(AppTheme.secondaryText)
+                if busy { ProgressView(L("Проверяем подключение…")).controlSize(.small) }
+                if let error {
+                    Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("pairingError")
+                }
+            }
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(24)
+            #if os(macOS)
+            .frame(width: 440)
+            #else
+            .frame(maxWidth: 440)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(connected ? L("Готово") : L("Отмена")) { dismiss() }.disabled(busy)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(connected ? L("Открыть сотрудников") : L("Подключить")) {
+                        if connected { if let candidate { library.select(candidate) }; dismiss(); return }
+                        busy = true; error = nil
+                        let target = candidate ?? library.connection(for: pairing); candidate = target
+                        Task {
+                            if await target.connectToMac(pairing) { library.add(target, select: false); connected = true }
+                            else { error = target.pairingError }
+                            busy = false
+                        }
                     }
-                } label: {
-                    HStack { if busy { ProgressView().controlSize(.small) }; Text(connected ? L("Открыть сотрудников") : busy ? L("Проверяем подключение…") : L("Подключить")) }
-                        .frame(minHeight: 32)
-                }.buttonStyle(.borderedProminent).disabled(busy).keyboardShortcut(.defaultAction)
-                .accessibilityIdentifier(connected ? "openDeviceEmployees" : "confirmMacPairing")
-            }.padding(32).frame(maxWidth: 460)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(connected ? L("Готово") : L("Отмена")) { dismiss() }.disabled(busy) } }
+                    .disabled(busy)
+                    .accessibilityIdentifier(connected ? "openDeviceEmployees" : "confirmMacPairing")
+                }
+            }
         }
         .interactiveDismissDisabled(busy)
-        #if os(macOS)
-        .frame(width: 500, height: 390)
-        #endif
+        .presentationSizing(.fitted)
     }
 }
 
+/// Every account on the selected device, its limits and credits. Emits Form sections.
 struct DeviceAccountsView: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
@@ -241,6 +423,7 @@ struct DeviceAccountsView: View {
     @State private var loadedDeviceID: String?
     @State private var accounts: [ManagedCodexAccount] = []
     @State private var loading = true
+    @State private var refreshing = false
     @State private var busy = false
     @State private var error: String?
     @State private var canManage = false
@@ -252,94 +435,76 @@ struct DeviceAccountsView: View {
     @State private var accountName = ""
     @State private var notice: String?
     @State private var requestID = UUID()
-    @State private var expandedAccounts: Set<String> = []
     private var query: String { deviceID.isEmpty ? "" : "?deviceId=" + deviceID }
+    private var deviceName: String { deviceID == client.health?.nodeId ? client.displayName : client.devices.first(where: { $0.id == deviceID })?.name ?? client.displayName }
     private func path(_ id: String, _ action: String) -> String { "/v1/accounts/" + id + "/" + action + query }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text(L("ChatGPT on \(deviceID == client.health?.nodeId ? client.displayName : client.devices.first(where: { $0.id == deviceID })?.name ?? client.displayName)"))
-                .font(.title3.weight(.semibold))
-            if client.devices.count > 1 {
-                Picker(L("Устройство сотрудника"), selection: $deviceID) {
-                    ForEach(client.devices) { Text($0.name).tag($0.id) }
-                }.disabled(login != nil || busy)
-            }
-            if loading { ProgressView(accounts.isEmpty ? L("Загружаем аккаунты и лимиты…") : L("Обновляем остатки…")).controlSize(.small) }
-            if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.destructive) }
-            ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(account.title).font(.headline).textSelection(.enabled)
-                            if let email = account.emailDetail { Text(email).font(.callout).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled) }
-                            Text(account.account.connected ? [account.account.planLabel, account.account.categoryLabel].compactMap { $0 }.joined(separator: " · ") : account.account.isUnavailable ? L("Не удалось проверить аккаунт") : L("Нужен вход в OpenAI")).font(.caption).foregroundStyle(AppTheme.secondaryText)
-                            if accounts.filter({ $0.title == account.title && $0.account.planType == account.account.planType }).count > 1 {
-                                Text(L("Connection \(String(account.id.suffix(6)))")).font(.caption.monospaced()).foregroundStyle(AppTheme.secondaryText)
-                            }
-                        }
-                        Spacer()
-                        if canManage {
-                            Menu {
-                                Button(L("Rename account…")) { accountName = account.title; renaming = account }
-                                if index > 0 && account.account.connected { Button(L("Использовать по умолчанию")) { perform {
-                                    let _: HomeActionResult = try await client.management(path(account.id, "priority"), method: "POST", payload: [:])
-                                    await refresh()
-                                } } }
-                                if account.account.connected { Button(L("Выйти из аккаунта…"), role: .destructive) { logout = account }
-                                    .disabled(account.activeRuns > 0)
-                                }
-                            } label: { Image(systemName: "ellipsis") }.menuStyle(.borderlessButton).fixedSize()
-                                .accessibilityLabel(L("Действия с аккаунтом"))
-                                .accessibilityIdentifier("accountActions-" + account.id)
-                        }
-                    }
-                    if account.account.connected {
-                        DisclosureGroup(L("Limits and credits"), isExpanded: Binding(get: { expandedAccounts.contains(account.id) }, set: { expanded in
-                            if expanded { expandedAccounts.insert(account.id) } else { expandedAccounts.remove(account.id) }
-                        })) { UsageSummary(usage: account.usage).padding(.top, 8) }
-                            .accessibilityIdentifier("accountLimits-" + account.id)
-                    }
-                    else if canManage && !account.account.isUnavailable {
-                        Button { perform { try await signIn(account.id) } } label: { AdaptiveActionLabel(title: L("Войти в OpenAI")) }
-                            .adaptiveActionStyle(.borderedProminent).disabled(login != nil || busy).accessibilityIdentifier("signInOpenAI")
-                    }
-                    if accounts.count > 1 && index == 0 { Text(L("По умолчанию для новых поручений")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
+        Group {
+            Section {
+                if client.devices.count > 1 {
+                    Picker(L("Устройство сотрудника"), selection: $deviceID) {
+                        ForEach(client.devices) { Text($0.name).tag($0.id) }
+                    }.disabled(login != nil || busy)
                 }
-                Divider()
+                if loading && accounts.isEmpty {
+                    LabeledContent(L("Загружаем аккаунты и лимиты…")) { ProgressView().controlSize(.small) }
+                }
+                if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
+                if let first = accounts.first { accountRows(first, index: 0) }
+            } header: {
+                Text(L("ChatGPT on \(deviceName)"))
+            } footer: {
+                if accounts.count > 1 { Text(L("По умолчанию для новых поручений")) }
             }
-            if let notice { Text(notice).font(.callout).foregroundStyle(AppTheme.secondaryText) }
+            ForEach(Array(accounts.enumerated()).dropFirst(), id: \.element.id) { index, account in
+                Section { accountRows(account, index: index) }
+            }
             if let login {
-                Text(L("Завершите вход на сайте OpenAI")).font(.headline)
-                if let code = login.userCode {
-                    Text(L("Введите этот код на сайте OpenAI")).font(.callout).foregroundStyle(AppTheme.secondaryText)
-                    Text(code).font(.title2.monospaced()).textSelection(.enabled).accessibilityIdentifier("openAIDeviceCode")
-                    Button(copiedCode ? L("Код скопирован") : L("Скопировать код")) {
-                        #if os(macOS)
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(code, forType: .string)
-                        #else
-                        UIPasteboard.general.string = code
-                        #endif
-                        copiedCode = true
-                    }.accessibilityIdentifier("copyOpenAICode")
+                Section {
+                    if let code = login.userCode {
+                        HStack {
+                            Text(code).font(AppTypography.title.monospaced()).textSelection(.enabled)
+                                .accessibilityIdentifier("openAIDeviceCode")
+                            Spacer()
+                            Button(copiedCode ? L("Код скопирован") : L("Скопировать код")) { copy(code) }
+                                .accessibilityIdentifier("copyOpenAICode")
+                        }
+                    }
+                    if let url = login.url {
+                        Link(L("Открыть OpenAI"), destination: url).foregroundStyle(AppTheme.accentText)
+                    }
+                    Button(L("Отменить вход")) { perform {
+                        let _: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + login.loginId), method: "DELETE")
+                        self.login = nil
+                    } }.accessibilityIdentifier("cancelOpenAILogin")
+                } header: {
+                    Text(L("Завершите вход на сайте OpenAI"))
+                } footer: {
+                    if login.userCode != nil { Text(L("Введите этот код на сайте OpenAI")) }
                 }
-                if let url = login.url { Link(L("Открыть OpenAI"), destination: url).buttonStyle(.borderedProminent) }
-                Button(L("Отменить вход")) { perform {
-                    let _: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + login.loginId), method: "DELETE")
-                    self.login = nil
-                } }.accessibilityIdentifier("cancelOpenAILogin")
-            } else if canManage && !accounts.isEmpty {
-                Button(L("Добавить аккаунт OpenAI")) { perform {
-                    notice = nil
-                    struct Added: Decodable { let id: String }
-                    let result: Added = try await client.management("/v1/accounts" + query, method: "POST", payload: ["name": "OpenAI"])
-                    try await signIn(result.id)
-                } }.disabled(busy)
             }
-            Button(L("Обновить остатки")) { Task { await refresh(force: true) } }.disabled(loading)
-            Text(L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
-                .font(.caption).foregroundStyle(AppTheme.secondaryText)
+            Section {
+                if let notice { Text(notice).foregroundStyle(AppTheme.secondaryText) }
+                if login == nil && canManage && !accounts.isEmpty {
+                    Button(L("Добавить аккаунт OpenAI")) { perform {
+                        notice = nil
+                        struct Added: Decodable { let id: String }
+                        let result: Added = try await client.management("/v1/accounts" + query, method: "POST", payload: ["name": "OpenAI"])
+                        try await signIn(result.id)
+                    } }.disabled(busy)
+                }
+                HStack {
+                    Button(L("Обновить остатки")) {
+                        refreshing = true
+                        Task { await refresh(force: true); refreshing = false }
+                    }.disabled(loading)
+                    Spacer()
+                    if refreshing { ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем остатки…")) }
+                }
+            } footer: {
+                Text(L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
+            }
         }
         .task(id: deviceID) {
             if deviceID.isEmpty, let localDeviceID = client.health?.nodeId {
@@ -393,6 +558,70 @@ struct DeviceAccountsView: View {
             }.disabled(accountName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || accountName.count > 80)
         } message: { Text(L("Choose a name you recognise. Your OpenAI account stays the same.")) }
     }
+
+    @ViewBuilder private func accountRows(_ account: ManagedCodexAccount, index: Int) -> some View {
+        LabeledContent {
+            if canManage { accountMenu(account, index: index) }
+        } label: {
+            Text(account.title).textSelection(.enabled)
+            let detail = accountDetail(account)
+            if !detail.isEmpty { Text(detail).textSelection(.enabled) }
+        }
+        if account.account.connected {
+            UsageSummary(usage: account.usage)
+        } else if canManage && !account.account.isUnavailable {
+            Button(L("Войти в OpenAI")) { perform { try await signIn(account.id) } }
+                .buttonStyle(.borderedProminent)
+                .disabled(login != nil || busy)
+                .accessibilityIdentifier("signInOpenAI")
+        }
+    }
+
+    private func accountDetail(_ account: ManagedCodexAccount) -> String {
+        var parts = [account.emailDetail].compactMap { $0 }
+        if account.account.connected {
+            parts += [account.account.planLabel, account.account.categoryLabel].compactMap { $0 }
+        } else if account.account.isUnavailable {
+            parts.append(L("Не удалось проверить аккаунт"))
+        } else if !canManage {
+            parts.append(L("Нужен вход в OpenAI"))
+        }
+        if accounts.filter({ $0.title == account.title && $0.account.planType == account.account.planType }).count > 1 {
+            parts.append(L("Connection \(String(account.id.suffix(6)))"))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func accountMenu(_ account: ManagedCodexAccount, index: Int) -> some View {
+        Menu {
+            Button(L("Rename account…")) { accountName = account.title; renaming = account }
+            if index > 0 && account.account.connected {
+                Button(L("Использовать по умолчанию")) { perform {
+                    let _: HomeActionResult = try await client.management(path(account.id, "priority"), method: "POST", payload: [:])
+                    await refresh()
+                } }
+            }
+            if account.account.connected {
+                Button(L("Выйти из аккаунта…"), role: .destructive) { logout = account }
+                    .disabled(account.activeRuns > 0)
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.button).buttonStyle(.borderless).menuIndicator(.hidden).fixedSize()
+        .accessibilityLabel(L("Действия с аккаунтом"))
+        .accessibilityIdentifier("accountActions-" + account.id)
+    }
+
+    private func copy(_ code: String) {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(code, forType: .string)
+        #else
+        UIPasteboard.general.string = code
+        #endif
+        copiedCode = true
+    }
     private func refresh(force: Bool = false) async {
         let selected = deviceID, token = UUID()
         requestID = token
@@ -416,48 +645,91 @@ struct DeviceAccountsView: View {
     }
 }
 
+/// An account's limits and credits as rows: in a Form each is a row, in the menu-bar popover they stack.
 struct UsageSummary: View {
     let usage: ManagedCodexAccount.Usage
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if usage.unavailable == true {
-                Label(L("Не удалось получить остатки. Попробуйте обновить."), systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(AppTheme.secondaryText)
-            } else if usage.windows.isEmpty {
-                Text(L("OpenAI не передал лимиты подписки.")).font(.callout).foregroundStyle(AppTheme.secondaryText)
+        if usage.unavailable == true {
+            Label(L("Не удалось получить остатки. Попробуйте обновить."), systemImage: "exclamationmark.circle")
+                .foregroundStyle(AppTheme.secondaryText)
+        } else if usage.windows.isEmpty {
+            Text(L("OpenAI не передал лимиты подписки.")).foregroundStyle(AppTheme.secondaryText)
+        }
+        ForEach(usage.windows) { UsageMeter(window: $0) }
+        LabeledContent(L("Кредиты")) {
+            Text(credits).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+        }
+        if let resets = usage.resetCredits {
+            LabeledContent(L("Extra limit resets")) {
+                Text(String(resets.availableCount)).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
             }
-            ForEach(usage.windows) { window in
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack { Text(window.displayName); Spacer(); Text(window.remainingPercent.map { L("\(Int($0.rounded()))% осталось") } ?? L("Нет данных")).monospacedDigit() }.font(.callout)
-                    if let remaining = window.remainingPercent { ProgressView(value: max(0, min(100, remaining)), total: 100).accessibilityLabel(window.displayName).accessibilityValue(L("Осталось \(Int(remaining)) процентов")) }
-                    if let reset = window.resetsAt {
-                        Text(L("Сброс \(Date(timeIntervalSince1970: reset).formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)))"))
-                            .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                    }
-                }
-            }
-            HStack {
-                Text(L("Кредиты")); Spacer()
-                Text(usage.credits.map { $0.unlimited ? L("Без ограничений") : $0.balance ?? ($0.hasCredits ? L("Доступны · баланс не передан") : L("Нет кредитов")) } ?? L("Баланс не передан"))
-                    .monospacedDigit().foregroundStyle(AppTheme.secondaryText)
-            }.font(.callout)
-            if let resets = usage.resetCredits {
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack {
-                        Text(L("Extra limit resets")); Spacer()
-                        Text(String(resets.availableCount)).monospacedDigit()
-                    }.font(.callout)
-                    if let expires = resets.nextExpiresAt {
-                        Text(L("Next expiry: \(Date(timeIntervalSince1970: expires).formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)))"))
-                            .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                    }
-                }
-            }
-            if let checked = ISO8601DateFormatter().date(from: usage.checkedAt)
-                ?? DateFormatter.usageTimestamp.date(from: usage.checkedAt) {
-                Text(L("Updated \(checked.formatted(.dateTime.hour().minute().locale(L10n.locale)))"))
-                    .font(.caption).foregroundStyle(AppTheme.secondaryText)
+            if let expires = resets.nextExpiresAt {
+                Text(L("Next expiry: \(Date(timeIntervalSince1970: expires).formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)))"))
+                    .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
             }
         }
+        if let checked = ISO8601DateFormatter().date(from: usage.checkedAt) ?? DateFormatter.usageTimestamp.date(from: usage.checkedAt) {
+            Text(L("Updated \(checked.formatted(.dateTime.hour().minute().locale(L10n.locale)))"))
+                .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+        }
+    }
+
+    private var credits: String {
+        usage.credits.map { $0.unlimited ? L("Без ограничений") : $0.balance ?? ($0.hasCredits ? L("Доступны · баланс не передан") : L("Нет кредитов")) } ?? L("Баланс не передан")
+    }
+}
+
+/// One limit window: its name and what is left above a thin bar.
+private struct UsageMeter: View {
+    let window: ManagedCodexAccount.Usage.Window
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            LabeledContent(window.displayName) {
+                Text(caption).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+            }
+            if let remaining = window.remainingPercent {
+                UsageBar(fraction: max(0, min(100, remaining)) / 100)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(window.displayName)
+        .accessibilityValue(caption)
+    }
+
+    private var caption: String {
+        guard let remaining = window.remainingPercent else { return L("Нет данных") }
+        let percent = Int(remaining.rounded())
+        guard let reset = window.resetsAt else { return L("\(percent)% осталось") }
+        return L("\(percent)% осталось · сброс \(Self.resetTime(Date(timeIntervalSince1970: reset)))")
+    }
+
+    /// Today shows the time, this week the weekday and time, later the date.
+    private static func resetTime(_ date: Date) -> String {
+        let style: Date.FormatStyle = Calendar.current.isDateInToday(date) ? .dateTime.hour().minute()
+            : date.timeIntervalSinceNow < 6 * 86_400 ? .dateTime.weekday(.abbreviated).hour().minute()
+            : .dateTime.day().month(.abbreviated)
+        return date.formatted(style.locale(L10n.locale))
+    }
+}
+
+/// A 4-pt meter: accent for what is left on a hairline track.
+private struct UsageBar: View {
+    let fraction: Double
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2, style: .continuous)
+            .fill(AppTheme.separator)
+            .frame(height: 4)
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(AppTheme.accent)
+                        .frame(width: proxy.size.width * fraction)
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 

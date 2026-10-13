@@ -43,14 +43,15 @@ struct ModelSettingsView: View {
     private var selection: ModelSelection { ModelSelection(model: model.isEmpty ? nil : model, serviceTier: model.isEmpty && agentID != nil ? nil : speed) }
     private var changed: Bool { selection != settings?.selection }
 
+    private var scope: String {
+        agentID == nil ? L("По умолчанию для сотрудников на «\(client.displayName)»") : L("Для этого сотрудника · на «\(client.displayName)»")
+    }
+
+    /// Rows only: the caller wraps them in a Form section.
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(L("Модель и скорость")).font(.headline)
-            Text(agentID == nil ? L("По умолчанию для сотрудников на «\(client.displayName)»") : L("Для этого сотрудника · на «\(client.displayName)»"))
-                .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-            if loading { ProgressView(L("Получаем доступные модели…")).controlSize(.small) }
+        Group {
             if let settings {
-                Picker(L("Модель"), selection: $model) {
+                Picker(selection: $model) {
                     if agentID != nil {
                         Text(L("Как на устройстве · \(settings.models.first { $0.id == settings.defaults.model }?.name ?? settings.defaults.model ?? "")")).tag("")
                     } else if let recommended = settings.recommended {
@@ -58,32 +59,51 @@ struct ModelSettingsView: View {
                     }
                     if !model.isEmpty && !settings.models.contains(where: { $0.id == model }) { Text(L("\(model) · unavailable")).tag(model) }
                     ForEach(settings.models) { Text($0.name).tag($0.id) }
-                }.accessibilityIdentifier("modelChoice").disabled(saving || !settings.canManage)
+                } label: {
+                    Text(L("Модель"))
+                    Text(scope)
+                }
+                .accessibilityIdentifier("modelChoice").disabled(saving || !settings.canManage)
                 Picker(L("Скорость"), selection: $speed) {
                     ForEach(selected?.speeds ?? []) { Text(L10n.text($0.name)).tag($0.id) }
                     if let selected, !selected.speeds.contains(where: { $0.id == speed }) { Text(L("\(speed) · unavailable")).tag(speed) }
-                }.accessibilityIdentifier("modelSpeed").disabled((model.isEmpty && agentID != nil) || saving || !settings.canManage)
-                if model.isEmpty && agentID == nil, let recommended = settings.recommended {
-                    Text((recommended.isDefault ? L("Рекомендует OpenAI") : L("Модель по умолчанию")) + " · " + (recommended.defaultReasoningEffort ?? "medium").capitalized)
-                        .font(.caption).foregroundStyle(AppTheme.secondaryText)
                 }
-                if speed != "default" {
-                    Text(L("Ускоренный режим может расходовать больше лимита аккаунта."))
-                        .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("modelSpeed").disabled((model.isEmpty && agentID != nil) || saving || !settings.canManage)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if model.isEmpty && agentID == nil, let recommended = settings.recommended {
+                            Text((recommended.isDefault ? L("Рекомендует OpenAI") : L("Модель по умолчанию")) + " · " + (recommended.defaultReasoningEffort ?? "medium").capitalized)
+                        }
+                        if speed != "default" { Text(L("Ускоренный режим может расходовать больше лимита аккаунта.")) }
+                        if !settings.canManage { Text(L("Настройки меняет владелец устройства.")) }
+                        Text(saved && !changed ? L("Сохранено. Применится со следующего поручения.") : L("Начатая работа продолжится с прежними настройками."))
+                    }
+                    .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if settings.canManage && changed {
+                        Button(saving ? L("Сохраняем…") : L("Применить")) { Task { await save() } }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(saving || selected == nil || ((agentID == nil || !model.isEmpty) && selected?.speeds.contains(where: { $0.id == speed }) != true))
+                            .accessibilityIdentifier("saveModelSelection")
+                    }
                 }
-                if !settings.canManage {
-                    Text(L("Настройки меняет владелец устройства.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
-                } else if changed {
-                    Button(saving ? L("Сохраняем…") : L("Применить")) { Task { await save() } }
-                        .buttonStyle(.borderedProminent).disabled(saving || selected == nil || ((agentID == nil || !model.isEmpty) && selected?.speeds.contains(where: { $0.id == speed }) != true))
-                        .accessibilityIdentifier("saveModelSelection")
+            } else if loading {
+                LabeledContent {
+                    ProgressView().controlSize(.small).accessibilityLabel(L("Получаем доступные модели…"))
+                } label: {
+                    Text(L("Модель"))
+                    Text(scope)
                 }
-                Text(saved && !changed ? L("Сохранено. Применится со следующего поручения.") : L("Начатая работа продолжится с прежними настройками."))
-                    .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
             }
             if let error {
-                Text(UserFacingError.text(error.localizedDescription)).font(.callout).foregroundStyle(AppTheme.warning).accessibilityIdentifier("modelSettingsError")
-                Button(L("Повторить")) { Task { await load() } }.disabled(saving)
+                HStack(spacing: 12) {
+                    Text(UserFacingError.text(error.localizedDescription)).foregroundStyle(AppTheme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("modelSettingsError")
+                    Spacer(minLength: 0)
+                    Button(L("Повторить")) { Task { await load() } }.disabled(saving)
+                }
             }
         }
         .task(id: path) { await load() }
