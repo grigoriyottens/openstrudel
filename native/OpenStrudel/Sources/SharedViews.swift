@@ -114,19 +114,6 @@ struct ConnectionStatus: View {
     }
 }
 
-/// A link in ink with a quiet underline, the way links read everywhere in the app.
-struct InkLink: View {
-    let title: String
-    let destination: URL
-
-    var body: some View {
-        Link(destination: destination) {
-            Text(title).underline(color: AppTheme.secondaryText)
-        }
-        .foregroundStyle(AppTheme.accentText)
-    }
-}
-
 extension EnvironmentValues {
     /// A settings Form already groups its rows, so a card inside one drops its own surface.
     @Entry var settingsCardIsPlain = false
@@ -188,4 +175,48 @@ struct OpenStrudelMark: View {
 
 struct HomeBackground: View {
     var body: some View { AppTheme.canvas.ignoresSafeArea() }
+}
+
+/// A link in ink, underlined in the secondary colour at rest and in ink under the pointer.
+struct InkLink: View {
+    let title: String
+    let destination: URL
+    @State private var hovering = false
+
+    init(_ title: String, destination: URL) {
+        self.title = title
+        self.destination = destination
+    }
+
+    init(title: String, destination: URL) { self.init(title, destination: destination) }
+
+    var body: some View {
+        Link(destination: destination) {
+            Text(title)
+                .underline(color: hovering ? AppTheme.accentText : AppTheme.secondaryText)
+                .textTarget()
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(AppTheme.accentText)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// Places its content so the content's centre sits at 40 % of the height, and scrolls from the
+/// top when the content is taller than the space.
+struct OpticalCentre: SwiftUI.Layout {
+    var height: CGFloat? = nil
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let content = subviews.first?.sizeThatFits(.init(width: proposal.width, height: nil)) ?? .zero
+        return CGSize(width: proposal.width ?? content.width, height: max(height ?? proposal.height ?? content.height, content.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let content = subviews.first else { return }
+        let size = content.sizeThatFits(.init(width: bounds.width, height: nil))
+        let top = min(max(0, bounds.height * 0.4 - size.height / 2), bounds.height - size.height)
+        content.place(at: CGPoint(x: bounds.midX, y: bounds.minY + top), anchor: .top,
+                      proposal: .init(width: bounds.width, height: size.height))
+    }
 }

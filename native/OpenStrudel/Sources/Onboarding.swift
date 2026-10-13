@@ -34,25 +34,6 @@ enum OnboardingLayout {
     }
 }
 
-/// Places its content so the content's centre sits at 40 % of the height, and scrolls from the
-/// top when the content is taller than the space.
-struct OpticalCentre: SwiftUI.Layout {
-    let height: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let content = subviews.first?.sizeThatFits(.init(width: proposal.width, height: nil)) ?? .zero
-        return CGSize(width: proposal.width ?? content.width, height: max(height, content.height))
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard let content = subviews.first else { return }
-        let size = content.sizeThatFits(.init(width: bounds.width, height: nil))
-        let top = min(max(0, bounds.height * 0.4 - size.height / 2), bounds.height - size.height)
-        content.place(at: CGPoint(x: bounds.midX, y: bounds.minY + top), anchor: .top,
-                      proposal: .init(width: bounds.width, height: size.height))
-    }
-}
-
 /// Wraps text to the narrowest width that keeps its number of lines, so centred lines come out even
 /// and no word is left alone on the last one. Leading-aligned text keeps the full column.
 struct BalancedLines: SwiftUI.Layout {

@@ -70,21 +70,6 @@ struct EmptyChat: View {
     }
 }
 
-/// Places its content's centre at 40 % of the height, never past the top or bottom.
-private struct OpticalCentre: SwiftUI.Layout {
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let content = subviews.first?.sizeThatFits(.init(width: proposal.width, height: nil)) ?? .zero
-        return CGSize(width: proposal.width ?? content.width, height: max(proposal.height ?? content.height, content.height))
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard let content = subviews.first else { return }
-        let size = content.sizeThatFits(.init(width: bounds.width, height: nil))
-        let top = min(max(bounds.minY + bounds.height * 0.4 - size.height / 2, bounds.minY), bounds.maxY - size.height)
-        content.place(at: CGPoint(x: bounds.midX, y: top), anchor: .top, proposal: .init(width: bounds.width, height: size.height))
-    }
-}
-
 /// Messages fade out under the header and above the composer instead of being cut.
 struct EdgeFade: View {
     var body: some View {

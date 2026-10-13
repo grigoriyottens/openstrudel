@@ -59,7 +59,7 @@ extension View {
 
     /// Gives a line of text a comfortable target. Layouts subtract `TextAction.inset` from the gaps
     /// around it, so the visible gaps between lines stay on the spacing scale.
-    fileprivate func textTarget() -> some View {
+    func textTarget() -> some View {
         #if os(macOS)
         // The pointer target grows; the layout keeps the line's own height.
         padding(.vertical, TextAction.reach).contentShape(Rectangle()).padding(.vertical, -TextAction.reach)
@@ -93,29 +93,6 @@ struct TextActionStyle: ButtonStyle {
                              : quiet ? AnyShapeStyle(AppTheme.secondaryText) : AnyShapeStyle(AppTheme.accentText))
             .opacity(configuration.isPressed ? 0.6 : 1)
             .textTarget()
-    }
-}
-
-/// A link in ink, underlined in the secondary colour at rest and in ink under the pointer.
-struct InkLink: View {
-    let title: String
-    let destination: URL
-    @State private var hovering = false
-
-    init(_ title: String, destination: URL) {
-        self.title = title
-        self.destination = destination
-    }
-
-    var body: some View {
-        Link(destination: destination) {
-            Text(title)
-                .underline(color: hovering ? AppTheme.accentText : AppTheme.secondaryText)
-                .textTarget()
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(AppTheme.accentText)
-        .onHover { hovering = $0 }
     }
 }
 
