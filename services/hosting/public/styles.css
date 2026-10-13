@@ -74,7 +74,6 @@ dialog > .text-btn, .link-btn, .details > .text-btn, .server-actions > :first-ch
 .dot { width: .35rem; height: .35rem; border-radius: 50%; background: currentColor; flex: none; }
 .main { width: min(100% - 3rem,39rem); margin: auto; padding: 2.5rem 0 3rem; min-height: calc(100dvh - 10rem); }
 .main:focus { outline: none; }
-.main.wide { width: min(100% - 3rem,46rem); }
 .hero { text-align: center; margin: 0 auto 2.25rem; }
 .hero h1 span { color: var(--muted); }
 .hero p { margin: 1.125rem auto 0; color: var(--muted); font-size: 15px; line-height: 22px; max-width: 31rem; text-wrap: pretty; }
@@ -95,7 +94,7 @@ dialog > .text-btn, .link-btn, .details > .text-btn, .server-actions > :first-ch
 .payment-set { border: 0; padding: 0; margin: 0 0 1.25rem; min-width: 0; display: flex; gap: .75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .payment-set legend { float: left; padding: 0; margin: 0; color: var(--muted); font-weight: var(--regular); }
 .payment-options { max-width: 100%; display: flex; align-items: center; gap: .25rem; padding: .25rem; border-radius: var(--radius); background: var(--subtle); }
-.payment-option { display: flex; align-items: center; justify-content: center; position: relative; min-height: 2.75rem; min-width: 0; flex: 1; padding: .5rem .875rem; font-size: 13px; line-height: 16px; color: var(--muted); border-radius: .5rem; cursor: pointer; border: 1px solid transparent; transition: background var(--fast),color var(--fast); }
+.payment-option { display: flex; align-items: center; justify-content: center; position: relative; min-height: 2.75rem; min-width: 0; flex: 1 0 auto; white-space: nowrap; padding: .5rem .875rem; font-size: 13px; line-height: 16px; color: var(--muted); border-radius: .5rem; cursor: pointer; border: 1px solid transparent; transition: background var(--fast),color var(--fast); }
 .payment-option:has(input:checked) { background: var(--surface); color: var(--ink); border-color: var(--control-line); }
 .purchase-row { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,9rem),1fr)); align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
 .price { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; font: var(--medium) 28px/34px var(--font-sans); font-variant-numeric: tabular-nums; }
@@ -242,7 +241,7 @@ dialog p.field-help { font-size: 13px; line-height: 20px; margin: .75rem 0; }
 @media(max-width:480px) {
   .site-header { padding: .75rem 1.25rem; }
   .brand span { display: none; }
-  .main,.main.wide { width: calc(100% - 2.5rem); padding-top: 1.75rem; }
+  .main { width: calc(100% - 2.5rem); padding-top: 1.75rem; }
   .hero p { max-width: 19rem; }
   .choices { gap: .5rem; }
   .choice { padding: 1rem .375rem; min-height: 6.25rem; }
