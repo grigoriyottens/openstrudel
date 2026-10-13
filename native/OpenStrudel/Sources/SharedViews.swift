@@ -234,14 +234,3 @@ struct OpenStrudelMark: View {
 struct HomeBackground: View {
     var body: some View { AppTheme.canvas.ignoresSafeArea() }
 }
-
-/// One reading column for messages and the composer.
-let chatColumn: CGFloat = 680
-
-var controlTarget: CGFloat {
-    #if os(iOS)
-    44
-    #else
-    34
-    #endif
-}

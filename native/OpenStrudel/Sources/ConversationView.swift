@@ -110,7 +110,7 @@ struct ConversationView: View {
                             }
                             Color.clear.frame(height: 1).id("conversation-bottom")
                         }
-                        .frame(maxWidth: chatColumn, alignment: .leading)
+                        .frame(maxWidth: Layout.column, alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.horizontal, chatInset)
                         .padding(.top, 18)
@@ -179,7 +179,7 @@ struct ConversationView: View {
             if client.activeTelegramChat != nil {
                 Text(L("Здесь можно обсудить переписку с помощником. Ответ останется в OpenStrudel."))
                     .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                    .frame(maxWidth: chatColumn, alignment: .leading).padding(.horizontal, chatInset)
+                    .frame(maxWidth: Layout.column, alignment: .leading).padding(.horizontal, chatInset)
                     .accessibilityIdentifier("telegramReplyDestination")
             }
             Composer(draft: $draft, files: $pickedFiles, focused: $focused, contextID: draftKey, canSend: client.isConfigured && !client.connectionNeedsPairing && client.openAIAccount?.connected != false) { mode in
@@ -192,7 +192,7 @@ struct ConversationView: View {
                 focused = true
                 Task { await client.sendMessage(value, files: files, mode: mode) }
             }
-            .frame(maxWidth: chatColumn)
+            .frame(maxWidth: Layout.column)
             .padding(.horizontal, chatInset)
         }
         .task { draft = library.draft(for: draftKey); pickedFiles = library.fileDrafts[draftKey] ?? [] }

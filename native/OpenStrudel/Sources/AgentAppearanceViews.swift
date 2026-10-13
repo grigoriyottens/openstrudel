@@ -4,12 +4,13 @@ struct AgentAvatar: View {
     var appearance: AgentAppearance?
     let size: CGFloat
     var body: some View {
-        if let appearance, appearance.isValid {
-            Image("Agent-" + appearance.kind).resizable().scaledToFit()
-                .frame(width: size, height: size)
-                .hueRotation(appearance.hue)
-                .clipped().accessibilityHidden(true)
-        } else { OpenStrudelMark(size: size) }
+        // The main assistant is the app-icon bun without its tile, so every avatar is a character.
+        let valid = appearance?.isValid == true
+        Image(valid ? "Agent-" + appearance!.kind : "Agent-main")
+            .renderingMode(.original).resizable().interpolation(.high).scaledToFit()
+            .frame(width: size, height: size)
+            .hueRotation(valid ? appearance!.hue : .zero)
+            .clipped().accessibilityHidden(true)
     }
 }
 

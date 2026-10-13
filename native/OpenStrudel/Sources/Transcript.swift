@@ -134,7 +134,7 @@ struct MessageBubble: View {
                     .background(.primary.opacity(isUser ? 0.10 : 0.045), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     if let error = message.error { Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.warning).textSelection(.enabled) }
                     if !meta.isEmpty {
-                        Text(meta).font(.caption2).foregroundStyle(AppTheme.metadataText).monospacedDigit().padding(.horizontal, 6)
+                        Text(meta).font(.caption2).foregroundStyle(AppTheme.secondaryText).monospacedDigit().padding(.horizontal, 6)
                     }
                 }
                 if !isUser { Spacer(minLength: 12) }
