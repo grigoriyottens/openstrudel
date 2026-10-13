@@ -158,6 +158,8 @@ struct ComposerTextField: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let editor = notification.object as? NSTextView else { return }
             parent.text = editor.string
+            // The field may grow with this change; keep the caret in view once SwiftUI has resized it.
+            DispatchQueue.main.async { [weak editor] in editor?.scrollRangeToVisible(editor?.selectedRange() ?? NSRange()) }
         }
         func textDidBeginEditing(_ notification: Notification) { parent.focused = true }
         func textDidEndEditing(_ notification: Notification) { parent.focused = false }
