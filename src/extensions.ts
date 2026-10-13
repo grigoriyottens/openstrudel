@@ -12,7 +12,7 @@ import { HomeError } from "./home.js";
 export type ExtensionFile = { path: string; contentBase64: string; executable?: boolean };
 export type ExtensionItem = { id: string; name: string; description: string; kind: "skill" | "plugin"; enabled: boolean; removable: boolean; };
 export type ExtensionsState = { items: ExtensionItem[]; notice?: string; };
-export type ExtensionPreview = { kind: "skill" | "plugin"; name: string; description: string; files: number; bytes: number; digest: string; services: string[]; hasHooks: boolean; };
+export type ExtensionPreview = { kind: "skill" | "plugin"; name: string; description: string; files: number; bytes: number; digest: string; services: string[]; hasHooks: boolean; replaces?: string; };
 type Options = { home: string; cwd: string; sharedConfigPath?: string; reservedServers?: string[]; client: () => Promise<CodexRpc>; changed: () => Promise<void>; idle: () => boolean; };
 const execute = promisify(execFile);
 const changingScopes = new Set<string>();
@@ -152,15 +152,19 @@ export class CodexExtensions {
     atomicText(resolve(this.options.home, "openstrudel-extensions.toml"), stringify(saved));
     if (this.options.sharedConfigPath) atomicText(this.options.sharedConfigPath,stringify(saved));
   }
-  private async mutate<T>(operation: (transaction: { undo: Array<() => void>; commit: Array<() => void> }) => Promise<T>): Promise<T> {
+  private async mutate<T>(operation: (transaction: { undo: Array<() => void | Promise<void>>; commit: Array<() => void> }) => Promise<T>): Promise<T> {
     const scope=this.options.sharedConfigPath ?? this.configPath;
     if (this.busy || changingScopes.has(scope) || runningScopes.has(scope) || !this.options.idle()) throw new HomeError("Дождитесь завершения текущего ответа или обновления и повторите.", 409);
     if (this.options.sharedConfigPath && existsSync(scope) && JSON.stringify(readToml(scope)) !== JSON.stringify(extensionConfig(this.options.home))) throw new HomeError("Список изменился. Обновите его и повторите.",409);
-    const before = readFileSync(this.configPath, "utf8"), transaction = {undo:[] as Array<()=>void>,commit:[] as Array<()=>void>};
+    const before = readFileSync(this.configPath, "utf8"), transaction = {undo:[] as Array<()=>void|Promise<void>>,commit:[] as Array<()=>void>};
     this.busy = true;
     changingScopes.add(scope);
     try { const result = await operation(transaction); this.persist(); await this.options.changed(); for(const finish of transaction.commit) finish(); return result; }
-    catch (error) { for(const undo of transaction.undo.reverse()) undo(); atomicText(this.configPath, before); this.persist(); await this.options.changed().catch(() => undefined); throw error; }
+    catch (error) {
+      try { for(const undo of transaction.undo.reverse()) await undo(); }
+      finally { atomicText(this.configPath, before); this.persist(); await this.options.changed().catch(() => undefined); }
+      throw error;
+    }
     finally { this.busy = false; changingScopes.delete(scope); }
   }
   async list(): Promise<ExtensionsState> {
@@ -253,29 +257,52 @@ export class CodexExtensions {
     const plugins=existsSync(dir)?readdirSync(dir).filter(name=>existsSync(resolve(dir,name,".openstrudel-package.json"))).map(name=>({name,source:{source:"local",path:"./plugins/"+name},policy:{installation:"AVAILABLE",authentication:"ON_INSTALL"},category:"Productivity"})):[];
     atomicText(resolve(this.packageRoot,".agents/plugins/marketplace.json"),JSON.stringify({name:"openstrudel-local",plugins}));
   }
-  async install(input: unknown, expectedDigest: string) {
-    const preview=previewExtension(input);
+  private packagePath(preview: ExtensionPreview) { return resolve(preview.kind==="skill"?this.skillRoot:resolve(this.packageRoot,"plugins"),preview.name); }
+  preview(input: unknown): ExtensionPreview {
+    const preview=previewExtension(input), destination=this.packagePath(preview);
+    if (!existsSync(destination)) return preview;
+    const record=resolve(destination,".openstrudel-package.json");
+    if (lstatSync(destination).isSymbolicLink() || !existsSync(record) || lstatSync(record).isSymbolicLink()) throw new HomeError("Здесь уже есть папка с таким именем. Выберите другое название пакета.",409);
+    const installed=JSON.parse(readFileSync(record,"utf8"));
+    if(installed.name!==preview.name || installed.kind!==preview.kind || !/^[a-f0-9]{64}$/.test(installed.digest)) throw new HomeError("Этот пакет управляется вне OpenStrudel. Его файлы сохранены.",409);
+    return {...preview,replaces:installed.digest};
+  }
+  async install(input: unknown, expectedDigest: string, replaces?: string) {
+    const preview=this.preview(input);
     if (preview.digest!==expectedDigest) throw new HomeError("Пакет изменился. Откройте предварительный просмотр ещё раз.",409);
     await this.options.client();
     return this.mutate(async(transaction)=>{
-      const destination=resolve(preview.kind==="skill"?this.skillRoot:resolve(this.packageRoot,"plugins"),preview.name);
-      if (existsSync(destination)) throw new HomeError("Такое расширение уже установлено. Сначала удалите прежнюю версию.",409);
+      if (this.preview(input).replaces!==replaces) throw new HomeError("Установленная версия изменилась. Откройте предварительный просмотр ещё раз.",409);
+      const destination=this.packagePath(preview), plugin=preview.name+"@openstrudel-local";
+      const previousConfig=readToml(this.configPath);
+      const previousEnabled=preview.kind==="plugin" ? previousConfig.plugins?.[plugin]?.enabled !== false
+        : (previousConfig.skills?.config ?? []).find((s:any)=>s.path===resolve(destination,"SKILL.md"))?.enabled !== false;
       const stage=destination+".install-"+randomUUID(); mkdirSync(stage,{recursive:true,mode:0o700});
-      let installed=false;
       try {
         for(const [path,data] of safeFiles(input)){const file=resolve(stage,path);mkdirSync(dirname(file),{recursive:true,mode:0o700});writeFileSync(file,data,{mode:(input as ExtensionFile[]).find(f=>f.path===path)?.executable ? 0o700 : 0o600,flag:"wx"});}
-        atomicText(resolve(stage,".openstrudel-package.json"),JSON.stringify(preview)); renameSync(stage,destination); installed=true;
+        const {replaces:_,...record}=preview;
+        atomicText(resolve(stage,".openstrudel-package.json"),JSON.stringify(record));
+        const backup=replaces ? resolve(this.packageRoot,"rollback-"+randomUUID()) : undefined;
+        if(backup) {
+          mkdirSync(dirname(backup),{recursive:true,mode:0o700}); renameSync(destination,backup);
+          transaction.undo.push(async()=>{
+            renameSync(backup,destination); this.catalog();
+            if(preview.kind==="plugin") await this.pluginCLI(["add",plugin]);
+          });
+          transaction.commit.push(()=>rmSync(backup,{recursive:true,force:true}));
+        }
+        renameSync(stage,destination);
         transaction.undo.push(()=>{rmSync(destination,{recursive:true,force:true});this.catalog();});
         if(preview.kind==="plugin"){
-          this.catalog(); await this.pluginCLI(["marketplace","add",this.packageRoot]); await this.pluginCLI(["add",preview.name+"@openstrudel-local"]);
+          this.catalog(); await this.pluginCLI(["marketplace","add",this.packageRoot]); await this.pluginCLI(["add",plugin]);
+          if(!previousEnabled) { const config=readToml(this.configPath); config.plugins[plugin].enabled=false; atomicText(this.configPath,stringify(config)); }
         }else{
           const result=await (await this.options.client()).request("skills/list",{cwds:[this.options.cwd],forceReload:true});
           if (!(result.data ?? []).some((r:any)=>(r.skills ?? []).some((s:any)=>s.path===resolve(destination,"SKILL.md")))) throw new HomeError("Codex не смог загрузить навык. Проверьте заголовок SKILL.md.");
-          await (await this.options.client()).request("skills/config/write",{path:resolve(destination,"SKILL.md"),enabled:true});
+          await (await this.options.client()).request("skills/config/write",{path:resolve(destination,"SKILL.md"),enabled:previousEnabled});
         }
         return preview;
-      }catch(error){if(installed)rmSync(destination,{recursive:true,force:true});this.catalog();throw error;}
-      finally{if(existsSync(stage))rmSync(stage,{recursive:true,force:true});}
+      }finally{if(existsSync(stage))rmSync(stage,{recursive:true,force:true});}
     });
   }
   async change(id: string, enabled?: boolean) {

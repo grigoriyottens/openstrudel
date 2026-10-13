@@ -288,6 +288,7 @@ struct EmployeeProfile: Codable, Identifiable, Hashable {
 struct ProfilesEnvelope: Decodable {
     let profiles: [EmployeeProfile]
     let importedConversations: [ImportedConversation]?
+    var telegram: TelegramStatus? = nil
 }
 
 struct ImportedConversation: Decodable, Identifiable, Equatable {
@@ -510,6 +511,7 @@ struct ExtensionPreview: Decodable {
     let digest: String
     let services: [String]
     let hasHooks: Bool
+    let replaces: String?
 }
 struct ConnectionLink: Decodable { let url: String? }
 struct ChatInteraction: Decodable, Identifiable, Equatable {

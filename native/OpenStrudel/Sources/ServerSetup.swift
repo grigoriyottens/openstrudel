@@ -6,12 +6,13 @@ import Security
 import Darwin
 
 enum ServerSetupFailure: Error, LocalizedError, Equatable {
-    case address, credentials, hostKey, connection, localNetwork, authentication, unsupportedSystem, resources, administrator
+    case address, credentials, privateKey, hostKey, connection, localNetwork, authentication, unsupportedSystem, resources, administrator
     case existingInstallation, portBusy, storage, installer, installation, identity, waiting, runtime, serviceUnreachable, sharedServer
     var errorDescription: String? {
         switch self {
         case .address: L("Enter a server address, sign-in name and a port between 1 and 65535.")
-        case .credentials: L("Enter the password or choose a private SSH key. Add its passphrase if it has one.")
+        case .credentials: L("Enter the password or add a private SSH key. Add its passphrase if it has one.")
+        case .privateKey: L("Add the complete private key, including its BEGIN and END lines. Public keys cannot be used to sign in.")
         case .hostKey: L("The server's identity could not be verified. Check the address and its fingerprint with your provider.")
         case .connection: L("The server did not respond. Check its address, SSH port and internet connection, then try again.")
         case .localNetwork: L("Allow OpenStrudel to access the local network in System Settings → Privacy & Security → Local Network, then try again.")
@@ -89,6 +90,29 @@ struct ServerAccess: Sendable {
     func validate() throws {
         guard secret.utf8.count < 2048, !secret.contains("\n"), !secret.contains("\r"), !secret.contains("\0"),
               privateKey.map({ !$0.isEmpty && $0.count <= 131072 }) ?? !password.isEmpty else { throw ServerSetupFailure.credentials }
+        if let privateKey { _ = try SSHPrivateKey.normalized(privateKey) }
+    }
+}
+
+enum SSHPrivateKey {
+    /// Both clipboard and file imports use the same bounded PEM envelope.
+    /// OpenSSH verifies the actual key and passphrase when connecting.
+    static func normalized(_ data: Data) throws -> Data {
+        guard data.count <= 131072, let raw = String(data: data, encoding: .utf8), !raw.contains("\0") else { throw ServerSetupFailure.privateKey }
+        let text = raw.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{feff}")))
+        let lines = text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        let labels = ["OPENSSH PRIVATE KEY", "RSA PRIVATE KEY", "EC PRIVATE KEY", "DSA PRIVATE KEY", "PRIVATE KEY", "ENCRYPTED PRIVATE KEY"]
+        guard lines.count >= 3, let label = labels.first(where: { lines.first == "-----BEGIN \($0)-----" }),
+              lines.last == "-----END \(label)-----" else { throw ServerSetupFailure.privateKey }
+        var payload: [String] = []
+        for line in lines.dropFirst().dropLast() where !line.isEmpty {
+            if payload.isEmpty && (line == "Proc-Type: 4,ENCRYPTED" || line.hasPrefix("DEK-Info: ")) { continue }
+            guard line.range(of: "^[A-Za-z0-9+/=]+$", options: .regularExpression) != nil else { throw ServerSetupFailure.privateKey }
+            payload.append(line)
+        }
+        guard let bytes = Data(base64Encoded: payload.joined()), bytes.count >= 32 else { throw ServerSetupFailure.privateKey }
+        return Data((lines.joined(separator: "\n") + "\n").utf8)
     }
 }
 
@@ -189,7 +213,7 @@ final class SSHPrivateSession {
             try Data("#!/bin/sh\nIFS= read -r -t 10 answer < \"$OPENSTRUDEL_ASKPASS_PIPE\" || exit 1\nprintf '%s\\n' \"$answer\"\n".utf8).write(to: helper)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: helper.path)
             if let key = access.privateKey, let keyFile {
-                guard FileManager.default.createFile(atPath: keyFile, contents: key, attributes: [.posixPermissions: 0o600]) else { throw ServerSetupFailure.storage }
+                guard FileManager.default.createFile(atPath: keyFile, contents: try SSHPrivateKey.normalized(key), attributes: [.posixPermissions: 0o600]) else { throw ServerSetupFailure.storage }
             }
         } catch { close(); throw error }
     }

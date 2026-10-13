@@ -3,6 +3,26 @@ import Testing
 
 @Suite("Server setup", .serialized)
 struct ServerSetupTests {
+    @Test func pastedKeysAndFilesShareNormalizationWithoutRetainingSecrets() throws {
+        let payload = Data(repeating: 3, count: 64).base64EncodedString()
+        let canonical = "-----BEGIN OPENSSH PRIVATE KEY-----\n\(payload)\n-----END OPENSSH PRIVATE KEY-----\n"
+        let pasted = "\u{feff} \r\n" + canonical.replacingOccurrences(of: "\n", with: "\r\n") + "  "
+        #expect(try SSHPrivateKey.normalized(Data(pasted.utf8)) == Data(canonical.utf8))
+        let session = try SSHPrivateSession(access: ServerAccess(privateKey: Data(pasted.utf8), passphrase: "fixture-passphrase"))
+        let keyFile = try #require(session.keyFile)
+        #expect(try Data(contentsOf: URL(fileURLWithPath: keyFile)) == Data(canonical.utf8))
+        #expect(try FileManager.default.attributesOfItem(atPath: keyFile)[.posixPermissions] as? Int == 0o600)
+        #expect(!session.environment.values.contains("fixture-passphrase"))
+        session.close()
+        #expect(!FileManager.default.fileExists(atPath: keyFile))
+    }
+
+    @Test func rejectsPublicIncompleteAndOversizedKeysBeforeConnecting() {
+        for value in ["ssh-ed25519 AAAA public@example", "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA", "-----BEGIN PRIVATE KEY-----\ninvalid!\n-----END PRIVATE KEY-----", String(repeating: "a", count: 131073)] {
+            #expect(throws: ServerSetupFailure.self) { try SSHPrivateKey.normalized(Data(value.utf8)) }
+        }
+    }
+
     @Test func targetRejectsShellAndSSHOptions() throws {
         let target = try ServerTarget(host: "  server.example.com ", user: "ubuntu", port: 2222)
         #expect(target.host == "server.example.com")
@@ -239,11 +259,17 @@ private actor ServerSetupTestTransport: ServerSSHTransport {
 
 @Suite("Real SSH setup", .serialized, .enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_SSH_INTEGRATION"] == "1"))
 struct ServerSSHIntegrationTests {
-    private struct Fixture: Decodable { let host: String; let port: Int; let user: String; let key: String; let wrongKey: String; let hostKey: String }
-    private func fixture() throws -> (ServerTarget, SSHHostKey, ServerAccess, ServerAccess) {
+    private struct Fixture: Decodable { let host: String; let port: Int; let user: String; let key: String; let wrongKey: String; let hostKey: String; let encryptedKey: String?; let passphrase: String? }
+    private func configuration() throws -> Fixture {
+        if let directory = ProcessInfo.processInfo.environment["OPENSTRUDEL_SSH_FIXTURE_DIRECTORY"] {
+            return try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: URL(fileURLWithPath: directory).appending(path: "fixture.json")))
+        }
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { root.deleteLastPathComponent() }
-        let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: root.appending(path: ".data/remaining-work-2026-10-12/ssh/fixture.json")))
+        return try JSONDecoder().decode(Fixture.self, from: Data(contentsOf: root.appending(path: ".data/remaining-work-2026-10-12/ssh/fixture.json")))
+    }
+    private func fixture() throws -> (ServerTarget, SSHHostKey, ServerAccess, ServerAccess) {
+        let fixture = try configuration()
         let target = try ServerTarget(host: fixture.host, user: fixture.user, port: fixture.port)
         let line = try String(contentsOfFile: fixture.hostKey, encoding: .utf8).split(whereSeparator: \.isWhitespace)
         let key = try SSHHostKey(line: "\(target.knownHostsName) \(line[0]) \(line[1])", target: target)
@@ -264,12 +290,23 @@ struct ServerSSHIntegrationTests {
         await #expect(throws: ServerSetupFailure.authentication) {
             _ = try await SSHServerTransport().run(target: target, key: key, access: wrong, input: Data("echo MUST_NOT_RUN\n".utf8))
         }
-        var root = URL(fileURLWithPath: #filePath)
-        for _ in 0..<4 { root.deleteLastPathComponent() }
-        let line = try String(contentsOf: root.appending(path: ".data/remaining-work-2026-10-12/ssh/wrong.pub"), encoding: .utf8).split(whereSeparator: \.isWhitespace)
+        let line = try String(contentsOfFile: configuration().wrongKey + ".pub", encoding: .utf8).split(whereSeparator: \.isWhitespace)
         let changed = try SSHHostKey(line: "\(target.knownHostsName) \(line[0]) \(line[1])", target: target)
         await #expect(throws: ServerSetupFailure.hostKey) {
             _ = try await SSHServerTransport().run(target: target, key: changed, access: access, input: Data("echo MUST_NOT_RUN\n".utf8))
+        }
+    }
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_SSH_FIXTURE_DIRECTORY"] != nil))
+    func pastedEncryptedKeyAuthenticatesWithoutSavingItsPassphrase() async throws {
+        let config = try configuration()
+        let raw = try String(contentsOfFile: #require(config.encryptedKey), encoding: .utf8)
+        let normalized = try SSHPrivateKey.normalized(Data(("\n" + raw.replacingOccurrences(of: "\n", with: "\r\n") + "  ").utf8))
+        let (target, hostKey, _, _) = try fixture()
+        let access = ServerAccess(privateKey: normalized, passphrase: try #require(config.passphrase))
+        let result = try await SSHServerTransport().run(target: target, key: hostKey, access: access, input: Data("printf 'authenticated'\n".utf8))
+        #expect(String(decoding: result, as: UTF8.self) == "authenticated")
+        await #expect(throws: ServerSetupFailure.authentication) {
+            _ = try await SSHServerTransport().run(target: target, key: hostKey, access: ServerAccess(privateKey: normalized, passphrase: "wrong-fixture-passphrase"), input: Data("echo MUST_NOT_RUN\n".utf8))
         }
     }
     @Test func passwordAndEncryptedKeyAuthenticateToActualUbuntu() async throws {

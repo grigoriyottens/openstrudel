@@ -4,6 +4,36 @@ import Testing
 
 @Suite(.serialized)
 @MainActor struct CatalogueTests {
+    @Test func telegramDiscoveryRemembersTheConversationPerEmployeeAndClearsReassignedChats() async throws {
+        let fixture = CatalogueFixture()
+        let (client, session, defaults, suite) = makeClient(fixture)
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite) }
+        await client.load()
+        #expect(client.employeeTelegramChats.isEmpty)
+        fixture.telegram = #"{"configured":true,"running":true,"linkedChats":["-42"],"chats":[{"chatId":"-42","title":"Team","conversationId":"group-chat","profileId":"employee","allowedSenders":[]}] }"#
+        await client.refreshCatalogue()
+        #expect(client.employeeTelegramChats.isEmpty) // Root and specialist audiences remain separate.
+        await client.selectProfile("employee")
+        #expect(client.employeeTelegramChats.map(\.title) == ["Team"])
+        await client.selectChat("group-chat")
+        #expect(fixture.requests.last?.url?.path == "/v1/conversations/group-chat")
+        await client.selectProfile(nil)
+        #expect(client.selectedChatID == nil)
+        await client.selectProfile("employee")
+        #expect(client.selectedChatID == "group-chat")
+        await client.selectChat(nil)
+        await client.selectProfile(nil)
+        await client.selectProfile("employee")
+        #expect(client.selectedChatID == nil) // Choosing the app chat is remembered too.
+        await client.selectChat("group-chat")
+        fixture.telegram = fixture.telegram?.replacingOccurrences(of: #""profileId":"employee""#, with: #""profileId":null"#)
+        await client.refreshCatalogue()
+        #expect(client.selectedChatID == nil)
+        #expect(client.employeeTelegramChats.isEmpty)
+        await client.selectProfile(nil)
+        #expect(client.employeeTelegramChats.map(\.title) == ["Team"])
+    }
+
     @Test func unchangedCatalogueDoesNotPublishAndADeletionOnTheHostClearsTheSelection() async throws {
         let fixture = CatalogueFixture()
         let (client, session, defaults, suite) = makeClient(fixture)
@@ -163,14 +193,16 @@ import Testing
     var accountDelay: Duration?
     var catalogueDelay: Duration?
     var catalogueStatus: Int?
+    var telegram: String?
     func respond(_ request: URLRequest) async -> (Int, Data, [String: String]) {
         requests.append(request)
         let path = request.url!.path
         if request.httpMethod == "DELETE" { deleted = true; return (200, Data(#"{"ok":true}"#.utf8), [:]) }
         if path == "/v1/profiles" {
             if let catalogueStatus { return (catalogueStatus, Data(#"{"error":"revoked"}"#.utf8), [:]) }
-            let etag = deleted ? "\"v2\"" : "\"v1\""
-            let body = deleted ? #"{"profiles":[]}"# : #"{"profiles":[{"id":"employee","name":"Тест","instructions":"","capabilities":[],"createdAt":"2026-10-09T00:00:00Z"}]}"#
+            let etag = telegram.map { "\"telegram-\($0.hashValue)\"" } ?? (deleted ? "\"v2\"" : "\"v1\"")
+            var body = deleted ? #"{"profiles":[]}"# : #"{"profiles":[{"id":"employee","name":"Тест","instructions":"","capabilities":[],"createdAt":"2026-10-09T00:00:00Z"}]}"#
+            if let telegram { body = String(body.dropLast()) + ",\"telegram\":" + telegram + "}" }
             if let catalogueDelay { try? await Task.sleep(for: catalogueDelay) }
             if !ignoreETag && request.value(forHTTPHeaderField: "If-None-Match") == etag { return (304, Data(), ["ETag": etag]) }
             return (200, Data(body.utf8), ["ETag": etag])
@@ -180,7 +212,7 @@ import Testing
         switch path {
         case "/health": body = #"{"ok":true,"homeId":"home-fixture"}"#
         case "/v1/account": body = #"{"account":{"connected":true,"managed":true},"canManage":true}"#
-        case "/v1/integrations": body = #"{"telegram":{"configured":false,"running":false,"linkedChats":[]}}"#
+        case "/v1/integrations": body = "{\"telegram\":" + (telegram ?? #"{"configured":false,"running":false,"linkedChats":[]}"#) + "}"
         default: body = #"{"conversation":{"id":"conversation","channel":"api","createdAt":"2026-10-09","updatedAt":"2026-10-09"},"messages":[],"interactions":[]}"#
         }
         return (200, Data(body.utf8), [:])

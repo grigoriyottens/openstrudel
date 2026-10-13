@@ -12,6 +12,21 @@ import { MockCodexEngine } from "../src/codex.js";
 import { hostingOrigin } from "../src/hosting-origin.js";
 
 describe("CLI recovery after a lost response", () => {
+  it("resolves root service commands to the default conversation on an independent runtime",async()=>{
+    const root=await mkdtemp(join(tmpdir(),"strudel-cli-services-"));
+    const runtime=new OpenStrudelRuntime({rootDirectory:root,dbPath:":memory:",apiToken:"test-owner",engine:new MockCodexEngine(),startTelegram:false});
+    const address=await runtime.api.listen("127.0.0.1",0),config=join(root,"connection.json");
+    await writeFile(config,JSON.stringify({url:`http://127.0.0.1:${address.port}`,token:"test-owner"}),{mode:0o600});
+    try {
+      for(const extra of [[],["--agent","main"]]) {
+        const result=await new Promise<{code:number|null;out:string;err:string}>((resolve,reject)=>{
+          const child=spawn(process.execPath,["--import",import.meta.resolve("tsx"),fileURLToPath(new URL("../src/cli.ts",import.meta.url)),"services","list","--json",...extra],{cwd:root,env:{...process.env,OPENSTRUDEL_CLIENT_CONFIG:config},stdio:"pipe"});
+          let out="",err="";child.stdout.on("data",b=>out+=b);child.stderr.on("data",b=>err+=b);child.once("error",reject);child.once("exit",code=>resolve({code,out,err}));child.stdin.end();
+        });
+        expect(result.code,result.err).toBe(0); expect(JSON.parse(result.out).connections).toBeInstanceOf(Array);
+      }
+    } finally {await runtime.stop();await rm(root,{recursive:true,force:true});}
+  });
   it("selects approval mode on the intended device and requires an explicit approve-all flag", async () => {
     const root = await mkdtemp(join(tmpdir(), "strudel-cli-approvals-"));
     const requests: {path:string;body:unknown}[]=[];

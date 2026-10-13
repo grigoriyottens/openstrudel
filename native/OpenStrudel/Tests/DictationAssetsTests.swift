@@ -2,6 +2,36 @@ import Foundation
 import Testing
 
 @Suite("Optional local dictation") @MainActor struct DictationAssetsTests {
+    @MainActor final class ControlledBackend: DictationAssetBackend {
+        var ready = false
+        var report: (@MainActor @Sendable (Double?) -> Void)?
+        var complete: CheckedContinuation<Void, Never>?
+        func installed() async throws -> Bool { ready }
+        func install(progress: @escaping @MainActor @Sendable (Double?) -> Void) async throws {
+            report = progress
+            await withCheckedContinuation { complete = $0 }
+            ready = true
+        }
+        func cancel() {}
+    }
+
+    @Test func delayedDownloadProgressCannotRegressOrChangeTheReadyState() async throws {
+        let backend = ControlledBackend()
+        let assets = DictationAssets(backend: backend)
+        await assets.check()
+        assets.download()
+        for _ in 0..<100 where backend.complete == nil { await Task.yield() }
+        let complete = try #require(backend.complete)
+        backend.report?(0.8)
+        backend.report?(0.2)
+        #expect(assets.progress == 0.8)
+        complete.resume()
+        for _ in 0..<100 where assets.state == .downloading { await Task.yield() }
+        #expect(assets.state == .ready)
+        backend.report?(0.9)
+        #expect(assets.progress == nil)
+    }
+
     @MainActor final class Backend: DictationAssetBackend {
         var ready = false
         var downloads = 0

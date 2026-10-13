@@ -48,8 +48,9 @@ enum DictationFailure: LocalizedError {
         work = Task {
             do {
                 try await backend.install() { [weak self] progress in
-                    guard let self, self.generation == id else { return }
-                    self.progress = progress
+                    guard let self, self.generation == id, self.state == .downloading,
+                          let progress, progress.isFinite else { return }
+                    self.progress = max(self.progress ?? 0, min(1, max(0, progress)))
                 }
                 try Task.checkCancellation()
                 guard id == generation else { return }

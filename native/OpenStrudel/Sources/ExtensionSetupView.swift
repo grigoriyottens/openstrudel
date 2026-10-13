@@ -169,8 +169,8 @@ struct ExtensionSetupView: View {
                         .font(.caption).foregroundStyle(AppTheme.secondaryText)
                     ForEach(preview.services, id: \.self) { Label($0, systemImage: "link") }
                     if preview.hasHooks { Text(L("В пакете есть автоматические действия (hooks). Проверьте, что доверяете его автору.")).font(.callout) }
-                    Button(L("Установить")) { perform {
-                        try await client.installExtension(files, digest: preview.digest, for: scope.id)
+                    Button(preview.replaces == nil ? L("Установить") : L("Обновить")) { perform {
+                        try await client.installExtension(files, digest: preview.digest, replacing: preview.replaces, for: scope.id)
                         isPresented = false
                     } }.buttonStyle(.borderedProminent).disabled(busy)
                     Button(L("Выбрать другой пакет")) { self.preview = nil; files = []; importing = true }.disabled(busy)

@@ -48,11 +48,15 @@ export class CodexEngineAdapter implements CodexEngine {
     return this.extensionManager ??= new CodexExtensions({home:this.codexHome,cwd:this.options.workingDirectory,sharedConfigPath:this.options.sharedExtensionsPath,
       reservedServers:[...(this.options.reservedServers ?? []),...Object.keys(this.options.telegramServers ?? {}),"codex_apps","codex_app","node_repl"],
       client:()=>this.client(), idle:()=>this.running===0, changed:async()=>{
-        const rpc=await this.client();
-        await rpc.request("config/mcpServer/reload",{});
-        for(const threadId of this.loadedConfig.keys())await rpc.request("thread/unsubscribe",{threadId});
-        this.loadedConfig.clear(); this.connectionCache=undefined; this.connectionLoading=undefined;
-        // Keep identity history so a capability update doesn't inject SOUL again.
+        // Native unsubscribe unloads only after an inactivity grace period.
+        // Reloading meanwhile reapplies old per-thread approval overrides and
+        // can recreate a removed MCP without its transport. Reopen this idle,
+        // audience-scoped app-server from the complete new config instead.
+        // Codex's persisted threads keep their history; SOUL is not reinjected.
+        const identities=new Map(this.loaded);
+        this.close();
+        try { await this.client(); }
+        finally { for(const [id,instructions] of identities)this.loaded.set(id,instructions); }
       }});
   }
 

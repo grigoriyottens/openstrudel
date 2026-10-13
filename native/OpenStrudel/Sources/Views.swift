@@ -298,7 +298,7 @@ private struct Sidebar: View {
                             }
                             if showsMain {
                                 SidebarRow(name: "OpenStrudel", subtitle: library.hasOtherDevices ? source.displayName : L("Помощник для ваших задач"),
-                                           selected: source === client && source.selectedProfileID == nil && source.selectedChatID == nil, appearance: nil) {
+                                           selected: source === client && source.selectedProfileID == nil, appearance: nil) {
                                     closeSearch(); Task { await library.select(source, profile: nil) }
                                 }
                             }
@@ -307,7 +307,7 @@ private struct Sidebar: View {
                             }
                             ForEach(people) { profile in
                                 SidebarRow(name: profile.name, subtitle: profile.previewText.isEmpty ? profile.roleText : profile.previewText,
-                                           selected: source === client && source.selectedProfileID == profile.id && source.selectedChatID == nil, appearance: profile.resolvedAppearance) {
+                                           selected: source === client && source.selectedProfileID == profile.id, appearance: profile.resolvedAppearance) {
                                     closeSearch()
                                     focusedEmployee = source.id + profile.id
                                     Task { await library.select(source, profile: profile.id) }
@@ -469,6 +469,11 @@ private struct ConversationView: View {
             #if os(macOS)
             ConversationHeader { showBotDetails = true }
             #endif
+
+            if !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
+                ConversationSources()
+                    .padding(.horizontal, chatInset).padding(.vertical, 8)
+            }
 
             if client.connectionNeedsPairing || client.homeUnreachable || client.health == nil {
                 HStack(spacing: 10) {
@@ -690,8 +695,7 @@ private struct ConversationView: View {
             EmployeePicker(isPresented: $showEmployees).environmentObject(client)
         }
         .sheet(isPresented: $showBotDetails) {
-            if client.activeTelegramChat != nil { TelegramChatsView() }
-            else if let profile = client.activeProfile {
+            if let profile = client.activeProfile {
                 BotDetailsView(profile: profile).environmentObject(client)
             } else {
                 NavigationStack {
@@ -801,19 +805,7 @@ private struct ConversationTitle: View {
     let openEmployee: () -> Void
     var body: some View {
         VStack(spacing: 2) {
-            if let group = client.activeTelegramChat {
-                Button(action: openEmployee) {
-                    HStack(spacing: 8) {
-                        Image(systemName: group.isGroup ? "person.2" : "bubble.left").foregroundStyle(AppTheme.accent)
-                        VStack(spacing: 2) {
-                            Text(group.title).font(.headline).lineLimit(1)
-                            Text(group.enabled == false ? L("Telegram · бот на паузе") : "Telegram")
-                                .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                        }
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    }.frame(minHeight: controlTarget).contentShape(Rectangle())
-                }.buttonStyle(.plain).accessibilityLabel("Telegram · " + group.title)
-            } else if !client.isEmployeeDraft {
+            if !client.isEmployeeDraft {
                 Button(action: openEmployee) {
                     HStack(spacing: 7) {
                         identity
@@ -839,6 +831,44 @@ private struct ConversationTitle: View {
     @ViewBuilder private var identity: some View {
         AgentAvatar(appearance: client.activeAppearance, size: 30)
         Text(client.activeAgentName).font(.headline).lineLimit(1)
+    }
+}
+
+/// These are views of existing conversations, not new employee bindings.
+/// Keep each audience's transcript, tools and draft in its original scope.
+private struct ConversationSources: View {
+    @EnvironmentObject private var client: HomeClient
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                source(title: L("В приложении"), symbol: "bubble.left", conversation: nil)
+                ForEach(client.employeeTelegramChats) { chat in
+                    source(title: chat.title, symbol: "paperplane", conversation: chat.conversationId,
+                           detail: chat.enabled == false ? L("Telegram · бот на паузе") : "Telegram")
+                }
+            }.padding(.horizontal, 2)
+        }
+        .scrollIndicators(.hidden)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityIdentifier("conversationSources")
+    }
+
+    private func source(title: String, symbol: String, conversation: String?, detail: String? = nil) -> some View {
+        let selected = client.selectedChatID == conversation
+        return Button { Task { await client.selectChat(conversation) } } label: {
+            Label(title, systemImage: symbol)
+                .font(.subheadline.weight(selected ? .semibold : .regular))
+                .padding(.horizontal, 12)
+                .frame(minHeight: controlTarget)
+                .contentShape(Capsule())
+                .background(selected ? Color.primary.opacity(0.10) : Color.clear, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selected ? Color.primary : AppTheme.secondaryText)
+        .accessibilityLabel(detail.map { title + ", " + $0 } ?? title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier(conversation.map { "conversationSource-" + $0 } ?? "conversationSource-app")
+        .help(detail.map { title + " · " + $0 } ?? title)
     }
 }
 
@@ -1480,12 +1510,12 @@ private struct EmployeePicker: View {
                     if showsMain || !people.isEmpty {
                     Section {
                         if showsMain {
-                            EmployeePickerRow(name: "OpenStrudel", subtitle: source.displayName, selected: source === client && source.selectedProfileID == nil && source.selectedChatID == nil, appearance: nil) {
+                            EmployeePickerRow(name: "OpenStrudel", subtitle: source.displayName, selected: source === client && source.selectedProfileID == nil, appearance: nil) {
                                 Task { await library.select(source, profile: nil); dismiss() }
                             }
                         }
                         ForEach(people) { profile in
-                            EmployeePickerRow(name: profile.name, subtitle: profile.previewText.isEmpty ? profile.roleText : profile.previewText, selected: source === client && source.selectedProfileID == profile.id && source.selectedChatID == nil, appearance: profile.resolvedAppearance) {
+                            EmployeePickerRow(name: profile.name, subtitle: profile.previewText.isEmpty ? profile.roleText : profile.previewText, selected: source === client && source.selectedProfileID == profile.id, appearance: profile.resolvedAppearance) {
                                 Task { await library.select(source, profile: profile.id); dismiss() }
                             }
                             .accessibilityIdentifier("employee-" + profile.id)

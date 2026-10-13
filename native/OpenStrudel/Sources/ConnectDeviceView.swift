@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
 
 /// Existing devices and newly installed servers both join the same library.
@@ -198,8 +199,8 @@ private struct OwnServerSetupView: View {
                 let scoped = url.startAccessingSecurityScopedResource(); defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                 let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
                 guard size > 0, size <= 131072 else { throw ServerSetupFailure.credentials }
-                key = try Data(contentsOf: url); keyName = url.lastPathComponent; localError = nil
-            } catch { localError = ServerSetupFailure.credentials.localizedDescription }
+                key = try SSHPrivateKey.normalized(Data(contentsOf: url)); keyName = url.lastPathComponent; passphrase = ""; localError = nil
+            } catch { key = nil; keyName = nil; localError = ServerSetupFailure.privateKey.localizedDescription }
         }
     }
 
@@ -247,8 +248,21 @@ private struct OwnServerSetupView: View {
                 Text(L("SSH key")).tag(true)
             }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("serverAccessMethod")
             if useKey {
-                Button(keyName ?? L("Choose private key…")) { choosingKey = true }.buttonStyle(.glass)
-                SecureField(L("Key passphrase, if any"), text: $passphrase).textFieldStyle(.roundedBorder)
+                HStack(spacing: 12) {
+                    Button(L("Choose private key…")) { choosingKey = true }.buttonStyle(.glass)
+                        .accessibilityIdentifier("chooseSSHKey")
+                    Button(L("Paste key")) {
+                        do {
+                            guard let text = NSPasteboard.general.string(forType: .string) else { throw ServerSetupFailure.privateKey }
+                            key = try SSHPrivateKey.normalized(Data(text.utf8)); keyName = L("Pasted SSH key"); passphrase = ""; localError = nil
+                        } catch { key = nil; keyName = nil; localError = ServerSetupFailure.privateKey.localizedDescription }
+                    }.buttonStyle(.glass).accessibilityIdentifier("pasteSSHKey")
+                }
+                if let keyName {
+                    Label(keyName, systemImage: "checkmark.circle").font(.callout).lineLimit(1).truncationMode(.middle)
+                        .accessibilityIdentifier("selectedSSHKey")
+                }
+                SecureField(L("Key passphrase, if any"), text: $passphrase).textFieldStyle(.roundedBorder).accessibilityIdentifier("sshKeyPassphrase")
             } else {
                 SecureField(L("Пароль"), text: $password).textFieldStyle(.roundedBorder).accessibilityIdentifier("serverPassword")
             }

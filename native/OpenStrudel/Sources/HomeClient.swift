@@ -337,6 +337,12 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     var telegramGroups: [TelegramChat] { (telegram?.chats ?? []).filter { $0.isGroup && $0.conversationId != nil } }
+    var employeeTelegramChats: [TelegramChat] {
+        (telegram?.chats ?? []).filter { $0.conversationId != nil && $0.profileId == selectedProfileID }
+    }
+    private func conversationSelectionKey(_ profileID: String?) -> String {
+        "openstrudel.conversationSelection." + HomeDrafts.key(home: baseURLString, profile: profileID, chat: nil)
+    }
     var activeTelegramChat: TelegramChat? { (telegram?.chats ?? []).first { selectedChatID != nil && $0.conversationId == selectedChatID } }
     var activeTelegramGroup: TelegramChat? { activeTelegramChat?.isGroup == true ? activeTelegramChat : nil }
 
@@ -622,6 +628,16 @@ final class HomeClient: ObservableObject, Identifiable {
             guard catalogue == catalogueGeneration else { catalogueETag = nil; return nil }
             if !data.isEmpty {
                 let loaded = try decoder.decode(ProfilesEnvelope.self, from: data)
+                if let status = loaded.telegram {
+                    telegram = status
+                    // A removed/reassigned chat must not stay selected under its old employee.
+                    if let selectedChatID, !(loaded.importedConversations ?? importedConversations).contains(where: { $0.id == selectedChatID }),
+                       !employeeTelegramChats.contains(where: { $0.conversationId == selectedChatID }) {
+                        self.selectedChatID = nil; conversationID = nil
+                        resetHistory(); messages = []; interactions = []; schedules = []; connections = []
+                        defaults.removeObject(forKey: conversationSelectionKey(selectedProfileID))
+                    }
+                }
                 if profiles != loaded.profiles {
                     profiles = loaded.profiles
                     defaults.set(try? JSONEncoder().encode(profiles), forKey: "openstrudel.employeeCatalog")
@@ -923,6 +939,8 @@ final class HomeClient: ObservableObject, Identifiable {
             defaults.set(selectedProfileID, forKey: "openstrudel.profileID")
         }
         selectedChatID = id
+        if let id { defaults.set(id, forKey: conversationSelectionKey(selectedProfileID)) }
+        else { defaults.removeObject(forKey: conversationSelectionKey(selectedProfileID)) }
         conversationID = nil; connections = []; connectionNotice = nil; schedules = []
         resetHistory()
         messages = []
@@ -1012,9 +1030,9 @@ final class HomeClient: ObservableObject, Identifiable {
         return try await request("/v1/extensions/preview", method: "POST", body: JSONEncoder().encode(Upload(files: files, conversationId: scope)))
     }
 
-    func installExtension(_ files: [ExtensionFile], digest: String, for scope: String) async throws {
-        struct Upload: Encodable { let files: [ExtensionFile]; let digest: String; let conversationId: String }
-        let _: ExtensionPreview = try await request("/v1/extensions/install", method: "POST", body: JSONEncoder().encode(Upload(files: files, digest: digest, conversationId: scope)))
+    func installExtension(_ files: [ExtensionFile], digest: String, replacing: String? = nil, for scope: String) async throws {
+        struct Upload: Encodable { let files: [ExtensionFile]; let digest: String; let replaces: String?; let conversationId: String }
+        let _: ExtensionPreview = try await request("/v1/extensions/install", method: "POST", body: JSONEncoder().encode(Upload(files: files, digest: digest, replaces: replacing, conversationId: scope)))
     }
 
     func addMCP(name: String, url: String, token: String, for scope: String) async throws {
@@ -1042,7 +1060,8 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     func selectProfile(_ profileID: String?) async {
-        selectedChatID = nil
+        let remembered = defaults.string(forKey: conversationSelectionKey(profileID))
+        selectedChatID = (telegram?.chats ?? []).first { $0.profileId == profileID && $0.conversationId == remembered }?.conversationId
         conversationID = nil; connections = []; connectionNotice = nil; schedules = []; telegramLink = nil
         resetHistory()
         messages = []
