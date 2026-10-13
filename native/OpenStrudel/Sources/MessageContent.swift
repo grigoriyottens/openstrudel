@@ -133,10 +133,10 @@ enum ParagraphDirection {
 
 private struct BlockDirection: ViewModifier {
     @Environment(\.layoutDirection) private var interface
-    let text: String
+    let direction: LayoutDirection?
 
     func body(content: Content) -> some View {
-        content.environment(\.layoutDirection, ParagraphDirection.of(text) ?? interface)
+        content.environment(\.layoutDirection, direction ?? interface)
     }
 }
 
@@ -155,7 +155,10 @@ private struct ChatSurface: ViewModifier {
 
 extension View {
     /// Lays a block out in its own reading direction; text without letters follows the interface.
-    func paragraphDirection(of text: String) -> some View { modifier(BlockDirection(text: text)) }
+    func paragraphDirection(of text: String) -> some View { modifier(BlockDirection(direction: ParagraphDirection.of(text))) }
+
+    /// Lays a block out in a known reading direction; none follows the interface.
+    func paragraphDirection(_ direction: LayoutDirection?) -> some View { modifier(BlockDirection(direction: direction)) }
 
     /// A transcript fill. Increased contrast adds a 1-pt separator edge, because a fill alone is too faint.
     func chatSurface(_ fill: Color, radius: CGFloat) -> some View { modifier(ChatSurface(fill: fill, radius: radius)) }

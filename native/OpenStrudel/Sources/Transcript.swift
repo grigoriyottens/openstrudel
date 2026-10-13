@@ -97,6 +97,9 @@ struct MessageBubble: View {
     let bubbleWidth: CGFloat
     /// A time heading above already shows this message's time.
     var headed = false
+    /// The direction of the employee's text. The person's bubbles sit on the opposite edge,
+    /// so the two sides never start on the same edge in either interface direction.
+    var replySide: LayoutDirection?
 
     private var isInbound: Bool { message.direction == "inbound" }
     private var fromSomeoneElse: Bool { isInbound && shared }
@@ -136,6 +139,7 @@ struct MessageBubble: View {
         }
         .frame(maxWidth: bubbleWidth, alignment: .trailing)
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .paragraphDirection(replySide)
     }
 
     private var someoneElse: some View {
@@ -161,6 +165,8 @@ struct MessageBubble: View {
             if let error = message.error { warning(error) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Pictures and files keep to the reply's own text edge, never the person's side.
+        .paragraphDirection(of: message.text)
     }
 
     @ViewBuilder private var attachments: some View {
@@ -264,7 +270,7 @@ struct ConversationHelper: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // The helper sits at the edge where the employee's replies start, so Russian or English
         // replies in the Hebrew interface keep it under their first letters.
-        .paragraphDirection(of: client.messages.last { $0.direction == "outbound" }?.text ?? "")
+        .paragraphDirection(of: client.latestReplyText)
         .animation(.easeInOut(duration: 0.15), value: working)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L("\(name) is working…"))
@@ -422,13 +428,14 @@ struct TranscriptRows: View {
         let start: CGFloat = client.hasEarlierMessages ? Self.sameSide : 0
         // The side of the last item so far: person (inbound) or employee.
         let lastIsPerson = pending.isEmpty ? rows.last?.message.direction == "inbound" : true
+        let replySide = ParagraphDirection.of(client.latestReplyText)
         TranscriptStack {
             if client.hasEarlierMessages { loadEarlier }
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 // Keep one stable layout node per message, including its optional time heading.
                 VStack(alignment: .leading, spacing: 16) {
                     if let header = row.header { ClusterHeader(date: header, hasTime: row.message.hasTime) }
-                    MessageBubble(message: row.message, shared: shared, bubbleWidth: bubbleWidth, headed: row.header != nil)
+                    MessageBubble(message: row.message, shared: shared, bubbleWidth: bubbleWidth, headed: row.header != nil, replySide: replySide)
                         #if os(macOS)
                         .help(exactTime(row.message))
                         #endif
@@ -463,6 +470,7 @@ struct TranscriptRows: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
+                .paragraphDirection(replySide)
                 .padding(.top, rows.isEmpty && index == 0 ? start : opens ? Self.cluster : afterPerson ? Self.sameSide : Self.turn)
                 .id(message.id)
                 .accessibilityElement(children: .contain)
@@ -520,6 +528,11 @@ struct TranscriptRows: View {
         guard message.direction == "inbound" else { return client.activeAgentName }
         return shared ? message.author ?? "" : L("Вы")
     }
+}
+
+extension HomeClient {
+    /// The employee's latest words, without service notices. Their direction is the conversation's text edge.
+    var latestReplyText: String { messages.last { $0.direction == "outbound" && $0.kind != "notice" }?.text ?? "" }
 }
 
 /// Card actions at one height and radius. The one prominent action is ink with a canvas-coloured
