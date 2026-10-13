@@ -164,6 +164,14 @@ export class HttpApi {
       const homeResponse = await this.homeApi.handle(request, canManageAccount, localExecution);
       if (homeResponse) { this.sendWire(response, homeResponse); return; }
       url = new URL(request.url ?? "/", "http://localhost"); path = url.pathname;
+      const employeeTransfer = path.match(/^\/v1\/employee-transfer\/(prepare|stage|release|activate|cancel|finish)$/);
+      if (employeeTransfer) {
+        if (!canManageAccount || request.method !== "POST") throw new HomeError("Переносить сотрудников может владелец устройства.", 403);
+        const input = await this.body(request, 65 * 1024 * 1024);
+        if (input.homeId !== this.home.state.id) throw new HomeError("Подключённое устройство изменилось. Проверьте подключение перед переносом.", 409);
+        if (employeeTransfer[1] === "prepare" && (input.agent === "main" || input.agentId !== input.agent)) throw new HomeError("Выберите сотрудника для переноса.", 400);
+        this.send(response, 200, await this.agentMoves.handle(employeeTransfer[1]!, input)); return;
+      }
       const moveAction = path.match(/^\/v1\/agent-transfer\/(prepare|stage|release|activate|cancel|finish)$/);
       if (moveAction) {
         if (!localExecution || !canManageAccount || request.method !== "POST") throw new HomeError("Этапы переноса доступны только устройствам команды.", 403);
@@ -295,7 +303,7 @@ export class HttpApi {
         }
       }
       if (request.method === "GET" && path === "/health") {
-        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, agentAppearanceVersion: 1, deviceLogoutVersion: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
+        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
         return;
       }
       if (request.method === "GET" && path === "/v1/integrations") {

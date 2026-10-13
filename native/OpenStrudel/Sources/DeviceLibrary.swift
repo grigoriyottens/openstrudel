@@ -19,6 +19,7 @@ final class DeviceLibrary: ObservableObject {
     @Published private(set) var hiddenEmployees: [String: [String]]
     var fileDrafts: [String: [PickedFile]] = [:]
     private let defaults: UserDefaults
+    let employeeMoves: EmployeeMoves
     private var observations: [AnyCancellable] = []
 
     var active: HomeClient { clients.first { $0.id == selectedID } ?? clients[0] }
@@ -52,6 +53,7 @@ final class DeviceLibrary: ObservableObject {
 
     init(defaults: UserDefaults = .standard, clients supplied: [HomeClient]? = nil) {
         self.defaults = defaults
+        employeeMoves = EmployeeMoves(defaults: defaults)
         hiddenEmployees = defaults.dictionary(forKey: "openstrudel.hiddenEmployees") as? [String: [String]] ?? [:]
         if let supplied, !supplied.isEmpty {
             clients = supplied
@@ -75,6 +77,26 @@ final class DeviceLibrary: ObservableObject {
         observations = clients.map { client in
             client.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         }
+        observations.append(employeeMoves.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() })
+    }
+
+    func moveTransport(clientID: String, action: String, body: Data) async throws -> Data {
+        guard !isErasing, let client = clients.first(where: { $0.id == clientID && !$0.isSignedOut }) else {
+            throw HomeClientError.server(L("Подключите оба устройства, чтобы завершить перенос."))
+        }
+        return try await client.employeeTransfer(action, body: body)
+    }
+
+    func refreshMovedEmployee(open: Bool = true) async {
+        guard let move = employeeMoves.operation, move.phase.finished else { return }
+        await refresh()
+        if open, move.phase == .completed, let target = clients.first(where: { $0.id == move.targetID }) {
+            await select(target, profile: move.profileID)
+        }
+    }
+
+    func employeeMoveDestinations(from source: HomeClient) -> [HomeClient] {
+        visibleClients.filter { $0 !== source && $0.health?.homeId != source.health?.homeId }
     }
 
     func select(_ client: HomeClient) {
@@ -162,6 +184,9 @@ final class DeviceLibrary: ObservableObject {
     /// remote logout is required, so an offline device can always be removed.
     func removeConnection(_ client: HomeClient) async {
         guard !isErasing, clients.contains(where: { $0 === client }) else { return }
+        if let move = employeeMoves.operation, !move.phase.finished, [move.sourceID, move.targetID].contains(client.id) {
+            client.errorMessage = L("Завершите или отмените перенос сотрудника перед отключением устройства."); return
+        }
         await client.signOutOnThisDevice()
         clients.removeAll { $0 === client }
         if clients.isEmpty {
@@ -202,6 +227,7 @@ final class DeviceLibrary: ObservableObject {
     /// host cannot delay changes from another one. Background iOS suspends the
     /// task; the first foreground request catches up without a socket service.
     func watchCatalogues() async {
+        employeeMoves.resume(using: moveTransport)
         await withTaskGroup(of: Void.self) { group in
             for client in visibleClients where client.shouldRestoreConnection && !client.isPairing {
                 group.addTask {
@@ -236,6 +262,9 @@ final class DeviceLibrary: ObservableObject {
 
     func eraseThisMac() async {
         guard erasePhase == nil, !erased else { return }
+        guard employeeMoves.operation?.phase.finished != false else {
+            eraseError = L("Завершите или отмените перенос сотрудника перед удалением данных."); return
+        }
         let reset = LocalDataReset.current
         eraseError = nil
         do { try reset.begin() }

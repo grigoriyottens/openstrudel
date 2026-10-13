@@ -1276,6 +1276,10 @@ final class HomeClient: ObservableObject, Identifiable {
 
     var canTransferAgents: Bool { canManageOpenAI && health?.agentArchiveVersion == 1 }
 
+    func employeeTransfer(_ action: String, body: Data) async throws -> Data {
+        try await requestData("/v1/employee-transfer/" + action, method: "POST", body: body, mayRelocate: false)
+    }
+
     func exportAgents(deviceID: String? = nil, password: String? = nil, progress: (@MainActor @Sendable (Int64, Int64?) -> Void)? = nil) async throws -> Data {
         guard canTransferAgents else { throw HomeClientError.server(L("Обновите OpenStrudel на устройстве с сотрудниками, чтобы сохранить копию.")) }
         let body = try password.map { try JSONSerialization.data(withJSONObject: ["password": $0]) }
@@ -1355,7 +1359,7 @@ final class HomeClient: ObservableObject, Identifiable {
         request.httpBody = body
         // Codex can search, edit files and work for several minutes. Keep one
         // simple request path and let the native client wait for that turn.
-        request.timeoutInterval = path == "/health" ? 10 : path.hasPrefix("/v1/agents/archive") ? 300 : 60
+        request.timeoutInterval = path == "/health" ? 10 : path.hasPrefix("/v1/agents/archive") || path.hasPrefix("/v1/employee-transfer/") ? 300 : 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let ifNoneMatch { request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match") }
         if method != "GET" { request.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key") }

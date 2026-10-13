@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { request as httpsRequest } from "node:https";
 import { OpenStrudelRuntime } from "../src/runtime.js";
 import { MockCodexEngine } from "../src/codex.js";
 import { HomeLink } from "../src/home-link.js";
@@ -145,5 +146,81 @@ describe("agent moves with one execution owner", () => {
     await b.runtime.messages.handle({ channel: "api", profile: p.id, text: "Active" });
     expect(agentTransfer(a.runtime.store, p.id).phase).toBe("moved");
     expect(agentTransfer(b.runtime.store, p.id)).toBeNull();
+  });
+});
+
+describe("employee moves between independent homes", () => {
+  const step = async (home: Awaited<ReturnType<typeof node>>, action: string, input: any) => {
+    const reply = await home.api("/v1/employee-transfer/" + action, "POST", { ...input, homeId: home.home.state.id });
+    expect(reply.status, JSON.stringify(reply.value)).toBe(200);
+    return reply.value;
+  };
+
+  it("keeps one execution owner through independent restarts and a return trip", async () => {
+    let a = await node("Laptop"), b = await node("Mini");
+    expect(a.home.state.id).not.toBe(b.home.state.id);
+    const employee = a.runtime.store.createProfile({ name: "Editor", instructions: "Keep my character", model: "gpt-6.1-sol" });
+    const reply = await a.runtime.messages.handle({ channel: "api", profile: employee.id, text: "Remember the blue notebook", externalId: "move-original" });
+    const context = a.runtime.messages.contextFor(reply.conversationId);
+    const file = a.runtime.messages.files.put(reply.conversationId, context, { name: "notebook.txt", contentBase64: Buffer.from("Blue notebook").toString("base64") });
+    const schedule = a.runtime.scheduler.save({ conversationId: reply.conversationId, name: "Reminder", prompt: "Check notebook", cron: "0 9 * * *", timezone: "UTC" });
+    const input = { id: randomUUID(), proof: "a".repeat(64), agent: employee.id, agentId: employee.id };
+    const prepared = await step(a, "prepare", input);
+    await step(b, "stage", { ...input, ...prepared });
+    expect((await b.api("/v1/profiles")).value.profiles).toHaveLength(0);
+    expect((await a.api("/v1/messages", "POST", { profile: employee.id, text: "Frozen" })).status).toBe(423);
+    expect((await b.api("/v1/messages", "POST", { profile: employee.id, text: "Too early" })).status).toBe(423);
+    await step(a, "release", input); // Treat the acknowledgement as lost.
+    const aRoot = a.root, bRoot = b.root;
+    await a.runtime.stop(); runtimes.splice(runtimes.indexOf(a.runtime), 1);
+    await b.runtime.stop(); runtimes.splice(runtimes.indexOf(b.runtime), 1);
+    a = await node("Laptop", aRoot); b = await node("Mini", bRoot);
+    expect((await step(a, "release", input)).released).toBe(true);
+    expect((await a.api("/v1/profiles")).value.profiles).toHaveLength(0);
+    await step(b, "activate", { ...input, digest: prepared.digest });
+    await step(b, "activate", { ...input, digest: prepared.digest });
+    await step(a, "finish", input); await step(b, "finish", input);
+    expect((await b.api("/v1/profiles")).value.profiles).toHaveLength(1);
+    expect(b.runtime.store.getProfile(employee.id)).toMatchObject({ name: "Editor", instructions: "Keep my character", model: "gpt-6.1-sol" });
+    expect(readFileSync(b.runtime.messages.files.get(file.id)!.path, "utf8")).toBe("Blue notebook");
+    expect(b.runtime.scheduler.list(reply.conversationId)[0]).toMatchObject({ id: schedule.id, enabled: true, nextRunAt: schedule.nextRunAt });
+    await b.runtime.messages.handle({ channel: "api", profile: employee.id, text: "Next", externalId: "move-next" });
+    expect((await a.api("/v1/messages", "POST", { profile: employee.id, text: "Retired" })).status).toBe(423);
+    const back = { ...input, id: randomUUID() };
+    const returned = await step(b, "prepare", back);
+    await step(a, "stage", { ...back, ...returned });
+    await step(b, "release", back);
+    await step(a, "activate", { ...back, digest: returned.digest });
+    expect((await a.api(`/v1/agents/${employee.id}/conversation`)).value.messages).toHaveLength(4);
+    expect((await b.api("/v1/profiles")).value.profiles).toHaveLength(0);
+    expect(a.home.nodes()).toHaveLength(1); expect(b.home.nodes()).toHaveLength(1);
+  });
+
+  it("checks owner access, home identity, proof and cancellation barriers", async () => {
+    const a = await node("Source"), b = await node("Target");
+    const employee = a.runtime.store.createProfile({ name: "Safe" });
+    const input = { id: randomUUID(), proof: "a".repeat(64), agent: employee.id, agentId: employee.id };
+    expect((await a.api("/v1/employee-transfer/prepare", "POST", { ...input, homeId: b.home.state.id })).status).toBe(409);
+    expect(agentTransfer(a.runtime.store, employee.id)).toBeNull();
+    expect((await fetch(a.url + "/v1/employee-transfer/prepare", { method: "POST", body: JSON.stringify(input) })).status).toBe(401);
+    Object.assign((a.runtime.api.mobile as any).options, { directory: join(a.root, "mobile"), port: 0, host: "127.0.0.1", hostname: "127.0.0.1" });
+    const invite = new URL((await a.runtime.api.mobile.invite(false)).url);
+    const call = (path: string, token: string) => new Promise<any>((resolve, reject) => {
+      const req = httpsRequest({ hostname: "127.0.0.1", port: a.runtime.api.mobile.port!, path, method: "POST", rejectUnauthorized: false,
+        headers: { authorization: "Bearer " + token, "content-type": "application/json" } }, res => {
+        let data = ""; res.on("data", chunk => data += chunk); res.on("end", () => resolve({ status: res.statusCode, body: JSON.parse(data) }));
+      }); req.on("error", reject); req.end(JSON.stringify({ ...input, homeId: a.home.state.id }));
+    });
+    const guest = await call("/pair", invite.searchParams.get("key")!);
+    expect((await call("/v1/employee-transfer/prepare", guest.body.token)).status).toBe(403);
+    const prepared = await step(a, "prepare", input);
+    expect((await a.api("/v1/employee-transfer/release", "POST", { ...input, homeId: a.home.state.id, proof: "b".repeat(64) })).status).toBe(403);
+    expect((await a.api("/v1/employee-transfer/prepare", "POST", { ...input, homeId: a.home.state.id, agent: "other", agentId: "other" })).status).toBe(409);
+    await step(b, "cancel", input); await step(a, "cancel", input);
+    expect((await b.api("/v1/employee-transfer/stage", "POST", { ...input, ...prepared, homeId: b.home.state.id })).status).toBe(409);
+    expect((await a.api("/v1/employee-transfer/prepare", "POST", { ...input, homeId: a.home.state.id })).status).toBe(409);
+    expect(agentTransfer(a.runtime.store, employee.id)).toBeNull();
+    expect(b.runtime.store.getProfile(employee.id)).toBeNull();
+    expect((await a.api("/v1/profiles")).value.profiles).toHaveLength(1);
   });
 });
