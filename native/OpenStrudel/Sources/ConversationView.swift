@@ -294,6 +294,10 @@ struct ConversationView: View {
             if animated && !reduceMotion {
                 withAnimation(.easeOut(duration: 0.22)) {
                     proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                } completion: {
+                    // A new pending row measures its real height only after the scroll starts.
+                    guard conversation == draftKey, followsLatest else { return }
+                    proxy.scrollTo("conversation-bottom", anchor: .bottom)
                 }
             } else {
                 proxy.scrollTo("conversation-bottom", anchor: .bottom)
