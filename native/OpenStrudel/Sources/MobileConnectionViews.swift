@@ -256,11 +256,12 @@ struct MobileConnectionHelpView: View {
                 }
             }
         }
+        .sheetTint()
     }
 
     private func topic(_ title: String, _ paragraphs: String...) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.headline).foregroundStyle(.primary).accessibilityAddTraits(.isHeader)
+            Text(title).font(.headline).foregroundStyle(Color.primary).accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(paragraphs, id: \.self) { Text($0) }
             }
@@ -384,7 +385,7 @@ struct ConnectionInvitationView: View {
                 #endif
             }
         }
-        .tint(nil)
+        .sheetTint()
         #if os(macOS)
         .frame(width: SetupSheet.size.width, height: SetupSheet.size.height)
         #else

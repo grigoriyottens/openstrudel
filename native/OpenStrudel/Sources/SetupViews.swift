@@ -57,6 +57,16 @@ extension View {
         buttonStyle(TextActionStyle())
     }
 
+    /// A sheet's toolbar colour. The Mac draws its default button filled in the system accent; iOS
+    /// draws the confirmation action as tinted text, so there it takes the ink.
+    func sheetTint() -> some View {
+        #if os(iOS)
+        tint(AppTheme.accentText)
+        #else
+        tint(nil)
+        #endif
+    }
+
     /// Gives a line of text a comfortable target. Layouts subtract `TextAction.inset` from the gaps
     /// around it, so the visible gaps between lines stay on the spacing scale.
     func textTarget() -> some View {
@@ -112,7 +122,7 @@ struct SetupHeader: View {
         VStack(alignment: .leading, spacing: 0) {
             AgentAvatar(appearance: nil, size: AvatarSize.hero)
             Text(title)
-                .font(AppTypography.display).foregroundStyle(.primary)
+                .font(AppTypography.display).foregroundStyle(Color.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.top, 24)
