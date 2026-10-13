@@ -103,7 +103,7 @@ struct SetupHeader: View {
 
     init(title: String, paragraphs: [String]) {
         self.title = title
-        self.paragraphs = paragraphs
+        self.paragraphs = paragraphs.map(\.withoutWidow)
     }
 
     init(title: String, _ paragraphs: String...) { self.init(title: title, paragraphs: paragraphs) }
@@ -230,7 +230,7 @@ struct ServerSetupView: View {
                 } footer: {
                     if !notes.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            ForEach(notes, id: \.self) { Text($0).fixedSize(horizontal: false, vertical: true) }
+                            ForEach(notes, id: \.self) { Text($0.withoutWidow).fixedSize(horizontal: false, vertical: true) }
                         }
                     }
                 }

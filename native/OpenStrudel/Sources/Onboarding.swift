@@ -64,6 +64,14 @@ struct BalancedLines: SwiftUI.Layout {
     }
 }
 
+extension String {
+    /// Joins the last two words with a no-break space, so wrapped text never ends on a lone word.
+    var withoutWidow: String {
+        guard let space = lastIndex(of: " ") else { return self }
+        return replacingCharacters(in: space...space, with: "\u{00A0}")
+    }
+}
+
 /// The first-run language menu: the globe and the current language in the quiet colour. It follows
 /// the interface direction, so in Hebrew it sits at the window's left.
 struct LanguagePicker: View {
@@ -115,7 +123,7 @@ struct WelcomeText: View {
     let paragraphs: [String]
     @State private var long: Set<Int> = []
 
-    init(_ paragraphs: String...) { self.paragraphs = paragraphs }
+    init(_ paragraphs: String...) { self.paragraphs = paragraphs.map(\.withoutWidow) }
 
     var body: some View {
         VStack(spacing: 12) {
