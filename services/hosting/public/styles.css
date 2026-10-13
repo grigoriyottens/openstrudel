@@ -32,8 +32,9 @@ a:hover { text-decoration-color: currentColor; }
 input:focus-visible,select:focus-visible { outline-offset: 2px; }
 h1,h2,h3,p { margin: 0; }
 h1,h2 { text-wrap: balance; }
-h1 { font-family: var(--font-display); font-size: clamp(2.75rem,5vw,3.5rem); font-weight: var(--semibold); line-height: 1.06; }
-h2 { font-size: 1.5rem; font-weight: var(--semibold); line-height: 1.25; }
+/* The app's scale: display 28/34 is the largest size, titles are 17/22. */
+h1 { font: var(--semibold) 28px/34px var(--font-display); }
+h2 { font-size: 17px; font-weight: var(--semibold); line-height: 22px; }
 h3 { font-size: 1.1rem; font-weight: var(--semibold); line-height: 1.4; }
 svg { flex: none; vertical-align: middle; }
 code,pre { font-family: var(--font-mono); font-size: .8125rem; }
@@ -92,12 +93,13 @@ code { overflow-wrap: anywhere; }
 .payment-option { display: flex; align-items: center; justify-content: center; position: relative; min-height: 2.75rem; min-width: 0; flex: 1; padding: .5rem .875rem; font-size: .875rem; color: var(--muted); border-radius: .5rem; cursor: pointer; border: 1px solid transparent; transition: background var(--fast),color var(--fast); }
 .payment-option:has(input:checked) { background: var(--surface); color: var(--ink); border-color: var(--control-line); }
 .purchase-row { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,9rem),1fr)); align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-.price { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; font-size: 2.25rem; font-weight: var(--medium); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.price { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; font: var(--medium) 28px/34px var(--font-sans); font-variant-numeric: tabular-nums; }
 .price span { font-size: .875rem; color: var(--muted); font-weight: var(--regular); }
 .price-caption { color: var(--muted); font-size: .8125rem; text-align: right; line-height: 1.6; }
 .btn { display: inline-flex; justify-content: center; align-items: center; gap: .625rem; min-height: 3.125rem; padding: .875rem 1.25rem; border: 1px solid var(--button); border-radius: var(--radius); background: var(--button); color: var(--on-button); font-size: .9375rem; font-weight: var(--medium); text-decoration: none; transition: background var(--fast),transform 100ms,border-color var(--fast); }
 .btn:hover { background: var(--button-hover); border-color: var(--button-hover); }
 .btn:active { transform: scale(.99); }
+.btn.full { border-radius: 24px; }
 .btn.secondary { color: var(--ink); background: var(--surface); border-color: var(--control-line); }
 .btn.secondary:hover { background: var(--subtle); }
 .btn.danger { color: var(--danger); border-color: var(--danger); background: var(--surface); }
@@ -124,12 +126,10 @@ code { overflow-wrap: anywhere; }
 .footer-links { display: flex; align-items: center; gap: .25rem; flex-wrap: wrap; }
 .site-footer .text-btn { font-size: .8125rem; font-weight: var(--regular); }
 .page-head { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; margin-bottom: 2rem; }
-.page-head h1 { font-size: clamp(2rem,4vw,2.75rem); }
 .page-head p { color: var(--muted); font-size: .9375rem; margin-top: .75rem; }
 .page-head .text-btn { flex: none; }
 .server-list { display: grid; gap: 1rem; }
 .server-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.5rem; }
-.server-card h2,.order-row h2 { font-size: 1.1rem; line-height: 1.4; }
 .server-top { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
 .server-sub { color: var(--muted); font-size: .8125rem; margin-top: .375rem; }
 .status { display: inline-flex; align-items: center; gap: .5rem; font-size: .8125rem; font-weight: var(--medium); color: var(--positive); background: var(--positive-bg); border-radius: 99px; padding: .375rem .625rem; flex: none; }
@@ -180,22 +180,22 @@ code { overflow-wrap: anywhere; }
 .key-row p { padding: .25rem 0 0; font-size: .8125rem; overflow-wrap: anywhere; }
 .key-row button { flex: none; }
 .article { max-width: 39rem; margin: auto; }
-.article h1 { font-size: clamp(2.25rem,4vw,3rem); margin-bottom: 1rem; }
+.article h1 { margin-bottom: 1rem; }
 .article>p { color: var(--muted); margin-bottom: 2rem; }
 .article .details { margin-top: 0; }
 .article .details summary { font-size: 1rem; min-height: 4rem; font-weight: var(--medium); }
 .article .details p { font-size: .9375rem; }
 .checkout { width: min(100% - 2rem,30rem); margin: 4rem auto; padding: 2rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .checkout .brand { margin-bottom: 2rem; }
-.checkout h1 { font-size: 2rem; margin-top: 1rem; }
+.checkout h1 { margin-top: 1rem; }
 .checkout p { color: var(--muted); font-size: .9375rem; margin-top: 1rem; }
-.checkout .price { margin: 1.5rem 0; font-size: 2.75rem; }
+.checkout .price { margin: 1.5rem 0; }
 .checkout-actions { display: grid; gap: .75rem; margin-top: 1.25rem; }
 .checkout .text-btn { width: 100%; }
 dialog { padding: 2rem; width: min(31rem,calc(100% - 2rem)); max-height: min(90dvh,48rem); border: 1px solid var(--line); border-radius: 1.5rem; background: var(--surface); color: var(--ink); box-shadow: 0 1.5rem 5rem #10111420; }
 dialog[open] { animation: dialog-in 160ms var(--ease); }
 dialog::backdrop { background: var(--scrim); backdrop-filter: blur(4px); }
-dialog h2 { padding-right: 1.5rem; font-size: 1.5rem; }
+dialog h2 { padding-right: 1.5rem; }
 dialog p { font-size: .9375rem; color: var(--muted); margin: .875rem 0 1.5rem; line-height: 1.65; }
 .close { display: grid; place-items: center; position: absolute; top: .75rem; right: .75rem; border: 0; width: 2.75rem; height: 2.75rem; border-radius: 50%; background: transparent; }
 .close:hover { background: var(--subtle); }
@@ -236,14 +236,12 @@ dialog p.field-help { font-size: .8125rem; margin: .75rem 0; }
 @media(max-width:480px) {
   .site-header { padding: .75rem 1.25rem; }
   .main,.main.wide { width: calc(100% - 2.5rem); padding-top: 1.75rem; }
-  .hero h1 { font-size: clamp(2.5rem,10.5vw,3rem); }
   .hero p { font-size: .9375rem; max-width: 19rem; }
   .choices { gap: .5rem; }
   .choice { padding: 1rem .375rem; min-height: 6.25rem; }
   .choice-title { font-size: .8125rem; }
   .purpose-description { min-height: 4.125rem; margin-bottom: 1rem; }
   .purchase-row { align-items: start; }
-  .price { font-size: 2rem; }
   .price span { flex-basis: 100%; }
   .price-caption { font-size: .8125rem; }
   .page-head { align-items: start; gap: .75rem; }

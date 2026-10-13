@@ -1,5 +1,6 @@
 /* Tokens: docs/design-system.md, the same values as the app's web UI. Monochrome: the primary action is an
-   ink capsule with a canvas label, quiet actions are plain text, the graphite accent marks focus. */
+   ink capsule with a canvas label, quiet actions are plain text, the graphite accent marks focus.
+   Four sizes, as in the app: display 28/34, reading 15/22, interface 13, meta 12. */
 :root {
   color-scheme: light dark;
   --canvas: #F7F3EC; --surface: #EEE9E1; --text: rgb(0 0 0 / .85); --secondary: #615B57;
@@ -7,7 +8,7 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, "Noto Sans", "Noto Sans Hebrew", "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   --font-display: ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;
-  font: 400 16px/1.5 var(--font-sans); color: var(--text); background: var(--canvas);
+  font: 400 15px/22px var(--font-sans); color: var(--text); background: var(--canvas);
   font-synthesis: none; -webkit-font-smoothing: antialiased;
 }
 @media (prefers-color-scheme: dark) { :root { --canvas: #1C1B1A; --surface: #262422; --text: rgb(255 255 255 / .85); --secondary: #ADA8A3; --accent: #6E6964; --ink: #EDEAE6; --control-border: #7C7781; } }
@@ -16,24 +17,27 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 main { max-width: 440px; margin: clamp(32px, 10vh, 108px) auto; padding: 0 24px 48px; }
-p { margin: 16px 0; font-size: 16px; line-height: 1.55; color: var(--secondary); }
+p { margin: 12px 0; color: var(--secondary); }
 .brand { margin: 16px 0 48px; color: var(--text); font-weight: 590; }
 .mark { display: block; margin: 0 0 24px; }
-h1 { margin: 0 0 24px; font: 590 clamp(36px, 9vw, 48px)/1.08 var(--font-display); }
+h1 { margin: 0; font: 590 28px/34px var(--font-display); }
 h2 { margin: 32px 0 16px; font: 590 28px/34px var(--font-display); }
-label { display: block; margin: 24px 0; font-size: 14px; font-weight: 510; }
-input { display: block; width: 100%; min-height: 48px; margin-top: 8px; padding: 12px 16px; border: 1px solid var(--control-border); border-radius: 12px; background: transparent; color: inherit; font: inherit; font-weight: 400; }
+label { display: block; margin: 24px 0; font: 510 13px/16px var(--font-sans); }
+input { display: block; width: 100%; min-height: 48px; margin-top: 8px; padding: 12px 16px; border: 1px solid var(--control-border); border-radius: 12px; background: transparent; color: inherit; font: 400 15px/22px var(--font-sans); }
 input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 .primary { display: block; width: 100%; min-height: 48px; padding: 12px 24px; border: 0; border-radius: 24px; background: var(--ink); color: var(--canvas); font: inherit; font-weight: 510; text-align: center; text-decoration: none; cursor: pointer; }
 .primary:hover { background: color-mix(in srgb, var(--ink), var(--canvas) 16%); }
 .quiet { display: block; min-height: 44px; margin: 12px auto 0; padding: 12px 8px; border: 0; background: none; color: var(--secondary); font: inherit; cursor: pointer; }
 .quiet:hover { color: var(--text); }
-.note { margin-top: 32px; font-size: 13px; }
-#notice { min-height: 1.6em; font-size: 14px; }
+.note, #notice { font-size: 12px; line-height: 16px; }
+.note { margin-top: 32px; }
+#notice { min-height: 16px; }
 strong { color: var(--text); font-weight: 590; }
-code { display: block; margin: 24px 0; padding: 16px; overflow-wrap: anywhere; border-radius: 12px; background: var(--surface); color: var(--text); font: 15px/1.6 var(--font-mono); }
+code { display: block; margin: 24px 0; padding: 16px; overflow-wrap: anywhere; border-radius: 12px; background: var(--surface); color: var(--text); font: 13px/20px var(--font-mono); }
 button:disabled { opacity: .5; cursor: wait; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 [hidden] { display: none !important; }
 @media (prefers-contrast: more) { code { box-shadow: inset 0 0 0 1px var(--control-border); } }
+/* Touch browsers zoom into a field whose text is under 16 px. */
+@media (pointer: coarse) { input { font-size: 16px; } }
 @media (prefers-reduced-motion: no-preference) { button, a, input { transition: background-color .15s ease, color .15s ease, opacity .15s ease; } }
