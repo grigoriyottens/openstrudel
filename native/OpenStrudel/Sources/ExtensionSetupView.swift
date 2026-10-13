@@ -37,31 +37,35 @@ struct ConnectionCatalogView: View {
     }
     var body: some View {
         ServiceList {
-            Section {
-                Text(scope.isGroup ? L("Для Telegram-группы «\(scope.title)»") : L("Для разговора в приложении"))
-                    .foregroundStyle(AppTheme.secondaryText)
-                if let shared = scope.sharedNotice { Text(shared).font(.caption).foregroundStyle(AppTheme.secondaryText) }
-                if loading { ProgressView(L("Загружаем сервисы…")) }
-                if let error {
-                    Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)
-                    Button(L("Повторить")) { Task { await refresh() } }.disabled(loading)
-                }
-                if let waiting {
-                    Text(L("Завершите вход в \(waiting.name) в браузере."))
-                    if let authorizationURL { Link(L("Открыть ещё раз"), destination: authorizationURL) }
-                    Button(L("Проверить подключение")) { Task { await refresh() } }.disabled(loading)
+            if loading || error != nil || waiting != nil {
+                Section {
+                    if loading {
+                        Label { Text(L("Загружаем сервисы…")).foregroundStyle(AppTheme.secondaryText) } icon: {
+                            ProgressView().controlSize(.small).frame(width: 20)
+                        }
+                    }
+                    if let error {
+                        Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)
+                        Button(L("Повторить")) { Task { await refresh() } }.disabled(loading)
+                    }
+                    if let waiting {
+                        Text(L("Завершите вход в \(waiting.name) в браузере."))
+                        if let authorizationURL { Link(L("Открыть ещё раз"), destination: authorizationURL) }
+                        Button(L("Проверить подключение")) { Task { await refresh() } }.disabled(loading)
+                    }
                 }
             }
             if !results.isEmpty || !query.isEmpty {
                 Section {
                     if connections.filter(\.isAvailableToAdd).count > 6 {
-                        TextField(L("Найти сервис"), text: $query).textFieldStyle(.roundedBorder)
+                        TextField(L("Найти сервис"), text: $query, prompt: Text(L("Найти сервис"))).labelsHidden()
                     }
                     ForEach(results) { connection in
                         // Dynamic Type keeps both the service name and action visible.
-                        let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10)) : AnyLayout(HStackLayout(spacing: 12))
+                        let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
                         layout {
-                            Text(connection.name).frame(maxWidth: .infinity, alignment: .leading)
+                            Label { Text(connection.name) } icon: { Image(systemName: connection.icon).frame(width: 20) }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             Button {
                                 Task { await connect(connection) }
                             } label: {
@@ -69,25 +73,28 @@ struct ConnectionCatalogView: View {
                             }.adaptiveActionStyle(.bordered).disabled(connecting != nil || waiting != nil)
                                 .accessibilityLabel("\(connection.actionTitle) \(connection.name)")
                                 .accessibilityIdentifier("connect-service-" + connection.id)
-                        }.padding(.vertical, 6)
-                            .accessibilityElement(children: .contain)
+                        }
+                        .accessibilityElement(children: .contain)
                     }
                     if results.isEmpty { Text(L("Ничего не найдено")).foregroundStyle(AppTheme.secondaryText) }
                 } header: { Text(L("Из аккаунта OpenAI")) } footer: {
                     Text(L("«Добавить» разрешает сотруднику использовать сервис в этом чате."))
                 }
             }
-            Section(L("Другие способы")) {
+            Section {
                 NavigationLink { ExtensionSetupView(scope: scope, source: .mcp, isPresented: $isPresented) } label: {
-                    Label(L("Сервис по адресу MCP"), systemImage: "link")
+                    DetailsRow(title: L("Сервис по адресу MCP"), symbol: "link")
                 }.accessibilityIdentifier("addMCPService")
                 NavigationLink { ExtensionSetupView(scope: scope, source: .package, isPresented: $isPresented) } label: {
-                    Label(L("Навык или плагин из файла"), systemImage: "folder.badge.plus")
+                    DetailsRow(title: L("Навык или плагин из файла"), symbol: "folder.badge.plus")
                 }.accessibilityIdentifier("addExtensionFile")
+            } header: { Text(L("Другие способы")) } footer: {
+                let notes = [scope.sharedNotice, notice.map { L10n.serviceText($0) }].compactMap { $0 }
+                if !notes.isEmpty { Text(notes.joined(separator: "\n")) }
             }
-            if let notice { Section { Text(L10n.serviceText(notice)).font(.caption).foregroundStyle(AppTheme.secondaryText) } }
         }
-        .scrollContentBackground(.hidden).background(HomeBackground()).navigationTitle(L("Добавить"))
+        .navigationTitle(L("Добавить"))
+        .navigationSubtitle(scope.isGroup ? L("Для Telegram-группы «\(scope.title)»") : L("Для разговора в приложении"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -155,29 +162,33 @@ struct ExtensionSetupView: View {
     @State private var error: String?
     @FocusState private var focusedField: Field?
 
+    private var canAdd: Bool { !busy && !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
     var body: some View {
         Form {
-            Section {
-                Text(scope.sharedNotice ?? (scope.isGroup ? L("Для Telegram-группы «\(scope.title)».") : L("Для разговора в приложении.")))
-                    .font(.callout).foregroundStyle(AppTheme.secondaryText)
-            }
             if let preview {
-                Section(preview.kind == "skill" ? L("Навык") : L("Плагин")) {
-                    Text(preview.name).font(.headline)
+                Section {
+                    LabeledContent {
+                        Text(L("Файлов: \(preview.files) · \(ByteCountFormatter.string(fromByteCount: Int64(preview.bytes), countStyle: .file))"))
+                            .foregroundStyle(AppTheme.secondaryText)
+                    } label: {
+                        Label { Text(preview.name) } icon: {
+                            Image(systemName: preview.kind == "skill" ? "sparkles" : "puzzlepiece.extension").frame(width: 20)
+                        }
+                    }
                     Text(preview.description).fixedSize(horizontal: false, vertical: true)
-                    Text(L("Файлов: \(preview.files) · \(ByteCountFormatter.string(fromByteCount: Int64(preview.bytes), countStyle: .file))"))
-                        .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                    ForEach(preview.services, id: \.self) { Label($0, systemImage: "link") }
-                    if preview.hasHooks { Text(L("В пакете есть автоматические действия (hooks). Проверьте, что доверяете его автору.")).font(.callout) }
-                    Button(preview.replaces == nil ? L("Установить") : L("Обновить")) { perform {
-                        try await client.installExtension(files, digest: preview.digest, replacing: preview.replaces, for: scope.id)
-                        isPresented = false
-                    } }.buttonStyle(.borderedProminent).disabled(busy)
+                    ForEach(preview.services, id: \.self) { service in
+                        Label { Text(service) } icon: { Image(systemName: "link").frame(width: 20) }
+                    }
+                    if preview.hasHooks {
+                        Text(L("В пакете есть автоматические действия (hooks). Проверьте, что доверяете его автору."))
+                            .foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
+                    }
                     Button(L("Выбрать другой пакет")) { self.preview = nil; files = []; importing = true }.disabled(busy)
-                }
+                } header: { Text(preview.kind == "skill" ? L("Навык") : L("Плагин")) }
             } else if source == .mcp {
                 Section {
-                    TextField(L("Адрес MCP"), text: $address, prompt: Text("https://example.com/mcp"))
+                    TextField(L("Адрес MCP"), text: $address, prompt: Text(verbatim: "https://example.com/mcp"))
                         .focused($focusedField, equals: .address)
                         .textContentType(.URL).autocorrectionDisabled()
                         .accessibilityLabel(L("Адрес MCP")).accessibilityIdentifier("mcpAddress")
@@ -187,39 +198,62 @@ struct ExtensionSetupView: View {
                     SecureField(L("Ключ, если сервис его требует"), text: $token)
                         .focused($focusedField, equals: .token)
                     DisclosureGroup(L("Название подключения")) {
-                        TextField(L("Название латиницей"), text: $name, prompt: Text(suggestedName)).autocorrectionDisabled()
+                        TextField(L("Название латиницей"), text: $name, prompt: Text(verbatim: suggestedName)).autocorrectionDisabled()
                             .focused($focusedField, equals: .name)
                     }
-                    Button(L("Добавить сервис")) { perform {
-                        try await client.addMCP(name: name.isEmpty ? suggestedName : name, url: address.trimmingCharacters(in: .whitespacesAndNewlines), token: token, for: scope.id)
-                        token = ""; isPresented = false
-                    } }.buttonStyle(.borderedProminent).disabled(busy || address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 } header: { Text(L("Сервис по адресу")) } footer: {
                     Text(L("Вставьте адрес MCP из настроек нужного сервиса. Если потребуется вход, продолжите его в браузере."))
                 }
             } else {
                 Section {
-                    Button { importing = true } label: { Label(L("Выбрать навык или плагин…"), systemImage: "folder.badge.plus") }.disabled(busy)
+                    Button { importing = true } label: {
+                        Label { Text(L("Выбрать навык или плагин…")) } icon: { Image(systemName: "folder.badge.plus").frame(width: 20) }
+                    }.disabled(busy)
                 } header: { Text(L("Из файла")) } footer: {
                     Text(L("Выберите SKILL.md или папку пакета Codex. Сначала покажем, что будет добавлено."))
                 }
             }
-            if busy { HStack(spacing: 10) { ProgressView().controlSize(.small); Text(preview == nil ? L("Проверяем…") : L("Устанавливаем…")) }.accessibilityElement(children: .combine) }
-            if let error { Section { Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true) } }
+            if busy || error != nil || scope.sharedNotice != nil {
+                Section {
+                    if busy {
+                        Label { Text(preview == nil ? L("Проверяем…") : L("Устанавливаем…")).foregroundStyle(AppTheme.secondaryText) } icon: {
+                            ProgressView().controlSize(.small).frame(width: 20)
+                        }.accessibilityElement(children: .combine)
+                    }
+                    if let error { Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true) }
+                } footer: {
+                    if let shared = scope.sharedNotice { Text(shared) }
+                }
+            }
         }
-        .formStyle(.grouped).scrollContentBackground(.hidden).background(HomeBackground())
+        .formStyle(.grouped)
         .navigationTitle(source == .mcp ? L("Подключить сервис") : L("Установить из файла"))
+        .navigationSubtitle(scope.isGroup ? L("Для Telegram-группы «\(scope.title)»") : L("Для разговора в приложении"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
+        #endif
         .toolbar {
+            if let preview {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(preview.replaces == nil ? L("Установить") : L("Обновить")) { perform {
+                        try await client.installExtension(files, digest: preview.digest, replacing: preview.replaces, for: scope.id)
+                        isPresented = false
+                    } }.disabled(busy).keyboardShortcut(.defaultAction)
+                }
+            } else if source == .mcp {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("Добавить сервис"), action: addService).disabled(!canAdd).keyboardShortcut(.defaultAction)
+                }
+            }
+            #if os(iOS)
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button { focusedField = nil } label: { Image(systemName: "keyboard.chevron.compact.down") }
                     .accessibilityLabel(L("Скрыть клавиатуру"))
             }
+            #endif
         }
-        #endif
         .fileImporter(isPresented: $importing, allowedContentTypes: [.folder, UTType(filenameExtension: "md") ?? .plainText]) { result in
             switch result {
             case .success(let url):
@@ -232,6 +266,13 @@ struct ExtensionSetupView: View {
                 }
             case .failure(let failure): error = failure.localizedDescription
             }
+        }
+    }
+
+    private func addService() {
+        perform {
+            try await client.addMCP(name: name.isEmpty ? suggestedName : name, url: address.trimmingCharacters(in: .whitespacesAndNewlines), token: token, for: scope.id)
+            token = ""; isPresented = false
         }
     }
     private var suggestedName: String {
