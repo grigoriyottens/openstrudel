@@ -163,8 +163,9 @@ struct MessageBubble: View {
         return VStack(alignment: .leading, spacing: 4) {
             if !author.isEmpty { Text(author).modifier(MetaLine()).padding(.leading, 16) }
             VStack(alignment: .leading, spacing: 8) {
-                if message.imported == true { ImportedMessageText(source: message.text) }
-                else if !message.text.isEmpty { ChatBubble(text: message.text, fill: AppTheme.surface) }
+                if message.text.isEmpty { EmptyView() }
+                else if message.imported == true { ImportedMessageText(source: message.text) }
+                else { ChatBubble(text: message.text, fill: AppTheme.surface) }
                 attachments
             }
             if let error = message.error { warning(error).padding(.leading, 16) }

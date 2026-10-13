@@ -147,4 +147,11 @@ struct MessageContentTests {
         let gaps = blocks.indices.map { MessageContent.spacing(before: blocks[$0], after: $0 == 0 ? nil : blocks[$0 - 1]) }
         #expect(gaps == [0, 12, 24, 8, 6, 12, 12])
     }
+
+    @Test func separateListsKeepParagraphSpacing() {
+        let blocks = MessageContent(source: "1. One\n2. Two\n\n- Other\n  - Nested").blocks
+        #expect(blocks.map(\.kind) == ["list", "list", "list", "list"])
+        let gaps = blocks.indices.map { MessageContent.spacing(before: blocks[$0], after: $0 == 0 ? nil : blocks[$0 - 1]) }
+        #expect(gaps == [0, 6, 12, 6])
+    }
 }

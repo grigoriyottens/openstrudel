@@ -175,6 +175,8 @@ struct MessageContent: View, Equatable {
         var content = AttributedString()
         var marker = ""
         var level = 0
+        /// The outermost list this item belongs to, so two lists in a row keep paragraph spacing.
+        var list: Int?
         var quoteDepth = 0
         var language: String?
         var table: MarkdownTable?
@@ -242,7 +244,9 @@ struct MessageContent: View, Equatable {
             if let itemIndex = components.firstIndex(where: { if case .listItem = $0.kind { return true }; return false }),
                case .listItem(let ordinal) = components[itemIndex].kind {
                 let item = components[itemIndex]
-                block.level = max(0, components.filter { $0.kind == .orderedList || $0.kind == .unorderedList }.count - 1)
+                let lists = components.filter { $0.kind == .orderedList || $0.kind == .unorderedList }
+                block.level = max(0, lists.count - 1)
+                block.list = lists.last?.identity
                 if seenListItems.insert(item.identity).inserted {
                     block.marker = components.dropFirst(itemIndex + 1).first?.kind == .orderedList ? "\(ordinal)." : "•"
                 }
@@ -260,7 +264,7 @@ struct MessageContent: View, Equatable {
         guard let previous else { return 0 }
         if block.kind == "heading" { return 24 }
         if previous.kind == "heading" { return 8 }
-        if block.kind == "list" && previous.kind == "list" { return 6 }
+        if block.kind == "list" && previous.kind == "list" && block.list == previous.list { return 6 }
         return 12
     }
 
@@ -350,8 +354,14 @@ private struct ListItem: View {
     let marker: String
     let level: Int
     let content: AttributedString
-    @ScaledMetric(relativeTo: .body) private var markerWidth: CGFloat = 20
+    /// Wide enough for "10." at the reading size, so two-digit lists keep the same text edge.
+    @ScaledMetric(relativeTo: .body) private var markerWidth: CGFloat = ListItem.marker
     private let gap: CGFloat = 8
+    #if os(macOS)
+    private static let marker: CGFloat = 24
+    #else
+    private static let marker: CGFloat = 28
+    #endif
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: gap) {
