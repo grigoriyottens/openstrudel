@@ -1,10 +1,10 @@
 {
   "В приложении": {
-    "ru": "В приложении",
     "en": "In the app",
     "fr": "Dans l’application",
     "es": "En la app",
-    "he": "באפליקציה"
+    "he": "באפליקציה",
+    "ru": "В приложении"
   },
   "Завиток": {
     "en": "Swirl",
@@ -4892,13 +4892,6 @@
     "he": "קבוצה",
     "ru": "Группа"
   },
-  "В приложении": {
-    "en": "In the app",
-    "fr": "Dans l’application",
-    "es": "En la app",
-    "he": "באפליקציה",
-    "ru": "В приложении"
-  },
   "Подключения для этой группы.": {
     "en": "Connections for this group.",
     "fr": "Connexions de ce groupe.",
@@ -6649,41 +6642,6 @@
     "he": "אפשר לכתוב מה צריך…",
     "ru": "Напишите, что нужно…"
   },
-  "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">Общий помощник</span></span>": {
-    "en": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">General assistant</span></span>",
-    "ru": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">Общий помощник</span></span>",
-    "fr": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">Assistant général</span></span>",
-    "es": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">Asistente general</span></span>",
-    "he": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">עוזר כללי</span></span>"
-  },
-  "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>Что сделать?</h1><p>Напишите, с чем помочь. Чтобы обратиться к другому сотруднику, выберите его в списке.</p></div></div>": {
-    "en": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>What would you like to do?</h1><p>Tell me what you need. Choose another assistant from the list to work with them.</p></div></div>",
-    "ru": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>Что сделать?</h1><p>Напишите, с чем помочь. Чтобы обратиться к другому сотруднику, выберите его в списке.</p></div></div>",
-    "fr": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>Que souhaitez-vous faire ?</h1><p>Dites-moi ce qu’il vous faut. Pour travailler avec un autre assistant, choisissez-le dans la liste.</p></div></div>",
-    "es": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>¿Qué te gustaría hacer?</h1><p>Dime qué necesitas. Elige otro asistente de la lista para trabajar con él.</p></div></div>",
-    "he": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>מה נעשה היום?</h1><p>אפשר לכתוב מה צריך. כדי לעבוד עם עוזר אחר, בוחרים אותו ברשימה.</p></div></div>"
-  },
-  "<b>●</b> готов": {
-    "en": "<b>●</b> ready",
-    "ru": "<b>●</b> готов",
-    "fr": "<b>●</b> prêt",
-    "es": "<b>●</b> listo",
-    "he": "<b>●</b> מוכן"
-  },
-  "<h2>Резервная копия сотрудников</h2><p id=\"backup-summary\">Сотрудники, переписка, файлы и расписания — в одном файле.</p><label>Устройство<select id=\"archive-device\" class=\"field\"></select></label><p>При импорте текущая команда сохранится. Новые расписания будут на паузе. Вход в OpenAI и доступ к сервисам не переносятся.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Защитить копию паролем</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Пароль · не менее 12 символов\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">Файл без пароля. Храните его в безопасном месте.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Сохранить копию</button><button class=\"secondary\" id=\"import-team\">Восстановить из копии</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Закрыть</button></div>": {
-    "en": "<h2>Back up your assistants</h2><p id=\"backup-summary\">Assistants, chats, files and schedules in one file.</p><label>Device<select id=\"archive-device\" class=\"field\"></select></label><p>Import keeps your current team. New schedules start paused. OpenAI sign-in and service access aren’t transferred.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Protect with a password</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Password · at least 12 characters\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">This file has no password. Keep it in a safe place.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Save backup</button><button class=\"secondary\" id=\"import-team\">Restore from backup</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Close</button></div>",
-    "ru": "<h2>Резервная копия сотрудников</h2><p id=\"backup-summary\">Сотрудники, переписка, файлы и расписания — в одном файле.</p><label>Устройство<select id=\"archive-device\" class=\"field\"></select></label><p>При импорте текущая команда сохранится. Новые расписания будут на паузе. Вход в OpenAI и доступ к сервисам не переносятся.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Защитить копию паролем</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Пароль · не менее 12 символов\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">Файл без пароля. Храните его в безопасном месте.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Сохранить копию</button><button class=\"secondary\" id=\"import-team\">Восстановить из копии</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Закрыть</button></div>",
-    "fr": "<h2>Sauvegarder vos assistants</h2><p id=\"backup-summary\">Assistants, conversations, fichiers et programmations dans un seul fichier.</p><label>Appareil<select id=\"archive-device\" class=\"field\"></select></label><p>L’importation conserve votre équipe actuelle. Les nouvelles programmations seront en pause. Les connexions OpenAI et aux services ne sont pas transférées.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Protéger par un mot de passe</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Mot de passe · 12 caractères minimum\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">Ce fichier n’a pas de mot de passe. Conservez-le en lieu sûr.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Enregistrer une sauvegarde</button><button class=\"secondary\" id=\"import-team\">Restaurer une sauvegarde</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Fermer</button></div>",
-    "es": "<h2>Copia de tus asistentes</h2><p id=\"backup-summary\">Asistentes, chats, archivos y programaciones en un solo archivo.</p><label>Dispositivo<select id=\"archive-device\" class=\"field\"></select></label><p>La importación conserva tu equipo actual. Las programaciones nuevas estarán en pausa. No se transfieren la sesión de OpenAI ni los accesos a servicios.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Proteger con contraseña</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Contraseña · al menos 12 caracteres\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">Este archivo no tiene contraseña. Guárdalo en un lugar seguro.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Guardar copia</button><button class=\"secondary\" id=\"import-team\">Restaurar una copia</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Cerrar</button></div>",
-    "he": "<h2>גיבוי העוזרים</h2><p id=\"backup-summary\">עוזרים, שיחות, קבצים ולוחות זמנים בקובץ אחד.</p><label>מכשיר<select id=\"archive-device\" class=\"field\"></select></label><p>הייבוא שומר על הצוות הנוכחי. לוחות הזמנים החדשים יהיו מושהים. הכניסה ל-OpenAI והגישה לשירותים לא מועברות.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> הגנה באמצעות סיסמה</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"סיסמה · 12 תווים לפחות\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">הקובץ אינו מוגן בסיסמה. יש לשמור אותו במקום בטוח.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">שמירת גיבוי</button><button class=\"secondary\" id=\"import-team\">שחזור מגיבוי</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">סגירה</button></div>"
-  },
-  "<h2>Восстановить сотрудников</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Отмена</button><button class=\"primary\" id=\"confirm-import\">Добавить сотрудников</button></div>": {
-    "en": "<h2>Restore assistants</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Cancel</button><button class=\"primary\" id=\"confirm-import\">Add assistants</button></div>",
-    "ru": "<h2>Восстановить сотрудников</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Отмена</button><button class=\"primary\" id=\"confirm-import\">Добавить сотрудников</button></div>",
-    "fr": "<h2>Restaurer les assistants</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Annuler</button><button class=\"primary\" id=\"confirm-import\">Ajouter des assistants</button></div>",
-    "es": "<h2>Restaurar asistentes</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Cancelar</button><button class=\"primary\" id=\"confirm-import\">Añadir asistentes</button></div>",
-    "he": "<h2>שחזור עוזרים</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">ביטול</button><button class=\"primary\" id=\"confirm-import\">הוספת עוזרים</button></div>"
-  },
   "Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.": {
     "en": "Update OpenStrudel on this assistant’s device to choose a model.",
     "ru": "Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.",
@@ -7663,5 +7621,12 @@
     "fr": "Ajoutez la clé privée complète, avec les lignes BEGIN et END. Une clé publique ne permet pas de se connecter.",
     "es": "Añade la clave privada completa, incluidas las líneas BEGIN y END. Una clave pública no sirve para iniciar sesión.",
     "he": "יש להוסיף את המפתח הפרטי במלואו, כולל שורות BEGIN ו-END. מפתח ציבורי אינו מתאים לכניסה."
+  },
+  "Message {0}": {
+    "en": "Message {0}",
+    "fr": "Message à {0}",
+    "es": "Mensaje para {0}",
+    "he": "הודעה אל {0}",
+    "ru": "Сообщение для {0}"
   }
 }
