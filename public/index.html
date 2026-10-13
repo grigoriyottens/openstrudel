@@ -209,9 +209,9 @@
     .composer-wrap { position: absolute; inset-inline: 0; bottom: 0; padding: 0 max(var(--gutter), calc((100% - var(--column)) / 2)) var(--composer-edge); pointer-events: none; }
     .composer { pointer-events: auto; display: flex; align-items: flex-end; gap: var(--space-2); min-height: 48px; padding: var(--space-2); border-radius: var(--radius-composer); background: var(--glass); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); box-shadow: inset 0 0 0 1px var(--glass-edge), var(--shadow); transition: box-shadow .15s; }
     .composer:focus-within { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), var(--shadow); }
-    .composer textarea { flex: 1; min-width: 0; height: 32px; max-height: 186px; padding: 5px 0 5px var(--space-2); margin: 0; border: 0; outline: 0; resize: none; background: transparent; font-size: 15px; line-height: 22px; }
-    .composer textarea::placeholder { color: var(--secondary); opacity: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .send { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-text); color: var(--canvas); transition: background-color .15s, color .15s, transform .1s; }
+    .composer textarea { flex: 1; min-width: 0; height: var(--control); max-height: 186px; padding: 5px var(--space-2); margin: 0; border: 0; outline: 0; resize: none; background: transparent; font-size: 15px; line-height: 22px; }
+    .composer textarea::placeholder { color: var(--secondary); opacity: 1; white-space: nowrap; }
+    .send { flex: none; width: var(--control); height: var(--control); display: grid; place-items: center; border-radius: 50%; background: var(--accent-text); color: var(--canvas); transition: background-color .15s, color .15s, transform .1s; }
     .send svg.icon { width: 18px; height: 18px; stroke-width: 2.2; }
     .send:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-text), var(--canvas) 16%); }
     .send:active:not(:disabled) { transform: scale(.92); }
@@ -237,6 +237,8 @@
     @media (pointer: coarse) {
       :root { --control: 44px; }
       .field, .composer textarea { font-size: 16px; }
+      .composer { padding-block: 2px; }
+      .composer textarea { padding-block: 11px; max-height: 198px; }
     }
 
     /* Modals: title, content, a bottom bar with Cancel first and one primary last. */
@@ -459,8 +461,18 @@
       const name = profile?.name || 'OpenStrudel';
       if ($('active-name').textContent !== name) $('active-name').textContent = name;
       $('active-name').title = name;
-      $('draft').placeholder = t("Message {0}", name);
+      $('draft').placeholder = composerPlaceholder(name);
       syncDraft();
+    }
+    /* A placeholder ignores text-overflow, so a long name is shortened to fit; the toolbar shows it in full. */
+    const measure = document.createElement('canvas').getContext('2d');
+    function composerPlaceholder(name) {
+      const draft = $('draft'), style = getComputedStyle(draft);
+      const room = draft.clientWidth - parseFloat(style.paddingInlineStart) - parseFloat(style.paddingInlineEnd);
+      measure.font = style.fontWeight + ' ' + style.fontSize + ' ' + style.fontFamily;
+      let chars = [...name], text = t("Message {0}", name);
+      while (room > 0 && chars.length > 1 && measure.measureText(text).width > room) { chars.pop(); text = t("Message {0}", chars.join('').trimEnd() + '…'); }
+      return text;
     }
 
     /* Transcript: one <article> per message, reconciled by id so a refresh never rebuilds unchanged messages. */
@@ -624,6 +636,7 @@
     new ResizeObserver(() => {
       const root = $('messages'), near = root.scrollHeight - root.scrollTop - root.clientHeight <= 60;
       $('conversation').style.setProperty('--composer-space', $('composer-wrap').offsetHeight + 'px');
+      $('draft').placeholder = composerPlaceholder(activeProfile()?.name || 'OpenStrudel');
       if (near) root.scrollTop = root.scrollHeight;
     }).observe($('composer-wrap'));
     addEventListener('blur', () => document.body.classList.add('inactive'));
@@ -653,7 +666,7 @@
       const draft = $('draft');
       $('send').disabled = !draft.value.trim();
       draft.dir = draft.value ? 'auto' : document.documentElement.dir || 'ltr';
-      draft.style.height = 'auto'; draft.style.height = Math.min(draft.scrollHeight, 186) + 'px';
+      draft.style.height = 'auto'; draft.style.height = draft.scrollHeight + 'px';
     }
     $('draft').addEventListener('input', syncDraft);
     $('composer').onsubmit = event => sendDraft(event);
