@@ -274,3 +274,75 @@ struct InteractionCard: View {
         }
     }
 }
+
+/// The transcript rows: earlier history, messages, pending sends, approvals and status.
+struct TranscriptRows: View {
+    @EnvironmentObject private var client: HomeClient
+    let proxy: ScrollViewProxy
+    @Binding var followsLatest: Bool
+    // Read live from the client so a history load notices a conversation switch.
+    private var draftKey: String { HomeDrafts.key(home: client.baseURLString, profile: client.selectedProfileID, chat: client.selectedChatID) }
+
+    var body: some View {
+        TranscriptStack {
+            if client.hasEarlierMessages {
+                Button {
+                    let anchor = client.messages.first?.id
+                    let conversation = draftKey
+                    followsLatest = false
+                    Task {
+                        await client.loadEarlierMessages()
+                        await Task.yield()
+                        guard conversation == draftKey, let anchor else { return }
+                        proxy.scrollTo(anchor, anchor: .top)
+                    }
+                } label: {
+                    HStack {
+                        if client.isLoadingEarlier { ProgressView().controlSize(.small) }
+                        Text(client.isLoadingEarlier ? L("Загружаем историю…") : L("Показать более ранние сообщения"))
+                    }
+                }
+                    .disabled(client.isLoadingEarlier)
+                    .font(.caption).buttonStyle(.plain).foregroundStyle(AppTheme.secondaryText)
+                    .frame(maxWidth: .infinity, minHeight: controlTarget)
+            }
+            ForEach(MessagePages.rows(client.messages)) { row in
+                // Keep one stable layout node per message,
+                // including its optional day heading.
+                VStack(alignment: .leading, spacing: 16) {
+                    if let day = row.day { DayDivider(date: day) }
+                    MessageBubble(message: row.message)
+                }.id(row.id)
+                    .accessibilityElement(children: .contain)
+            }
+            ForEach(client.visiblePendingMessages) { pending in
+                VStack(alignment: .trailing, spacing: 4) {
+                    PendingMessageBubble(text: pending.text, files: pending.files)
+                    if let error = pending.error {
+                        Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        if pending.operationID == nil {
+                            Button(L("Проверить доставку и повторить")) { Task { await client.retry(pending) } }.buttonStyle(.plain).frame(minHeight: controlTarget)
+                        }
+                    } else if let delivery = pending.deliveryState {
+                        Text(delivery == "waiting_for_device" ? L("Сообщение сохранено. Ждём подключения устройства.") : L("Сообщение сохранено. Передаём сотруднику."))
+                            .font(.caption).foregroundStyle(AppTheme.secondaryText)
+                        if client.canManageOpenAI {
+                            Button(L("Отменить доставку")) { Task { await client.cancelPending(pending) } }.buttonStyle(.plain).frame(minHeight: controlTarget)
+                        }
+                    }
+                }
+                    .id(pending.id)
+            }
+            ForEach(client.interactions) { interaction in
+                InteractionCard(interaction: interaction).id(interaction.id)
+            }
+            if client.isSending && client.interactions.isEmpty {
+                ThinkingBubble(name: client.activeAgentName, appearance: client.activeAppearance).id("thinking-message")
+            }
+            if let error = client.syncError {
+                Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.secondaryText)
+            }
+            Color.clear.frame(height: 1).id("conversation-bottom")
+        }
+    }
+}
