@@ -2,7 +2,7 @@
 
 ## Scope and release state
 
-This continues the MacBook checkpoint `d3418d1` on `codex/server-journey-completion`. The objective is a complete journey from server setup to ChatGPT sign-in and a useful first assistant task, including recovery. These source changes have not yet been published as a Mac, iOS, Home or Sparkle release. The published Home package remains 35.1.
+This continues the MacBook checkpoint `d3418d1` on `codex/server-journey-completion`. The objective is a complete journey from server setup to ChatGPT sign-in and a useful first assistant task, including recovery. These changes were merged in PR #18 and published in build 36 on 13 October. See the [release and deployment evidence](releases/2026-10-13-server-recovery.md); the remaining live acceptance boundaries below are still separate.
 
 ## Changes
 
@@ -33,13 +33,13 @@ This continues the MacBook checkpoint `d3418d1` on `codex/server-journey-complet
 
 The test file is `server-check-20261012.txt`, containing `OpenStrudel server check: 17 × 23 = 391.` Its SHA-256 is `111a787c57e12f8a6ac6a3da060b96a7231f331bfb643bb89755867daa94f9d4`.
 
-The useful-task, restart and service-interruption checks used the initial isolated QA bundle built from this branch, before the final generated-name and service-notice localization edits. Updating that ad-hoc-signed QA bundle changed its signature, and the new binary could not read the old saved Keychain connection. The earlier authorized QA bundle was restored for connection testing. This exposed the missing Keychain recovery action; that action is now implemented, built and covered by the four new tests. The latest candidate visibly shows **Unlock connection** and remains responsive while macOS authorization is pending. Completing that real permission request requires the user: Computer Use refused control of SecurityAgent. No Keychain ACL, password or security setting was changed to bypass it. Final connected-state UI acceptance is still pending.
+The useful-task, restart and service-interruption checks used the initial isolated QA bundle built from this branch, before the final generated-name and service-notice localization edits. Updating that ad-hoc-signed QA bundle changed its signature, and the new binary could not read the old saved Keychain connection. The earlier authorized QA bundle was restored for connection testing. This exposed the missing Keychain recovery action; that action is implemented, built and covered by four new tests. The candidate visibly showed **Unlock connection** and remained responsive while macOS authorization was pending. Computer Use refused control of SecurityAgent; no Keychain ACL, password or security setting was changed to bypass it. On 13 October the recovered QA app displayed the same server online, all 16 assistants, history and the verified attachment. This closes saved-connection recovery, but does not replace the fresh-server first-sign-in checks.
 
 Before and after the QA service interruption, independent authenticated HTTPS checks verified all 16 existing employee records, the node identity and certificate were unchanged. The consistent private QA snapshot is on that server under `/var/lib/openstrudel-qa-snapshots/recovery-20261012T193431Z/`.
 
 ## Remaining acceptance gates
 
-1. Complete the real Keychain permission request, then verify the final native account sheet visually: first sign-in, code copying, successful authorization, **Continue later**, and creating the first assistant. Prior MacBook evidence confirms official ChatGPT authorization and a real reply, but not every state of this new sheet.
+1. Verify the final native account sheet on a fresh server: first sign-in, code copying, successful authorization, **Continue later**, and creating the first assistant. Saved-Keychain recovery is now verified. Prior MacBook evidence confirms official ChatGPT authorization and a real reply, but not every state of this new sheet.
 2. Exercise the preserved failed Home 35 recovery record with the corrected installer. The working, authorized 35.1 installation must not be overwritten to manufacture this result. Fault-injection tests are not a substitute for that live acceptance.
 3. Repeat installation on a clean supported OS. The current server reused Docker and packages from the failed first attempt. No second paid resource was created on Mac mini.
 4. Keep integrated provider purchasing gated until real offer/payment/provisioning acceptance passes. Do not publish missing prices as a working checkout.
@@ -48,7 +48,7 @@ Before and after the QA service interruption, independent authenticated HTTPS ch
 
 ## Evidence handling
 
-Private test logs, result bundles, fixture, QA bundles and recovery receipts are under `.data/server-journey-2026-10-12/` in this worktree. Credentials and private test state stay out of Git. Test artifacts use the native build wrapper's locked staging copy. Production app/runtime data were not replaced by this continuation.
+Private test logs, result bundles, fixture, QA bundles and recovery receipts are under `.data/server-journey-2026-10-12/` in this worktree. Credentials and private test state stay out of Git. Test artifacts use the native build wrapper's locked staging copy. The subsequent build 36 production update is documented separately, with backup, atomic replacement, health and data checks.
 
 The integration test exports the entire disposable server team. Repeating its restore grows the QA catalogue; do not use it as a polling health check or run it against a personal/production Home.
 
