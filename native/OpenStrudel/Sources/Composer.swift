@@ -65,7 +65,7 @@ struct Composer: View {
         .overlay {
             if dropTargeted {
                 RoundedRectangle(cornerRadius: Radius.composer, style: .continuous)
-                    .strokeBorder(AppTheme.accent, lineWidth: 2).allowsHitTesting(false)
+                    .strokeBorder(AppTheme.accentText, lineWidth: 2).allowsHitTesting(false)
             }
         }
         .onDrop(of: [.fileURL, .image], isTargeted: $dropTargeted) { providers in
@@ -369,14 +369,15 @@ struct Composer: View {
 
 }
 
-/// The one tinted control: an accent circle with a white glyph, and the system's
-/// quiet fill and tertiary glyph while there is nothing to send.
+/// The one filled control: an ink circle with a canvas-coloured glyph, and the system's
+/// quiet fill and tertiary glyph while there is nothing to send. A custom style, because
+/// AppKit greys prominent buttons out whenever the window is inactive.
 private struct SendButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(isEnabled ? AnyShapeStyle(.white) : AnyShapeStyle(.tertiary))
+            .foregroundStyle(isEnabled ? AnyShapeStyle(AppTheme.canvas) : AnyShapeStyle(.tertiary))
             .frame(width: ComposerMetrics.send, height: ComposerMetrics.send)
             .background(fill(pressed: configuration.isPressed), in: Circle())
             .frame(width: controlTarget, height: controlTarget)
@@ -385,7 +386,8 @@ private struct SendButtonStyle: ButtonStyle {
 
     private func fill(pressed: Bool) -> AnyShapeStyle {
         guard isEnabled else { return AnyShapeStyle(.quaternary) }
-        return AnyShapeStyle(pressed ? AppTheme.accent.mix(with: .black, by: 0.2) : AppTheme.accent)
+        // Pressing moves the ink a step toward the canvas in both appearances.
+        return AnyShapeStyle(pressed ? AppTheme.accentText.mix(with: AppTheme.canvas, by: 0.25) : AppTheme.accentText)
     }
 }
 
