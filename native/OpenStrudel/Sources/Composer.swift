@@ -140,12 +140,13 @@ struct Composer: View {
     /// actions share the microphone and send columns.
     private var queueTray: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // A control-sized row, so the clock sits on the corner's centre exactly like the plus below.
             HStack(spacing: ComposerMetrics.spacing) {
                 Image(systemName: "clock").frame(width: controlTarget)
                 Text(L("После ответа"))
             }
             .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
-            .padding(.top, 12).padding(.bottom, 4)
+            .frame(height: controlTarget).padding(.top, ComposerMetrics.padding)
             .accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
             ScrollView {
                 VStack(spacing: 0) {
@@ -211,15 +212,8 @@ struct Composer: View {
         }
     }
 
-    private func controlGlyph(_ name: String) -> some View {
-        Image(systemName: name).font(ComposerMetrics.glyph).foregroundStyle(AppTheme.secondaryText)
-            .frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
-    }
-
-    private func rowGlyph(_ name: String) -> some View {
-        Image(systemName: name).font(ComposerMetrics.rowGlyph).foregroundStyle(AppTheme.secondaryText)
-            .frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
-    }
+    private func controlGlyph(_ name: String) -> some View { ControlGlyph(name: name, font: ComposerMetrics.glyph) }
+    private func rowGlyph(_ name: String) -> some View { ControlGlyph(name: name, font: ComposerMetrics.rowGlyph) }
 
     /// A menu draws its own label only with the plain style; borderless hands it to AppKit,
     /// which drops the 32-pt target and the secondary colour.
@@ -388,6 +382,19 @@ private struct SendButtonStyle: ButtonStyle {
         guard isEnabled else { return AnyShapeStyle(.quaternary) }
         // Pressing moves the ink a step toward the canvas in both appearances.
         return AnyShapeStyle(pressed ? AppTheme.accentText.mix(with: AppTheme.canvas, by: 0.25) : AppTheme.accentText)
+    }
+}
+
+/// A borderless control's glyph: SecondaryText, and the system's tertiary while disabled.
+private struct ControlGlyph: View {
+    @Environment(\.isEnabled) private var isEnabled
+    let name: String
+    let font: Font
+
+    var body: some View {
+        Image(systemName: name).font(font)
+            .foregroundStyle(isEnabled ? AnyShapeStyle(AppTheme.secondaryText) : AnyShapeStyle(.tertiary))
+            .frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
     }
 }
 
