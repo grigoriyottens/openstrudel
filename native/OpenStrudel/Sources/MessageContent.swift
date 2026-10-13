@@ -360,6 +360,7 @@ private struct ListItem: View {
     let marker: String
     let level: Int
     let content: AttributedString
+    @Environment(\.layoutDirection) private var direction
     /// Wide enough for "10." at the reading size, so two-digit lists keep the same text edge.
     @ScaledMetric(relativeTo: .body) private var markerWidth: CGFloat = ListItem.marker
     private let gap: CGFloat = 8
@@ -371,7 +372,9 @@ private struct ListItem: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: gap) {
-            Text(marker)
+            // A marker has no letters, so it would read in the window's direction: "1." turns
+            // into ".1" beside English in the Hebrew interface. Isolate it in its item's direction.
+            Text((direction == .rightToLeft ? "\u{2067}" : "\u{2066}") + marker + "\u{2069}")
                 .foregroundStyle(AppTheme.secondaryText)
                 .monospacedDigit()
                 .fixedSize()
