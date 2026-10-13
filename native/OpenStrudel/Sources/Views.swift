@@ -2302,7 +2302,7 @@ private struct InteractionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(interaction.title).font(.headline)
+            Text(L10n.text(interaction.title)).font(.headline)
             if let detail = interaction.detail, !detail.isEmpty {
                 Text(detail).font(.subheadline).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled)
             }
@@ -2311,11 +2311,11 @@ private struct InteractionCard: View {
                     .buttonStyle(.bordered)
             }
             ForEach(interaction.questions) { question in
-                if !question.question.isEmpty { Text(question.question).font(.subheadline) }
+                if !question.question.isEmpty { Text(L10n.text(question.question)).font(.subheadline) }
                 if question.options.isEmpty {
                     TextField(L("Ваш ответ"), text: Binding(get: { answers[question.id] ?? "" }, set: { answers[question.id] = $0 }))
                         .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel(question.question.isEmpty ? L("Ваш ответ") : question.question)
+                        .accessibilityLabel(question.question.isEmpty ? L("Ваш ответ") : L10n.text(question.question))
                         .frame(minHeight: controlTarget)
                 } else {
                     // Short choices sit side by side; long ones stack.
@@ -2344,7 +2344,7 @@ private struct InteractionCard: View {
                 if interaction.questions.count == 1 { submit() }
             } label: {
                 HStack {
-                    Text(option).fixedSize(horizontal: false, vertical: true)
+                    Text(L10n.text(option)).fixedSize(horizontal: false, vertical: true)
                     if interaction.questions.count > 1 && answers[question.id] == option { Image(systemName: "checkmark") }
                 }.frame(minHeight: controlTarget)
             }.buttonStyle(.bordered).disabled(busy)
@@ -2533,7 +2533,7 @@ private struct ConnectionsView: View {
                         Text(UserFacingError.text(error)).font(.callout).foregroundStyle(AppTheme.warning)
                         Button(L("Повторить")) { Task { await refresh() } }.disabled(loading)
                     }
-                    if let extensionNotice, !extensionNotice.hasPrefix(L("Каталог OpenAI")) { Text(extensionNotice).font(.caption).foregroundStyle(AppTheme.secondaryText) }
+                    if let extensionNotice { Text(L10n.serviceText(extensionNotice)).font(.caption).foregroundStyle(AppTheme.secondaryText) }
                     if client.canManageConnections || client.canManageOpenAI {
                         Button { query = ""; showAdd = true } label: { Label(L("Добавить…"), systemImage: "plus") }
                             .buttonStyle(.bordered).disabled(scope == nil || changing).padding(.top, 8).accessibilityIdentifier("addEmployeeExtension")
@@ -2571,7 +2571,7 @@ private struct ConnectionsView: View {
     private func connectionDetails(_ connection: ServiceConnection) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(connection.name)
-            if let detail = connection.detail { Text(detail).font(.caption).foregroundStyle(AppTheme.secondaryText) }
+            if let detail = connection.detail { Text(L10n.serviceText(detail)).font(.caption).foregroundStyle(AppTheme.secondaryText) }
             if let count = connection.toolCount, connection.connected { Text(L("Инструментов: \(count)")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
             if connection.status == "unavailable" { Text(L("Нет связи с сервисом")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
             if connection.status == "unknown" { Text(L("Не удалось проверить подключение")).font(.caption).foregroundStyle(AppTheme.secondaryText) }

@@ -2,7 +2,7 @@
 
 Verified on 13 October 2026 after resuming the Mac mini work on the MacBook. Starting source: main `e0c909a03a5203f8c443ec76dea2b71150f6b9af`, containing PRs #25–27. The primary MacBook checkout was fast-forwarded from `1b17617`; unrelated untracked files were preserved. Follow-up changes use a separate worktree.
 
-Both follow-up fixes and their tests are merged through [PR #28](https://github.com/mikwiseman/openstrudel/pull/28), main `1780c2a`. This records source integration; the current published binary remains build 40.
+Both follow-up fixes and their tests are merged through [PR #28](https://github.com/mikwiseman/openstrudel/pull/28), main `1780c2a`. This records source integration; the current published binary remains build 40. The subsequent [build 41 local acceptance](2026-10-13-build-41-local.md) verifies automatic startup with a remote employee selected and fixes a separate packaging defect found on this Mac.
 
 ## Delivered artifacts
 
@@ -43,7 +43,7 @@ A complete replacement rollback snapshot was created before updating, with 23 su
 - The actual Mac drag gesture remains unverified: the CUA gesture does not invoke the source provider even in the previously tested minimal SwiftUI fixture. Context-menu/settings transfer and isolated round-trip/recovery acceptance remain the proven paths. No production employee was moved for this inspection.
 - The Mini is visible and online through its saved public app connection. The current MacBook environment cannot resolve its SSH alias or read its remote Codex thread; online app connectivity does not imply those management routes are available.
 - Live WAI VDS still disables purchases and supplies no payable amount. Its profile pins `2d2276516882aee51f79c003320ac226101f3291c1d365f25b03b520ef516a69` against the mutable Home alias, which no longer matches. Agree on a versioned artifact and profile before enabling payment; do not weaken integrity checks. The native protocol client is not a completed checkout UI.
-- One-off mentor changes already exist in wai-web main (`25d33df0`). Exact deployment and live private replay were not confirmed here. Preserve the independent Operations work rather than duplicating it.
+- One-off mentor changes already exist in wai-web main (`25d33df0`). A later read of the School deployment confirms `23e0ea6a`, which includes that change, and successful deployment. Exact live private mutation replay remains unverified. Preserve the independent Operations work rather than duplicating it.
 - Physical iPhone microphone/camera, fresh Google authorization, broad WAN/assistive-technology coverage and the next public App Store materials remain separate checks.
 - Active Claude design worktrees contain additional unmerged changes. Their UI work is not included in this build or this acceptance claim.
 - Sparkle 40 embeds Russian notes. Use English for the next signed feed generation; never edit the signed XML directly.
