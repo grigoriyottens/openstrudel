@@ -76,8 +76,7 @@ private struct MobileQRCodeView: View {
                             Task { await client.inviteMobile(); refreshing = false }
                         } label: {
                             Text(refreshing ? L("Обновляем…") : L("Новая ссылка"))
-                                .frame(minHeight: controlTarget).contentShape(Rectangle())
-                        }.buttonStyle(.plain).disabled(refreshing)
+                        }.secondaryAction().disabled(refreshing)
                     }
                 }
             }
@@ -136,41 +135,41 @@ struct MobileWelcomeView: View {
             if reconnecting {
                 ProgressView().padding(.top, 24).accessibilityLabel(L("Восстанавливаем связь"))
             }
-            VStack(spacing: 12) {
+            Group {
                 if reconnecting {
                     Button { Task { await client.load(quiet: true) } } label: {
                         SetupActionLabel(title: L("Проверить соединение"))
-                    }.adaptiveActionStyle(.glassProminent).controlSize(.large)
+                    }.primaryAction()
                         .disabled(client.isLoading).accessibilityIdentifier("retryHomeConnection")
+                } else {
+                    // Scanning the code another device shows is the way in, so it leads unless a retry does.
+                    scanButton.primaryAction()
                 }
-                // Scanning the code another device shows is the way in, so it leads unless a retry does.
-                emphasised(!reconnecting, Button { Task { await openScanner() } } label: {
-                    let label = SetupActionLabel(title: textSize.isAccessibilitySize ? L("QR-код") : L("Сканировать QR"), icon: "qrcode.viewfinder")
-                    if reconnecting { label.foregroundStyle(.primary) } else { label }
-                })
-                .accessibilityLabel(L("Сканировать QR")).accessibilityIdentifier("scanInvitation")
+            }.padding(.top, 32)
+            VStack(spacing: 0) {
+                if reconnecting { scanButton.secondaryAction() }
                 Button { enteringInvitation = true } label: {
                     SetupActionLabel(title: L("Вставить ссылку"), icon: "link")
-                        .foregroundStyle(.primary)
-                }.adaptiveActionStyle(.glass).controlSize(.large)
+                }.secondaryAction()
                     .accessibilityLabel(L("Вставить ссылку подключения")).accessibilityIdentifier("pasteInvitation")
                 if let cameraError {
                     Text(L10n.serviceText(cameraError)).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 }
-            }.padding(.top, 32)
+            }
+            // Text actions are as tall as the capsule; the gaps subtract that, so the words sit 16 below it.
+            .padding(.top, 16 - TextAction.inset)
             VStack(spacing: 0) {
                 if client.isConfigured { DeviceSignOutButton {}.frame(minHeight: controlTarget) }
                 Button { showingHelp = true } label: {
                     Text(L("Как начать?"))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: controlTarget)
-                        .contentShape(Rectangle())
-                }.buttonStyle(.plain).foregroundStyle(AppTheme.secondaryText)
+                        .frame(maxWidth: .infinity)
+                }.buttonStyle(TextActionStyle(quiet: true))
                     .accessibilityIdentifier("invitationHelp")
             }
-            .font(AppTypography.interface).padding(.top, 12)
+            .font(AppTypography.interface).padding(.top, 32 - 2 * TextAction.inset)
         }
         .sheet(isPresented: $enteringInvitation, onDismiss: confirmInvitation) {
             ConnectionInvitationView { invitation = $0 }
@@ -196,9 +195,11 @@ struct MobileWelcomeView: View {
         }
     }
 
-    @ViewBuilder private func emphasised(_ prominent: Bool, _ button: some View) -> some View {
-        if prominent { button.adaptiveActionStyle(.glassProminent).controlSize(.large) }
-        else { button.adaptiveActionStyle(.glass).controlSize(.large) }
+    private var scanButton: some View {
+        Button { Task { await openScanner() } } label: {
+            SetupActionLabel(title: textSize.isAccessibilitySize ? L("QR-код") : L("Сканировать QR"), icon: "qrcode.viewfinder")
+        }
+        .accessibilityLabel(L("Сканировать QR")).accessibilityIdentifier("scanInvitation")
     }
 
     private func confirmInvitation() {
@@ -362,7 +363,7 @@ struct ConnectionInvitationView: View {
             #if os(iOS)
             .safeAreaInset(edge: .bottom) {
                 Button(action: confirm) { SetupActionLabel(title: continueTitle) }
-                    .adaptiveActionStyle(.glassProminent).controlSize(.large)
+                    .primaryAction()
                     .disabled(!canContinue)
                     .accessibilityIdentifier("continueConnection")
                     .keyboardShortcut(.defaultAction)

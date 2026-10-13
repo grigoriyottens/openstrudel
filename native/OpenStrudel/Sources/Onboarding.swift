@@ -17,7 +17,7 @@ struct WelcomePage<Content: View>: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
-        // The asset accent colours the one prominent action; secondary glass stays clear.
+        // Actions choose their own ink; glass inside shared cards stays clear.
         .tint(nil)
     }
 }
@@ -147,6 +147,9 @@ struct HomeUnavailableView: View {
     @State private var invitation: MacPairing?
     @State private var starting = false
     private var reconnecting: Bool { client.shouldRestoreConnection && client.connectionState == .unavailable }
+    private var remote: Bool { client.isConfigured && !client.isLocalConnection }
+    /// Connecting another device leads only when there is nothing to retry or start here.
+    private var connectingLeads: Bool { !remote && !LocalHome.isAvailable }
 
     var body: some View {
         WelcomePage {
@@ -155,41 +158,42 @@ struct HomeUnavailableView: View {
                         ? L("Пока не удаётся подключиться к вашей команде. Ваши чаты сохранены. Подключимся автоматически.")
                         : client.isSignedOut ? L("Сотрудники сохранены на своих устройствах. Подключитесь снова, чтобы продолжить.") : L("Начните на этом Mac. Создайте сотрудников или восстановите их из копии. Другие устройства можно подключить позже."))
                 .padding(.top, 12)
-            VStack(spacing: 12) {
-                if client.isConfigured && !client.isLocalConnection {
+            VStack(spacing: 8) {
+                if remote {
                     Button { Task { await client.load() } } label: {
                         SetupActionLabel(title: L("Попробовать ещё раз"))
-                    }.buttonStyle(.glassProminent).controlSize(.large)
-                    if let managementURL = DigitalOceanCloud.managementURL(for: client.normalizedBaseURL) {
+                    }.primaryAction()
+                } else if LocalHome.isAvailable {
+                    Button {
+                        starting = true
+                        Task { await client.startLocalHome(); starting = false }
+                    } label: {
+                        SetupActionLabel(title: starting ? L("Готовим ваш Mac…") : L("Начать на этом Mac"))
+                    }.primaryAction()
+                        .disabled(starting).accessibilityIdentifier("setupThisMac")
+                    Text(L("Сотрудники и их файлы будут храниться здесь."))
+                        .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    connectButton.primaryAction()
+                }
+            }.padding(.top, 32)
+            if !connectingLeads {
+                VStack(spacing: 16) {
+                    if remote, let managementURL = DigitalOceanCloud.managementURL(for: client.normalizedBaseURL) {
                         Link(destination: managementURL) {
-                            SetupActionLabel(title: L("Управлять облаком"), icon: "arrow.up.right")
-                        }.buttonStyle(.glass).controlSize(.large)
+                            Label(L("Управлять облаком"), systemImage: "arrow.up.forward")
+                        }.secondaryAction()
                             .accessibilityIdentifier("manageCloudOffline")
                             .accessibilityHint(L("Открыть вашу установку в DigitalOcean"))
                     }
-                } else if LocalHome.isAvailable {
-                    VStack(spacing: 8) {
-                        Button {
-                            starting = true
-                            Task { await client.startLocalHome(); starting = false }
-                        } label: {
-                            SetupActionLabel(title: starting ? L("Готовим ваш Mac…") : L("Начать на этом Mac"))
-                        }.buttonStyle(.glassProminent).controlSize(.large)
-                            .disabled(starting).accessibilityIdentifier("setupThisMac")
-                        Text(L("Сотрудники и их файлы будут храниться здесь."))
-                            .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
-                            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                    }.padding(.bottom, 4)
+                    connectButton.secondaryAction()
                 }
-                Button { showingInvitation = true } label: {
-                    SetupActionLabel(title: L("Подключить другое устройство"))
-                }.buttonStyle(.glass).controlSize(.large)
-                    .disabled(starting).accessibilityIdentifier("setupExisting")
-            }.padding(.top, 32)
-            VStack(spacing: 8) {
+                .font(AppTypography.interface).padding(.top, 16)
+            }
+            HStack(spacing: 24) {
                 if client.isConfigured { DeviceSignOutButton {} }
-                Link(L("Конфиденциальность"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
-                    .buttonStyle(.plain).foregroundStyle(AppTheme.accentText)
+                InkLink(L("Конфиденциальность"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
             }
             .font(AppTypography.meta).padding(.top, 24)
         }
@@ -198,6 +202,14 @@ struct HomeUnavailableView: View {
         }) {
             ConnectDeviceView { invitation = $0 }
         }
+    }
+
+    private var connectButton: some View {
+        Button { showingInvitation = true } label: {
+            if connectingLeads { SetupActionLabel(title: L("Подключить другое устройство")) }
+            else { Text(L("Подключить другое устройство")) }
+        }
+        .disabled(starting).accessibilityIdentifier("setupExisting")
     }
 }
 #endif
@@ -218,7 +230,29 @@ struct OpenAIWelcomeView: View {
                         ? L("Сохранённый вход больше не действует. Войдите снова для сотрудников этого устройства.")
                         : L("Войдите на сайте OpenAI. Этот аккаунт будут использовать сотрудники на «\(client.displayName)»."))
                 .padding(.top, 12)
-            OpenAISettingsCard(showIdentity: false).padding(.top, 32)
+            Group {
+                if client.openAILogin != nil || client.openAILoginPending {
+                    // The code, the browser link and cancelling live in the shared account card.
+                    OpenAISettingsCard(showIdentity: false)
+                } else if client.openAIAccount?.isUnavailable == true {
+                    VStack(spacing: 12) {
+                        error
+                        Button { Task { await client.refreshOpenAIAccount(force: true) } } label: {
+                            SetupActionLabel(title: L("Проверить ещё раз"))
+                        }.primaryAction()
+                            .accessibilityIdentifier("retryOpenAIAccount")
+                    }
+                } else if client.canManageOpenAI {
+                    VStack(spacing: 12) {
+                        error
+                        Button { Task { await client.beginOpenAILogin() } } label: {
+                            SetupActionLabel(title: client.isStartingOpenAILogin ? L("Открываем OpenAI…") : L("Войти в OpenAI"), icon: "arrow.up.forward")
+                        }.primaryAction()
+                            .disabled(client.isStartingOpenAILogin)
+                            .accessibilityIdentifier("signInOpenAI")
+                    }
+                }
+            }.padding(.top, 32)
         }
         .sheet(isPresented: .constant(UserDefaults.standard.bool(forKey: "qa.serverAccount"))) { ServerAccountSetupView(onDone: {}).environmentObject(client) } // QA-TEMP
         .onChange(of: client.openAILogin) { _, login in if let url = login?.url { openURL(url) } }
@@ -228,6 +262,14 @@ struct OpenAIWelcomeView: View {
                 try? await Task.sleep(for: .seconds(1))
                 await client.pollOpenAILogin()
             }
+        }
+    }
+
+    @ViewBuilder private var error: some View {
+        if let error = client.openAIErrorMessage {
+            Text(UserFacingError.text(error))
+                .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

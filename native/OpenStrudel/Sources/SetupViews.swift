@@ -21,11 +21,87 @@ struct SetupActionLabel: View {
         #endif
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
-        #if os(macOS)
-        // A large capsule grows to the 36-pt height macOS gives the actions people came to do.
-        .padding(.vertical, 4)
-        #endif
         .contentShape(Rectangle())
+    }
+}
+
+extension View {
+    /// The one prominent action of a screen: a capsule in ink. The system draws the label in the
+    /// colour that reads on the ink, and the pressed, inactive-window and disabled states.
+    func primaryAction() -> some View {
+        adaptiveActionStyle(.glassProminent)
+            .tint(AppTheme.accentText)
+            #if os(macOS)
+            .controlSize(.extraLarge)
+            #else
+            .controlSize(.large)
+            #endif
+    }
+
+    /// An action beside the primary one: plain ink text.
+    func secondaryAction() -> some View {
+        buttonStyle(TextActionStyle())
+    }
+
+    /// Gives a line of text a comfortable target. Layouts subtract `TextAction.inset` from the gaps
+    /// around it, so the visible gaps between lines stay on the spacing scale.
+    fileprivate func textTarget() -> some View {
+        #if os(macOS)
+        // The pointer target grows; the layout keeps the line's own height.
+        padding(.vertical, TextAction.reach).contentShape(Rectangle()).padding(.vertical, -TextAction.reach)
+        #else
+        frame(minHeight: TextAction.height).contentShape(Rectangle())
+        #endif
+    }
+}
+
+enum TextAction {
+    #if os(macOS)
+    /// Added above and below a line for the pointer, so the target reaches a control's 32 pt.
+    static let reach: CGFloat = 8
+    static let inset: CGFloat = 0
+    #else
+    /// The prominent capsule's height, so stacked targets are equal.
+    static let height: CGFloat = 50
+    /// The part of the target above and below a 22-pt line of body text.
+    static let inset: CGFloat = 14
+    #endif
+}
+
+/// Text that dims while pressed: ink, or the secondary colour for quiet help and footer actions.
+struct TextActionStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    var quiet = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(!isEnabled ? AnyShapeStyle(.tertiary)
+                             : quiet ? AnyShapeStyle(AppTheme.secondaryText) : AnyShapeStyle(AppTheme.accentText))
+            .opacity(configuration.isPressed ? 0.6 : 1)
+            .textTarget()
+    }
+}
+
+/// A link in ink, underlined in the secondary colour at rest and in ink under the pointer.
+struct InkLink: View {
+    let title: String
+    let destination: URL
+    @State private var hovering = false
+
+    init(_ title: String, destination: URL) {
+        self.title = title
+        self.destination = destination
+    }
+
+    var body: some View {
+        Link(destination: destination) {
+            Text(title)
+                .underline(color: hovering ? AppTheme.accentText : AppTheme.secondaryText)
+                .textTarget()
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(AppTheme.accentText)
+        .onHover { hovering = $0 }
     }
 }
 
@@ -64,7 +140,7 @@ struct SetupHeader: View {
 
 /// Every page of the Connect a Device sheet shares one size, so moving between pages never resizes it.
 enum SetupSheet {
-    static let size = CGSize(width: 560, height: 640)
+    static let size = CGSize(width: 560, height: 480)
 }
 
 #if os(macOS)
@@ -243,7 +319,11 @@ private struct SetupLinkRow: View {
 
     var body: some View {
         Link(destination: url) {
-            Label(title, systemImage: "arrow.up.right")
+            Label {
+                Text(title).underline(color: AppTheme.secondaryText)
+            } icon: {
+                Image(systemName: "arrow.up.forward")
+            }
         }
         .foregroundStyle(AppTheme.accentText)
     }
@@ -347,20 +427,16 @@ struct AIDataConsentView: View {
             WelcomeText(L("Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI получает сообщения, нужную часть переписки и выбранные файлы."),
                         L("Другие сервисы получают данные только при обращении к ним."))
                 .padding(.top, 12)
-            // The link's hit target reaches the control height, so the gaps around its text stay 12 and 32.
-            Link(destination: URL(string: "https://waiwai.is/openstrudel/privacy")!) {
-                Text(L("Подробнее о данных")).frame(minHeight: controlTarget).contentShape(Rectangle())
-            }
+            InkLink(L("Подробнее о данных"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
                 .font(AppTypography.interface)
-                .buttonStyle(.plain).foregroundStyle(AppTheme.accentText)
-                .padding(.top, 4)
+                .padding(.top, 12 - TextAction.inset)
             Button(action: accept) {
                 SetupActionLabel(title: textSize.isAccessibilitySize ? L("Разрешить") : L("Разрешить и продолжить"))
             }
-                .adaptiveActionStyle(.glassProminent).controlSize(.large)
+                .primaryAction()
                 .accessibilityLabel(L("Разрешить и продолжить"))
                 .accessibilityIdentifier("acceptAIDataSharing")
-                .padding(.top, 24)
+                .padding(.top, 32 - TextAction.inset)
         }
     }
 }
