@@ -57,7 +57,7 @@ Warm low-chroma neutrals, ink and graphite. Values are light / dark / light incr
 | `SurfaceColor` (new) | `#EEE9E1` / `#262422` / `#EFE9E1` / `#211F1D` | code blocks, file chips, cards, table header, multi-author messages |
 | `UserBubbleColor` (new) | `#E6DFD5` / `#34302D` / `#E0D8CC` / `#3B3633` | the person's message bubble, a step darker than the surface |
 | `SeparatorColor` (new) | `#DCD5CB` / `#3A3633` / `#8F887F` / `#77726D` | hairlines, table rules, quote rule, increased-contrast strokes. Never an input border |
-| `AccentColor` | `#3D3936` / `#6E6964` / `#2B2826` / `#7A746F` | the system accent: selection, focus, switches, checkboxes, default buttons. White on it: 11.4 / 5.4 / 14.6 / 4.6 |
+| `AccentColor` | `#55504C` / `#7B7570` / `#2B2826` / `#7B7570` | the system accent: selection, focus, switches, checkboxes, default buttons. White on it: 8.0 / 4.5 / 14.6 / 4.5; against the sidebar 6.6 / 3.4 and grouped cards ≥ 3.0 in dark |
 | `AccentText` (new) | `#262422` / `#EDEAE6` / `#14120F` / `#FFFFFF` | ink: links (underlined), the primary action's fill (label in `CanvasColor`: 14.0 / 14.3 / 20.7 / 18.9), the send button |
 | `SecondaryText` | `#615B57` / `#ADA8A3` / `#45403C` / `#D2CEC9` | supporting text and meta |
 | `WarningText` | `#865021` / `#DFB681` / `#6D3B12` / `#F6D3A3` | warnings |
