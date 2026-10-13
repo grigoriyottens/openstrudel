@@ -1,8 +1,49 @@
 import CryptoKit
 import Foundation
+import Network
 import Testing
 
 @Suite("Parakeet model installation") struct ParakeetModelTests {
+    @MainActor @Test func asyncDownloadReportsIntermediateProgress() async throws {
+        let listener = try NWListener(using: .tcp, on: .any)
+        defer { listener.cancel() }
+        let queue = DispatchQueue(label: "dictation-download-fixture")
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: queue)
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { _, _, _, _ in
+                Task {
+                    defer { connection.cancel() }
+                    let header = Data("HTTP/1.1 200 OK\r\nContent-Length: 1048576\r\nConnection: close\r\n\r\n".utf8)
+                    connection.send(content: header, completion: .idempotent)
+                    for _ in 0..<16 {
+                        try? await Task.sleep(for: .milliseconds(60))
+                        await withCheckedContinuation { (sent: CheckedContinuation<Void, Never>) in
+                            connection.send(content: Data(repeating: 42, count: 65536), completion: .contentProcessed { _ in sent.resume() })
+                        }
+                    }
+                }
+            }
+        }
+        try await withCheckedThrowingContinuation { (ready: CheckedContinuation<Void, Error>) in
+            listener.stateUpdateHandler = { state in
+                switch state {
+                case .ready: listener.stateUpdateHandler = nil; ready.resume()
+                case .failed(let error): listener.stateUpdateHandler = nil; ready.resume(throwing: error)
+                default: break
+                }
+            }
+            listener.start(queue: queue)
+        }
+        let port = try #require(listener.port)
+        var fractions: [Double] = []
+        let delegate = ParakeetDownloadProgress { if let value = $0 { fractions.append(value) } }
+        let request = URLRequest(url: URL(string: "http://127.0.0.1:\(port.rawValue)/model")!, timeoutInterval: 5)
+        let (file, _) = try await URLSession.shared.download(for: request, delegate: delegate)
+        defer { try? FileManager.default.removeItem(at: file) }
+        #expect(try file.resourceValues(forKeys: [.fileSizeKey]).fileSize == 1048576)
+        #expect(fractions.contains { $0 > 0 && $0 < 1 })
+    }
+
     @Test func damagedDownloadCannotReplaceTheInstalledModel() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

@@ -215,6 +215,8 @@ private struct Sidebar: View {
     @State private var deletion: EmployeeDeletion?
     @State private var confirmDeletion = false
     @State private var deleting = false
+    @State private var movingEmployee: EmployeeMoveRequest?
+    @State private var dropTargetID: String?
 
     private struct EmployeeDeletion {
         let client: HomeClient
@@ -285,6 +287,7 @@ private struct Sidebar: View {
                         SearchEmptyState(query: query) { query = "" }
                     }
                     ForEach(library.visibleClients) { source in
+                        VStack(alignment: .leading, spacing: 3) {
                         let people = library.visibleProfiles(on: source).filter { searchTerm.isEmpty || $0.name.localizedCaseInsensitiveContains(searchTerm) || $0.roleText.localizedCaseInsensitiveContains(searchTerm) }
                         if showsMain || !people.isEmpty {
                             if library.hasOtherDevices {
@@ -305,29 +308,7 @@ private struct Sidebar: View {
                             if source.isEmployeeDraft && searchTerm.isEmpty {
                                 SidebarRow(name: L("Новый сотрудник"), subtitle: L("Опишите его задачу"), selected: source === client, appearance: source.draftAppearance) { library.select(source) }
                             }
-                            ForEach(people) { profile in
-                                SidebarRow(name: profile.name, subtitle: profile.previewText.isEmpty ? profile.roleText : profile.previewText,
-                                           selected: source === client && source.selectedProfileID == profile.id, appearance: profile.resolvedAppearance) {
-                                    closeSearch()
-                                    focusedEmployee = source.id + profile.id
-                                    Task { await library.select(source, profile: profile.id) }
-                                }
-                                .focusable()
-                                .focused($focusedEmployee, equals: source.id + profile.id)
-                                .focusEffectDisabled()
-                                #if os(macOS)
-                                .onDeleteCommand {
-                                    guard !deleting, source.canManageOpenAI else { return }
-                                    requestDeletion(profile, from: source)
-                                }
-                                #endif
-                                .contextMenu {
-                                    Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
-                                    Divider()
-                                    Button(L("Удалить сотрудника…"), role: .destructive) { requestDeletion(profile, from: source) }
-                                        .disabled(deleting || !source.canManageOpenAI || source.homeUnreachable)
-                                }
-                            }
+                            ForEach(people) { profile in employeeRow(profile, on: source) }
                         }
                         let groups = source.telegramGroups.filter { !searchTerm.isEmpty && $0.title.localizedCaseInsensitiveContains(searchTerm) }
                         if !groups.isEmpty {
@@ -345,6 +326,22 @@ private struct Sidebar: View {
                                 .accessibilityIdentifier("telegramConversation-" + group.chatId)
                             }
                         }
+                        }
+                        .contentShape(Rectangle())
+                        .dropDestination(for: String.self) { values, _ in
+                            guard values.count == 1 else { return false }
+                            let parts = values[0].split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+                            guard parts.count == 3, parts[0] == "openstrudel-employee",
+                                  let origin = library.visibleClients.first(where: { $0.id == parts[1] }),
+                                  origin !== source, origin.canManageOpenAI,
+                                  let profile = origin.profiles.first(where: { $0.id == parts[2] }) else { return false }
+                            movingEmployee = EmployeeMoveRequest(source: origin, profile: profile, targetID: source.id)
+                            return true
+                        } isTargeted: { targeted in
+                            if targeted { dropTargetID = source.id }
+                            else if dropTargetID == source.id { dropTargetID = nil }
+                        }
+                        .background(dropTargetID == source.id ? AppTheme.accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 12))
                     }
                 }
                 .padding(.horizontal, 9)
@@ -352,6 +349,8 @@ private struct Sidebar: View {
             .scrollIndicators(.hidden)
 
             Spacer(minLength: 12)
+
+            EmployeeMoveStatusButton().padding(.horizontal, 12)
 
             HiddenEmployeesButton().padding(.horizontal, 22)
 
@@ -378,6 +377,7 @@ private struct Sidebar: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 13)
         }
+        .sheet(item: $movingEmployee) { EmployeeMoveView(request: $0) }
         .alert(L("Удалить «\(deletion?.name ?? L("сотрудника"))»?"), isPresented: $confirmDeletion) {
             Button(L("Отмена"), role: .cancel) {}
             Button(L("Удалить"), role: .destructive) {
@@ -391,6 +391,33 @@ private struct Sidebar: View {
             }
         } message: {
             Text(L("Сотрудник, переписка и расписания будут удалены с устройства «\(deletion?.device ?? "OpenStrudel")». Отменить удаление нельзя."))
+        }
+    }
+
+    private func employeeRow(_ profile: EmployeeProfile, on source: HomeClient) -> some View {
+        SidebarRow(name: profile.name, subtitle: profile.previewText.isEmpty ? profile.roleText : profile.previewText,
+                   selected: source === client && source.selectedProfileID == profile.id, appearance: profile.resolvedAppearance,
+                   dragPayload: "openstrudel-employee|" + source.id + "|" + profile.id) {
+            closeSearch()
+            focusedEmployee = source.id + profile.id
+            Task { await library.select(source, profile: profile.id) }
+        }
+        .focusable()
+        .focused($focusedEmployee, equals: source.id + profile.id)
+        .focusEffectDisabled()
+        #if os(macOS)
+        .onDeleteCommand {
+            guard !deleting, source.canManageOpenAI else { return }
+            requestDeletion(profile, from: source)
+        }
+        #endif
+        .contextMenu {
+            Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
+            Button(L("Перенести на другое устройство…"), systemImage: "arrow.right.square") { movingEmployee = EmployeeMoveRequest(source: source, profile: profile) }
+                .disabled(!source.canManageOpenAI)
+            Divider()
+            Button(L("Удалить сотрудника…"), role: .destructive) { requestDeletion(profile, from: source) }
+                .disabled(deleting || !source.canManageOpenAI || source.homeUnreachable)
         }
     }
 
@@ -419,10 +446,27 @@ private struct SidebarRow: View {
     let selected: Bool
     let appearance: AgentAppearance?
     var symbol: String? = nil
+    var dragPayload: String? = nil
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        if let dragPayload {
+            button.draggable(dragPayload)
+        } else {
+            button
+        }
+    }
+
+    private var button: some View {
+        Button(action: action) { rowContent }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
+        .accessibilityValue(subtitle)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .help(name + (subtitle.isEmpty ? "" : "\n" + subtitle))
+    }
+
+    private var rowContent: some View {
             HStack(spacing: 11) {
                 if let symbol {
                     Image(systemName: symbol).font(.title3).foregroundStyle(AppTheme.accent)
@@ -439,15 +483,14 @@ private struct SidebarRow: View {
             .frame(maxWidth: .infinity, minHeight: 60)
             .contentShape(Rectangle())
             .background(selected ? Color.primary.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(name)
-        .accessibilityValue(subtitle)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .help(name + (subtitle.isEmpty ? "" : "\n" + subtitle))
     }
 }
 #endif
+
+private struct EmployeeDetailsPresentation: Identifiable {
+    let profile: EmployeeProfile?
+    var id: String { profile?.id ?? "main" }
+}
 
 private struct ConversationView: View {
     @EnvironmentObject private var library: DeviceLibrary
@@ -457,7 +500,7 @@ private struct ConversationView: View {
     @State private var draft = ""
     @State private var pickedFiles: [PickedFile] = []
     @State private var showEmployees = false
-    @State private var showBotDetails = false
+    @State private var details: EmployeeDetailsPresentation?
     @State private var followsLatest = true
     @State private var userIsScrolling = false
     @State private var hasNewMessages = false
@@ -467,7 +510,9 @@ private struct ConversationView: View {
     var body: some View {
         VStack(spacing: 0) {
             #if os(macOS)
-            ConversationHeader { showBotDetails = true }
+            ConversationHeader { openBotDetails() }
+            #else
+            EmployeeMoveStatusButton()
             #endif
 
             if !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
@@ -568,6 +613,11 @@ private struct ConversationView: View {
                 }
                 .scrollIndicators(.hidden)
                 .defaultScrollAnchor(.bottom, for: .initialOffset)
+                #if os(iOS)
+                // Attachments settle after the initial scroll. Keep the end
+                // anchored only while the reader follows new replies.
+                .defaultScrollAnchor(followsLatest ? .bottom : nil, for: .sizeChanges)
+                #endif
                 #if os(macOS)
                 .mask(EdgeFade())
                 #endif
@@ -681,7 +731,7 @@ private struct ConversationView: View {
                     .accessibilityLabel(L("Чаты"))
             }
             ToolbarItem(placement: .principal) {
-                ConversationTitle { focused = false; showBotDetails = true }
+                ConversationTitle { focused = false; openBotDetails() }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 if client.activeProfile == nil {
@@ -694,8 +744,8 @@ private struct ConversationView: View {
         .sheet(isPresented: $showEmployees) {
             EmployeePicker(isPresented: $showEmployees).environmentObject(client)
         }
-        .sheet(isPresented: $showBotDetails) {
-            if let profile = client.activeProfile {
+        .sheet(item: $details) { presentation in
+            if let profile = presentation.profile {
                 BotDetailsView(profile: profile).environmentObject(client)
             } else {
                 NavigationStack {
@@ -707,13 +757,19 @@ private struct ConversationView: View {
                         }.padding(24)
                     }
                         .navigationTitle("OpenStrudel")
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { showBotDetails = false } } }
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { details = nil } } }
                 }
                 #if os(macOS)
                 .frame(width: 500, height: 400)
                 #endif
             }
         }
+    }
+
+    private func openBotDetails() {
+        // Keep the presented employee stable when a transfer refresh removes
+        // it from the source catalogue while its progress sheet is still open.
+        details = EmployeeDetailsPresentation(profile: client.activeProfile)
     }
 
     /// Messages and the composer share one column.
@@ -839,14 +895,22 @@ private struct ConversationTitle: View {
 private struct ConversationSources: View {
     @EnvironmentObject private var client: HomeClient
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                source(title: L("В приложении"), symbol: "bubble.left", conversation: nil)
-                ForEach(client.employeeTelegramChats) { chat in
-                    source(title: chat.title, symbol: "paperplane", conversation: chat.conversationId,
-                           detail: chat.enabled == false ? L("Telegram · бот на паузе") : "Telegram")
-                }
-            }.padding(.horizontal, 2)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    source(title: L("В приложении"), symbol: "bubble.left", conversation: nil)
+                    ForEach(client.employeeTelegramChats) { chat in
+                        source(title: chat.title, symbol: "paperplane", conversation: chat.conversationId,
+                               detail: chat.enabled == false ? L("Telegram · бот на паузе") : "Telegram")
+                    }
+                }.padding(.horizontal, 2)
+            }
+            .onChange(of: client.selectedChatID, initial: true) {
+                proxy.scrollTo(client.selectedChatID ?? "app", anchor: .center)
+            }
+            .onChange(of: client.employeeTelegramChats.map(\.conversationId)) {
+                proxy.scrollTo(client.selectedChatID ?? "app", anchor: .center)
+            }
         }
         .scrollIndicators(.hidden)
         .fixedSize(horizontal: false, vertical: true)
@@ -869,6 +933,7 @@ private struct ConversationSources: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier(conversation.map { "conversationSource-" + $0 } ?? "conversationSource-app")
         .help(detail.map { title + " · " + $0 } ?? title)
+        .id(conversation ?? "app")
     }
 }
 
@@ -1491,6 +1556,7 @@ private struct EmployeePicker: View {
     @State private var query = ""
     @State private var showingSettings = false
     @State private var showingHistory = false
+    @State private var movingEmployee: EmployeeMoveRequest?
     private var searchTerm: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var showsMain: Bool { searchTerm.isEmpty || "OpenStrudel".localizedCaseInsensitiveContains(searchTerm) }
 
@@ -1521,6 +1587,8 @@ private struct EmployeePicker: View {
                             .accessibilityIdentifier("employee-" + profile.id)
                             .contextMenu {
                                 Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
+                                Button(L("Перенести на другое устройство…"), systemImage: "arrow.right.square") { movingEmployee = EmployeeMoveRequest(source: source, profile: profile) }
+                                    .disabled(!source.canManageOpenAI)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(L("Скрыть"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }.tint(.gray)
@@ -1547,6 +1615,7 @@ private struct EmployeePicker: View {
             .background(HomeBackground())
             .navigationTitle(L("Чаты"))
             .navigationDestination(isPresented: $showingHistory) { ConversationBrowser(isPresented: $isPresented, embedded: true) }
+            .sheet(item: $movingEmployee) { EmployeeMoveView(request: $0) }
             #if os(iOS)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: L("Найти чат"))
             #else
@@ -1766,6 +1835,7 @@ private struct BotDetailsView: View {
                 }
                 ModelSettingsView(agentID: profile.id)
                 if client.health?.homeProtocol == 1 { AgentAccountPreference(profile: profile) }
+                EmployeeMoveButton(profile: profile, disabled: hasChanges || isSaving)
                 if !client.schedules.isEmpty {
                     Divider()
                     Text(L("Расписание")).font(.subheadline.weight(.medium))

@@ -32,6 +32,13 @@ export class HomeApi {
     let path = url.pathname; const method = request.method ?? "GET";
     const auth = request.headers.authorization?.replace(/^Bearer /, "") ?? "";
     if (path.startsWith("/v1/agent-transfer/")) throw new HomeError("Этапы переноса доступны только устройствам команды.", 403);
+    // Independent homes keep their own owners and credentials. The viewing
+    // client coordinates the existing durable transfer steps on both homes.
+    if (path.startsWith("/v1/employee-transfer/")) {
+      if (!owner) throw new HomeError("Переносить сотрудников может владелец устройства.", 403);
+      if (this.home.state.role !== "primary") throw new HomeError("Подключитесь напрямую к устройству сотрудника.", 409);
+      return;
+    }
     if (path === "/v1/home/identity" && method === "GET") return wireJSON({ protocol: 1, nodeId: this.home.state.nodeId, homeId: this.home.state.id, role: this.home.state.role, epoch: this.home.state.epoch });
     if (path === "/v1/home/pair" && method === "POST") return wireJSON(this.home.pair(auth, object((await jsonBody(request)).node) as any));
     if (path === "/v1/home/poll" && method === "POST") {

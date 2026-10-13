@@ -13,7 +13,7 @@ export const hiddenAgent = (store: Store, agent: string) => ["moved", "staged"].
 export function assertAgentWritable(store: Store, agent: string) {
   if (store.getSetting("employee.deleted." + agent)) throw new HomeError("Сотрудник удалён.", 410);
   const lock = agentTransfer(store, agent);
-  if (lock) throw new HomeError(lock.phase === "moved" ? "Агент перенесён на другое устройство. Обновите подключение к главному." : "Агент переносится. Новое поручение можно отправить после завершения.", 423);
+  if (lock) throw new HomeError(lock.phase === "moved" ? "Сотрудник перенесён на другое устройство. Откройте его там." : "Сотрудник переносится. Новое поручение можно отправить после завершения.", 423);
 }
 
 type Bundle = { format: "openstrudel.agent-move"; version: 1; id: string; sourceAgent: string; agentId: string; archive: AgentArchive; metadata: MoveMetadata };
@@ -98,6 +98,7 @@ export class LocalAgentMoves {
     throw new HomeError("Неизвестный этап переноса.", 404);
   }
   private async prepare(input: any, previous: any) {
+    if (previous?.agent && (previous.agent !== input.agent || previous.bundle && previous.bundle.agentId !== input.agentId)) throw new HomeError("Этот перенос относится к другому сотруднику.", 409);
     if (previous?.phase === "canceled") throw new HomeError("Перенос отменён.", 409);
     if (previous?.bundle) return { ready: true, digest: previous.digest, bundle: previous.bundle };
     if (previous?.phase === "moved") throw new HomeError("Агент уже передан.", 409);
