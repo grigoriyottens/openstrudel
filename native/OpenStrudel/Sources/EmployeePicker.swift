@@ -28,12 +28,14 @@ struct EmployeePicker: View {
                     if showsMain || !people.isEmpty {
                     Section {
                         if showsMain {
-                            EmployeePickerRow(name: "OpenStrudel", subtitle: source.displayName, selected: source === client && source.selectedProfileID == nil, appearance: nil) {
+                            EmployeePickerRow(name: "OpenStrudel", subtitle: source.displayName, selected: source === client && source.selectedProfileID == nil,
+                                              appearance: nil, offline: source.isOffline(nil)) {
                                 Task { await library.select(source, profile: nil); dismiss() }
                             }
                         }
                         ForEach(people) { profile in
-                            EmployeePickerRow(name: profile.name, subtitle: profile.previewText.isEmpty ? profile.roleText : profile.previewText, selected: source === client && source.selectedProfileID == profile.id, appearance: profile.resolvedAppearance) {
+                            EmployeePickerRow(name: profile.name, subtitle: profile.previewText.isEmpty ? profile.roleText : profile.previewText, selected: source === client && source.selectedProfileID == profile.id,
+                                              appearance: profile.resolvedAppearance, offline: source.isOffline(profile)) {
                                 Task { await library.select(source, profile: profile.id); dismiss() }
                             }
                             .accessibilityIdentifier("employee-" + profile.id)
@@ -61,8 +63,6 @@ struct EmployeePicker: View {
                 }
                 HiddenEmployeesButton()
             }
-            .scrollContentBackground(.hidden)
-            .background(HomeBackground())
             .navigationTitle(L("Чаты"))
             .navigationDestination(isPresented: $showingHistory) { ConversationBrowser(isPresented: $isPresented, embedded: true) }
             #if os(iOS)
@@ -84,6 +84,7 @@ struct EmployeePicker: View {
             }
         }
         .sheet(isPresented: $showingSettings) { SettingsView().environmentObject(client) }
+        .modifier(InterfaceLanguage())
     }
 }
 
@@ -147,8 +148,6 @@ struct ConversationBrowser: View {
                 }) { SearchEmptyState(query: query) { query = "" } }
             }
         }
-        .scrollContentBackground(.hidden)
-        .background(HomeBackground())
         .navigationTitle(L("Переписки"))
         .searchable(text: $query, prompt: L("Найти переписку"))
         .toolbar {
@@ -167,41 +166,47 @@ struct ConversationBrowser: View {
     }
 }
 
+/// A row like the Mac sidebar: the character at 36, 12 to the name, the name over one line of preview.
+/// An employee whose device is out of reach rests in grey and says so in words.
 struct EmployeePickerRow: View {
     @Environment(\.dynamicTypeSize) private var textSize
     let name: String
     let subtitle: String
     let selected: Bool
     let appearance: AgentAppearance?
+    var offline = false
     var symbol: String? = nil
     let action: () -> Void
+    private var preview: String { offline ? L("Нет связи") : subtitle }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 11) {
+            HStack(spacing: 12) {
                 if !textSize.isAccessibilitySize {
-                    if let symbol { Image(systemName: symbol).font(.title2).foregroundStyle(AppTheme.accent).frame(width: 42, height: 42) }
-                    else { AgentAvatar(appearance: appearance, size: 42) }
+                    if let symbol {
+                        Image(systemName: symbol).font(.title3).foregroundStyle(AppTheme.secondaryText)
+                            .frame(width: AvatarSize.row, height: AvatarSize.row)
+                    } else {
+                        AgentAvatar(appearance: appearance, size: AvatarSize.row).offlineCharacter(offline)
+                    }
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(name).font(.body.weight(.medium)).lineLimit(textSize.isAccessibilitySize ? nil : 2)
-                        .foregroundStyle(Color.primary)
-                    if !subtitle.isEmpty {
-                        Text(subtitle).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                    Text(name).font(AppTypography.interface.weight(.medium)).foregroundStyle(Color.primary)
+                        .lineLimit(textSize.isAccessibilitySize ? nil : 1)
+                    if !preview.isEmpty {
+                        Text(preview).font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
                             .lineLimit(textSize.isAccessibilitySize ? nil : 1)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 0)
-                if selected { Image(systemName: "checkmark").foregroundStyle(AppTheme.secondaryText) }
+                if selected { Image(systemName: "checkmark").fontWeight(.semibold).foregroundStyle(AppTheme.accent) }
             }
-            .padding(.vertical, 5)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.automatic)
         .accessibilityLabel(name)
-        .accessibilityValue(subtitle)
+        .accessibilityValue(preview)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
@@ -211,9 +216,9 @@ struct SearchEmptyState: View {
     let clear: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(L("Ничего не найдено")).font(.headline)
+            Text(L("Ничего не найдено")).font(AppTypography.interface.weight(.semibold))
             Text(L("Нет совпадений для «\(query)». Проверьте название или очистите поиск."))
-                .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
             Button(L("Очистить поиск"), action: clear).frame(minHeight: controlTarget)
         }.padding(.vertical, 16).accessibilityIdentifier("searchEmptyState")
     }
