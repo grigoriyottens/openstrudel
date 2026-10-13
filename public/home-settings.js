@@ -38,12 +38,17 @@ function arrange(page) {
   order.forEach((button, index) => { if (page.actions.children[index] !== button) page.actions.insertBefore(button, page.actions.children[index] || null); });
 }
 /* kind: false for a secondary action, true for the main action, 'destructive' for a destructive main action,
-   'danger' for a destructive secondary action. A new main action demotes the previous one. */
+   'danger' for a destructive secondary action. A new main action demotes the previous one. Return in a text field
+   presses the main action, as the default button does on the Mac; a textarea keeps Return for a new line. */
 function action(page, title, work, kind = false) {
   const main = kind === true || kind === 'destructive';
   const button = element('button', title, kind === true ? 'primary' : kind === 'destructive' || kind === 'danger' ? 'destructive' : 'secondary');
   button.type = 'button';
-  if (main) { for (const other of page.actions.querySelectorAll('[data-main="true"]')) { delete other.dataset.main; if (other.classList.contains('primary')) other.className = 'secondary'; } button.dataset.main = 'true'; }
+  if (main) {
+    for (const other of page.actions.querySelectorAll('[data-main="true"]')) { delete other.dataset.main; if (other.classList.contains('primary')) other.className = 'secondary'; }
+    button.dataset.main = 'true';
+    page.box.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target.matches('input:not([type=checkbox])') && !button.disabled) { e.preventDefault(); button.click(); } };
+  }
   button.onclick = async () => { button.disabled = true; page.error.textContent = ''; try { await work(); } catch(e) { page.report(e); } finally { button.disabled = false; } };
   page.actions.append(button); arrange(page); return button;
 }
@@ -157,13 +162,14 @@ function showWelcome(error) {
   const language=languageField(page,()=>{state.invitationDraft=input.value;showWelcome();$('interface-language').focus();});
   language.className='language-line'; page.box.append(language);
   if(error) page.report(error);
-  action(page,t("Подключиться"),async()=>{
-    const url=new URL(input.value.trim());
+  const connect=action(page,t("Подключиться"),async()=>{
+    let url; try { url=new URL(input.value.trim()); } catch { throw new Error(t("В ссылке нет приглашения.")); }
     if(url.origin!==location.origin) throw new Error(t("Это приглашение для другого устройства. Откройте его адрес в браузере."));
     const invite=new URLSearchParams(url.hash.slice(1)).get('invite'); if(!invite) throw new Error(t("В ссылке нет приглашения."));
     const session=await api('/auth/session',{method:'POST',body:JSON.stringify({key:invite})});
     state.csrf=session.csrf; state.owner=session.owner; closeModal(); await bootstrapWeb();
   },true);
+  const ready=()=>{connect.disabled=!input.value.trim();}; input.addEventListener('input',ready); ready();
   input.focus();
 }
 window.addEventListener('hashchange',()=>{ if(new URLSearchParams(location.hash.slice(1)).has('invite')) void bootstrapWeb(); });
