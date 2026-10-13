@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// One size for every page of a multi-page sheet. The bar under it holds Cancel on every page,
-/// so pushing a page never changes the sheet's height. It fits the smallest window.
+/// One size for every page of a multi-page sheet. It fits the smallest window.
 enum Sheet {
     #if os(macOS)
     static let width: CGFloat? = 560
@@ -10,6 +9,27 @@ enum Sheet {
     static let width: CGFloat? = nil
     static let height: CGFloat? = nil
     #endif
+}
+
+/// A multi-page sheet. On Mac its bar belongs to the sheet, so every page keeps the bar and pushing a page
+/// never resizes the sheet. On iOS the bar items sit on the first page, where the navigation bar shows them.
+struct SheetStack<Root: View, Bar: ToolbarContent>: View {
+    @ViewBuilder let root: () -> Root
+    @ToolbarContentBuilder let bar: () -> Bar
+
+    var body: some View {
+        #if os(macOS)
+        NavigationStack { root() }
+            .toolbar(content: bar)
+            .frame(width: Sheet.width, height: Sheet.height)
+            .presentationSizing(.form)
+            .modifier(InterfaceLanguage())
+        #else
+        NavigationStack { root().toolbar(content: bar) }
+            .presentationSizing(.form)
+            .modifier(InterfaceLanguage())
+        #endif
+    }
 }
 
 /// Pages a details sheet pushes. The sheet's stack owns them, so a push never resizes the sheet.
@@ -27,8 +47,11 @@ struct DetailsHeader<Name: View>: View {
             AgentAvatar(appearance: appearance, size: AvatarSize.header)
             VStack(alignment: .leading, spacing: 2) {
                 // An editable name keeps to the interface edge like the role, whatever script it is in.
+                // A Mac text field reads "leading" by its text's own direction, so right to left
+                // names the physical right edge instead.
                 name().font(AppTypography.title)
                     .multilineTextAlignment(layoutDirection == .rightToLeft ? .trailing : .leading)
+                    .environment(\.layoutDirection, .leftToRight)
                 if !role.isEmpty {
                     Text(role).font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
@@ -103,7 +126,7 @@ struct BotDetailsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        SheetStack {
             Form {
                 Section {
                     DetailsHeader(appearance: appearance, role: profile.roleText) {
@@ -145,7 +168,7 @@ struct BotDetailsView: View {
                     NavigationLink(value: DetailsPage.services) { DetailsRow(title: L("Сервисы и навыки"), symbol: "link") }
                     NavigationLink(value: DetailsPage.telegram) { DetailsRow(title: "Telegram", symbol: "paperplane", value: telegramChats) }
                 }
-                Section { ModelSettingsView(agentID: profile.id) }
+                Section(L("Модель и скорость")) { ModelSettingsView(agentID: profile.id) }
                 if client.health?.homeProtocol == 1 { Section { AgentAccountPreference(profile: profile) } }
                 if !client.schedules.isEmpty || client.scheduleRuns.first?.error != nil {
                     Section(L("Расписание")) { schedules }
@@ -188,18 +211,14 @@ struct BotDetailsView: View {
                 }
             }
             .task { await client.loadChatSettings() }
-        }
-        // Cancel belongs to the sheet, so every page keeps the same bar and the sheet keeps its size.
-        .toolbar {
+        } bar: {
+            // Cancel belongs to the sheet: it stays on every page and closes the whole sheet.
             ToolbarItem(placement: .cancellationAction) {
                 Button(L("Отмена")) { if hasChanges { confirmDiscard = true } else { dismiss() } }
                     .disabled(isSaving).keyboardShortcut(.cancelAction)
                     .accessibilityIdentifier("cancelEmployeeChanges")
             }
         }
-        .frame(width: Sheet.width, height: Sheet.height)
-        .presentationSizing(.form)
-        .modifier(InterfaceLanguage())
     }
 
     @ViewBuilder private var schedules: some View {
@@ -252,7 +271,7 @@ struct MainAssistantDetailsView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
+        SheetStack {
             Form {
                 Section {
                     DetailsHeader(appearance: nil, role: L("Помощник для ваших задач")) { Text(verbatim: "OpenStrudel") }
@@ -260,7 +279,7 @@ struct MainAssistantDetailsView: View {
                 Section {
                     NavigationLink(value: DetailsPage.services) { DetailsRow(title: L("Сервисы и навыки"), symbol: "link") }
                 }
-                Section { ModelSettingsView(agentID: "main") }
+                Section(L("Модель и скорость")) { ModelSettingsView(agentID: "main") }
             }
             .formStyle(.grouped)
             .navigationTitle("OpenStrudel")
@@ -268,13 +287,9 @@ struct MainAssistantDetailsView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .navigationDestination(for: DetailsPage.self) { _ in ConnectionsView(embedded: true) }
-        }
-        .toolbar {
+        } bar: {
             ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() }.keyboardShortcut(.defaultAction) }
         }
-        .frame(width: Sheet.width, height: Sheet.height)
-        .presentationSizing(.form)
-        .modifier(InterfaceLanguage())
     }
 }
 
@@ -291,7 +306,11 @@ struct TelegramChatsView: View {
 
     var body: some View {
         if embedded { content }
-        else { NavigationStack { content }.presentationSizing(.form).modifier(InterfaceLanguage()) }
+        else {
+            SheetStack { content } bar: {
+                ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } }
+            }
+        }
     }
 
     private var content: some View {
@@ -307,7 +326,7 @@ struct TelegramChatsView: View {
                         .accessibilityIdentifier("telegramGroupServices")
                 } header: { Text(L("Группа в Telegram")) }
             } else {
-                Section { TelegramSetupView() }
+                Section(L("Telegram на «\(client.executionDeviceName)»")) { TelegramSetupView() }
             }
             if client.telegram?.configured == true && client.openAIAccount?.connected == false {
                 Section {
@@ -339,11 +358,6 @@ struct TelegramChatsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar {
-            if !embedded {
-                ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } }
-            }
-        }
         .navigationDestination(isPresented: $showAccounts) {
             Form { DeviceAccountsView() }.formStyle(.grouped).navigationTitle(L("Аккаунты OpenAI"))
         }
@@ -425,7 +439,11 @@ struct ConnectionsView: View {
     }
     var body: some View {
         if embedded { content }
-        else { NavigationStack { content }.presentationSizing(.form).modifier(InterfaceLanguage()) }
+        else {
+            SheetStack { content } bar: {
+                ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } }
+            }
+        }
     }
 
     private var canManage: Bool { client.canManageConnections || client.canManageOpenAI }
@@ -450,11 +468,6 @@ struct ConnectionsView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar {
-            if !embedded {
-                ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } }
-            }
-        }
     }
 
     private var content: some View {
@@ -503,22 +516,16 @@ struct ConnectionsView: View {
         if !shown.isEmpty {
             Section(L("Навыки и плагины")) {
                 ForEach(shown) { item in
-                    let manageable = item.removable && canManage
-                    VStack(alignment: .leading, spacing: 4) {
-                        if manageable {
+                    Group {
+                        if item.removable && canManage {
                             Toggle(isOn: Binding(get: { item.enabled }, set: { enabled in updateExtension(item, enabled: enabled) })) {
-                                extensionLabel(item)
+                                extensionLabel(item, removable: true)
                             }.disabled(changing || loading)
                         } else {
                             LabeledContent {
                                 Image(systemName: item.enabled ? "checkmark" : "pause.circle")
-                                    .foregroundStyle(item.enabled ? AppTheme.accent : AppTheme.secondaryText)
+                                    .foregroundStyle(item.enabled ? Color.primary : AppTheme.secondaryText)
                             } label: { extensionLabel(item) }
-                        }
-                        if manageable {
-                            Button(L("Удалить…"), role: .destructive) { pendingRemoval = item }
-                                .buttonStyle(.borderless).font(AppTypography.meta).disabled(changing)
-                                .padding(.leading, 32)
                         }
                     }
                     .accessibilityElement(children: .contain)
@@ -527,12 +534,17 @@ struct ConnectionsView: View {
         }
     }
 
-    private func extensionLabel(_ item: EmployeeExtension) -> some View {
+    /// The name, what it does and, when it can go, the quiet way to remove it, all on the text edge.
+    private func extensionLabel(_ item: EmployeeExtension, removable: Bool = false) -> some View {
         Label {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
                 if !item.description.isEmpty {
                     Text(item.description).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText).lineLimit(3)
+                }
+                if removable {
+                    Button(L("Удалить…"), role: .destructive) { pendingRemoval = item }
+                        .buttonStyle(.borderless).font(AppTypography.meta).disabled(changing)
                 }
             }
         } icon: { Image(systemName: item.kind == "plugin" ? "puzzlepiece.extension" : "sparkles").frame(width: 20) }
@@ -597,7 +609,7 @@ struct ConnectionsView: View {
                 }
             }
             if let notice {
-                Label { Text(notice) } icon: { Image(systemName: "checkmark").foregroundStyle(AppTheme.accent).frame(width: 20) }
+                Label { Text(notice) } icon: { Image(systemName: "checkmark").frame(width: 20) }
             }
             if let error {
                 Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
@@ -664,7 +676,7 @@ struct ConnectionsView: View {
 
     @ViewBuilder private func connectionAction(_ connection: ServiceConnection) -> some View {
         if connection.connected {
-            Label { Text(L("Подключён")).foregroundStyle(AppTheme.secondaryText) } icon: { Image(systemName: "checkmark").foregroundStyle(AppTheme.accent) }
+            Label { Text(L("Подключён")).foregroundStyle(AppTheme.secondaryText) } icon: { Image(systemName: "checkmark") }
                 .fixedSize()
         } else {
             Button {
