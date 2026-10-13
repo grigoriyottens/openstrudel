@@ -40,4 +40,4 @@ Private signing, publication, TestFlight, deployment and test receipts are under
 
 ## Remaining acceptance
 
-The provider console and 1Password CLI on Mac mini still require sign-in. Clean-OS cloud installation, the preserved failed Home 35 attempt and deletion of the paid QA VM remain open. The proposed portable dictation engine has not replaced Apple dictation. Physical-device, natural-speech and extended native memory checks retain the boundaries in the central acceptance queue.
+The subsequent [Mac 39 acceptance](2026-10-13-local-network.md) closes clean-OS installation, fresh native ChatGPT sign-in and server-side retry of the preserved failed Home 35 recipe. Provider API access was recovered through the documented WAI VDS host. The [current queue](../remaining-work-2026-10-12.md) records QA retirement and remaining boundaries. The proposed portable dictation engine has not replaced Apple dictation; physical-device, natural-speech and extended native memory checks remain separately scoped.

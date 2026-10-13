@@ -12,7 +12,7 @@ SHA-256: `421ba9bb34baaa9b5adf8014763f6e6c9ce4f53a96bedf38fa54da2423ad65b2`.
 
 ## Cloud configuration and cost
 
-One server, `openstrudel-qa-20261012`, in Amsterdam: Ubuntu 24.04, 2 shared vCPUs, 4 GiB RAM and 40 GiB SSD. No backup or managed-service add-ons. The provider returned **$0.026/hour while on or off** and a $19 equivalent monthly price. This server was bought directly for acceptance, not through an embedded OpenStrudel checkout. The user approved removal after the full acceptance run. The server is still running for the remaining checks; deletion must be confirmed through the provider before this work is closed.
+One server, `openstrudel-qa-20261012`, in Amsterdam: Ubuntu 24.04, 2 shared vCPUs, 4 GiB RAM and 40 GiB SSD. No backup or managed-service add-ons. The provider returned **$0.026/hour while on or off** and a $19 equivalent monthly price. This server was bought directly for acceptance, not through an embedded OpenStrudel checkout. The user approved removal after acceptance. On 13 October, after the remaining server checks, the exact VM was powered off and terminated through the provider API. At 10:41 UTC the provider inventory contained neither its UUID nor its name. The private receipt records the exact identity and mutation IDs; no other server was changed.
 
 ## Verified behavior
 
@@ -43,8 +43,8 @@ Use [the packaging procedure](home-release-packaging.md) for future Home release
 ## Still unverified or unresolved
 
 - No integrated Kamatera purchase flow was added. OpenStrudel currently offers setup of an existing server and a separate DigitalOcean flow; provider provisioning in this test used the official API.
-- A pending install pins its release digest. An already failed Home 35 attempt does not recover merely because the public alias now points to 35.1. The continuation now preserves identity, permits replacement only before installation after a failed service, and atomically publishes the installation marker. Native and script fault-injection tests pass; the real failed-35 retry remains unverified. Do not overwrite users' recovery records or data to bypass that test.
-- The published server still appends the Russian suffix `(импорт)` even in the English client. Source now uses numeric collision suffixes and client-localized default assistant names; existing employees keep their names. Build and unit checks passed, with the final connected UI pass pending. See the continuation report below.
+- A pending install pins its release digest. An already failed Home 35 attempt does not recover merely because the public alias changes. Build 36 adds an explicit retry that permits replacement only before installation after a failed service and retains owner and installation identity. On 13 October, the exact preserved failed recipe was exercised on a separate free Ubuntu VM: real failure, corrected-package retry, Home 38 readiness, matching owner/key/identity, HTTP 401 without authorization, healthy local API and sandbox checks all passed. The working paid Home and the original Mac recovery record were not overwritten. See [the evidence](releases/2026-10-13-local-network.md).
+- The Russian `(импорт)` suffix was replaced by numeric collision suffixes in build 36. New assistants follow the creating client's language; existing employees keep their names. The fresh-server English UI created **New assistant** during Mac 39 acceptance.
 - This run does not close physical-iPhone dictation/interruptions, fresh Google OAuth, live-microphone quality, Windows/Linux desktop or long-running native memory checks. Prior evidence remains scoped in [release 35 acceptance](release-35-acceptance.md).
 - The proposed OpenRamble-based dictation direction is documented [separately](dictation-direction-2026-10-12.md); the Apple speech engine in shipped clients was not replaced.
 
@@ -56,10 +56,10 @@ Use [the packaging procedure](home-release-packaging.md) for future Home release
 | Account settings show the container hostname. | Use the device label the user sees in navigation. | Users should recognize which server owns the account. |
 | The device code is selectable but has no copy action. | Show a short entry hint and a Copy code action with feedback. | Sign-in should not depend on knowing text-selection conventions. |
 
-The Mac mini continuation has added the five-language catalog, passed native tests and Mac/iOS Simulator builds, fixed interrupted identity publication, and verified a useful server task plus app/service restart recovery. These changes are not a published release. The exact evidence and remaining account, Keychain and clean-install checks are in [the continuation report](server-journey-mini-2026-10-12.md).
+The Mac mini continuation shipped these changes in build 36. Mac 39 adds the local-network permission fix and verified clean-server ChatGPT sign-in and tool/file tasks; iOS and Home are at 38. The exact evidence and remaining platform limits are in [the continuation report](server-journey-mini-2026-10-12.md) and [current release](releases/2026-10-13-local-network.md).
 
 ## Evidence and rollback
 
 Private receipts, provider queue/configuration, SSH test keys, installation fixture, archive, screenshots, publication receipt and native logs/results are under `.data/kamatera-acceptance-2026-10-12/`. They are intentionally excluded from Git. The first native result bundle is under `native/OpenStrudel/.data/kamatera-acceptance-2026-10-12/native-server.xcresult`; the restore result is in the main evidence directory.
 
-Publication rollback is `/var/www/openstrudel-home35-1-backup-20261012T130055Z` on `wai-web-prod`. The original failed cloud staging directory is retained on the test VM as `/var/lib/openstrudel-cloud-failed-35`; it contains private bootstrap material and must not be published.
+Publication rollback is `/var/www/openstrudel-home35-1-backup-20261012T130055Z` on `wai-web-prod`. Before retiring the VM, its original failed cloud staging directory was retained privately in the Mac 39 evidence directory for the isolated recovery check. It contains private bootstrap material and must not be published. Synthetic database snapshots and the recovery/deletion receipts were retained there as well.
