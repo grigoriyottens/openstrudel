@@ -2,6 +2,8 @@
 
 Verified on 13 October 2026 after resuming the Mac mini work on the MacBook. Starting source: main `e0c909a03a5203f8c443ec76dea2b71150f6b9af`, containing PRs #25–27. The primary MacBook checkout was fast-forwarded from `1b17617`; unrelated untracked files were preserved. Follow-up changes use a separate worktree.
 
+Both follow-up fixes and their tests are merged through [PR #28](https://github.com/mikwiseman/openstrudel/pull/28), main `1780c2a`. This records source integration; the current published binary remains build 40.
+
 ## Delivered artifacts
 
 | Surface | Fresh verification |

@@ -4,6 +4,8 @@ User requests remain active when new questions arrive. Implementation and verifi
 
 **Latest checkpoint: resumed on MacBook, 13 October evening.** PRs #25, #26 and #27 are merged; the starting main is `e0c909a`. Public Mac/Sparkle and Home **40** were independently downloaded and verified. iOS **40** is `VALID` and `IN_BETA_TESTING` internally. The public App Store submission is still **34**, `WAITING_FOR_REVIEW`. The earlier handoff and chronological entries below retain their original dates; they are not the current release status. See [delivery verification and follow-up](releases/2026-10-13-build-40-follow-up.md).
 
+The MacBook runtime-startup and rollback-backup fixes below are now merged through [PR #28](https://github.com/mikwiseman/openstrudel/pull/28), merge `1780c2a`. They are in main, but not in the published build 40 binary.
+
 | Request | Implementation | Verification |
 | --- | --- | --- |
 | Embedded Parakeet dictation: one optional download, automatic language recognition, no language picker or second application | Published in build 40 | Mac microphone-to-draft, EN/RU/FR/ES, offline recognition, bounded cancellation and idle model unload pass. iOS Simulator downloaded the model and transcribed saved audio into an editable draft; its microphone supplies silence, so physical microphone acceptance remains separate |
@@ -34,7 +36,7 @@ User requests remain active when new questions arrive. Implementation and verifi
 
 ### Next work from this checkpoint
 
-1. Merge the verified local-runtime and backup fixes; include them in the next signed release. Repeat automatic startup after an actual update with a remote employee selected; the manual reconciliation here does not close that release check.
+1. Include the merged local-runtime and backup fixes in the next signed release. Repeat automatic startup after an actual update with a remote employee selected; the manual reconciliation here does not close that release check.
 2. Integrate the active design work only when its owner has finished, then repeat affected Mac/iOS/web paths. Preserve the runtime-startup fix when `Views.swift` is split. Use English release notes.
 3. Complete the available service/Operations acceptance: fresh Google OAuth and live private replay of the deployed one-off mentor command, using isolated fixtures.
 4. Resolve the VDS offer/artifact contract, then finish the native checkout experience and the approved paid pilot. Keep purchase disabled until those checks pass.
