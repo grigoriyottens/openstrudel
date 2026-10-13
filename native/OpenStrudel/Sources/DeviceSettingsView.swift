@@ -380,6 +380,7 @@ struct DeviceAccountsView: View {
         } message: { Text(L("Сотрудники и переписка сохранятся. Для новых поручений понадобится вход.")) }
         .alert(L("Rename account"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField(L("Название аккаунта"), text: $accountName)
+                .autocorrectionDisabled()
             Button(L("Отмена"), role: .cancel) { renaming = nil }
             Button(L("Сохранить")) {
                 guard let account = renaming else { return }
