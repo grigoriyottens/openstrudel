@@ -4234,6 +4234,13 @@
     "he": "הודעה",
     "ru": "Сообщение"
   },
+  "Сообщение для «{0}»": {
+    "en": "Message {0}",
+    "fr": "Message à {0}",
+    "es": "Mensaje para {0}",
+    "he": "הודעה ל־{0}",
+    "ru": "Сообщение для «{0}»"
+  },
   "Return отправляет сообщение. Shift+Return добавляет новую строку.": {
     "en": "Return sends. Shift+Return adds a new line.",
     "fr": "Entrée envoie le message. Maj+Entrée ajoute une ligne.",

@@ -2,10 +2,40 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
+/// The composer's grid. Controls hang in gutters on both sides, so all text inside the glass
+/// starts on one edge, and every shape inside is concentric with the 24-pt glass.
+private enum ComposerMetrics {
+    #if os(macOS)
+    /// 8 + 32 + 8 = 48: one line of text makes a capsule.
+    static let padding: CGFloat = 8
+    static let spacing: CGFloat = 8
+    static let glyph = Font.system(size: 16, weight: .medium)
+    static let rowGlyph = Font.system(size: 13, weight: .medium)
+    #else
+    /// 2 + 44 + 2 = 48 with full-size touch targets.
+    static let padding: CGFloat = 2
+    static let spacing: CGFloat = 4
+    static let glyph = Font.system(size: 19, weight: .medium)
+    static let rowGlyph = Font.system(size: 15, weight: .medium)
+    #endif
+    /// Where typed, queued and placeholder text starts.
+    static var textEdge: CGFloat { padding + controlTarget + spacing }
+    /// 24 − (padding + (target − 28) / 2) = 14 on both platforms, so the circle is concentric.
+    static let send: CGFloat = 28
+    static let tile: CGFloat = 48
+    /// 24 − 12 = 12, so attachment tiles are concentric with the glass.
+    static let tileInset: CGFloat = Radius.composer - Radius.card
+    static let trayHeight: CGFloat = 168
+    static let lines = 8
+}
+
 struct Composer: View {
     @EnvironmentObject private var client: HomeClient
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.layoutDirection) private var layoutDirection
+    #if os(macOS)
+    @Environment(\.fontResolutionContext) private var fontContext
+    #endif
     @Binding var draft: String
     @Binding var files: [PickedFile]
     @FocusState.Binding var focused: Bool
@@ -31,8 +61,13 @@ struct Composer: View {
 
     var body: some View {
         composerContents
-        .glassEffect(.regular, in: .rect(cornerRadius: 25))
-        .overlay { RoundedRectangle(cornerRadius: 25).stroke(AppTheme.accent, lineWidth: dropTargeted ? 2 : 0).allowsHitTesting(false) }
+        .glassEffect(.regular, in: .rect(cornerRadius: Radius.composer, style: .continuous))
+        .overlay {
+            if dropTargeted {
+                RoundedRectangle(cornerRadius: Radius.composer, style: .continuous)
+                    .strokeBorder(AppTheme.accent, lineWidth: 2).allowsHitTesting(false)
+            }
+        }
         .onDrop(of: [.fileURL, .image], isTargeted: $dropTargeted) { providers in
             guard voice.phase == .idle else { return false }
             importProviders(providers); return true
@@ -84,135 +119,165 @@ struct Composer: View {
     }
 
     private var composerContents: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if client.health?.turnControlVersion == 1 && !client.visibleQueuedMessages.isEmpty {
-                Text(L("После ответа")).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 10)
-                ScrollView {
-                    VStack(spacing: 2) {
-                        ForEach(client.visibleQueuedMessages) { queued in
-                            HStack(spacing: 4) {
-                                Button { editingMessage = queued } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(queued.text.isEmpty ? L("Вложение") : queued.text).lineLimit(2)
-                                        if let files = queued.attachments, !files.isEmpty {
-                                            Text(files.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                        }
-                                    }.font(.callout).frame(maxWidth: .infinity, minHeight: controlTarget, alignment: .leading).contentShape(Rectangle())
-                                }.buttonStyle(.plain).disabled(client.health?.queueControlVersion != 1)
-                                    .accessibilityLabel(L("Edit message: \(queued.text.isEmpty ? L("Вложение") : queued.text)"))
-                                    .accessibilityIdentifier("editQueuedMessage-" + queued.id)
-                                if client.health?.queueControlVersion == 1 && client.visibleQueuedMessages.count > 1 {
-                                    Button { Task { await client.moveQueuedMessageFirst(queued) } } label: {
-                                        Image(systemName: "arrow.up.to.line").font(.system(size: 18)).frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
-                                    }.buttonStyle(.plain).disabled(client.visibleQueuedMessages.first?.id == queued.id)
-                                        .accessibilityLabel(L("В начало очереди")).help(L("Отправить первым после текущего ответа"))
-                                }
-                                Button { Task { await client.cancelMessage(queued) } } label: {
-                                    Image(systemName: "xmark").font(.system(size: 18)).frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
-                                }.buttonStyle(.plain).accessibilityLabel(L("Убрать сообщение из очереди"))
-                            }.padding(.horizontal, 16)
-                        }
-                    }
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { queuedContentHeight = $0 }
-                }
-                .frame(height: min(168, queuedContentHeight))
-                .scrollBounceBehavior(.basedOnSize)
-            }
-            if !files.isEmpty {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(files) { file in
-                            HStack(spacing: 8) {
-                                if file.mimeType.hasPrefix("image/"), let image = ChatMedia.thumbnail(file.data) {
-                                    Image(decorative: image, scale: 1).resizable().scaledToFill()
-                                        .frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 8))
-                                } else { Image(systemName: "doc").foregroundStyle(AppTheme.secondaryText).frame(width: 28) }
-                                Text(file.name).font(.caption).lineLimit(1)
-                                Button { files.removeAll { $0.id == file.id } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(AppTheme.secondaryText).frame(width: controlTarget, height: controlTarget).contentShape(Rectangle()) }
-                                    .buttonStyle(.plain).accessibilityLabel(L("Remove \(file.name)"))
-                            }.padding(5).background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
-                        }
-                    }.padding(.horizontal, 12).padding(.top, 9)
-                }.scrollIndicators(.hidden)
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            if client.health?.turnControlVersion == 1 && !client.visibleQueuedMessages.isEmpty { queueTray }
+            if !files.isEmpty { attachmentTiles }
             if voice.phase != .idle {
                 VoiceRecordingRow(voice: voice, canSend: canSend)
             } else {
-                if !voice.detail.isEmpty { Text(L10n.serviceText(voice.detail)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 8) }
-                inputRow
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
+                if !voice.detail.isEmpty {
+                    Text(L10n.serviceText(voice.detail)).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                        .padding(.leading, ComposerMetrics.textEdge).padding(.trailing, ComposerMetrics.padding).padding(.top, 12)
+                }
+                inputRow.padding(ComposerMetrics.padding)
             }
         }
     }
+
+    // MARK: Queue and attachments, inside the glass above the text
+
+    /// Messages that wait for the current reply. Their text shares the draft's edge, and their
+    /// actions share the microphone and send columns.
+    private var queueTray: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: ComposerMetrics.spacing) {
+                Image(systemName: "clock").frame(width: controlTarget)
+                Text(L("После ответа"))
+            }
+            .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+            .padding(.top, 12).padding(.bottom, 4)
+            .accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(client.visibleQueuedMessages) { queued in queuedRow(queued) }
+                }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { queuedContentHeight = $0 }
+            }
+            .frame(height: min(ComposerMetrics.trayHeight, queuedContentHeight))
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .padding(.horizontal, ComposerMetrics.padding)
+    }
+
+    private func queuedRow(_ queued: HomeMessage) -> some View {
+        HStack(spacing: ComposerMetrics.spacing) {
+            Button { editingMessage = queued } label: {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(queued.text.isEmpty ? L("Вложение") : queued.text).font(AppTypography.interface).lineLimit(2)
+                    if let files = queued.attachments, !files.isEmpty {
+                        Text(files.map(\.name).joined(separator: ", ")).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText).lineLimit(1)
+                    }
+                }
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, minHeight: controlTarget, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain).disabled(client.health?.queueControlVersion != 1)
+                .accessibilityLabel(L("Edit message: \(queued.text.isEmpty ? L("Вложение") : queued.text)"))
+                .accessibilityIdentifier("editQueuedMessage-" + queued.id)
+            HStack(spacing: 0) {
+                if client.health?.queueControlVersion == 1 && client.visibleQueuedMessages.count > 1 {
+                    Button { Task { await client.moveQueuedMessageFirst(queued) } } label: { rowGlyph("arrow.up.to.line") }
+                        .buttonStyle(.borderless).disabled(client.visibleQueuedMessages.first?.id == queued.id)
+                        .accessibilityLabel(L("В начало очереди")).help(L("Отправить первым после текущего ответа"))
+                }
+                Button { Task { await client.cancelMessage(queued) } } label: { rowGlyph("xmark") }
+                    .buttonStyle(.borderless).accessibilityLabel(L("Убрать сообщение из очереди"))
+            }
+        }
+        .padding(.leading, controlTarget + ComposerMetrics.spacing)
+    }
+
+    private var attachmentTiles: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 12) {
+                ForEach(files) { file in
+                    AttachmentTile(file: file) { files.removeAll { $0.id == file.id } }
+                }
+            }
+            .padding(.horizontal, ComposerMetrics.tileInset).padding(.top, ComposerMetrics.tileInset)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    // MARK: The control row
 
     @ViewBuilder private var inputRow: some View {
         if textSize.isAccessibilitySize {
             VStack(alignment: .leading, spacing: 0) {
-                draftField.padding(.horizontal, 7)
-                HStack(spacing: 9) { attachmentMenu; Spacer(minLength: 0); inputActions }
+                draftField.padding(.horizontal, ComposerMetrics.tileInset - ComposerMetrics.padding)
+                HStack(spacing: ComposerMetrics.spacing) { attachmentMenu; Spacer(minLength: 0); inputActions }
             }
         } else {
-            HStack(alignment: .bottom, spacing: 9) { attachmentMenu; draftField; inputActions }
+            HStack(alignment: .bottom, spacing: ComposerMetrics.spacing) { attachmentMenu; draftField; inputActions }
         }
     }
 
+    private func controlGlyph(_ name: String) -> some View {
+        Image(systemName: name).font(ComposerMetrics.glyph).foregroundStyle(AppTheme.secondaryText)
+            .frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
+    }
+
+    private func rowGlyph(_ name: String) -> some View {
+        Image(systemName: name).font(ComposerMetrics.rowGlyph).foregroundStyle(AppTheme.secondaryText)
+            .frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
+    }
+
+    /// A menu draws its own label only with the plain style; borderless hands it to AppKit,
+    /// which drops the 32-pt target and the secondary colour.
     private var attachmentMenu: some View {
         Menu {
-                Button(L("Фото"), systemImage: "photo") { showPhotos = true }
-                Button(L("Прикрепить файл"), systemImage: "paperclip") { showFiles = true }
-                Divider()
-                Button(L("Голосовой ввод…"), systemImage: "mic") { showDictation = true }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(AppTheme.secondaryText)
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .frame(width: controlTarget, height: controlTarget)
+            Button(L("Фото"), systemImage: "photo") { showPhotos = true }
+            Button(L("Прикрепить файл"), systemImage: "paperclip") { showFiles = true }
+            Divider()
+            Button(L("Голосовой ввод…"), systemImage: "mic") { showDictation = true }
+        } label: { controlGlyph("plus") }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
             .accessibilityLabel(L("Прикрепить фото или файл"))
             .help(files.count >= AttachmentImport.countLimit ? L("Можно прикрепить до шести файлов") : L("Прикрепить фото или файл до 25 МБ"))
             .disabled(importing || files.count >= AttachmentImport.countLimit)
     }
 
+    private var placeholder: String {
+        client.isEmployeeDraft ? L("Сообщение") : L("Сообщение для «\(client.activeAgentName)»")
+    }
+
     @ViewBuilder private var draftField: some View {
         #if os(macOS)
-        ComposerTextField(text: $draft, focused: Binding(get: { focused }, set: { focused = $0 }), paste: { providers in
+        let font = ComposerTextField.readingFont(in: fontContext)
+        let insets = ComposerTextField.insets(for: font, controlHeight: controlTarget)
+        ComposerTextField(text: $draft, focused: Binding(get: { focused }, set: { focused = $0 }), placeholder: placeholder, paste: { providers in
             guard voice.phase == .idle else { return }
             importProviders(providers)
         }, submit: { if canSend && hasContent && !importing { send(sendMode) } })
-            .overlay(alignment: .leading) {
-                if draft.isEmpty { Text(L("Сообщение")).font(ChatTypography.body).foregroundStyle(AppTheme.secondaryText).allowsHitTesting(false).accessibilityHidden(true) }
-            }
-            .padding(.vertical, 8).frame(minHeight: controlTarget)
+            .padding(.top, insets.top).padding(.bottom, insets.bottom)
         #else
-        TextField(L("Сообщение"), text: $draft, axis: .vertical)
+        TextField(L("Сообщение"), text: $draft, prompt: Text(placeholder).foregroundStyle(AppTheme.secondaryText), axis: .vertical)
                 .accessibilityLabel(L("Сообщение")).accessibilityIdentifier("messageComposer")
                 .textFieldStyle(.plain)
-                .font(ChatTypography.body)
-                .lineLimit(1...(textSize.isAccessibilitySize ? 2 : 6))
-                .padding(.vertical, 8)
+                .font(AppTypography.reading)
+                .lineSpacing(AppTypography.readingLineSpacing)
+                .lineLimit(1...(textSize.isAccessibilitySize ? 2 : ComposerMetrics.lines))
+                .padding(.vertical, 11)
                 .frame(minHeight: controlTarget)
                 .focused($focused)
                 .onSubmit { if canSend && hasContent && !importing { send(sendMode) } }
         #endif
     }
 
+    private var showsSendMode: Bool { hasContent && client.isSending && client.health?.turnControlVersion == 1 }
+
+    private func symbol(for mode: ComposerSendMode) -> String {
+        mode == .queue ? "clock" : layoutDirection == .rightToLeft ? "arrow.turn.down.left" : "arrow.turn.down.right"
+    }
+
     @ViewBuilder private var inputActions: some View {
-            if client.isSending && client.health?.turnControlVersion == 1 {
+        HStack(spacing: 0) {
+            if showsSendMode {
                 Menu {
                     Picker(L("Отправка во время ответа"), selection: $sendMode) {
-                        ForEach(ComposerSendMode.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
-                } label: {
-                    Image(systemName: sendMode == .steer ? "arrow.turn.down.right" : "clock")
-                        .font(.system(size: 18))
-                        .frame(width: controlTarget, height: controlTarget).contentShape(Rectangle())
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden)
+                        ForEach(ComposerSendMode.allCases, id: \.self) { Label($0.title, systemImage: symbol(for: $0)).tag($0) }
+                    }.pickerStyle(.inline)
+                } label: { controlGlyph(symbol(for: sendMode)) }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
                     .accessibilityLabel(sendMode.title).help(sendMode.title)
             }
 
@@ -227,10 +292,11 @@ struct Composer: View {
                         if dictationAssets.state == .ready && UserDefaults.standard.bool(forKey: "openstrudel.dictationIntroduced") { voice.start() }
                         else { showDictation = true }
                     }
-                } label: { Image(systemName: "mic").font(.system(size: 18)).frame(width: controlTarget, height: controlTarget).contentShape(Rectangle()) }
-                    .buttonStyle(.plain).accessibilityLabel(L("Голосовой ввод")).accessibilityIdentifier("voiceInput")
+                } label: { controlGlyph("mic") }
+                    .buttonStyle(.borderless).accessibilityLabel(L("Голосовой ввод")).accessibilityIdentifier("voiceInput")
                 sendButton
             }
+        }
     }
 
     private var canStop: Bool { !hasContent && client.activeMessage != nil && client.health?.turnControlVersion == 1 }
@@ -241,16 +307,10 @@ struct Composer: View {
             else { send(sendMode) }
         } label: {
             Image(systemName: canStop ? "stop.fill" : "arrow.up")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
-                .frame(width: 30, height: 30)
-                .background(colorScheme == .dark ? Color.white : Color.black, in: Circle())
-                .frame(width: controlTarget, height: controlTarget)
-                .contentShape(Rectangle())
+                .font(.system(size: canStop ? 11 : 13, weight: .bold))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SendButtonStyle())
         .disabled(!canSend || (!hasContent && !canStop))
-        .opacity(canSend && (hasContent || canStop) ? 1 : 0.4)
         .accessibilityLabel(canStop ? L("Остановить ответ") : client.isSending ? sendMode.title : L("Отправить"))
         .accessibilityIdentifier("sendMessage")
         .help(canStop ? L("Остановить текущий ответ") : L("Отправить сообщение (⌘Return)"))
@@ -309,6 +369,76 @@ struct Composer: View {
 
 }
 
+/// The one tinted control: an accent circle with a white glyph, and the system's
+/// quiet fill and tertiary glyph while there is nothing to send.
+private struct SendButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(isEnabled ? AnyShapeStyle(.white) : AnyShapeStyle(.tertiary))
+            .frame(width: ComposerMetrics.send, height: ComposerMetrics.send)
+            .background(fill(pressed: configuration.isPressed), in: Circle())
+            .frame(width: controlTarget, height: controlTarget)
+            .contentShape(Rectangle())
+    }
+
+    private func fill(pressed: Bool) -> AnyShapeStyle {
+        guard isEnabled else { return AnyShapeStyle(.quaternary) }
+        return AnyShapeStyle(pressed ? AppTheme.accent.mix(with: .black, by: 0.2) : AppTheme.accent)
+    }
+}
+
+/// A picked photo or file, 48 tall with radius 12 so it nests in the glass.
+private struct AttachmentTile: View {
+    @Environment(\.colorSchemeContrast) private var contrast
+    let file: PickedFile
+    let remove: () -> Void
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Radius.card, style: .continuous) }
+
+    var body: some View {
+        content
+            .frame(height: ComposerMetrics.tile)
+            .clipShape(shape)
+            .overlay { if contrast == .increased { shape.strokeBorder(AppTheme.separator, lineWidth: 1) } }
+            .overlay(alignment: .topTrailing) {
+                // The badge sits on the corner's curve: 4 pt in from each edge.
+                Button(action: remove) {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 16))
+                        .symbolRenderingMode(.palette).foregroundStyle(AppTheme.canvas, AppTheme.secondaryText)
+                        .background(Circle().fill(AppTheme.canvas).padding(-1.5))
+                        .frame(width: controlTarget, height: controlTarget).contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .alignmentGuide(.top) { $0[VerticalAlignment.center] - 4 }
+                .alignmentGuide(.trailing) { $0[HorizontalAlignment.center] + 4 }
+                .accessibilityLabel(L("Remove \(file.name)"))
+            }
+    }
+
+    @ViewBuilder private var content: some View {
+        if file.mimeType.hasPrefix("image/"), let image = ChatMedia.thumbnail(file.data) {
+            Image(decorative: image, scale: 1).resizable().scaledToFill()
+                .frame(width: ComposerMetrics.tile, height: ComposerMetrics.tile)
+                .accessibilityElement().accessibilityLabel(file.name)
+        } else {
+            let details = ChatAttachment(id: file.id.uuidString, conversationId: "", name: file.name, mimeType: file.mimeType, size: file.data.count)
+            HStack(spacing: 8) {
+                Image(systemName: details.icon).font(.system(size: 17)).foregroundStyle(AppTheme.secondaryText).frame(width: 20)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(file.name).font(AppTypography.interface.weight(.medium)).lineLimit(1).truncationMode(.middle)
+                    Text(details.sizeLabel).font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+            .padding(.leading, 12).padding(.trailing, 16)
+            .frame(maxWidth: 220, maxHeight: .infinity, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: false)
+            .background(AppTheme.surface)
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
 struct QueuedMessageEditor: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.dismiss) private var dismiss
@@ -322,36 +452,42 @@ struct QueuedMessageEditor: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                TextEditor(text: $text).font(.body).focused($focused)
-                    .frame(minHeight: 160).accessibilityLabel(L("Текст сообщения в очереди"))
+            VStack(alignment: .leading, spacing: 12) {
+                TextEditor(text: $text)
+                    .font(AppTypography.reading).lineSpacing(AppTypography.readingLineSpacing)
+                    .scrollContentBackground(.hidden)
+                    .focused($focused)
+                    .frame(minHeight: 160)
+                    .accessibilityLabel(L("Текст сообщения в очереди"))
                     .accessibilityIdentifier("queuedMessageText")
                 if let files = message.attachments, !files.isEmpty {
-                    ForEach(files) { file in Label(file.name, systemImage: file.icon).font(.callout).foregroundStyle(.secondary) }
+                    ForEach(files) { file in Label(file.name, systemImage: file.icon).font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText) }
                 }
-                if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.warning).textSelection(.enabled) }
-            }.padding(24).background(HomeBackground())
-                .navigationTitle(L("Изменить сообщение"))
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.disabled(saving).keyboardShortcut(.cancelAction) }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(saving ? L("Сохраняем…") : L("Сохранить")) {
-                            saving = true; error = nil
-                            Task {
-                                do { try await client.editQueuedMessage(message, text: text); dismiss() }
-                                catch { self.error = error.localizedDescription }
-                                saving = false
-                            }
-                        }.disabled(saving || text == message.text || (text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (message.attachments ?? []).isEmpty))
-                    }
+                if let error { Text(L10n.serviceText(error)).font(AppTypography.interface).foregroundStyle(AppTheme.warning).textSelection(.enabled) }
+            }
+            .padding(20)
+            .navigationTitle(L("Изменить сообщение"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.disabled(saving).keyboardShortcut(.cancelAction) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? L("Сохраняем…") : L("Сохранить")) {
+                        saving = true; error = nil
+                        Task {
+                            do { try await client.editQueuedMessage(message, text: text); dismiss() }
+                            catch { self.error = error.localizedDescription }
+                            saving = false
+                        }
+                    }.disabled(saving || text == message.text || (text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && (message.attachments ?? []).isEmpty))
                 }
+            }
         }
         #if os(macOS)
-        .frame(minWidth: 420, idealWidth: 520, minHeight: 300, idealHeight: 380)
+        .frame(idealWidth: 480, idealHeight: 280)
         #endif
+        .presentationSizing(.fitted)
         .interactiveDismissDisabled(saving)
         .onAppear { focused = true }
     }
