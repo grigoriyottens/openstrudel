@@ -334,7 +334,7 @@ function openNavigation() {
   const page=modalPage(t("Сотрудники"));
   const list=group(page.content);
   for(const profile of [null,...state.profiles]) {
-    const avatar=element('span','','avatar'); avatar.append(characterImage(profile?agentAppearance(profile):null,32)); avatar.classList.toggle('offline',isOffline(profile));
+    const avatar=element('span','','avatar'); avatar.append(characterImage(profile?agentAppearance(profile):null,36)); avatar.classList.toggle('offline',isOffline(profile));
     const current=(state.selected||null)===(profile?.id||null);
     const button=row(list,profile?.name||'OpenStrudel',async()=>{closeModal();try{await selectAgent(profile?.id||null);}catch(e){$('status').textContent=e.message;}},{avatar,detail:isOffline(profile)?t("Не на связи"):profile?previewLine(profile.preview)||profile.purpose:t("Помощник для ваших задач"),className:'agent-row'+(current?' current':'')});
     if(current) button.setAttribute('aria-current','page');
