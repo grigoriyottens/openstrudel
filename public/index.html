@@ -246,6 +246,7 @@
       .field, .composer textarea { font-size: 16px; }
       .composer { padding-block: 2px; }
       .composer textarea { padding-block: 11px; max-height: 198px; }
+      .md .copy { width: 44px; height: 44px; top: 0; inset-inline-end: 0; }
     }
 
     /* Modals: title, content, a bottom bar with Cancel first and one primary last. */
@@ -362,6 +363,7 @@
       #active-name { max-width: min(240px, 44vw); }
       #imported-chat { max-width: 30vw; }
       .modal-backdrop { padding: var(--space-4); place-items: end center; }
+      .modal { max-height: calc(100dvh - 2 * var(--space-4)); }
       .modal-actions > * { flex: 1 1 auto; }
     }
     @media (max-width: 480px) { .tone-choices { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
