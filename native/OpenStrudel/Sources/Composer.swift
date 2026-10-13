@@ -464,21 +464,37 @@ struct QueuedMessageEditor: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
+                #if os(macOS)
+                // On the Mac a single-page sheet carries its title in its content, on the text's edge.
+                Text(L("Изменить сообщение")).font(AppTypography.title)
+                #endif
                 TextEditor(text: $text)
                     .font(AppTypography.reading).lineSpacing(AppTypography.readingLineSpacing)
                     .scrollContentBackground(.hidden)
+                    #if os(macOS)
+                    // TextKit pads each line by 5 pt; give it back so the text shares the title's edge.
+                    .padding(.horizontal, -5)
+                    #endif
                     .focused($focused)
                     .frame(minHeight: 160)
                     .accessibilityLabel(L("Текст сообщения в очереди"))
                     .accessibilityIdentifier("queuedMessageText")
                 if let files = message.attachments, !files.isEmpty {
-                    ForEach(files) { file in Label(file.name, systemImage: file.icon).font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText) }
+                    // A fixed icon column, so every name starts on one edge.
+                    ForEach(files) { file in
+                        HStack(spacing: 8) {
+                            Image(systemName: file.icon).frame(width: 20)
+                            Text(file.name).lineLimit(1).truncationMode(.middle)
+                        }
+                        .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
+                        .accessibilityElement(children: .combine)
+                    }
                 }
                 if let error { Text(L10n.serviceText(error)).font(AppTypography.interface).foregroundStyle(AppTheme.warning).textSelection(.enabled) }
             }
-            .padding(20)
-            .navigationTitle(L("Изменить сообщение"))
+            .padding(24)
             #if os(iOS)
+            .navigationTitle(L("Изменить сообщение"))
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
@@ -497,8 +513,8 @@ struct QueuedMessageEditor: View {
         }
         #if os(macOS)
         .frame(idealWidth: 480, idealHeight: 280)
-        #endif
         .presentationSizing(.fitted)
+        #endif
         .interactiveDismissDisabled(saving)
         .onAppear { focused = true }
     }
