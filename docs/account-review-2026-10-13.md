@@ -16,9 +16,11 @@ Provider outages retain the last known identity and show an unavailable state. T
 - Four native account presentation tests and 20 account recovery tests pass. One run hit a temporary file-protection error in the unchanged pending-message test; the complete recovery suite passed on rerun.
 - The real Mac UI was driven against an isolated Home using simulated OpenAI responses: rename, duplicate sign-in with no added row, new-account sign-in appearing without reopening settings, six-account list, limits/credits, unavailable state and automatic recovery. A web rename propagated into the already open Mac settings.
 - The browser UI was driven through its owner invitation and account settings; rename, compact sections and email/plan presentation were inspected. Browser console had no errors or warnings. The invitation overlay now closes when an invitation is accepted in an already open tab.
+- Build 38 was installed and driven on an iPhone 17e simulator running iOS 27: onboarding, account settings, rename, retained email/plan, weekly limits, reset date, credits and extra resets. An initial run reproduced keyboard autocorrection replacing a typed account name when Save was pressed. Autocorrection is now disabled for that field; the rebuilt app preserved the exact typed name. A physical iPhone was not tested in this run.
+- Installed production Mac build 38 was inspected against the updated Mini Home. All three unique accounts and the Rename account action were visible. The duplicate migration preserved the six assistants, 15 conversations, 1,944 messages and three schedules, including assistant account assignments and Telegram bindings.
 - Synthetic sign-in proves the local completion and merge paths, not a fresh human OAuth authorization. Production credentials were inspected only for equality; their contents are not included here.
 
-Private screenshots and logs are under `.data/account-identity-qa-2026-10-13/` and the scoped `/tmp/openstrudel-account*` test logs. Delivery and production migration require separate release receipts.
+Private screenshots and logs are under `.data/account-identity-qa-2026-10-13/` and the scoped `/tmp/openstrudel-account*` test logs. The [build 38 delivery record](releases/2026-10-13-account-consistency.md) distinguishes the public Mac update, production installations and internal TestFlight availability.
 
 ## WAI Core Team
 
