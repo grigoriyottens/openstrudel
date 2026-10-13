@@ -436,6 +436,8 @@ struct TranscriptRows: View {
                 .padding(.top, index == 0 ? start : row.header != nil ? Self.cluster : row.startsTurn ? Self.turn : Self.sameSide)
                 .id(row.id)
                 .accessibilityElement(children: .contain)
+                // No avatars or author labels, so VoiceOver names the speaker here.
+                .accessibilityLabel(speaker(row.message, shared: shared))
                 .accessibilityValue(exactTime(row.message))
             }
             ForEach(Array(pending.enumerated()), id: \.element.id) { index, message in
@@ -463,6 +465,8 @@ struct TranscriptRows: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.top, rows.isEmpty && index == 0 ? start : opens ? Self.cluster : afterPerson ? Self.sameSide : Self.turn)
                 .id(message.id)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(L("Вы"))
             }
             ForEach(Array(client.interactions.enumerated()), id: \.element.id) { index, interaction in
                 InteractionCard(interaction: interaction)
@@ -510,6 +514,11 @@ struct TranscriptRows: View {
 
     private func exactTime(_ message: HomeMessage) -> String {
         message.sentAt.map { ChatClock.exact($0, hasTime: message.hasTime) } ?? ""
+    }
+
+    private func speaker(_ message: HomeMessage, shared: Bool) -> String {
+        guard message.direction == "inbound" else { return client.activeAgentName }
+        return shared ? message.author ?? "" : L("Вы")
     }
 }
 
