@@ -32,7 +32,7 @@ struct OpenStrudelRootView: View {
         screens
         .overlay(alignment: .topTrailing) {
             if client.health == nil || !aiConsent || client.openAIAccount?.connected == false && client.profiles.isEmpty {
-                LanguagePicker(compact: true).padding(16)
+                LanguagePicker().padding(OnboardingLayout.margin)
             }
         }
         .task(id: "\(pollingPhase)-\(client.id)") {

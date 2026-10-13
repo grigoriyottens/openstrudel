@@ -124,18 +124,6 @@ struct LocalizedMessage: ExpressibleByStringLiteral, ExpressibleByStringInterpol
 
 func L(_ message: LocalizedMessage) -> String { L10n.text(message.key, arguments: message.arguments) }
 
-struct LanguagePicker: View {
-    var compact = false
-    var body: some View {
-        Picker(selection: Binding(get: { L10n.shared.language }, set: { L10n.shared.language = $0 })) {
-            ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
-        } label: { Label(L("Language"), systemImage: "globe") }
-        .pickerStyle(.menu)
-        .accessibilityIdentifier("interfaceLanguage")
-        .environment(\.layoutDirection, .leftToRight)
-    }
-}
-
 struct InterfaceLanguage: ViewModifier {
     func body(content: Content) -> some View {
         content.environment(\.locale, L10n.locale)

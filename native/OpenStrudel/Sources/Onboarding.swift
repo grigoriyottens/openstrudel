@@ -12,7 +12,8 @@ struct WelcomePage<Content: View>: View {
                     VStack(spacing: 0) { content }
                         .frame(maxWidth: OnboardingLayout.column)
                         .padding(.horizontal, OnboardingLayout.margin)
-                        .padding(.vertical, 48)
+                        // The top band stays clear of the language menu when the content fills the height.
+                        .padding(.top, 64).padding(.bottom, 48)
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -60,6 +61,34 @@ struct BalancedLines: SwiftUI.Layout {
             if text.sizeThatFits(.init(width: width, height: nil)).height > height + 0.5 { narrow = width } else { wide = width }
         }
         return wide
+    }
+}
+
+/// The first-run language menu: the globe and the current language in the quiet colour. It follows
+/// the interface direction, so in Hebrew it sits at the window's left.
+struct LanguagePicker: View {
+    var body: some View {
+        let language = L10n.shared.language
+        Menu {
+            Picker(L("Language"), selection: Binding(get: { L10n.shared.language }, set: { L10n.shared.language = $0 })) {
+                ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Label(language.title, systemImage: "globe")
+                .labelStyle(.titleAndIcon)
+                .font(AppTypography.interface)
+                .foregroundStyle(AppTheme.secondaryText)
+                .textTarget()
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel(L("Language"))
+        .accessibilityValue(language.title)
+        .accessibilityIdentifier("interfaceLanguage")
     }
 }
 
