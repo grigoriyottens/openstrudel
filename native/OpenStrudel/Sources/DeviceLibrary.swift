@@ -27,6 +27,16 @@ final class DeviceLibrary: ObservableObject {
     var hasOtherDevices: Bool { visibleClients.count > 1 }
     var connectionListKey: String { visibleClients.map { $0.id + ":" + $0.normalizedBaseURL }.joined(separator: "|") }
 
+    var localClientToRestore: HomeClient? {
+        guard !isErasing else { return nil }
+        // A remote employee may be selected when Sparkle relaunches the app.
+        // The saved local Home still needs its bundled runtime reconciled.
+        return clients.first {
+            $0.normalizedBaseURL == "http://127.0.0.1:7788" &&
+                $0.hasToken && !$0.isPairing && !$0.isSignedOut
+        }
+    }
+
     struct EmployeeDestination: Identifiable {
         let client: HomeClient
         let deviceID: String?

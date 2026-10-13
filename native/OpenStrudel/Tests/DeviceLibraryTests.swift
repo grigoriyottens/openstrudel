@@ -3,6 +3,42 @@ import Testing
 
 @Suite(.serialized)
 @MainActor struct DeviceLibraryTests {
+    @Test func restoringLocalRuntimeDoesNotDependOnTheSelectedRemoteEmployee() throws {
+        let name = "OpenStrudel.local-runtime-restore." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        // Construct away from the real local endpoint so the fixture never
+        // reads this Mac's LocalConnection.json or uses its credentials.
+        defaults.set("http://127.0.0.1:57106", forKey: "openstrudel.homeURL")
+        let local = HomeClient(defaults: defaults, connectionID: name + "-local", credentialReader: { account, _ in
+            account.hasSuffix("home-api-token") ? "fixture" : nil
+        })
+        local.baseURLString = "http://127.0.0.1:7788"
+        let remote = HomeClient(defaults: defaults, connectionID: name + "-remote", credentialReader: { _, _ in nil })
+        remote.baseURLString = "https://remote.example"
+        let library = DeviceLibrary(defaults: defaults, clients: [local, remote])
+        library.select(remote)
+        #expect(library.localClientToRestore === local)
+        #expect(library.active === remote)
+        local.baseURLString = "http://127.0.0.1:57106"
+        #expect(library.localClientToRestore == nil, "An unrelated loopback service is not the managed Home")
+    }
+
+    @Test func restoringLocalRuntimeDoesNotReconnectASignedOutDevice() async throws {
+        let name = "OpenStrudel.local-runtime-signed-out." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        defaults.set("http://127.0.0.1:57107", forKey: "openstrudel.homeURL")
+        let local = HomeClient(defaults: defaults, connectionID: name, credentialReader: { account, _ in
+            account.hasSuffix("home-api-token") ? "fixture" : nil
+        })
+        local.baseURLString = "http://127.0.0.1:7788"
+        let library = DeviceLibrary(defaults: defaults, clients: [local])
+        #expect(library.localClientToRestore === local)
+        await local.signOutOnThisDevice()
+        #expect(library.localClientToRestore == nil)
+    }
+
     @Test func lockedCredentialsKeepTheDestinationAndRecoverWithoutPairingAgain() async throws {
         let name = "OpenStrudel.unlock-test." + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))
