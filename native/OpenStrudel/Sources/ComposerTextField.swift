@@ -50,11 +50,22 @@ struct ComposerTextField: NSViewRepresentable {
         }
     }
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
-        guard let editor = nsView.documentView as? NSTextView, let container = editor.textContainer, let layout = editor.layoutManager else { return nil }
-        let width = max(1, proposal.width ?? 400)
-        container.containerSize = NSSize(width: width, height: .greatestFiniteMagnitude)
+        guard let editor = nsView.documentView as? NSTextView else { return nil }
+        return Self.fittingSize(for: editor, width: proposal.width ?? 400)
+    }
+    static func fittingSize(for editor: NSTextView, width proposedWidth: CGFloat) -> CGSize {
+        let width = proposedWidth.isFinite ? max(1, proposedWidth) : 400
+        // SwiftUI probes several widths during layout. Measuring the live text
+        // container resizes NSTextView and invalidates that same layout again.
+        let storage = NSTextStorage(attributedString: editor.attributedString())
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: NSSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = editor.textContainer?.lineFragmentPadding ?? 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
         layout.ensureLayout(for: container)
-        return CGSize(width: width, height: min(126, max(20, ceil(layout.usedRect(for: container).height))))
+        let height = max(layout.usedRect(for: container).maxY, layout.extraLineFragmentUsedRect.maxY)
+        return CGSize(width: width, height: min(126, max(20, ceil(height))))
     }
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ComposerTextField
