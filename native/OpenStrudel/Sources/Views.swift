@@ -208,7 +208,6 @@ private struct Sidebar: View {
     @EnvironmentObject private var client: HomeClient
     @Binding var showSettings: Bool
     @State private var searching = false
-    @State private var showHistory = false
     @State private var query = ""
     private var searchTerm: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     @FocusState private var searchFocused: Bool
@@ -264,15 +263,6 @@ private struct Sidebar: View {
                     .keyboardShortcut("f", modifiers: .command)
 
                     Spacer()
-                    Button { showHistory = true } label: {
-                        Label(L("Переписки"), systemImage: "clock.arrow.circlepath")
-                            .font(.callout).frame(minHeight: 36)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .accessibilityIdentifier("openConversations")
-                    .help(L("История разговоров с ботом"))
-                    Spacer(minLength: 0)
                 }
 
                 NewEmployeeControl(beforeCreate: closeSearch) {
@@ -388,7 +378,6 @@ private struct Sidebar: View {
             .padding(.horizontal, 12)
             .padding(.bottom, 13)
         }
-        .sheet(isPresented: $showHistory) { ConversationBrowser(isPresented: $showHistory) }
         .alert(L("Удалить «\(deletion?.name ?? L("сотрудника"))»?"), isPresented: $confirmDeletion) {
             Button(L("Отмена"), role: .cancel) {}
             Button(L("Удалить"), role: .destructive) {
