@@ -166,7 +166,7 @@ async function openHomeSettings() {
     const hosting=new URL(state.hostingOrigin);
     if(hosting.protocol==='https:'||hosting.protocol==='http:') row(list,t("Серверы: создание и продление"),null,{href:hosting.href});
   }
-  row(group(page.content),t("Выйти на этом устройстве"),openDeviceSignOut,{className:'destructive-row'});
+  row(group(page.content),t("Выйти на этом устройстве"),()=>{state.fromSettings=true;return openDeviceSignOut();},{className:'destructive-row'});
 }
 async function openDevices() {
   const page=modalPage(t("Устройства"),t("Сотрудники остаются на устройстве, где созданы. Для работы с несколькими устройствами откройте приложение OpenStrudel."));
@@ -427,6 +427,7 @@ languageReady.then(()=>bootstrapWeb()).catch(()=>{ const retry=element('button',
 
 async function openDeviceSignOut() {
   const page=modalPage(t("Выйти на этом устройстве?"),t("Сотрудники, переписка, файлы и расписания сохранятся на ваших устройствах. Команда продолжит работать, пока её Mac или сервер включён. Для возвращения понадобится новое приглашение."),{close:'cancel'});
+  if(state.fromSettings) page.close.onclick=()=>void openHomeSettings();
   if($('draft').value.trim()) page.content.append(element('p',t("Черновик останется в этом браузере для повторного подключения к этой команде.")));
   action(page,t("Выйти"),async()=>{ saveDraft(); await api('/auth/logout',{method:'POST'}); clearInterval(state.refreshTimer); location.reload(); },'destructive');
   if(state.owner && state.archiveVersion===1) action(page,t("Сначала сохранить копию…"),openSettings);
@@ -442,6 +443,7 @@ async function openModelSettings(agent, deviceId) {
       for(const item of control.devices) { const o=element('option',item.name+(item.online?'':t(" · нет связи")));o.value=item.id;device.append(o); }
       deviceId ||= control.home.nodeId; device.value=deviceId;
       device.onchange=()=>void openModelSettings(undefined,device.value);page.content.prepend(label);
+      label.hidden=control.devices.length<2;
     }
     const query=new URLSearchParams();if(agent)query.set('agentId',agent);if(deviceId)query.set('deviceId',deviceId);
     const path='/v1/settings/models?'+query;
