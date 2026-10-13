@@ -58,6 +58,10 @@ code { overflow-wrap: anywhere; }
 .text-btn:hover,.link-btn:hover,.text-btn:active,.link-btn:active { background: var(--subtle); }
 .link-btn { color: var(--link); text-decoration: underline; text-decoration-color: var(--muted); text-decoration-thickness: 1px; text-underline-offset: .22em; }
 .link-btn:hover { text-decoration-color: currentColor; }
+/* A text button on a column edge puts its text on that edge; the padding is only its hit area. */
+dialog > .text-btn { display: flex; width: fit-content; }
+dialog > .text-btn, .link-btn, .details > .text-btn, .server-actions > :first-child, .footer-links > :first-child { margin-inline-start: -.75rem; }
+.header-actions > .text-btn:last-child, .page-head > .text-btn, .key-row > .text-btn, .footer-links > :last-child { margin-inline-end: -.75rem; }
 .account-menu { position: relative; }
 .account-menu>summary { display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 50%; width: 2.75rem; height: 2.75rem; font-size: 13px; line-height: 16px; font-weight: var(--semibold); list-style: none; }
 .account-menu>summary::-webkit-details-marker { display: none; }
@@ -237,6 +241,7 @@ dialog p.field-help { font-size: 13px; line-height: 20px; margin: .75rem 0; }
 }
 @media(max-width:480px) {
   .site-header { padding: .75rem 1.25rem; }
+  .brand span { display: none; }
   .main,.main.wide { width: calc(100% - 2.5rem); padding-top: 1.75rem; }
   .hero p { max-width: 19rem; }
   .choices { gap: .5rem; }
@@ -244,8 +249,8 @@ dialog p.field-help { font-size: 13px; line-height: 20px; margin: .75rem 0; }
   .purpose-description { min-height: 4.125rem; margin-bottom: 1rem; }
   .purchase-row { align-items: start; }
   .price span { flex-basis: 100%; }
-  .page-head { align-items: start; gap: .75rem; }
-  .page-head .text-btn { max-width: 6.5rem; line-height: 1.4; }
+  .page-head { flex-wrap: wrap; align-items: start; gap: .75rem; }
+  .page-head > .text-btn { white-space: nowrap; margin-inline: -.75rem 0; }
   .server-card { padding: 1rem; }
   .server-top,.server-bottom { flex-wrap: wrap; gap: .75rem; }
   .server-bottom .btn { padding: .75rem 1rem; font-size: 13px; line-height: 16px; }

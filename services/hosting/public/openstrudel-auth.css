@@ -27,7 +27,7 @@ input { display: block; width: 100%; min-height: 48px; margin-top: 8px; padding:
 input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
 .primary { display: block; width: 100%; min-height: 48px; padding: 12px 24px; border: 0; border-radius: 24px; background: var(--ink); color: var(--canvas); font: inherit; font-weight: 510; text-align: center; text-decoration: none; cursor: pointer; }
 .primary:hover { background: color-mix(in srgb, var(--ink), var(--canvas) 16%); }
-.quiet { display: block; min-height: 44px; margin: 12px auto 0; padding: 12px 8px; border: 0; background: none; color: var(--secondary); font: inherit; cursor: pointer; }
+.quiet { display: block; width: fit-content; min-height: 44px; margin: 12px 0 0; margin-inline-start: -8px; padding: 12px 8px; border: 0; background: none; color: var(--secondary); font: inherit; cursor: pointer; }
 .quiet:hover { color: var(--text); }
 .note, #notice { font-size: 12px; line-height: 16px; }
 .note { margin-top: 32px; }
