@@ -129,20 +129,7 @@ struct ConversationView: View {
             if let profile = client.activeProfile {
                 BotDetailsView(profile: profile).environmentObject(client)
             } else {
-                NavigationStack {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 20) {
-                            ModelSettingsView(agentID: "main")
-                            Divider()
-                            NavigationLink { ConnectionsView(embedded: true) } label: { Label(L("Сервисы и навыки"), systemImage: "link") }
-                        }.padding(24)
-                    }
-                        .navigationTitle("OpenStrudel")
-                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { showBotDetails = false } } }
-                }
-                #if os(macOS)
-                .frame(width: 500, height: 400)
-                #endif
+                MainAssistantDetailsView().environmentObject(client)
             }
         }
     }
