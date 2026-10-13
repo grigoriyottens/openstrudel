@@ -12,14 +12,14 @@ struct OpenStrudelApp: App {
     var body: some Scene {
         #if os(macOS)
         mainWindow
-        .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unifiedCompact)
+        .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1120, height: 760)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button(L("Новый сотрудник")) { library.beginEmployee() }
                     .keyboardShortcut("n", modifiers: .command)
                     .disabled(client.isCreating || library.isErasing)
+                EmployeeDetailsCommand()
             }
             CommandGroup(after: .appInfo) {
                 Button(L("Аккаунты и остатки")) {
@@ -74,7 +74,8 @@ struct OpenStrudelApp: App {
             OpenStrudelRootView()
             #endif
         }
-            .id(client.id + "-" + String(library.viewGeneration))
+            // Only an erase rebuilds the window; each device's conversation keeps its own identity.
+            .id(library.viewGeneration)
             .tint(AppTheme.accent)
             .modifier(InterfaceLanguage())
             #if os(macOS)
@@ -103,3 +104,20 @@ struct OpenStrudelApp: App {
             .environmentObject(library)
     }
 }
+
+#if os(macOS)
+extension FocusedValues {
+    /// Opens the selected employee's details from the menu bar.
+    @Entry var showEmployeeDetails: (() -> Void)?
+}
+
+private struct EmployeeDetailsCommand: View {
+    @FocusedValue(\.showEmployeeDetails) private var showDetails
+
+    var body: some View {
+        Button(L("Настройки сотрудника")) { showDetails?() }
+            .keyboardShortcut("i", modifiers: .command)
+            .disabled(showDetails == nil)
+    }
+}
+#endif

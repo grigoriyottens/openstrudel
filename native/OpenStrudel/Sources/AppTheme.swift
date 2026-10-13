@@ -101,7 +101,7 @@ enum Radius {
 
 enum AvatarSize {
     static let toolbar: CGFloat = 24
-    static let row: CGFloat = 32
+    static let row: CGFloat = 36
     static let header: CGFloat = 64
     static let hero: CGFloat = 96
 }
