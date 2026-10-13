@@ -1,9 +1,13 @@
 function element(tag, text, className) { const e = document.createElement(tag); if (text) e.textContent = text; if (className) e.className = className; return e; }
 /* A modal page: title, content, then a bottom bar with Cancel first and one main action last.
-   close: 'done' (default), 'cancel', or false when the page owns its buttons or must not be dismissed. */
+   close: 'done' (default), 'cancel', or false when the page owns its buttons or must not be dismissed.
+   A page reached from the Settings list leads with a way back to it; a locked page is the whole screen. */
 function modalPage(title, description, { close: closeKind = 'done', locked = false } = {}) {
-  const box = element('div', '', 'page'); box.append(element('h2', title)); if (description) box.append(element('p', description, 'description'));
+  const box = element('div', '', 'page');
+  if (state.fromSettings && !locked) { const back = element('button', '', 'back'); back.type = 'button'; back.append(icon('back', true), element('span', t("Настройки"))); back.onclick = () => void openHomeSettings(); box.append(back); }
+  box.append(element('h2', title)); if (description) box.append(element('p', description, 'description'));
   if (locked) box.dataset.locked = 'true';
+  document.body.classList.toggle('locked', locked);
   const error = element('p'); error.setAttribute('role','alert'); box.append(error);
   const content = element('div', '', 'page-content'); box.append(content);
   const actions = element('div', '', 'modal-actions'); box.append(actions);
@@ -150,11 +154,12 @@ async function bootstrapWeb() {
 }
 window.addEventListener('hashchange',()=>{ if(new URLSearchParams(location.hash.slice(1)).has('invite')) void bootstrapWeb(); });
 async function openHomeSettings() {
+  state.fromSettings=false;
   const page=modalPage(t("Настройки"),t("Сотрудники и переписка находятся на этом устройстве."));
   languageField(page,()=>void openHomeSettings());
   const entries=state.owner ? [[t("Устройства"),openDevices],[t("Настройки сотрудника"),openCurrentAgent],[t("Аккаунты и лимиты"),openAccounts],[t("Модель и скорость"),()=>openModelSettings()],[t("Резервная копия"),openSettings],['Telegram',openTelegramSettings]] : [[t("Аккаунты и лимиты"),openAccounts]];
   const list=group(page.content);
-  for(const [label,fn] of entries) row(list,label,fn);
+  for(const [label,fn] of entries) row(list,label,()=>{state.fromSettings=true;return fn();});
   if(state.hostingOrigin) {
     const hosting=new URL(state.hostingOrigin);
     if(hosting.protocol==='https:'||hosting.protocol==='http:') row(list,t("Серверы: создание и продление"),null,{href:hosting.href});
@@ -182,7 +187,7 @@ async function openDevices() {
 }
 async function openCurrentAgent() {
   const agent=state.selected||'main', profile=state.profiles.find(p=>p.id===agent), name=profile?.name||'OpenStrudel';
-  const page=modalPage(name,t("Настройки изменят новые поручения. Уже начатая работа продолжится с прежним аккаунтом."),{close:'cancel'});
+  const page=modalPage(name,'',{close:'cancel'});
   const list=group(page.content);
   row(list,t("Модель и скорость"),()=>openModelSettings(agent));
   row(list,t("Управление компьютером"),openComputerSettings);
@@ -202,6 +207,7 @@ async function openCurrentAgent() {
     page.content.append(element('p',t("Работает на «{0}».",device?.name||t("вашем устройстве"))));
     const data=await api('/v1/accounts?deviceId='+encodeURIComponent(deviceId)), policy=await api('/v1/agents/'+agent+'/accounts');
     const label=element('label',t("Аккаунт OpenAI")); select=element('select','','field'); label.append(select); page.content.append(label);
+    page.content.append(element('p',t("Настройки изменят новые поручения. Уже начатая работа продолжится с прежним аккаунтом."),'hint'));
     const defaultOption=element('option',t("По умолчанию")); defaultOption.value=''; select.append(defaultOption);
     for(const account of data.accounts) { const option=element('option',(account.account.email||account.name)+' · '+accountPlan(account.account.planType)); option.value=account.id; select.append(option); }
     if(policy.accountIds?.length===1) select.value=policy.accountIds[0];
