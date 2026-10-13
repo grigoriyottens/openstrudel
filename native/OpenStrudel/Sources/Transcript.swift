@@ -70,17 +70,6 @@ struct EmptyChat: View {
     }
 }
 
-/// Messages fade out under the header and above the composer instead of being cut.
-struct EdgeFade: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: 18)
-            Color.black
-            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 18)
-        }
-    }
-}
-
 /// A centred time heading where a new day starts or after half an hour of quiet.
 struct ClusterHeader: View {
     let date: Date

@@ -160,6 +160,10 @@ struct ConversationView: View {
             }
         }
         .scrollIndicators(.hidden)
+        #if os(macOS)
+        // Under a Mac toolbar the soft style draws nothing visible; the hard one blurs and edges it like Settings.
+        .scrollEdgeEffectStyle(.hard, for: .top)
+        #endif
         .defaultScrollAnchor(.bottom, for: .initialOffset)
         .scrollDismissesKeyboard(.interactively)
         .onScrollPhaseChange { oldPhase, phase, context in
