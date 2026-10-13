@@ -21,34 +21,40 @@ struct HiddenEmployeesButton: View {
 private struct HiddenEmployeesView: View {
     @EnvironmentObject private var library: DeviceLibrary
     @Environment(\.dismiss) private var dismiss
+    private var sources: [HomeClient] { library.visibleClients.filter { !library.hiddenProfiles(on: $0).isEmpty } }
+
     var body: some View {
         NavigationStack {
-            List {
-                Text(L("Скрыты только в этом приложении. Сотрудники продолжают работать и доступны на других устройствах."))
-                    .font(.callout).foregroundStyle(.secondary)
-                ForEach(library.visibleClients) { source in
-                    let hidden = library.hiddenProfiles(on: source)
-                    if !hidden.isEmpty {
-                        Section(source.displayName) {
-                            ForEach(hidden) { profile in
-                                HStack(spacing: 12) {
-                                    AgentAvatar(appearance: profile.resolvedAppearance, size: 32)
-                                    Text(profile.name)
-                                    Spacer()
-                                    Button(L("Показать")) { Task { await library.setHidden(false, profile: profile, on: source) } }
-                                        .buttonStyle(.borderless)
-                                        .accessibilityLabel(L("Показать «\(profile.name)»"))
-                                }.padding(.vertical, 4).accessibilityElement(children: .contain)
-                            }
+            Form {
+                ForEach(sources) { source in
+                    Section {
+                        ForEach(library.hiddenProfiles(on: source)) { profile in
+                            HStack(spacing: 12) {
+                                AgentAvatar(appearance: profile.resolvedAppearance, size: AvatarSize.row)
+                                Text(profile.name)
+                                Spacer()
+                                Button(L("Показать")) { Task { await library.setHidden(false, profile: profile, on: source) } }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityLabel(L("Показать «\(profile.name)»"))
+                            }.accessibilityElement(children: .contain)
+                        }
+                    } header: {
+                        Text(source.displayName)
+                    } footer: {
+                        if source === sources.last {
+                            Text(L("Скрыты только в этом приложении. Сотрудники продолжают работать и доступны на других устройствах."))
                         }
                     }
                 }
             }
+            .formStyle(.grouped)
             .navigationTitle(L("Скрытые сотрудники"))
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } } }
         }
         #if os(macOS)
-        .frame(width: 480, height: 400)
+        // A single page: as tall as its rows.
+        .frame(width: 480)
+        .presentationSizing(.fitted)
         #endif
     }
 }
