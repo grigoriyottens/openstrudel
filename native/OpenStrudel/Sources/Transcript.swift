@@ -1,56 +1,84 @@
 import SwiftUI
 import QuickLook
 
+/// An empty conversation: the character, its name and its role, optically centred at 40 %.
+/// The focused composer is the action.
 struct EmptyChat: View {
     @EnvironmentObject private var library: DeviceLibrary
     @EnvironmentObject private var client: HomeClient
-    @Environment(\.dynamicTypeSize) private var textSize
+
     var body: some View {
-        VStack(spacing: 12) {
-            AgentAvatar(appearance: client.activeAppearance, size: 72)
-            Text(client.isEmployeeDraft ? L("Создайте сотрудника") : client.activeProfile?.name ?? L("Напишите, что нужно"))
-                .font(AppTypography.emptyTitle)
-            if client.isEmployeeDraft {
-                Text(L("Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты»."))
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 360)
-                if library.employeeDestinations.count > 1 {
-                    Menu {
-                        EmployeeDestinationChoices { destination in
-                            library.chooseEmployeeDevice(destination.client, deviceID: destination.deviceID)
-                        }
-                    } label: {
-                        Label(L("Create on \(client.executionDeviceName)"), systemImage: "desktopcomputer")
-                            .font(.callout).fixedSize(horizontal: false, vertical: true)
-                            .frame(minHeight: controlTarget)
-                    }
-                    #if os(macOS)
-                    .menuStyle(.borderedButton)
-                    #else
-                    .buttonStyle(.bordered)
-                    #endif
-                    .padding(.top, 8)
-                    .accessibilityLabel(L("Где будет работать сотрудник"))
-                    .accessibilityValue(client.executionDeviceName)
-                    .accessibilityIdentifier("employeeCreationDevice")
-                } else {
-                    Text(L("Works on “\(client.executionDeviceName)”."))
-                        .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                        .multilineTextAlignment(.center)
-                }
-            } else if client.homeUnreachable || client.connectionNeedsPairing {
-                Text(L("История появится после подключения к устройству."))
-                    .font(.subheadline).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
-            } else if let profile = client.activeProfile {
-                Text(profile.roleText.isEmpty ? L("Напишите, что нужно.") : profile.roleText)
-                    .font(.subheadline).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
+        OpticalCentre {
+            VStack(spacing: 0) {
+                AgentAvatar(appearance: client.activeAppearance, size: AvatarSize.hero)
+                Text(client.isEmployeeDraft ? L("Создайте сотрудника") : client.activeProfile?.name ?? L("Напишите, что нужно"))
+                    .font(AppTypography.display)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.top, 16)
+                detail
             }
+            .frame(maxWidth: 360)
+            .padding(.horizontal, 24)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .containerRelativeFrame(.vertical)
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder private var detail: some View {
+        if client.isEmployeeDraft {
+            line(L("Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты»."), limit: nil)
+            if library.employeeDestinations.count > 1 {
+                Menu {
+                    EmployeeDestinationChoices { destination in
+                        library.chooseEmployeeDevice(destination.client, deviceID: destination.deviceID)
+                    }
+                } label: {
+                    Label(L("Create on \(client.executionDeviceName)"), systemImage: "desktopcomputer")
+                        .font(AppTypography.interface)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .fixedSize()
+                .padding(.top, 24)
+                .accessibilityLabel(L("Где будет работать сотрудник"))
+                .accessibilityValue(client.executionDeviceName)
+                .accessibilityIdentifier("employeeCreationDevice")
+            } else {
+                line(L("Works on “\(client.executionDeviceName)”."), limit: 2)
+            }
+        } else if client.homeUnreachable || client.connectionNeedsPairing {
+            line(L("История появится после подключения к устройству."), limit: 2)
+        } else if let profile = client.activeProfile {
+            line(profile.roleText.isEmpty ? L("Напишите, что нужно.") : profile.roleText, limit: 2)
+        }
+    }
+
+    private func line(_ text: String, limit: Int?) -> some View {
+        Text(text)
+            .font(AppTypography.interface)
+            .foregroundStyle(AppTheme.secondaryText)
+            .multilineTextAlignment(.center)
+            .lineLimit(limit)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 8)
+    }
+}
+
+/// Places its content's centre at 40 % of the height, never past the top or bottom.
+private struct OpticalCentre: SwiftUI.Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let content = subviews.first?.sizeThatFits(.init(width: proposal.width, height: nil)) ?? .zero
+        return CGSize(width: proposal.width ?? content.width, height: max(proposal.height ?? content.height, content.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let content = subviews.first else { return }
+        let size = content.sizeThatFits(.init(width: bounds.width, height: nil))
+        let top = min(max(bounds.minY + bounds.height * 0.4 - size.height / 2, bounds.minY), bounds.maxY - size.height)
+        content.place(at: CGPoint(x: bounds.midX, y: top), anchor: .top, proposal: .init(width: bounds.width, height: size.height))
     }
 }
 
@@ -65,88 +93,117 @@ struct EdgeFade: View {
     }
 }
 
-struct DayDivider: View {
+/// A centred time heading where a new day starts or after half an hour of quiet.
+struct ClusterHeader: View {
     let date: Date
+    let hasTime: Bool
 
     var body: some View {
-        Text(ChatClock.day(date))
-            .font(.caption.weight(.medium))
+        Text(ChatClock.cluster(date, hasTime: hasTime))
+            .font(AppTypography.meta)
             .foregroundStyle(AppTheme.secondaryText)
+            .monospacedDigit()
             .frame(maxWidth: .infinity)
-            .padding(.top, 6)
             .accessibilityAddTraits(.isHeader)
     }
 }
 
+/// One message. The person writes in a trailing bubble; the employee answers in open text
+/// on the canvas; other people in imported history or a Telegram group write on the surface.
 struct MessageBubble: View {
     @EnvironmentObject private var client: HomeClient
     @State private var previewURL: URL?
     let message: HomeMessage
-    private var isUser: Bool { message.direction == "inbound" }
+    /// Other people write here too, so inbound messages carry their author.
+    let shared: Bool
+    let bubbleWidth: CGFloat
+    /// A time heading above already shows this message's time.
+    var headed = false
+
+    private var isInbound: Bool { message.direction == "inbound" }
+    private var fromSomeoneElse: Bool { isInbound && (shared || message.imported == true) }
 
     var body: some View {
-        if let scheduleTitle = message.scheduleTitle {
-            VStack(alignment: .leading, spacing: 4) {
-                Label(withTime(scheduleTitle), systemImage: "clock")
-                    .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                if let error = message.error { Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.warning) }
-            }.padding(.vertical, 4)
-        } else if message.kind == "notice" {
-            Label(withTime(L10n.text(message.text)), systemImage: "checkmark")
-                .font(.caption).foregroundStyle(AppTheme.secondaryText).padding(.vertical, 4)
-        } else {
-            HStack(alignment: .bottom) {
-                if isUser { Spacer(minLength: 44) }
-                VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                    if message.imported == true, let author = message.author {
-                        Text(author).font(.caption).foregroundStyle(AppTheme.secondaryText).padding(.horizontal, 6)
-                    }
-                    VStack(alignment: .leading, spacing: 9) {
-                        if isUser && !message.text.isEmpty {
-                            if message.imported == true { ImportedMessageText(source: message.text) }
-                            else {
-                                Text(message.text).font(ChatTypography.body)
-                                    .lineSpacing(4).textSelection(.enabled)
-                            }
-                        }
-                        else if !isUser { MessageContent(source: message.text).equatable() }
-                        ForEach(message.attachments ?? []) { file in
-                            if file.mimeType.hasPrefix("image/") {
-                                ChatImage(name: file.name, identity: file.id) { try await client.downloadFile(file) }
-                            } else {
-                            Button {
-                                Task { previewURL = await client.previewFile(file) }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: file.icon).font(.title3).foregroundStyle(AppTheme.secondaryText)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(file.name).font(.callout.weight(.medium)).lineLimit(2)
-                                        Text(file.sizeLabel).font(.caption).foregroundStyle(AppTheme.secondaryText)
-                                    }
-                                    Spacer(minLength: 8)
-                                    Image(systemName: "arrow.down").font(.caption).foregroundStyle(.tertiary)
-                                }.padding(10).background(.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 11))
-                            }.buttonStyle(.plain).accessibilityLabel(L("Open \(file.name)"))
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16).padding(.vertical, 11)
-                    .background(.primary.opacity(isUser ? 0.10 : 0.045), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    if let error = message.error { Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.warning).textSelection(.enabled) }
-                    if !meta.isEmpty {
-                        Text(meta).font(.caption2).foregroundStyle(AppTheme.secondaryText).monospacedDigit().padding(.horizontal, 6)
-                    }
+        Group {
+            if let scheduleTitle = message.scheduleTitle {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(withTime(scheduleTitle), systemImage: "clock").modifier(MetaLine())
+                    if let error = message.error { warning(error) }
                 }
-                if !isUser { Spacer(minLength: 12) }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else if message.kind == "notice" {
+                Label(withTime(L10n.text(message.text)), systemImage: "checkmark").modifier(MetaLine())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if fromSomeoneElse {
+                someoneElse
+            } else if isInbound {
+                person
+            } else {
+                employee
             }
-            .fixedSize(horizontal: false, vertical: true)
-            .quickLookPreview($previewURL)
-            .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+        }
+        .quickLookPreview($previewURL)
+    }
+
+    private var person: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 8) {
+                if !message.text.isEmpty { ChatBubble(text: message.text) }
+                attachments
+            }
+            if message.status == "queued" { Text(L("В очереди")).modifier(MetaLine()).padding(.trailing, 16) }
+            if let error = message.error { warning(error).multilineTextAlignment(.trailing).padding(.trailing, 16) }
+        }
+        .frame(maxWidth: bubbleWidth, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private var someoneElse: some View {
+        let author = [message.author, headed ? nil : message.time].compactMap { $0 }.joined(separator: " · ")
+        return VStack(alignment: .leading, spacing: 4) {
+            if !author.isEmpty { Text(author).modifier(MetaLine()).padding(.leading, 16) }
+            VStack(alignment: .leading, spacing: 8) {
+                if message.imported == true { ImportedMessageText(source: message.text) }
+                else if !message.text.isEmpty { ChatBubble(text: message.text, fill: AppTheme.surface) }
+                attachments
+            }
+            if let error = message.error { warning(error).padding(.leading, 16) }
+        }
+        .frame(maxWidth: bubbleWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var employee: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !message.text.isEmpty { MessageContent(source: message.text).equatable() }
+            attachments
+            if let error = message.error { warning(error) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder private var attachments: some View {
+        ForEach(message.attachments ?? []) { file in
+            if file.mimeType.hasPrefix("image/") {
+                ChatImage(name: file.name, identity: file.id) { try await client.downloadFile(file) }
+            } else {
+                Button {
+                    Task { previewURL = await client.previewFile(file) }
+                } label: {
+                    FileChip(icon: file.icon, name: file.name, detail: file.sizeLabel)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L("Open \(file.name)"))
+            }
         }
     }
 
-    private var meta: String {
-        [message.status == "queued" ? L("В очереди") : nil, message.time].compactMap { $0 }.joined(separator: " · ")
+    private func warning(_ error: String) -> some View {
+        Text(UserFacingError.text(error))
+            .font(AppTypography.meta)
+            .foregroundStyle(AppTheme.warning)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
     }
 
     private func withTime(_ text: String) -> String {
@@ -154,58 +211,120 @@ struct MessageBubble: View {
     }
 }
 
+/// Status, captions and times: the meta size in the secondary colour with tabular figures.
+private struct MetaLine: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(AppTypography.meta)
+            .foregroundStyle(AppTheme.secondaryText)
+            .monospacedDigit()
+    }
+}
+
+/// A message on its way: the same bubble as a sent one, so delivery changes nothing on screen.
 struct PendingMessageBubble: View {
     let text: String
     var files: [PickedFile] = []
+    let bubbleWidth: CGFloat
 
     var body: some View {
-        HStack {
-            Spacer(minLength: 44)
-            VStack(alignment: .leading, spacing: 8) {
-                if !text.isEmpty { Text(text) }
-                ForEach(files) { file in
-                    if file.mimeType.hasPrefix("image/"), let image = ChatMedia.thumbnail(file.data, maxPixels: 600) {
-                        Image(decorative: image, scale: 1).resizable().scaledToFit().frame(maxWidth: 280, maxHeight: 220)
-                            .clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityLabel(file.name)
-                    } else { Label(file.name, systemImage: "doc").font(.callout).lineLimit(2) }
+        VStack(alignment: .trailing, spacing: 8) {
+            if !text.isEmpty { ChatBubble(text: text) }
+            ForEach(files) { file in
+                if file.mimeType.hasPrefix("image/"), let image = ChatMedia.thumbnail(file.data, maxPixels: 640) {
+                    ChatPicture(image: image).accessibilityLabel(file.name)
+                } else {
+                    FileChip(icon: "doc", name: file.name, detail: ByteCountFormatter.string(fromByteCount: Int64(file.data.count), countStyle: .file))
                 }
             }
-                .font(ChatTypography.body)
-                .lineSpacing(4)
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .background(.primary.opacity(0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: bubbleWidth, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }
 
-struct ThinkingBubble: View {
+/// The helper: one character at the "now" edge of the conversation. Still while idle,
+/// it proofs like rising dough while the employee works and plops once when a reply lands.
+struct ConversationHelper: View {
+    @EnvironmentObject private var client: HomeClient
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var textSize
-    let name: String
-    let appearance: AgentAppearance?
+    #if os(macOS)
+    @Environment(\.appearsActive) private var appearsActive
+    #else
+    @Environment(\.scenePhase) private var scenePhase
+    #endif
+    @State private var awaitingReply = false
+    @State private var landings = 0
+
+    private var working: Bool { client.isSending && client.interactions.isEmpty }
+    private var windowIsActive: Bool {
+        #if os(macOS)
+        appearsActive
+        #else
+        scenePhase == .active
+        #endif
+    }
+    private var reply: ReplyMark {
+        ReplyMark(conversation: HomeDrafts.key(home: client.baseURLString, profile: client.selectedProfileID, chat: client.selectedChatID),
+                  id: client.messages.last { $0.direction == "outbound" }?.id)
+    }
 
     var body: some View {
-        HStack {
-            HStack(spacing: 8) {
-                AgentAvatar(appearance: appearance, size: 24)
-                ProgressView().controlSize(.small).dynamicTypeSize(.medium).accessibilityHidden(true)
+        let name = client.activeAgentName
+        HStack(spacing: 12) {
+            character
+            if working {
                 Text(textSize.isAccessibilitySize ? L("Готовим ответ…") : L("\(name) is working"))
-                    .font(.subheadline)
-                    .foregroundStyle(AppTheme.secondaryText)
+                    .modifier(MetaLine())
+                    .transition(.opacity)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .accessibilityElement(children: .ignore).accessibilityLabel(L("\(name) is working"))
-            Spacer(minLength: textSize.isAccessibilitySize ? 0 : 80)
         }
-        .transition(.opacity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeInOut(duration: 0.15), value: working)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L("\(name) is working"))
+        .accessibilityHidden(!working)
+        .onAppear { awaitingReply = working }
+        .onChange(of: working) { _, now in if now { awaitingReply = true } }
+        .onChange(of: reply) { old, new in
+            defer { awaitingReply = working }
+            guard old.conversation == new.conversation, new.id != old.id, new.id != nil, awaitingReply else { return }
+            landings += 1
+        }
+        #if os(iOS)
+        .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.5), trigger: landings)
+        #endif
+    }
+
+    private var character: some View {
+        let avatar = AgentAvatar(appearance: client.activeAppearance, size: AvatarSize.toolbar)
+        let still = reduceMotion
+        return Group {
+            if working && windowIsActive && !still {
+                avatar.phaseAnimator([false, true]) { view, risen in
+                    view.scaleEffect(x: risen ? 1.03 : 1, y: risen ? 0.95 : 1, anchor: .bottom)
+                } animation: { _ in .easeInOut(duration: 0.9) }
+            } else {
+                avatar
+            }
+        }
+        .keyframeAnimator(initialValue: 1.0, trigger: landings) { view, height in
+            view.scaleEffect(x: 1, y: still ? 1 : height, anchor: .bottom)
+        } keyframes: { _ in
+            LinearKeyframe(0.86, duration: 0.09)
+            SpringKeyframe(1, spring: Spring(response: 0.35, dampingRatio: 0.55))
+        }
+        .offlineCharacter(client.isOffline(client.activeProfile))
     }
 }
 
+private struct ReplyMark: Equatable {
+    let conversation: String
+    let id: String?
+}
+
+/// An approval or question from the employee: a surface card with one prominent action.
 struct InteractionCard: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
@@ -214,18 +333,27 @@ struct InteractionCard: View {
     @State private var busy = false
     @State private var error: String?
 
+    private var needsContinue: Bool {
+        interaction.questions.count > 1 || interaction.questions.first?.options.isEmpty == true
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(interaction.title).font(.headline)
-            if let detail = interaction.detail, !detail.isEmpty {
-                Text(detail).font(.subheadline).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(interaction.title).font(AppTypography.interface.weight(.semibold))
+                if let detail = interaction.detail, !detail.isEmpty {
+                    Text(detail).font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled)
+                }
             }
             if let raw = interaction.url, let url = URL(string: raw) {
-                Button(L("Открыть подключение"), systemImage: "arrow.up.right") { openURL(url) }
-                    .buttonStyle(.bordered)
+                if interaction.questions.isEmpty {
+                    Button(L("Открыть подключение"), systemImage: "arrow.up.forward") { openURL(url) }.buttonStyle(.borderedProminent)
+                } else {
+                    Button(L("Открыть подключение"), systemImage: "arrow.up.forward") { openURL(url) }.buttonStyle(.bordered)
+                }
             }
             ForEach(interaction.questions) { question in
-                if !question.question.isEmpty { Text(question.question).font(.subheadline) }
+                if !question.question.isEmpty { Text(question.question).font(AppTypography.interface) }
                 if question.options.isEmpty {
                     TextField(L("Ваш ответ"), text: Binding(get: { answers[question.id] ?? "" }, set: { answers[question.id] = $0 }))
                         .textFieldStyle(.roundedBorder)
@@ -234,30 +362,36 @@ struct InteractionCard: View {
                 } else {
                     // Short choices sit side by side; long ones stack.
                     ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 8) { options(for: question) }
-                        VStack(alignment: .leading, spacing: 6) { options(for: question) }
+                        HStack(spacing: 12) { options(for: question) }
+                        VStack(alignment: .leading, spacing: 12) { options(for: question) }
                     }
                 }
             }
-            if interaction.questions.count > 1 || interaction.questions.first?.options.isEmpty == true {
-                Button(L("Продолжить")) { submit() }
-                    .disabled(busy || interaction.questions.contains { (answers[$0.id] ?? "").isEmpty })
+            if needsContinue || busy || error != nil {
+                HStack(spacing: 12) {
+                    if needsContinue {
+                        Button(L("Продолжить")) { submit() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(busy || interaction.questions.contains { (answers[$0.id] ?? "").isEmpty })
+                    }
+                    if busy { ProgressView().controlSize(.small) }
+                }
+                if let error { Text(UserFacingError.text(error)).font(AppTypography.meta).foregroundStyle(AppTheme.warning) }
             }
-            if busy { ProgressView().controlSize(.small) }
-            if let error { Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.warning) }
         }
-        .padding(18).frame(maxWidth: 480, alignment: .leading)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .overlay { RoundedRectangle(cornerRadius: 20).stroke(.primary.opacity(0.08)) }
-        .padding(.vertical, 8)
+        .buttonBorderShape(.roundedRectangle(radius: Radius.control))
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .chatSurface(AppTheme.surface, radius: Radius.card)
     }
+
     private func options(for question: ChatQuestion) -> some View {
         ForEach(question.options, id: \.self) { option in
             Button {
                 answers[question.id] = option
                 if interaction.questions.count == 1 { submit() }
             } label: {
-                HStack {
+                HStack(spacing: 4) {
                     Text(option).fixedSize(horizontal: false, vertical: true)
                     if interaction.questions.count > 1 && answers[question.id] == option { Image(systemName: "checkmark") }
                 }.frame(minHeight: controlTarget)
@@ -275,74 +409,128 @@ struct InteractionCard: View {
     }
 }
 
-/// The transcript rows: earlier history, messages, pending sends, approvals and status.
+/// The transcript rows: earlier history, messages, pending sends, approvals, status and the helper.
+/// Rhythm: 32 between turns, 12 between messages from the same side, 48 above a time heading
+/// and 16 below it (none above the first), 12 above the helper.
 struct TranscriptRows: View {
     @EnvironmentObject private var client: HomeClient
     let proxy: ScrollViewProxy
     @Binding var followsLatest: Bool
+    @State private var columnWidth = Layout.column
     // Read live from the client so a history load notices a conversation switch.
     private var draftKey: String { HomeDrafts.key(home: client.baseURLString, profile: client.selectedProfileID, chat: client.selectedChatID) }
 
+    private static let turn: CGFloat = 32
+    private static let sameSide: CGFloat = 12
+    private static let cluster: CGFloat = 48
+
     var body: some View {
+        let rows = MessagePages.rows(client.messages)
+        let pending = client.visiblePendingMessages
+        let shared = client.activeTelegramGroup != nil
+        let bubbleWidth = (columnWidth * 0.75).rounded()
+        let start: CGFloat = client.hasEarlierMessages ? Self.sameSide : 0
+        // The side of the last item so far: person (inbound) or employee.
+        let lastIsPerson = pending.isEmpty ? rows.last?.message.direction == "inbound" : true
         TranscriptStack {
-            if client.hasEarlierMessages {
-                Button {
-                    let anchor = client.messages.first?.id
-                    let conversation = draftKey
-                    followsLatest = false
-                    Task {
-                        await client.loadEarlierMessages()
-                        await Task.yield()
-                        guard conversation == draftKey, let anchor else { return }
-                        proxy.scrollTo(anchor, anchor: .top)
-                    }
-                } label: {
-                    HStack {
-                        if client.isLoadingEarlier { ProgressView().controlSize(.small) }
-                        Text(client.isLoadingEarlier ? L("Загружаем историю…") : L("Показать более ранние сообщения"))
-                    }
-                }
-                    .disabled(client.isLoadingEarlier)
-                    .font(.caption).buttonStyle(.plain).foregroundStyle(AppTheme.secondaryText)
-                    .frame(maxWidth: .infinity, minHeight: controlTarget)
-            }
-            ForEach(MessagePages.rows(client.messages)) { row in
-                // Keep one stable layout node per message,
-                // including its optional day heading.
+            if client.hasEarlierMessages { loadEarlier }
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                // Keep one stable layout node per message, including its optional time heading.
                 VStack(alignment: .leading, spacing: 16) {
-                    if let day = row.day { DayDivider(date: day) }
-                    MessageBubble(message: row.message)
-                }.id(row.id)
-                    .accessibilityElement(children: .contain)
+                    if let header = row.header { ClusterHeader(date: header, hasTime: row.message.hasTime) }
+                    MessageBubble(message: row.message, shared: shared, bubbleWidth: bubbleWidth, headed: row.header != nil)
+                        #if os(macOS)
+                        .help(exactTime(row.message))
+                        #endif
+                }
+                .padding(.top, index == 0 ? start : row.header != nil ? Self.cluster : row.startsTurn ? Self.turn : Self.sameSide)
+                .id(row.id)
+                .accessibilityElement(children: .contain)
+                .accessibilityValue(exactTime(row.message))
             }
-            ForEach(client.visiblePendingMessages) { pending in
+            ForEach(Array(pending.enumerated()), id: \.element.id) { index, message in
+                let afterPerson = index > 0 || rows.last?.message.direction == "inbound"
+                let opens = index == 0 && MessagePages.opensCluster(.now, after: rows.last?.message.sentAt)
                 VStack(alignment: .trailing, spacing: 4) {
-                    PendingMessageBubble(text: pending.text, files: pending.files)
-                    if let error = pending.error {
-                        Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.secondaryText)
-                        if pending.operationID == nil {
-                            Button(L("Проверить доставку и повторить")) { Task { await client.retry(pending) } }.buttonStyle(.plain).frame(minHeight: controlTarget)
+                    if opens { ClusterHeader(date: .now, hasTime: true).padding(.bottom, 12) }
+                    PendingMessageBubble(text: message.text, files: message.files, bubbleWidth: bubbleWidth)
+                    if let error = message.error {
+                        Text(UserFacingError.text(error)).modifier(MetaLine()).foregroundStyle(AppTheme.warning)
+                            .multilineTextAlignment(.trailing).padding(.trailing, 16)
+                        if message.operationID == nil {
+                            Button(L("Проверить доставку и повторить")) { Task { await client.retry(message) } }
+                                .modifier(StatusAction())
                         }
-                    } else if let delivery = pending.deliveryState {
+                    } else if let delivery = message.deliveryState {
                         Text(delivery == "waiting_for_device" ? L("Сообщение сохранено. Ждём подключения устройства.") : L("Сообщение сохранено. Передаём сотруднику."))
-                            .font(.caption).foregroundStyle(AppTheme.secondaryText)
+                            .modifier(MetaLine()).multilineTextAlignment(.trailing).padding(.trailing, 16)
                         if client.canManageOpenAI {
-                            Button(L("Отменить доставку")) { Task { await client.cancelPending(pending) } }.buttonStyle(.plain).frame(minHeight: controlTarget)
+                            Button(L("Отменить доставку")) { Task { await client.cancelPending(message) } }
+                                .modifier(StatusAction())
                         }
                     }
                 }
-                    .id(pending.id)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.top, rows.isEmpty && index == 0 ? start : opens ? Self.cluster : afterPerson ? Self.sameSide : Self.turn)
+                .id(message.id)
             }
-            ForEach(client.interactions) { interaction in
-                InteractionCard(interaction: interaction).id(interaction.id)
-            }
-            if client.isSending && client.interactions.isEmpty {
-                ThinkingBubble(name: client.activeAgentName, appearance: client.activeAppearance).id("thinking-message")
+            ForEach(Array(client.interactions.enumerated()), id: \.element.id) { index, interaction in
+                InteractionCard(interaction: interaction)
+                    .padding(.top, index == 0 && lastIsPerson ? Self.turn : Self.sameSide)
+                    .id(interaction.id)
             }
             if let error = client.syncError {
-                Text(UserFacingError.text(error)).font(.caption).foregroundStyle(AppTheme.secondaryText)
+                Text(UserFacingError.text(error)).modifier(MetaLine()).foregroundStyle(AppTheme.warning)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, Self.sameSide)
             }
-            Color.clear.frame(height: 1).id("conversation-bottom")
+            ConversationHelper()
+                .padding(.top, 12)
+                .id("conversation-helper")
+            // Scrolling to the latest message keeps a turn's worth of room under the helper.
+            Color.clear.frame(height: 24).id("conversation-bottom")
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { columnWidth = $0 }
+    }
+
+    private var loadEarlier: some View {
+        Button {
+            let anchor = client.messages.first?.id
+            let conversation = draftKey
+            followsLatest = false
+            Task {
+                await client.loadEarlierMessages()
+                await Task.yield()
+                guard conversation == draftKey, let anchor else { return }
+                proxy.scrollTo(anchor, anchor: .top)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                if client.isLoadingEarlier { ProgressView().controlSize(.mini) }
+                Text(client.isLoadingEarlier ? L("Загружаем историю…") : L("Показать более ранние сообщения"))
+            }
+            .modifier(MetaLine())
+            .frame(minHeight: controlTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(client.isLoadingEarlier)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func exactTime(_ message: HomeMessage) -> String {
+        message.sentAt.map { ChatClock.exact($0, hasTime: message.hasTime) } ?? ""
+    }
+}
+
+/// A quiet action under a pending message: retry or cancel delivery.
+private struct StatusAction: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(AppTypography.meta.weight(.medium))
+            .foregroundStyle(AppTheme.accentText)
+            .buttonStyle(.plain)
+            .frame(minHeight: controlTarget)
+            .padding(.trailing, 16)
     }
 }

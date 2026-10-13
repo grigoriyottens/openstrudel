@@ -216,6 +216,17 @@ enum ChatClock {
         let style = Date.FormatStyle.dateTime.day().month(.wide).locale(locale)
         return date.formatted(calendar.isDate(date, equalTo: .now, toGranularity: .year) ? style : style.year())
     }
+
+    /// A time-cluster heading: "Today, 12:02", or the day alone when history kept no time.
+    static func cluster(_ date: Date, hasTime: Bool) -> String {
+        hasTime ? day(date) + ", " + time(date) : day(date)
+    }
+
+    /// The full moment for the Mac tooltip and VoiceOver.
+    static func exact(_ date: Date, hasTime: Bool) -> String {
+        let style = Date.FormatStyle.dateTime.weekday(.wide).day().month(.wide).year().locale(locale)
+        return date.formatted(hasTime ? style.hour().minute() : style)
+    }
 }
 
 struct PendingHomeMessage: Codable, Identifiable, Equatable {
