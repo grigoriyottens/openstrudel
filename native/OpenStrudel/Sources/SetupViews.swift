@@ -3,6 +3,8 @@ import SwiftUI
 /// A full-width, wrapping action label; the system button style supplies the capsule and its states.
 struct SetupActionLabel: View {
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.inkCapsule) private var inkCapsule
     let title: String
     var icon: String? = nil
 
@@ -10,7 +12,7 @@ struct SetupActionLabel: View {
         let layout = textSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 8))
             : AnyLayout(HStackLayout(spacing: 8))
-        layout {
+        let label = layout {
             if let icon { Image(systemName: icon).accessibilityHidden(true) }
             Text(title).fixedSize(horizontal: false, vertical: true)
         }
@@ -22,19 +24,31 @@ struct SetupActionLabel: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
+
+        // On an enabled ink capsule the label takes the canvas colour; the disabled capsule and the
+        // large-text style keep the colours the button style gives them.
+        if inkCapsule && isEnabled && !textSize.isAccessibilitySize {
+            label.foregroundStyle(AppTheme.canvas)
+        } else {
+            label
+        }
     }
 }
 
+extension EnvironmentValues {
+    /// Set by `primaryAction()` where the system leaves a white label on the ink (iOS).
+    @Entry var inkCapsule = false
+}
+
 extension View {
-    /// The one prominent action of a screen: a capsule in ink. The system draws the label in the
-    /// colour that reads on the ink, and the pressed, inactive-window and disabled states.
+    /// The one prominent action of a screen: a capsule in ink with a canvas-coloured label. On the
+    /// Mac the system picks the label colour that reads on the ink and draws the inactive-window state.
     func primaryAction() -> some View {
         adaptiveActionStyle(.glassProminent)
             .tint(AppTheme.accentText)
-            #if os(macOS)
             .controlSize(.extraLarge)
-            #else
-            .controlSize(.large)
+            #if os(iOS)
+            .environment(\.inkCapsule, true)
             #endif
     }
 

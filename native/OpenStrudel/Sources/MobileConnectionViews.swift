@@ -27,7 +27,6 @@ struct MobilePairingSettings: View {
         }
         .disabled(creating || !(client.isLocalConnection || client.canManageConnections))
         .task { await client.refreshMobileStatus() }
-        .sheet(isPresented: .constant(UserDefaults.standard.bool(forKey: "qa.serverAccount"))) { ServerAccountSetupView(onDone: {}).environmentObject(client) } // QA-TEMP
         .sheet(isPresented: $showingCode, onDismiss: { Task { await client.cancelMobileInvitation() } }) {
             MobileQRCodeView().environmentObject(client)
         }

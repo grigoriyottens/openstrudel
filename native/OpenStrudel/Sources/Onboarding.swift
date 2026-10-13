@@ -254,7 +254,9 @@ struct OpenAIWelcomeView: View {
                 }
             }.padding(.top, 32)
         }
+        #if os(macOS) // QA-TEMP
         .sheet(isPresented: .constant(UserDefaults.standard.bool(forKey: "qa.serverAccount"))) { ServerAccountSetupView(onDone: {}).environmentObject(client) } // QA-TEMP
+        #endif // QA-TEMP
         .onChange(of: client.openAILogin) { _, login in if let url = login?.url { openURL(url) } }
         .task(id: client.openAILogin?.loginId) {
             guard client.openAILogin != nil else { return }
