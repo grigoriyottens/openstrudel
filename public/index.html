@@ -404,7 +404,7 @@
     </aside>
     <section class="conversation" id="conversation">
       <header class="topbar">
-        <div class="top-start"><button class="icon-button" id="mobile-agents" data-i18n-aria-label="Список сотрудников" aria-label="Assistant list" data-i18n-title="Сотрудники" title="Assistants" data-icon="sidebar"></button></div>
+        <div class="top-start"><button class="icon-button" id="mobile-agents" data-i18n-aria-label="Список сотрудников" aria-label="Assistant list" data-i18n-title="Сотрудники" title="Assistants" data-icon="sidebar" data-directional></button></div>
         <button type="button" class="top-title" id="active-details" disabled><span class="avatar" id="active-avatar"></span><span id="active-name" dir="auto">OpenStrudel</span></button>
         <div class="top-actions"><select id="imported-chat" class="field" data-i18n-aria-label="Выбрать переписку" aria-label="Choose a conversation" hidden></select></div>
       </header>
@@ -441,7 +441,7 @@
       for (const d of ICONS[name]) { const path = document.createElementNS('http://www.w3.org/2000/svg', 'path'); path.setAttribute('d', d); svg.append(path); }
       return svg;
     }
-    document.querySelectorAll('[data-icon]').forEach(node => node.append(icon(node.dataset.icon)));
+    document.querySelectorAll('[data-icon]').forEach(node => node.append(icon(node.dataset.icon, node.hasAttribute('data-directional'))));
     /* Problems show under the toolbar at every width. A loading problem clears itself once the device answers
        again; an action's problem stays until the next action. */
     function notify(message, loading = false) { const notice = $('connection-notice'); notice.textContent = message; notice.toggleAttribute('data-loading', loading && Boolean(message)); }
@@ -518,12 +518,23 @@
         if (sub.textContent !== preview) sub.textContent = preview;
         const current = (state.selected || null) === entry.id;
         if (current) row.setAttribute('aria-current', 'page'); else row.removeAttribute('aria-current');
+        row.tabIndex = current ? 0 : -1;
         if (root.children[index] !== row) root.insertBefore(row, root.children[index] || null);
       });
       for (const [key, row] of agentRows) if (!seen.has(key)) { row.remove(); agentRows.delete(key); }
       const device = (state.devices || []).find(d => d.id === state.nodeId)?.name || 'OpenStrudel';
       if ($('device-name').textContent !== device) $('device-name').textContent = device;
     }
+    /* The list is one Tab stop, as on the Mac: the arrows, Home and End move between rows; Return or Space opens one. */
+    $('agents').addEventListener('keydown', event => {
+      const rows = [...$('agents').querySelectorAll('.agent')], index = rows.indexOf(document.activeElement);
+      const next = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: rows.length - 1 }[event.key];
+      if (index < 0 || next === undefined) return;
+      event.preventDefault();
+      const target = rows[Math.max(0, Math.min(rows.length - 1, next))];
+      for (const row of rows) row.tabIndex = row === target ? 0 : -1;
+      target.focus();
+    });
     function paintHeader() {
       const profile = activeProfile();
       const avatar = $('active-avatar'), look = JSON.stringify(profile ? agentAppearance(profile) : null);
