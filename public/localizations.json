@@ -7845,5 +7845,117 @@
     "fr": "Terminez ou annulez le transfert avant d’effacer les données.",
     "es": "Termina o cancela el traslado antes de borrar los datos.",
     "he": "יש להשלים או לבטל את העברת העובד לפני מחיקת הנתונים."
+  },
+  "Каталог OpenAI сейчас недоступен. Можно добавить сервис по адресу MCP.": {
+    "en": "Couldn’t load the OpenAI service list. Try refreshing.",
+    "ru": "Не удалось загрузить список сервисов OpenAI. Попробуйте обновить.",
+    "fr": "Impossible de charger la liste des services OpenAI. Essayez de l’actualiser.",
+    "es": "No se pudo cargar la lista de servicios de OpenAI. Intenta actualizarla.",
+    "he": "לא ניתן לטעון את רשימת השירותים של OpenAI. כדאי לנסות לרענן."
+  },
+  "Не удалось проверить подключения OpenAI. Обновите список.": {
+    "en": "Couldn’t check your OpenAI connections. Refresh to try again.",
+    "ru": "Не удалось проверить подключения OpenAI. Обновите список.",
+    "fr": "Impossible de vérifier vos connexions OpenAI. Actualisez la liste pour réessayer.",
+    "es": "No se pudieron comprobar tus conexiones de OpenAI. Actualiza la lista para volver a intentarlo.",
+    "he": "לא ניתן לבדוק את החיבורים ל־OpenAI. יש לרענן את הרשימה כדי לנסות שוב."
+  },
+  "Не удалось проверить часть подключений. Нажмите «Обновить», чтобы проверить ещё раз.": {
+    "en": "Some connections couldn’t be checked. Refresh to try again.",
+    "ru": "Не удалось проверить часть подключений. Обновите список, чтобы проверить ещё раз.",
+    "fr": "Certaines connexions n’ont pas pu être vérifiées. Actualisez la liste pour réessayer.",
+    "es": "No se pudieron comprobar algunas conexiones. Actualiza la lista para volver a intentarlo.",
+    "he": "לא ניתן לבדוק חלק מהחיבורים. יש לרענן את הרשימה כדי לנסות שוב."
+  },
+  "Не все навыки удалось загрузить. Проверьте SKILL.md в добавленном пакете.": {
+    "en": "Some skills couldn’t load. Check SKILL.md in the package you added.",
+    "ru": "Не все навыки удалось загрузить. Проверьте SKILL.md в добавленном пакете.",
+    "fr": "Certains savoir-faire n’ont pas pu être chargés. Vérifiez le fichier SKILL.md du paquet ajouté.",
+    "es": "No se pudieron cargar algunas habilidades. Comprueba el archivo SKILL.md del paquete que añadiste.",
+    "he": "לא ניתן לטעון חלק מהמיומנויות. יש לבדוק את הקובץ SKILL.md בחבילה שהוספת."
+  },
+  "Разрешения на приложения задаются в Codex": {
+    "en": "Manage app permissions in Codex",
+    "ru": "Разрешения на приложения задаются в Codex",
+    "fr": "Gérez les autorisations des applications dans Codex",
+    "es": "Gestiona los permisos de las aplicaciones en Codex",
+    "he": "הרשאות לאפליקציות מנוהלות ב־Codex"
+  },
+  "Рабочие документы и встречи": {
+    "en": "Work documents and meetings",
+    "ru": "Рабочие документы и встречи",
+    "fr": "Documents et réunions de travail",
+    "es": "Documentos y reuniones de trabajo",
+    "he": "מסמכים ופגישות עבודה"
+  },
+  "Личные документы": {
+    "en": "Personal documents",
+    "ru": "Личные документы",
+    "fr": "Documents personnels",
+    "es": "Documentos personales",
+    "he": "מסמכים אישיים"
+  },
+  "Нужен ваш ответ": {
+    "en": "Your answer is needed",
+    "ru": "Нужен ваш ответ",
+    "fr": "Votre réponse est nécessaire",
+    "es": "Necesitamos tu respuesta",
+    "he": "נדרשת תשובתך"
+  },
+  "Разрешить действие?": {
+    "en": "Allow this action?",
+    "ru": "Разрешить действие?",
+    "fr": "Autoriser cette action ?",
+    "es": "¿Permitir esta acción?",
+    "he": "לאשר את הפעולה?"
+  },
+  "Разрешить доступ?": {
+    "en": "Allow access?",
+    "ru": "Разрешить доступ?",
+    "fr": "Autoriser l’accès ?",
+    "es": "¿Permitir el acceso?",
+    "he": "לאשר גישה?"
+  },
+  "Только для этого ответа": {
+    "en": "For this reply only",
+    "ru": "Только для этого ответа",
+    "fr": "Pour cette réponse uniquement",
+    "es": "Solo para esta respuesta",
+    "he": "לתשובה הזאת בלבד"
+  },
+  "Разрешить действие сервиса?": {
+    "en": "Allow this service action?",
+    "ru": "Разрешить действие сервиса?",
+    "fr": "Autoriser cette action du service ?",
+    "es": "¿Permitir esta acción del servicio?",
+    "he": "לאשר את פעולת השירות?"
+  },
+  "Только это действие": {
+    "en": "This action only",
+    "ru": "Только это действие",
+    "fr": "Cette action uniquement",
+    "es": "Solo esta acción",
+    "he": "הפעולה הזאת בלבד"
+  },
+  "Отказать": {
+    "en": "Deny",
+    "ru": "Отказать",
+    "fr": "Refuser",
+    "es": "Rechazar",
+    "he": "לא לאשר"
+  },
+  "Завершите подключение в браузере": {
+    "en": "Finish connecting in your browser",
+    "ru": "Завершите подключение в браузере",
+    "fr": "Terminez la connexion dans votre navigateur",
+    "es": "Termina de conectar en el navegador",
+    "he": "יש להשלים את החיבור בדפדפן"
+  },
+  "Создание изображений, видео и звука": {
+    "en": "Create images, video and audio",
+    "ru": "Создание изображений, видео и звука",
+    "fr": "Créer des images, des vidéos et du son",
+    "es": "Crear imágenes, vídeos y audio",
+    "he": "יצירת תמונות, וידאו ושמע"
   }
 }
