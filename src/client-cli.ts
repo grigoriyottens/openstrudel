@@ -106,7 +106,8 @@ export async function clientCommand(command: string, args: string[]): Promise<bo
   const readJSON = async () => JSON.parse(await readInput());
   if (["services","skills","plugins"].includes(command)) {
     const option = (key:string) => { const n=clean.indexOf(key); if(n<0)return; if(!clean[n+1] || clean[n+1]!.startsWith("--"))throw new HomeError("Укажите значение после "+key); return clean[n+1]; };
-    const conversationId = option("--chat") ?? (await call("/v1/agents/"+encodeURIComponent(option("--agent") ?? "main")+"/conversation")).conversation.id;
+    const agent = option("--agent");
+    const conversationId = option("--chat") ?? (await call(!agent || agent === "main" ? "/v1/conversation" : "/v1/agents/"+encodeURIComponent(agent)+"/conversation")).conversation.id;
     const query="?conversationId="+encodeURIComponent(conversationId);
     if(action === "list") {
       const value=await call((command === "services" ? "/v1/connections" : "/v1/extensions")+query);
@@ -118,7 +119,7 @@ export async function clientCommand(command: string, args: string[]): Promise<bo
     else if(command !== "services" && ["preview","install"].includes(action) && id) {
       const files=await readExtensionBundle(id),preview=await call("/v1/extensions/preview","POST",{files,conversationId});
       if(preview.kind!==(command === "skills" ? "skill" : "plugin"))throw new HomeError("Тип пакета не совпадает с командой. Используйте skills для навыка или plugins для плагина.");
-      output(action === "preview" ? preview : await call("/v1/extensions/install","POST",{files,digest:preview.digest,conversationId}));
+      output(action === "preview" ? preview : await call("/v1/extensions/install","POST",{files,digest:preview.digest,replaces:preview.replaces,conversationId}));
     } else if(command !== "services" && ["enable","disable","remove"].includes(action) && id) output(await call("/v1/extensions/change","POST",{id,conversationId,...(action === "remove" ? {} : {enabled:action === "enable"})}));
     else throw new HomeError("Сервисы: list, add NAME (JSON через stdin), connect ID, remove NAME. Навыки и плагины: list, preview PATH, install PATH, enable ID, disable ID, remove ID. --agent выбирает сотрудника; --chat — его группу.");
   } else if (command === "devices") {

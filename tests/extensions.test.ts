@@ -6,6 +6,7 @@ import { CodexExtensions, previewExtension, readToml, beginExtensionRun, type Ex
 import { readExtensionBundle } from "../src/extension-bundle.js";
 import { CodexRpc } from "../src/rpc.js";
 import { ScopedCodexEngine } from "../src/scopes.js";
+import { CodexEngineAdapter } from "../src/codex.js";
 
 const roots:string[]=[];
 afterEach(()=>{for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true,maxRetries:5,retryDelay:50});});
@@ -68,6 +69,23 @@ it("keeps MCP credentials private, persists explicit config, blocks built-ins an
   expect(readToml(join(home,"openstrudel-extensions.toml")).mcp_servers).toBeUndefined();
 });
 
+it("removes a service after a native thread used its per-tool approval settings",async()=>{
+  const {home,cwd}=fixture();
+  const config='[features]\napps = false\n[mcp_servers.probe]\ncommand = "true"\nenabled = false\n';
+  writeFileSync(join(home,"config.toml"),config);
+  writeFileSync(join(home,"openstrudel-extensions.toml"),'[mcp_servers.probe]\ncommand = "true"\nenabled = false\n');
+  const engine=new CodexEngineAdapter({codexHome:home,workingDirectory:cwd,scoped:true});
+  try {
+    const rpc=await (engine as any).client() as CodexRpc;
+    const result=await rpc.request("thread/start",{cwd,model:"gpt-6.1-sol",config:{"mcp_servers.probe.default_tools_approval_mode":"prompt"}});
+    (engine as any).loadedConfig.set(result.thread.id,"fixture");
+    (engine as any).loaded.set(result.thread.id,"Same employee identity");
+    await engine.extensions().removeMcp("probe");
+    expect(readToml(join(home,"config.toml")).mcp_servers?.probe).toBeUndefined();
+    expect((engine as any).loaded.get(result.thread.id)).toBe("Same employee identity");
+  } finally {engine.close();}
+},30_000);
+
 it("preserves employee extensions across scoped restarts and isolates another audience",()=>{
   const {root,home}=fixture(),source=join(root,"source");mkdirSync(source);
   const scoped=new ScopedCodexEngine(root,source);
@@ -124,6 +142,41 @@ it("restores installed files when an extension removal cannot reload Codex",asyn
   const item=(await manager.list()).items[0]!;
   await expect(manager.change(item.id)).rejects.toThrow("failed");expect(existsSync(path)).toBe(true);
 });
+
+it("updates a real local plugin in one operation and restores its previous version on failure",async()=>{
+  const {home,cwd}=fixture(); const rpc=new CodexRpc(home,undefined,undefined,undefined,cwd); await rpc.initialize();
+  const changed=vi.fn(async()=>{await rpc.request("config/mcpServer/reload",{});});
+  const manager=new CodexExtensions({home,cwd,client:async()=>rpc,changed,idle:()=>true});
+  const bundle=(version:string)=>[
+    file("plugin.json",JSON.stringify({name:"update-fixture",version,description:"Version "+version,skills:"./skills/"})),
+    file("skills/concise-replies/SKILL.md",`---\nname: concise-replies\ndescription: Version ${version}\n---\nUse version ${version}.\n`),
+  ];
+  const path=join(home,"openstrudel-packages/plugins/update-fixture/plugin.json");
+  const installedDescription=async()=>(await rpc.request("skills/list",{cwds:[cwd],forceReload:true})).data.flatMap((r:any)=>r.skills).find((s:any)=>s.name==="update-fixture:concise-replies")?.description;
+  try {
+    const first=bundle("1.0.0"); await manager.install(first,previewExtension(first).digest);
+    expect(await installedDescription()).toBe("Version 1.0.0");
+    const second=bundle("1.1.0"),preview=manager.preview(second);
+    expect(preview.replaces).toBe(previewExtension(first).digest);
+    await expect(manager.install(second,preview.digest)).rejects.toThrow(/версия изменилась/);
+    await manager.install(second,preview.digest,preview.replaces);
+    expect(JSON.parse(readFileSync(path,"utf8")).version).toBe("1.1.0");
+    expect(await installedDescription()).toBe("Version 1.1.0");
+    const third=bundle("1.2.0"),review=manager.preview(third);
+    changed.mockRejectedValueOnce(new Error("injected reload failure"));
+    await expect(manager.install(third,review.digest,review.replaces)).rejects.toThrow("injected reload failure");
+    expect(JSON.parse(readFileSync(path,"utf8")).version).toBe("1.1.0");
+    expect(await installedDescription()).toBe("Version 1.1.0");
+    await manager.change("plugin:update-fixture@openstrudel-local",false);
+    await manager.install(third,review.digest,review.replaces);
+    expect((await manager.list()).items.find(i=>i.name==="update-fixture")?.enabled).toBe(false);
+    const revised=[third[0]!,file("skills/concise-replies/SKILL.md","---\nname: concise-replies\ndescription: Same version, corrected content\n---\nCorrected.\n")];
+    const revision=manager.preview(revised);
+    await manager.install(revised,revision.digest,revision.replaces);
+    await manager.change("plugin:update-fixture@openstrudel-local",true);
+    expect(await installedDescription()).toBe("Same version, corrected content");
+  } finally {rpc.close();}
+},90_000);
 
 it("keeps scope changes out of active turns, including another account",async()=>{
   const {root,home,cwd}=fixture(),shared=join(root,"shared/config.toml");

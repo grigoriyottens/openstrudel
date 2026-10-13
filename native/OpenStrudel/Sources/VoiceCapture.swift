@@ -1,6 +1,5 @@
 import SwiftUI
 import AVFoundation
-import Speech
 import CryptoKit
 
 /// One bounded recording on the viewing device. Audio stays local; a draft is
@@ -18,8 +17,7 @@ import CryptoKit
     private var file: URL?
     private var context = ""
     private var deliver: ((String, Bool) -> Void)?
-    private var transcriber: DictationTranscriber?
-    static let maximumDuration: TimeInterval = 300
+    nonisolated static let maximumDuration: TimeInterval = 300
     static let maximumLevels = 64
 
     func attach(context: String, deliver: @escaping (String, Bool) -> Void) {
@@ -33,13 +31,13 @@ import CryptoKit
         }
     }
 
-    func start(locale: String) {
+    func start() {
         guard phase == .idle else { return }
         phase = .preparing; detail = L("Разрешите доступ к микрофону…")
         let id = generation
         work = Task {
             do {
-                let module = try await Self.prepare(locale: locale)
+                guard DictationAssets.shared.state == .ready else { throw DictationFailure.modelNeeded }
                 guard await AVCaptureDevice.requestAccess(for: .audio) else {
                     throw VoiceFailure(L("Разрешите доступ к микрофону в настройках системы."))
                 }
@@ -59,13 +57,13 @@ import CryptoKit
                 ])
                 recorder.isMeteringEnabled = true
                 guard recorder.record(forDuration: Self.maximumDuration) else { throw VoiceFailure(L("Не удалось начать запись. Проверьте микрофон.")) }
-                self.recorder = recorder; self.transcriber = module
+                self.recorder = recorder
                 phase = .recording; levels = []; seconds = 0; detail = ""
                 meter = Task { [weak self] in
                     while !Task.isCancelled {
                         do { try await Task.sleep(for: .milliseconds(80)) } catch { return }
                         guard let self, id == self.generation, let recorder = self.recorder else { return }
-                        guard recorder.isRecording else { self.finish(send: false, locale: locale); return }
+                        guard recorder.isRecording else { self.finish(send: false); return }
                         recorder.updateMeters()
                         self.seconds = Int(recorder.currentTime)
                         self.levels.append(min(1, max(0, pow(10, Double(recorder.averagePower(forChannel: 0)) / 35))))
@@ -80,27 +78,24 @@ import CryptoKit
         }
     }
 
-    func finish(send: Bool, locale: String) {
+    func finish(send: Bool) {
         guard phase == .recording || phase == .saved, let file else { return }
         stopRecorder()
         phase = .transcribing; detail = L("Распознаём на устройстве…")
         let id = generation
         work = Task {
             do {
-                let module: DictationTranscriber
-                if let transcriber { module = transcriber }
-                else { module = try await Self.prepare(locale: locale) }
-                let result = try await Self.transcribe(file: file, module: module)
+                let result = try await ParakeetTranscriber.shared.transcribe(file: file)
                 try Task.checkCancellation()
                 guard id == generation else { return }
                 guard !result.isEmpty else { throw VoiceFailure(L("Не удалось разобрать речь. Попробуйте ещё раз или запишите новое сообщение.")) }
                 // Deliver before deleting the recoverable audio draft.
                 deliver?(result, send)
                 try? FileManager.default.removeItem(at: file)
-                transcriber = nil; phase = .idle; detail = ""; levels = []
+                phase = .idle; detail = ""; levels = []
             } catch {
                 guard id == generation, !Task.isCancelled else { return }
-                transcriber = nil; phase = .saved
+                phase = .saved
                 detail = (error as? VoiceFailure)?.message ?? L("Не удалось распознать. Запись сохранена, можно повторить.")
             }
         }
@@ -109,12 +104,12 @@ import CryptoKit
     func cancel() {
         generation = UUID(); work?.cancel(); meter?.cancel(); stopRecorder()
         if let file { try? FileManager.default.removeItem(at: file) }
-        transcriber = nil; phase = .idle; detail = ""; levels = []
+        phase = .idle; detail = ""; levels = []
     }
 
     func detach() {
         generation = UUID(); work?.cancel(); meter?.cancel(); stopRecorder()
-        transcriber = nil; deliver = nil; phase = .idle; detail = ""; levels = []
+        deliver = nil; phase = .idle; detail = ""; levels = []
     }
 
     private func stopRecorder() {
@@ -131,28 +126,6 @@ import CryptoKit
             .appendingPathComponent("OpenStrudel/VoiceDrafts", isDirectory: true).appendingPathComponent(name + ".m4a")
     }
 
-    static func prepare(locale: String) async throws -> DictationTranscriber {
-        let module = try await AppleDictationAssets.module(locale: locale)
-        guard await AssetInventory.status(forModules: [module]) == .installed else { throw DictationFailure.modelNeeded }
-        return module
-    }
-
-    static func transcribe(file: URL, module: DictationTranscriber) async throws -> String {
-        let analyzer = SpeechAnalyzer(modules: [module], options: .init(priority: .userInitiated, modelRetention: .whileInUse))
-        let results = Task {
-            var parts: [String] = []
-            for try await result in module.results where result.isFinal { parts.append(String(result.text.characters)) }
-            return parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return try await withTaskCancellationHandler {
-            do {
-                let audio = try AVAudioFile(forReading: file)
-                if let end = try await analyzer.analyzeSequence(from: audio) { try await analyzer.finalizeAndFinish(through: end) }
-                else { await analyzer.cancelAndFinishNow() }
-                return try await results.value
-            } catch { results.cancel(); await analyzer.cancelAndFinishNow(); throw error }
-        } onCancel: { results.cancel(); Task { await analyzer.cancelAndFinishNow() } }
-    }
 }
 
 private struct VoiceFailure: LocalizedError {
@@ -164,7 +137,6 @@ private struct VoiceFailure: LocalizedError {
 struct VoiceRecordingRow: View {
     @ObservedObject var voice: VoiceCapture
     @Environment(\.dynamicTypeSize) private var textSize
-    let locale: String
     let canSend: Bool
     var body: some View {
         let layout = textSize.isAccessibilitySize && voice.phase != .recording
@@ -186,15 +158,15 @@ struct VoiceRecordingRow: View {
                     }
                 }.frame(height: 28).accessibilityHidden(true)
                 Text(String(format: "%d:%02d", voice.seconds / 60, voice.seconds % 60)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                Button { voice.finish(send: false, locale: locale) } label: { Image(systemName: "stop.fill").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
+                Button { voice.finish(send: false) } label: { Image(systemName: "stop.fill").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
                     .buttonStyle(.plain).accessibilityLabel(L("Остановить и проверить текст"))
-                Button { voice.finish(send: true, locale: locale) } label: { Image(systemName: "arrow.up").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
+                Button { voice.finish(send: true) } label: { Image(systemName: "arrow.up").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
                     .buttonStyle(.glassProminent).buttonBorderShape(.circle).disabled(!canSend).accessibilityLabel(L("Распознать и отправить"))
             } else {
                 if voice.phase == .preparing || voice.phase == .transcribing { ProgressView().controlSize(.small) }
                 Text(L10n.serviceText(voice.detail)).font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 if voice.phase == .saved {
-                    Button { voice.finish(send: false, locale: locale) } label: { AdaptiveActionLabel(title: L("Распознать")) }
+                    Button { voice.finish(send: false) } label: { AdaptiveActionLabel(title: L("Распознать")) }
                         .adaptiveActionStyle(.glass)
                 }
             }
@@ -205,20 +177,17 @@ struct VoiceRecordingRow: View {
 
 struct DictationSettings: View {
     var showsTitle = true
-    @AppStorage("openstrudel.dictationLocale") private var locale = "interface"
     @ObservedObject private var assets = DictationAssets.shared
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if showsTitle { Text(L("Dictation")).font(.headline) }
-            Picker(L("Spoken language"), selection: $locale) {
-                Text(L("Same as the app")).tag("interface")
-                ForEach(AppLanguage.allCases) { Text($0.title).tag($0.speechLocale) }
-            }.disabled(assets.state == .downloading).accessibilityIdentifier("dictationLanguage")
-            Text(L("Speech is transcribed on this device. Record up to 5 minutes, then review the text before sending."))
+            Text(L("Speak naturally. Your language is recognized automatically, on this device."))
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(L("25 languages, including English, Russian, French and Spanish. Hebrew is not supported."))
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             DictationModelStatus()
         }
-        .task(id: DictationAssets.selectedLocale) { await assets.check(locale: DictationAssets.selectedLocale) }
+        .task { await assets.check() }
     }
 }
 
@@ -235,18 +204,17 @@ private struct DictationModelStatus: View {
             case .downloading:
                 if let progress = assets.progress {
                     ProgressView(value: progress) {
-                        Text(L("Downloading the model…"))
+                        Text(progress < 1 ? L("Downloading the model…") : L("Checking the download…"))
                     } currentValueLabel: { Text(progress, format: .percent.precision(.fractionLength(0))).monospacedDigit() }
                 } else { ProgressView(L("Preparing the download…")) }
                 Button(L("Cancel download")) { assets.cancel() }.accessibilityIdentifier("cancelDictationDownload")
             case .available, .failed:
                 if let error = assets.error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
-                Text(L("Download a language model once. After that, dictation works without internet. Models already on this device are reused."))
+                Text(L("Download Parakeet once (740 MB). After that, dictation works offline."))
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button(L("Download model")) { assets.download() }
+                Button(L("Download · 740 MB")) { assets.download() }
                     .buttonStyle(.borderedProminent).accessibilityIdentifier("downloadDictationModel")
-            case .unsupported:
-                Text(L10n.serviceText(assets.error ?? "")).font(.callout).foregroundStyle(.secondary)
+
             }
         }.accessibilityElement(children: .contain)
     }
@@ -274,7 +242,7 @@ struct DictationSetupView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Done")) { dismiss() } } }
         }
         #if os(macOS)
-        .frame(width: 480, height: 430)
+        .frame(width: 480, height: 340)
         #endif
     }
 }

@@ -7,6 +7,8 @@ options:
     macOS: "26.0"
   createIntermediateGroups: true
 packages:
+  ParakeetRuntime:
+    path: ../Packages/ParakeetRuntime
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     # Sparkle 2.10.0, pinned to the published immutable commit.
@@ -19,6 +21,8 @@ settings:
   ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 targets:
   OpenStrudel iOS:
+    dependencies:
+      - package: ParakeetRuntime
     type: application
     platform: iOS
     entitlements:
@@ -66,6 +70,8 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
+      - path: Resources/Dictation-LICENSE.txt
+        buildPhase: resources
       - path: ../../public/localizations.json
         buildPhase: resources
       - path: Localizations
@@ -101,6 +107,7 @@ targets:
     type: application
     platform: macOS
     dependencies:
+      - package: ParakeetRuntime
       - package: Sparkle
         product: Sparkle
     info:
@@ -131,6 +138,8 @@ targets:
     sources:
       - path: Sources
       - path: Assets.xcassets
+      - path: Resources/Dictation-LICENSE.txt
+        buildPhase: resources
       - path: ../../public/localizations.json
         buildPhase: resources
       - path: Localizations
@@ -152,6 +161,8 @@ targets:
       testTargets:
         - OpenStrudel Text Tests
   OpenStrudel Text Tests:
+    dependencies:
+      - package: ParakeetRuntime
     type: bundle.unit-test
     platform: macOS
     sources:
@@ -164,7 +175,11 @@ targets:
       - path: Sources/ComposerTextField.swift
       - path: Sources/VoiceCapture.swift
       - path: Sources/DictationAssets.swift
+      - path: Sources/ParakeetModel.swift
+      - path: Sources/ParakeetTranscriber.swift
       - path: Sources/Localization.swift
+      - path: Resources/Dictation-LICENSE.txt
+        buildPhase: resources
       - path: ../../public/localizations.json
         buildPhase: resources
       - path: Sources/Models.swift

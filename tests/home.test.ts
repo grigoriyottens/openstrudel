@@ -37,6 +37,26 @@ async function eventually(f: () => Promise<void> | void) {
 }
 
 describe("user-owned primary Home", () => {
+  it("discovers Telegram conversations in the conditional catalogue without combining their histories", async () => {
+    const host = await node("Telegram host");
+    const read = (etag?: string) => fetch(host.url + "/v1/profiles", { headers: { authorization: "Bearer test-owner", ...(etag ? { "if-none-match": etag } : {}) } });
+    const initial = await read();
+    const store = host.runtime.store;
+    store.linkTelegramChat({ chatId: "-123", title: "Team", allowedSenders: ["42"] });
+    const group = store.connectTelegramGroup("-123");
+    const changed = await read(initial.headers.get("etag")!);
+    expect(changed.status).toBe(200);
+    expect((await changed.json()).telegram.chats).toContainEqual(expect.objectContaining({ chatId: "-123", conversationId: group.conversationId, profileId: null }));
+    const etag = changed.headers.get("etag")!;
+    const inbound = store.addMessage({ conversationId: group.conversationId!, channel: "telegram", direction: "inbound", text: "Group question" });
+    store.addMessage({ conversationId: group.conversationId!, channel: "telegram", direction: "outbound", text: "Specialist result", replyToId: inbound.id });
+    expect((await read(etag)).status).toBe(304); // Message polling uses the existing bounded conversation endpoint.
+    const timeline = await host.api("/v1/conversations/" + group.conversationId + "?page=true");
+    expect(timeline.value.messages.map((m: any) => m.text)).toEqual(["Group question", "Specialist result"]);
+    expect((await host.api("/v1/conversation?page=true")).value.messages).toEqual([]);
+    store.linkTelegramChat({ chatId: "-123", title: "Renamed team", allowedSenders: ["42"] });
+    expect((await read(etag)).status).toBe(200);
+  });
   it("conditionally refreshes independent client catalogs after employee deletion without exposing data before auth", async () => {
     const host = await node("Mac mini");
     const employee = host.runtime.store.createProfile({ name: "Temporary editor", instructions: "Keep the facts." });

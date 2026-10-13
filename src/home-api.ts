@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { Home, HomeError, endpoint, encryptBackup, identifier, object, type WireRequest, type WireResponse } from "./home.js";
 import { HomeLink } from "./home-link.js";
 import { requestJSON, wireJSON } from "./home-transport.js";
+import type { TelegramIntegrationStatus } from "./telegram.js";
 
 const bodies = new WeakMap<IncomingMessage, Promise<Buffer>>();
 export async function readBody(request: IncomingMessage, limit = 1_048_576): Promise<Buffer> {
@@ -24,7 +25,7 @@ export async function jsonBody(request: IncomingMessage, limit?: number) { const
 export const isPeerRoute = (path: string) => ["/v1/home/identity", "/v1/home/pair", "/v1/home/poll"].includes(path);
 
 export class HomeApi {
-  constructor(readonly home: Home, readonly link: HomeLink, private readonly address: () => Promise<{ url: string; pin?: string }>) {}
+  constructor(readonly home: Home, readonly link: HomeLink, private readonly address: () => Promise<{ url: string; pin?: string }>, private readonly telegramStatus?: () => TelegramIntegrationStatus) {}
   async handle(request: IncomingMessage, owner: boolean, localExecution: boolean): Promise<WireResponse | undefined> {
     if (localExecution) return;
     const url = new URL(request.url ?? "/", "http://localhost");
@@ -107,7 +108,7 @@ export class HomeApi {
       return wireJSON({ id: row.id, status: row.canceled ? "canceled" : row.response ? "delivered" : row.dispatched ? "sent" : "queued", response: row.response ? JSON.parse(row.response) : null });
     }
     if (path === "/v1/profiles" && method === "GET") {
-      const response = wireJSON({ profiles: this.home.resources("profile").filter(p => p.id !== this.home.state.mainAgentId), importedConversations: this.home.resources("conversation").filter(c => c.externalId?.startsWith("import::")).map(c => ({ id: c.id, title: c.title ?? "Импортированный чат", profileId: c.profileId, deviceId: c.deviceId })) });
+      const response = wireJSON({ profiles: this.home.resources("profile").filter(p => p.id !== this.home.state.mainAgentId), telegram: this.telegramStatus?.(), importedConversations: this.home.resources("conversation").filter(c => c.externalId?.startsWith("import::")).map(c => ({ id: c.id, title: c.title ?? "Импортированный чат", profileId: c.profileId, deviceId: c.deviceId })) });
       // The catalog is small and already authoritative here. Conditional HTTP
       // avoids transferring/decoding it when nothing changed, without another
       // event bus or a persisted revision that can drift after restore/import.

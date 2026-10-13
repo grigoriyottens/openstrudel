@@ -20,7 +20,6 @@ import { homeRequest } from "./home-transport.js";
 import { WebAccess, sameOrigin } from "./web-access.js";
 import type { Accounts } from "./accounts.js";
 import { hostingOrigin } from "./hosting-origin.js";
-import { previewExtension } from "./extensions.js";
 import { approvalSetting, isApprovalMode, readApprovalMode } from "./approval-mode.js";
 
 const MAX_BODY_BYTES = 1_048_576;
@@ -72,7 +71,7 @@ export class HttpApi {
         await new Promise(resolve => setTimeout(resolve, 25));
       }
     });
-    this.homeApi = new HomeApi(this.home, this.homeLink, () => this.mobile.endpoint());
+    this.homeApi = new HomeApi(this.home, this.homeLink, () => this.mobile.endpoint(), () => this.telegram.status());
   }
 
   localCredential(): string | null { return this.token ?? null; }
@@ -377,7 +376,7 @@ export class HttpApi {
         return;
       }
       if (request.method === "GET" && path === "/v1/profiles") {
-        this.send(response, 200, { profiles: this.store.listProfiles(), importedConversations: this.store.listConversations().filter(c => c.externalId?.startsWith("import::")).map(c => ({ id: c.id, title: c.title ?? "Импортированный чат", profileId: c.profileId })) });
+        this.send(response, 200, { profiles: this.store.listProfiles(), telegram: this.telegram.status(), importedConversations: this.store.listConversations().filter(c => c.externalId?.startsWith("import::")).map(c => ({ id: c.id, title: c.title ?? "Импортированный чат", profileId: c.profileId })) });
         return;
       }
       if (request.method === "POST" && path === "/v1/profiles") {
@@ -485,9 +484,6 @@ export class HttpApi {
       }
       if (path === "/v1/extensions" || path.startsWith("/v1/extensions/")) {
         const body = request.method === "POST" ? await this.body(request, 15 * 1024 * 1024) : {};
-        if (request.method === "POST" && path === "/v1/extensions/preview") {
-          this.send(response,200,previewExtension(body.files)); return;
-        }
         const conversationId = String(body.conversationId ?? url.searchParams.get("conversationId") ?? "");
         const conversation = this.store.getConversation(conversationId);
         if (!conversation) throw new HomeError("Откройте чат сотрудника, для которого добавляете расширение.",404);
@@ -502,11 +498,12 @@ export class HttpApi {
         const engine = this.engine?.forAgent?.(conversation.profileId ?? "main",this.messages.contextFor(conversationId)) ?? this.engine?.forContext?.(this.messages.contextFor(conversationId)) ?? this.engine;
         const extensions = await engine?.extensions?.();
         if (!extensions) throw new HomeError("Обновите OpenStrudel на устройстве сотрудника, чтобы добавлять расширения.",501);
-        if (request.method === "GET" && path === "/v1/extensions/computer") this.send(response,200,extensions.computerUse());
+        if (request.method === "POST" && path === "/v1/extensions/preview") this.send(response,200,extensions.preview(body.files));
+        else if (request.method === "GET" && path === "/v1/extensions/computer") this.send(response,200,extensions.computerUse());
         else if (request.method === "POST" && path === "/v1/extensions/computer") this.send(response,200,await extensions.connectComputerUse());
         else if (request.method === "DELETE" && path === "/v1/extensions/computer") this.send(response,200,await extensions.removeMcp("cua_repl"));
         else if (request.method === "GET" && path === "/v1/extensions") this.send(response,200,await extensions.list());
-        else if (request.method === "POST" && path === "/v1/extensions/install") this.send(response,200,await extensions.install(body.files,String(body.digest ?? "")));
+        else if (request.method === "POST" && path === "/v1/extensions/install") this.send(response,200,await extensions.install(body.files,String(body.digest ?? ""),body.replaces == null ? undefined : String(body.replaces)));
         else if (request.method === "POST" && path === "/v1/extensions/mcp") this.send(response,200,await extensions.addMcp(body));
         else if (request.method === "POST" && path === "/v1/extensions/mcp/remove") this.send(response,200,await extensions.removeMcp(String(body.name ?? "")));
         else if (request.method === "POST" && path === "/v1/extensions/change") {

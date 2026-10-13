@@ -1,4 +1,11 @@
 {
+  "В приложении": {
+    "ru": "В приложении",
+    "en": "In the app",
+    "fr": "Dans l’application",
+    "es": "En la app",
+    "he": "באפליקציה"
+  },
   "Завиток": {
     "en": "Swirl",
     "fr": "Spirale",
@@ -7586,5 +7593,68 @@
     "fr": "Autorisez OpenStrudel à accéder au réseau local dans Réglages Système → Confidentialité et sécurité → Réseau local, puis réessayez.",
     "es": "Permite que OpenStrudel acceda a la red local en Ajustes del Sistema → Privacidad y seguridad → Red local y vuelve a intentarlo.",
     "he": "אפשרו ל־OpenStrudel לגשת לרשת המקומית בהגדרות המערכת ← פרטיות ואבטחה ← רשת מקומית, ונסו שוב."
+  },
+  "Speak naturally. Your language is recognized automatically, on this device.": {
+    "en": "Speak naturally. Your language is recognized automatically, on this device.",
+    "ru": "Говорите как обычно. Язык определяется автоматически, прямо на устройстве.",
+    "fr": "Parlez naturellement. La langue est reconnue automatiquement sur cet appareil.",
+    "es": "Habla con naturalidad. El idioma se reconoce automáticamente en este dispositivo.",
+    "he": "אפשר לדבר בטבעיות. השפה מזוהה אוטומטית במכשיר הזה."
+  },
+  "25 languages, including English, Russian, French and Spanish. Hebrew is not supported.": {
+    "en": "25 languages, including English, Russian, French and Spanish. Hebrew is not supported.",
+    "ru": "25 языков, включая русский, английский, французский и испанский. Иврит пока не поддерживается.",
+    "fr": "25 langues, dont le français, l’anglais, le russe et l’espagnol. L’hébreu n’est pas pris en charge.",
+    "es": "25 idiomas, entre ellos español, inglés, ruso y francés. No se admite el hebreo.",
+    "he": "25 שפות, בהן אנגלית, רוסית, צרפתית וספרדית. עברית אינה נתמכת."
+  },
+  "Download Parakeet once (740 MB). After that, dictation works offline.": {
+    "en": "Download Parakeet once (740 MB). After that, dictation works offline.",
+    "ru": "Скачайте Parakeet один раз (740 МБ). После этого диктовка работает без интернета.",
+    "fr": "Téléchargez Parakeet une seule fois (740 Mo). La dictée fonctionne ensuite hors ligne.",
+    "es": "Descarga Parakeet una sola vez (740 MB). Después podrás dictar sin conexión.",
+    "he": "יש להוריד את Parakeet פעם אחת (740 MB). לאחר מכן ההכתבה פועלת ללא אינטרנט."
+  },
+  "Download · 740 MB": {
+    "en": "Download · 740 MB",
+    "ru": "Скачать · 740 МБ",
+    "fr": "Télécharger · 740 Mo",
+    "es": "Descargar · 740 MB",
+    "he": "הורדה · 740 MB"
+  },
+  "Checking the download…": {
+    "en": "Checking the download…",
+    "ru": "Проверяем загрузку…",
+    "fr": "Vérification du téléchargement…",
+    "es": "Verificando la descarga…",
+    "he": "בודקים את ההורדה…"
+  },
+  "Paste key": {
+    "en": "Paste key",
+    "ru": "Вставить ключ",
+    "fr": "Coller la clé",
+    "es": "Pegar clave",
+    "he": "הדבקת מפתח"
+  },
+  "Pasted SSH key": {
+    "en": "Pasted SSH key",
+    "ru": "Вставленный SSH-ключ",
+    "fr": "Clé SSH collée",
+    "es": "Clave SSH pegada",
+    "he": "מפתח SSH שהודבק"
+  },
+  "Enter the password or add a private SSH key. Add its passphrase if it has one.": {
+    "en": "Enter the password or add a private SSH key. Add its passphrase if it has one.",
+    "ru": "Введите пароль или добавьте приватный SSH-ключ. Если ключ защищён паролем, введите его ниже.",
+    "fr": "Saisissez le mot de passe ou ajoutez une clé SSH privée. Si la clé est chiffrée, saisissez sa phrase secrète.",
+    "es": "Introduce la contraseña o añade una clave SSH privada. Si está cifrada, introduce su frase de contraseña.",
+    "he": "יש להזין סיסמה או להוסיף מפתח SSH פרטי. אם המפתח מוצפן, יש להזין גם את הסיסמה שלו."
+  },
+  "Add the complete private key, including its BEGIN and END lines. Public keys cannot be used to sign in.": {
+    "en": "Add the complete private key, including its BEGIN and END lines. Public keys cannot be used to sign in.",
+    "ru": "Добавьте приватный ключ целиком, со строками BEGIN и END. Публичный ключ не подходит для входа.",
+    "fr": "Ajoutez la clé privée complète, avec les lignes BEGIN et END. Une clé publique ne permet pas de se connecter.",
+    "es": "Añade la clave privada completa, incluidas las líneas BEGIN y END. Una clave pública no sirve para iniciar sesión.",
+    "he": "יש להוסיף את המפתח הפרטי במלואו, כולל שורות BEGIN ו-END. מפתח ציבורי אינו מתאים לכניסה."
   }
 }
