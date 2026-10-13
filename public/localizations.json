@@ -7516,5 +7516,12 @@
     "fr": "Autorisez OpenStrudel à accéder à sa connexion enregistrée dans le Trousseau, puis réessayez.",
     "es": "Permite que OpenStrudel acceda a su conexión guardada en el Llavero y vuelve a intentarlo.",
     "he": "יש לאפשר ל-OpenStrudel לגשת לחיבור השמור בצרור המפתחות, ואז לנסות שוב."
+  },
+  "Allow OpenStrudel to access the local network in System Settings → Privacy & Security → Local Network, then try again.": {
+    "en": "Allow OpenStrudel to access the local network in System Settings → Privacy & Security → Local Network, then try again.",
+    "ru": "Разрешите OpenStrudel доступ к локальной сети: «Системные настройки» → «Конфиденциальность и безопасность» → «Локальная сеть». Затем попробуйте ещё раз.",
+    "fr": "Autorisez OpenStrudel à accéder au réseau local dans Réglages Système → Confidentialité et sécurité → Réseau local, puis réessayez.",
+    "es": "Permite que OpenStrudel acceda a la red local en Ajustes del Sistema → Privacidad y seguridad → Red local y vuelve a intentarlo.",
+    "he": "אפשרו ל־OpenStrudel לגשת לרשת המקומית בהגדרות המערכת ← פרטיות ואבטחה ← רשת מקומית, ונסו שוב."
   }
 }

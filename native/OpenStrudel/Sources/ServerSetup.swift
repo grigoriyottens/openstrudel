@@ -6,7 +6,7 @@ import Security
 import Darwin
 
 enum ServerSetupFailure: Error, LocalizedError, Equatable {
-    case address, credentials, hostKey, connection, authentication, unsupportedSystem, resources, administrator
+    case address, credentials, hostKey, connection, localNetwork, authentication, unsupportedSystem, resources, administrator
     case existingInstallation, portBusy, storage, installer, installation, identity, waiting, runtime, serviceUnreachable, sharedServer
     var errorDescription: String? {
         switch self {
@@ -14,6 +14,7 @@ enum ServerSetupFailure: Error, LocalizedError, Equatable {
         case .credentials: L("Enter the password or choose a private SSH key. Add its passphrase if it has one.")
         case .hostKey: L("The server's identity could not be verified. Check the address and its fingerprint with your provider.")
         case .connection: L("The server did not respond. Check its address, SSH port and internet connection, then try again.")
+        case .localNetwork: L("Allow OpenStrudel to access the local network in System Settings → Privacy & Security → Local Network, then try again.")
         case .authentication: L("Sign-in was refused. Check the sign-in name, password or SSH key.")
         case .unsupportedSystem: L("Automatic setup supports Ubuntu 24.04 on a 64-bit Intel or ARM server.")
         case .resources: L("This server needs at least 4 GB of memory, 30 GB of storage and 8 GB free.")
@@ -264,6 +265,7 @@ struct SSHServerTransport: ServerSSHTransport {
         return args
     }
     func scan(_ target: ServerTarget) async throws -> SSHHostKey {
+        try await SSHConnectionReadiness(target: target).wait()
         let result = try await SSHProcess().run("/usr/bin/ssh-keyscan", arguments: ["-T", "10", "-p", String(target.port), "-t", "ed25519,ecdsa,rsa", target.host], timeout: 15)
         let keys = String(decoding: result.data, as: UTF8.self).split(whereSeparator: \.isNewline).compactMap { try? SSHHostKey(line: String($0), target: target) }
         guard let key = keys.first(where: { $0.type == "ssh-ed25519" }) ?? keys.first else { throw ServerSetupFailure.connection }
