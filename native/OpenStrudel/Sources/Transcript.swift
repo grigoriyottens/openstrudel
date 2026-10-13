@@ -29,20 +29,23 @@ struct EmptyChat: View {
         if client.isEmployeeDraft {
             line(L("Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты»."), limit: nil)
             if library.employeeDestinations.count > 1 {
+                // The composer is the action; choosing the device is a quiet text menu in the line's place.
                 Menu {
                     EmployeeDestinationChoices { destination in
                         library.chooseEmployeeDevice(destination.client, deviceID: destination.deviceID)
                     }
                 } label: {
-                    Label(L("Create on \(client.executionDeviceName)"), systemImage: "desktopcomputer")
-                        .font(AppTypography.interface)
+                    Text(L("Create on \(client.executionDeviceName)"))
+                        .font(AppTypography.interface.weight(.medium))
+                        .foregroundStyle(AppTheme.accentText)
                 }
                 .menuStyle(.button)
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
+                .buttonStyle(.borderless)
+                .menuIndicator(.visible)
+                .tint(AppTheme.accentText)
                 .fixedSize()
-                .padding(.top, 24)
+                .frame(minHeight: controlTarget)
+                .padding(.top, 8)
                 .accessibilityLabel(L("Где будет работать сотрудник"))
                 .accessibilityValue(client.executionDeviceName)
                 .accessibilityIdentifier("employeeCreationDevice")
