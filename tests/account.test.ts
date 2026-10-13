@@ -52,6 +52,34 @@ afterEach(() => {
 });
 
 describe("one explicitly authorized Home account", () => {
+  it("does not publish an obsolete identity when sign-in changes during a read", async () => {
+    store.setSetting("codex.auth.mode", "managed");
+    let finish!: (value: unknown) => void;
+    wire.request.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const reading = account.read();
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    account.invalidate();
+    wire.request.mockResolvedValue({ account: { ...identity, email: "new@example.invalid" } });
+    finish({ account: { ...identity, email: "old@example.invalid" } });
+    expect((await reading).email).toBe("new@example.invalid");
+    expect((await account.read()).email).toBe("new@example.invalid");
+  });
+  it("serves the same effective account to chat and settings and persists renaming through the owner API", async () => {
+    const runtime = new OpenStrudelRuntime({ rootDirectory: root, dbPath: ":memory:", startTelegram: false, apiToken: "fixture-api-token", engine: { async run() { throw new Error("Not used"); } } });
+    const extra = runtime.accounts.add("OpenAI");
+    runtime.store.setSetting(`codex.account.${extra.id}.mode`, "managed");
+    const address = await runtime.api.listen("127.0.0.1", 0);
+    const headers = { authorization: "Bearer fixture-api-token", "content-type": "application/json" };
+    const url = `http://127.0.0.1:${address.port}`;
+    try {
+      expect(await (await fetch(url + "/v1/account", { headers })).json()).toMatchObject({ accountId: extra.id, account: { connected: true } });
+      const rename = await fetch(url + "/v1/accounts/" + extra.id, { method: "POST", headers, body: JSON.stringify({ name: "My studio" }) });
+      expect(rename.status).toBe(200);
+      const result = await (await fetch(url + "/v1/accounts", { headers })).json() as any;
+      expect(result.accounts.find((a: any) => a.id === extra.id)).toMatchObject({ name: "My studio", displayName: "My studio" });
+      expect((await fetch(url + "/v1/accounts/" + extra.id, { method: "POST", headers, body: JSON.stringify({ name: " " }) })).status).toBe(400);
+    } finally { await runtime.stop(); }
+  });
   it("keeps reset passes separate from spendable credits and prefers the current Codex bucket", async () => {
     store.setSetting("codex.auth.mode", "managed");
     wire.request.mockResolvedValue({

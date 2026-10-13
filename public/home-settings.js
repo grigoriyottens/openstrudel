@@ -90,7 +90,7 @@ async function bootstrapWeb() {
   if (key) history.replaceState(null,'',location.pathname);
   try {
     const session = key ? await api('/auth/session',{method:'POST',body:JSON.stringify({key})}) : await api('/auth/session');
-    state.csrf=session.csrf; state.owner=session.owner; state.authenticated=true; await refresh();
+    state.csrf=session.csrf; state.owner=session.owner; state.authenticated=true; closeModal(); await refresh();
     restoreDraft();
     const transfer = JSON.parse(localStorage.getItem('openstrudel.transfer') || 'null');
     if (transfer) await watchTransfer(transfer);
@@ -216,31 +216,45 @@ async function openAccounts(deviceId, force=false) {
     const selector=element('select','','field'); selector.setAttribute('aria-label',t("Устройство"));
     for(const device of devices) { const option=element('option',device.name); option.value=device.id; selector.append(option); }
     selector.value=deviceId || state.nodeId||devices[0]?.id; deviceId=selector.value;
-    selector.onchange=()=>void openAccounts(selector.value); page.content.append(selector);
+    selector.onchange=()=>void openAccounts(selector.value); if(devices.length>1)page.content.append(selector);
     const suffix='?deviceId='+encodeURIComponent(deviceId);
     const data=await api('/v1/accounts'+suffix+'&refresh='+force);loading.remove();
     for(const [i,entry] of data.accounts.entries()) {
       const row=element('div','','account-summary');
-      row.append(element('strong',entry.account.email || entry.name));
-      row.append(element('p',entry.account.connected?accountPlan(entry.account.planType):t('Нужен вход')));
-      const category=accountCategory(entry.account.planType);if(category&&entry.account.connected)row.append(element('small',category));
+      const title=entry.displayName || (["Основной","Аккаунт","OpenAI","Account","ChatGPT",""].includes(entry.name)?entry.account.email||'ChatGPT':entry.name);
+      row.append(element('strong',title));
+      if(entry.account.email&&entry.account.email!==title)row.append(element('p',entry.account.email));
+      const category=accountCategory(entry.account.planType);
+      row.append(element('p',entry.account.issue==='unavailable'?t('Не удалось проверить аккаунт'):entry.account.connected?[accountPlan(entry.account.planType),category].filter(Boolean).join(' · '):t('Нужен вход')));
       if(data.accounts.filter(other=>other.account.email===entry.account.email&&other.account.planType===entry.account.planType).length>1)row.append(element('small',t('Connection {0}',entry.id.slice(-6))));
       if(i===0&&data.accounts.length>1)row.append(element('small',t('По умолчанию для новых поручений')));
+      if(entry.account.connected) {
+      const limits=element('details');limits.append(element('summary',t('Limits and credits')));row.append(limits);
       const usage=entry.usage || {windows:[],unavailable:true};
       if(usage.windows.length) for(const window of usage.windows) {
         const name=window.windowDurationMins===300?t('5 часов'):window.windowDurationMins===10080?t('Неделя'):window.windowDurationMins===1440?t('Сутки'):i18n.error(window.name);
-        row.append(element('p',name+' · '+(window.remainingPercent==null?t('Нет данных'):t('{0}% осталось',Math.round(window.remainingPercent)))));
-        if(window.remainingPercent!=null) {const progress=element('progress');progress.max=100;progress.value=Math.min(100,Math.max(0,window.remainingPercent));progress.setAttribute('aria-label',name);row.append(progress);}
-        if(window.resetsAt)row.append(element('small',t('Сброс {0}',new Date(window.resetsAt*1000).toLocaleString(i18n.language))));
-      } else row.append(element('p',usage.unavailable?t('Не удалось получить остатки. Обновите список.'):t('OpenAI не передал лимиты подписки.')));
-      const credits=usage.credits;row.append(element('p',t('Кредиты')+': '+(credits?.unlimited?t('Без ограничений'):credits?.balance??(credits?.hasCredits?t('Доступны · баланс не передан'):credits?t('Нет кредитов'):t('Баланс не передан')))));
+        limits.append(element('p',name+' · '+(window.remainingPercent==null?t('Нет данных'):t('{0}% осталось',Math.round(window.remainingPercent)))));
+        if(window.remainingPercent!=null) {const progress=element('progress');progress.max=100;progress.value=Math.min(100,Math.max(0,window.remainingPercent));progress.setAttribute('aria-label',name);limits.append(progress);}
+        if(window.resetsAt)limits.append(element('small',t('Сброс {0}',new Date(window.resetsAt*1000).toLocaleString(i18n.language))));
+      } else limits.append(element('p',usage.unavailable?t('Не удалось получить остатки. Обновите список.'):t('OpenAI не передал лимиты подписки.')));
+      const credits=usage.credits;limits.append(element('p',t('Кредиты')+': '+(credits?.unlimited?t('Без ограничений'):credits?.balance??(credits?.hasCredits?t('Доступны · баланс не передан'):credits?t('Нет кредитов'):t('Баланс не передан')))));
       const resets=usage.resetCredits;
-      if(resets) {row.append(element('p',t('Extra limit resets')+': '+resets.availableCount));if(resets.nextExpiresAt)row.append(element('small',t('Next expiry: {0}',new Date(resets.nextExpiresAt*1000).toLocaleString(i18n.language))));}
-      if(usage.checkedAt)row.append(element('small',t('Updated {0}',new Date(usage.checkedAt).toLocaleTimeString(i18n.language,{hour:'2-digit',minute:'2-digit'}))));
+      if(resets) {limits.append(element('p',t('Extra limit resets')+': '+resets.availableCount));if(resets.nextExpiresAt)limits.append(element('small',t('Next expiry: {0}',new Date(resets.nextExpiresAt*1000).toLocaleString(i18n.language))));}
+      if(usage.checkedAt)limits.append(element('small',t('Updated {0}',new Date(usage.checkedAt).toLocaleTimeString(i18n.language,{hour:'2-digit',minute:'2-digit'}))));
+      }
       if(data.canManage) {
+        const more=element('details'), summary=element('summary',t('Действия с аккаунтом'));more.append(summary);
+        const rename=element('button',t('Rename account…'),'secondary');
+        rename.onclick=()=>{
+          const edit=modalPage(t('Rename account'),t('Choose a name you recognise. Your OpenAI account stays the same.'));
+          const input=field(edit.content,t('Название аккаунта'));input.value=title;input.maxLength=80;
+          const save=action(edit,t('Сохранить'),async()=>{await api(`/v1/accounts/${entry.id}`+suffix,{method:'POST',body:JSON.stringify({name:input.value.trim()})});await openAccounts(deviceId);},true);
+          input.oninput=()=>{save.disabled=!input.value.trim();};input.focus();input.select();
+        };more.append(rename);
         const login=element('button',entry.account.connected?t("Войти заново"):t("Войти в OpenAI"),'secondary');
-        login.onclick=()=>void startAccountLogin(entry.id,deviceId); row.append(login);
-        if(i>0) { const use=element('button',t("Использовать первым"),'secondary'); use.onclick=async()=>{try{await api(`/v1/accounts/${entry.id}/priority`+suffix,{method:'POST',body:'{}'}); await openAccounts(deviceId);}catch(e){page.report(e);}}; row.append(use); }
+        login.onclick=()=>void startAccountLogin(entry.id,deviceId);(entry.account.connected?more:row).append(login);
+        if(i>0&&entry.account.connected) { const use=element('button',t("Использовать первым"),'secondary'); use.onclick=async()=>{try{await api(`/v1/accounts/${entry.id}/priority`+suffix,{method:'POST',body:'{}'}); await openAccounts(deviceId);}catch(e){page.report(e);}}; more.append(use); }
+        row.append(more);
       }
       page.content.append(row);
     }

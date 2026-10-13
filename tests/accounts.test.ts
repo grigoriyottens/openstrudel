@@ -51,6 +51,7 @@ describe("per-device Codex subscriptions", () => {
     store.addMessage({ channel: "api", conversationId: conversation.id, direction: "outbound", text: "Remember this context" });
     engines.run.mockImplementation(async (account, _context, _input, options) => ({ threadId: account + "-thread", response: "ok", events: [] }));
     await pool.run("one", { conversationId: conversation.id });
+    expect(engines.run.mock.calls[0]?.[2]).toContain("Remember this context");
     accounts.prioritize(second); await pool.run("two", { conversationId: conversation.id, threadId: "default-thread" });
     expect(engines.run.mock.calls[1]?.[3].threadId).toBeUndefined(); expect(engines.run.mock.calls[1]?.[2]).toContain("Remember this context");
     accounts.prioritize("default"); await pool.run("three", { conversationId: conversation.id, threadId: second + "-thread" });

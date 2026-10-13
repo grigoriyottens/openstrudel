@@ -335,7 +335,13 @@ struct ManagedCodexAccount: Decodable, Identifiable {
         let checkedAt: String; let ordinaryUsageAllowed: Bool?; let windows: [Window]; let unavailable: Bool?
     }
     let id: String; let name: String; let account: OpenAIAccount; let usage: Usage; let activeRuns: Int; let loginPending: Bool
-    var identityLabel: String { [account.email ?? name, account.planLabel].joined(separator: " · ") }
+    var displayName: String? = nil
+    var title: String {
+        if let displayName { return displayName }
+        return ["Основной", "Аккаунт", "OpenAI", "Account", "ChatGPT", ""].contains(name) ? account.email ?? "ChatGPT" : name
+    }
+    var emailDetail: String? { account.email == title ? nil : account.email }
+    var identityLabel: String { [title, account.planLabel].joined(separator: " · ") }
 }
 struct ManagedCodexAccounts: Decodable { let accounts: [ManagedCodexAccount]; let canManage: Bool }
 struct HomeActionResult: Decodable { let ok: Bool?; let status: String?; let operationId: String? }
@@ -441,6 +447,7 @@ struct OpenAILoginStatus: Decodable, Equatable {
     let status: String
     let error: String?
     let account: OpenAIAccount?
+    let alreadyConnected: Bool?
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -448,9 +455,10 @@ struct OpenAILoginStatus: Decodable, Equatable {
         status = try values.decode(String.self, forKey: .status)
         error = try values.decodeIfPresent(String.self, forKey: .error)
         account = try values.decodeIfPresent(OpenAIAccount.self, forKey: .account)
+        alreadyConnected = try values.decodeIfPresent(Bool.self, forKey: .alreadyConnected)
     }
 
-    private enum CodingKeys: String, CodingKey { case loginId, status, error, account }
+    private enum CodingKeys: String, CodingKey { case loginId, status, error, account, alreadyConnected }
 }
 
 struct ServiceConnection: Decodable, Identifiable {
