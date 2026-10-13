@@ -1,18 +1,34 @@
 import SwiftUI
 
 #if os(macOS)
+/// One row of the sidebar. Each case names its device, so a selection spans devices.
+enum SidebarItem: Hashable {
+    case main(client: String)
+    case draft(client: String)
+    case employee(client: String, profile: String)
+    case group(client: String, conversation: String)
+
+    var client: String {
+        switch self {
+        case .main(let client), .draft(let client), .employee(let client, _), .group(let client, _): client
+        }
+    }
+}
+
 struct Sidebar: View {
     @EnvironmentObject private var library: DeviceLibrary
-    @EnvironmentObject private var client: HomeClient
-    @Binding var showSettings: Bool
-    @State private var searching = false
-    @State private var query = ""
-    private var searchTerm: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
-    @FocusState private var searchFocused: Bool
-    @FocusState private var focusedEmployee: String?
+    @Environment(\.openSettings) private var openSettings
+    /// The sidebar search text; the window owns the field so ⌘F can reveal a collapsed sidebar.
+    @Binding var query: String
+    /// The row the person just chose, shown until its device applies it.
+    @State private var pendingSelection: SidebarItem?
+    /// A chosen row keeps the keyboard, so arrows, Delete and the context menu act on it.
+    @FocusState private var listFocused: Bool
     @State private var deletion: EmployeeDeletion?
     @State private var confirmDeletion = false
     @State private var deleting = false
+    private var searchTerm: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var showsMain: Bool { searchTerm.isEmpty || "OpenStrudel".localizedCaseInsensitiveContains(searchTerm) }
 
     private struct EmployeeDeletion {
         let client: HomeClient
@@ -21,160 +37,62 @@ struct Sidebar: View {
         let device: String
     }
 
-    private var showsMain: Bool { searchTerm.isEmpty || "OpenStrudel".localizedCaseInsensitiveContains(searchTerm) }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                if searching {
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(AppTheme.secondaryText)
-                        TextField(L("Найти чат"), text: $query)
-                            .textFieldStyle(.plain)
-                            .focused($searchFocused)
-                            .task {
-                                // The field has to be in the window before it can take focus from the composer.
-                                try? await Task.sleep(for: .milliseconds(50))
-                                searchFocused = true
-                            }
-                            .onExitCommand(perform: closeSearch)
-                        Button(action: closeSearch) { Image(systemName: "xmark.circle.fill") }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.tertiary)
-                            .accessibilityLabel(L("Закрыть поиск"))
-                            .help(L("Закрыть поиск (Escape)"))
+        List(selection: selection) {
+            ForEach(library.visibleClients) { source in
+                let people = people(on: source)
+                if showsMain || !people.isEmpty {
+                    if library.hasOtherDevices {
+                        Section { rows(source, people) } header: { deviceHeader(source) }
+                    } else {
+                        rows(source, people)
                     }
-                    .padding(.horizontal, 10)
-                    .frame(height: 32)
-                    .background(.primary.opacity(0.07), in: Capsule())
-                } else {
-                    Button { searching = true } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 16, weight: .medium))
-                            .frame(width: 36, height: 36)
-                            .contentShape(Rectangle())
+                }
+                let groups = groups(on: source)
+                if !groups.isEmpty {
+                    Section {
+                        ForEach(groups) { group in
+                            SidebarRow(name: group.title, preview: group.enabled == false ? L("Бот на паузе") : L("Группа в Telegram"),
+                                       appearance: source.profiles.first { $0.id == group.profileId }?.resolvedAppearance)
+                                .tag(SidebarItem.group(client: source.id, conversation: group.conversationId ?? ""))
+                                .accessibilityIdentifier("telegramConversation-" + group.chatId)
+                        }
+                    } header: {
+                        SidebarHeader { Text(library.hasOtherDevices ? L("Conversations · \(source.displayName)") : L("Переписки")) }
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AppTheme.secondaryText)
-                    .accessibilityLabel(L("Поиск чата"))
-                    .help(L("Найти сотрудника (⌘F)"))
-                    .keyboardShortcut("f", modifiers: .command)
-
-                    Spacer()
                 }
-
-                NewEmployeeControl(beforeCreate: closeSearch) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .medium))
-                        .frame(width: 36, height: 36)
-                        .contentShape(Rectangle())
+            }
+            if !showsMain && library.visibleClients.allSatisfy({ people(on: $0).isEmpty && groups(on: $0).isEmpty }) {
+                ContentUnavailableView.search(text: searchTerm)
+            }
+        }
+        .listStyle(.sidebar)
+        .focused($listFocused)
+        // The system leaves 9.5 between the search field and the first selection; the contract asks for 16.
+        .safeAreaPadding(.top, 6.5)
+        .contextMenu(forSelectionType: SidebarItem.self) { items in
+            if items.count == 1, let target = employee(items.first) {
+                Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: target.profile, on: target.source) } }
+                Divider()
+                Button(L("Удалить сотрудника…"), role: .destructive) { requestDeletion(target.profile, from: target.source) }
+                    .disabled(!canDelete(on: target.source))
+            }
+        }
+        .onDeleteCommand {
+            guard let target = employee(selection.wrappedValue), canDelete(on: target.source) else { return }
+            requestDeletion(target.profile, from: target.source)
+        }
+        .onChange(of: currentItem) { _, item in
+            if item == pendingSelection { pendingSelection = nil }
+        }
+        .safeAreaBar(edge: .bottom, spacing: 0) { footer }
+        .toolbar {
+            ToolbarItem {
+                NewEmployeeControl(beforeCreate: { query = "" }) {
+                    Label(L("Новый сотрудник"), systemImage: "plus")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(AppTheme.secondaryText)
                 .help(L("Новый сотрудник (⌘N)"))
             }
-            .padding(.horizontal, 15)
-            .padding(.top, 12)
-            .padding(.bottom, 10)
-
-            ScrollView {
-                VStack(spacing: 3) {
-                    if !showsMain && !library.visibleClients.contains(where: { source in library.visibleProfiles(on: source).contains { $0.name.localizedCaseInsensitiveContains(searchTerm) || $0.roleText.localizedCaseInsensitiveContains(searchTerm) } || source.telegramGroups.contains { $0.title.localizedCaseInsensitiveContains(searchTerm) } }) {
-                        SearchEmptyState(query: query) { query = "" }
-                    }
-                    ForEach(library.visibleClients) { source in
-                        let people = library.visibleProfiles(on: source).filter { searchTerm.isEmpty || $0.name.localizedCaseInsensitiveContains(searchTerm) || $0.roleText.localizedCaseInsensitiveContains(searchTerm) }
-                        if showsMain || !people.isEmpty {
-                            if library.hasOtherDevices {
-                                HStack(spacing: 5) {
-                                    Text(source.displayName)
-                                    if source.connectionNeedsUnlock { Image(systemName: "lock").accessibilityLabel(L("Unlock connection")) }
-                                    else if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
-                                }.font(.system(size: 11, weight: .medium)).foregroundStyle(AppTheme.secondaryText)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 5)
-                            }
-                            if showsMain {
-                                SidebarRow(name: "OpenStrudel", subtitle: library.hasOtherDevices ? source.displayName : L("Помощник для ваших задач"),
-                                           selected: source === client && source.selectedProfileID == nil, appearance: nil) {
-                                    closeSearch(); Task { await library.select(source, profile: nil) }
-                                }
-                            }
-                            if source.isEmployeeDraft && searchTerm.isEmpty {
-                                SidebarRow(name: L("Новый сотрудник"), subtitle: L("Опишите его задачу"), selected: source === client, appearance: source.draftAppearance) { library.select(source) }
-                            }
-                            ForEach(people) { profile in
-                                SidebarRow(name: profile.name, subtitle: profile.previewText.isEmpty ? profile.roleText : profile.previewText,
-                                           selected: source === client && source.selectedProfileID == profile.id, appearance: profile.resolvedAppearance) {
-                                    closeSearch()
-                                    focusedEmployee = source.id + profile.id
-                                    Task { await library.select(source, profile: profile.id) }
-                                }
-                                .focusable()
-                                .focused($focusedEmployee, equals: source.id + profile.id)
-                                .focusEffectDisabled()
-                                #if os(macOS)
-                                .onDeleteCommand {
-                                    guard !deleting, source.canManageOpenAI else { return }
-                                    requestDeletion(profile, from: source)
-                                }
-                                #endif
-                                .contextMenu {
-                                    Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
-                                    Divider()
-                                    Button(L("Удалить сотрудника…"), role: .destructive) { requestDeletion(profile, from: source) }
-                                        .disabled(deleting || !source.canManageOpenAI || source.homeUnreachable)
-                                }
-                            }
-                        }
-                        let groups = source.telegramGroups.filter { !searchTerm.isEmpty && $0.title.localizedCaseInsensitiveContains(searchTerm) }
-                        if !groups.isEmpty {
-                            Text(library.hasOtherDevices ? L("Conversations · \(source.displayName)") : L("Переписки"))
-                                .font(.caption.weight(.medium)).foregroundStyle(AppTheme.secondaryText)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 5)
-                            ForEach(groups) { group in
-                                SidebarRow(name: group.title, subtitle: group.enabled == false ? L("Бот на паузе") : L("Группа в Telegram"),
-                                           selected: source === client && source.selectedChatID == group.conversationId,
-                                           appearance: source.profiles.first(where: { $0.id == group.profileId })?.resolvedAppearance,
-                                           symbol: "person.2") {
-                                    closeSearch(); Task { await library.select(source, group: group) }
-                                }
-                                .accessibilityIdentifier("telegramConversation-" + group.chatId)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 9)
-            }
-            .scrollIndicators(.hidden)
-
-            Spacer(minLength: 12)
-
-            HiddenEmployeesButton().padding(.horizontal, 22)
-
-            Button { showSettings = true } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: library.hasOtherDevices ? "desktopcomputer" : client.isLocalConnection ? "laptopcomputer" : "desktopcomputer")
-                        .font(.system(size: 19)).frame(width: 30)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(library.hasOtherDevices ? L("Мои устройства") : client.displayName)
-                            .font(.subheadline.weight(.medium)).lineLimit(1).truncationMode(.middle)
-                        Text(L("Устройства и настройки")).font(.caption).foregroundStyle(AppTheme.secondaryText)
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 10).padding(.vertical, 10)
-                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L("Устройства и настройки"))
-            .accessibilityValue(library.hasOtherDevices ? L("Мои устройства") : client.displayName)
-            .accessibilityIdentifier("openDeviceSettings")
-            .help(L("Устройства и настройки OpenStrudel (⌘,)"))
-            .padding(.horizontal, 12)
-            .padding(.bottom, 13)
         }
         .alert(L("Удалить «\(deletion?.name ?? L("сотрудника"))»?"), isPresented: $confirmDeletion) {
             Button(L("Отмена"), role: .cancel) {}
@@ -184,12 +102,130 @@ struct Sidebar: View {
                 Task {
                     defer { deleting = false }
                     do { try await target.client.deleteProfile(target.id) }
-                    catch { client.errorMessage = error.localizedDescription }
+                    catch { target.client.errorMessage = error.localizedDescription }
                 }
             }
         } message: {
             Text(L("Сотрудник, переписка и расписания будут удалены с устройства «\(deletion?.device ?? "OpenStrudel")». Отменить удаление нельзя."))
         }
+    }
+
+    @ViewBuilder private func rows(_ source: HomeClient, _ people: [EmployeeProfile]) -> some View {
+        if showsMain {
+            SidebarRow(name: "OpenStrudel",
+                       preview: library.hasOtherDevices ? source.displayName : L("Помощник для ваших задач"),
+                       appearance: nil, offline: source.isOffline(nil))
+                .tag(SidebarItem.main(client: source.id))
+        }
+        if source.isEmployeeDraft && searchTerm.isEmpty {
+            SidebarRow(name: L("Новый сотрудник"), preview: L("Опишите его задачу"), appearance: source.draftAppearance)
+                .tag(SidebarItem.draft(client: source.id))
+        }
+        ForEach(people) { profile in
+            SidebarRow(name: profile.name, preview: profile.previewText.isEmpty ? profile.roleText : profile.previewText,
+                       appearance: profile.resolvedAppearance, offline: source.isOffline(profile))
+                .tag(SidebarItem.employee(client: source.id, profile: profile.id))
+                .accessibilityIdentifier("employee-" + profile.id)
+        }
+    }
+
+    private func deviceHeader(_ source: HomeClient) -> some View {
+        SidebarHeader {
+            HStack(spacing: 4) {
+                Text(source.displayName)
+                if source.connectionNeedsUnlock { Image(systemName: "lock").accessibilityLabel(L("Unlock connection")) }
+                else if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
+            }
+        }
+    }
+
+    /// The hidden employees and the device row stay under the list, on the row text edge.
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HiddenEmployeesButton()
+            Button {
+                UserDefaults.standard.set(SettingsView.Section.devices.rawValue, forKey: "openstrudel.settingsTab")
+                openSettings()
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(library.hasOtherDevices ? L("Мои устройства") : library.active.displayName)
+                            .fontWeight(.medium).lineLimit(1).truncationMode(.middle)
+                        Text(L("Устройства и настройки")).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                } icon: {
+                    Image(systemName: !library.hasOtherDevices && library.active.isLocalConnection ? "laptopcomputer" : "desktopcomputer")
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L("Устройства и настройки"))
+            .accessibilityValue(library.hasOtherDevices ? L("Мои устройства") : library.active.displayName)
+            .accessibilityIdentifier("openDeviceSettings")
+            .help(L("Устройства и настройки OpenStrudel (⌘,)"))
+        }
+        .labelStyle(SidebarAccessoryLabelStyle())
+        // The symbols share the characters' column, so the words share the rows' text edge.
+        .padding(.horizontal, SidebarMetrics.characterEdge)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: Selection
+
+    /// The library's own selection, read in the order the rows are drawn.
+    private var currentItem: SidebarItem {
+        let source = library.active
+        if !searchTerm.isEmpty, let chat = source.selectedChatID, groups(on: source).contains(where: { $0.conversationId == chat }) {
+            return .group(client: source.id, conversation: chat)
+        }
+        if source.isEmployeeDraft { return .draft(client: source.id) }
+        if let profile = source.selectedProfileID { return .employee(client: source.id, profile: profile) }
+        return .main(client: source.id)
+    }
+
+    private var selection: Binding<SidebarItem?> {
+        Binding {
+            pendingSelection ?? currentItem
+        } set: { item in
+            guard let item, item != pendingSelection ?? currentItem,
+                  let source = library.visibleClients.first(where: { $0.id == item.client }) else { return }
+            query = ""
+            pendingSelection = item
+            listFocused = true
+            Task {
+                switch item {
+                case .main: await library.select(source, profile: nil)
+                case .draft: library.select(source)
+                case .employee(_, let profile): await library.select(source, profile: profile)
+                case .group(_, let conversation):
+                    if let group = source.telegramGroups.first(where: { $0.conversationId == conversation }) {
+                        await library.select(source, group: group)
+                    }
+                }
+                if pendingSelection == item { pendingSelection = nil }
+            }
+        }
+    }
+
+    private func people(on source: HomeClient) -> [EmployeeProfile] {
+        library.visibleProfiles(on: source).filter {
+            searchTerm.isEmpty || $0.name.localizedCaseInsensitiveContains(searchTerm) || $0.roleText.localizedCaseInsensitiveContains(searchTerm)
+        }
+    }
+
+    /// Telegram groups appear only as search results.
+    private func groups(on source: HomeClient) -> [TelegramChat] {
+        searchTerm.isEmpty ? [] : source.telegramGroups.filter { $0.title.localizedCaseInsensitiveContains(searchTerm) }
+    }
+
+    private func employee(_ item: SidebarItem?) -> (source: HomeClient, profile: EmployeeProfile)? {
+        guard case .employee(let client, let id)? = item,
+              let source = library.visibleClients.first(where: { $0.id == client }),
+              let profile = source.profiles.first(where: { $0.id == id }) else { return nil }
+        return (source, profile)
+    }
+
+    private func canDelete(on source: HomeClient) -> Bool {
+        !deleting && source.canManageOpenAI && !source.homeUnreachable
     }
 
     private func requestDeletion(_ profile: EmployeeProfile, from source: HomeClient) {
@@ -199,50 +235,67 @@ struct Sidebar: View {
         deletion = EmployeeDeletion(client: source, id: profile.id, name: profile.name, device: device)
         confirmDeletion = true
     }
+}
 
-    private func select(_ profileID: String?) {
-        closeSearch()
-        Task { await client.selectProfile(profileID) }
-    }
+/// A character, its name and one line of preview. The system draws selection.
+struct SidebarRow: View {
+    let name: String
+    let preview: String
+    let appearance: AgentAppearance?
+    var offline = false
 
-    private func closeSearch() {
-        searching = false
-        query = ""
+    var body: some View {
+        HStack(spacing: 12) {
+            AgentAvatar(appearance: appearance, size: AvatarSize.row)
+                .offlineCharacter(offline)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).fontWeight(.medium).lineLimit(1)
+                let text = offline ? L("Нет связи") : preview
+                if !text.isEmpty {
+                    // The system secondary follows the selection fill and the window's active state.
+                    Text(text).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+        }
+        // The list adds 4 above and below and 6 at the leading edge, so each row is
+        // a 60-pt step whose selection keeps the character 12 from every edge.
+        .padding(.vertical, 8)
+        .padding(.leading, SidebarMetrics.leadingInset)
+        .accessibilityElement(children: .combine)
     }
 }
 
-struct SidebarRow: View {
-    let name: String
-    let subtitle: String
-    let selected: Bool
-    let appearance: AgentAppearance?
-    var symbol: String? = nil
-    let action: () -> Void
-
+/// A section title on the characters' edge with 24 above it; the list draws its style.
+private struct SidebarHeader<Content: View>: View {
+    @ViewBuilder let content: () -> Content
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 11) {
-                if let symbol {
-                    Image(systemName: symbol).font(.title3).foregroundStyle(AppTheme.accent)
-                        .frame(width: 36, height: 36).background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
-                } else { AgentAvatar(appearance: appearance, size: 36) }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name).font(AppTypography.sidebarTitle).lineLimit(1)
-                    if !subtitle.isEmpty { Text(subtitle).font(AppTypography.sidebarDetail).foregroundStyle(AppTheme.secondaryText).lineLimit(1) }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, minHeight: 60)
-            .contentShape(Rectangle())
-            .background(selected ? Color.primary.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        content()
+            // The list starts titles 8 before the character column and 16 under the row above.
+            .padding(.leading, 8)
+            .padding(.top, 8)
+    }
+}
+
+enum SidebarMetrics {
+    /// Row content inset added to the list's own 6, so the character sits 12 inside the selection.
+    static let leadingInset: CGFloat = 6
+    /// The list's selection starts 10 from the sidebar edge and its content 6 inside that.
+    static let characterEdge: CGFloat = 16 + leadingInset
+}
+
+/// Puts a symbol in the avatar column so text below the list starts on the row text edge.
+struct SidebarAccessoryLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 12) {
+            configuration.icon
+                .imageScale(.large)
+                .foregroundStyle(.secondary)
+                .frame(width: AvatarSize.row, height: AvatarSize.row)
+            configuration.title
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(name)
-        .accessibilityValue(subtitle)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .help(name + (subtitle.isEmpty ? "" : "\n" + subtitle))
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 #endif
