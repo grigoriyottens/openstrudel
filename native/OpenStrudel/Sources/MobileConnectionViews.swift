@@ -5,52 +5,36 @@ import VisionKit
 import AVFoundation
 #endif
 
+/// Rows for a device's section in Settings → Devices: a one-use connection link and, on this Mac,
+/// disconnecting the other devices. The section footer can use `explanation`.
 struct MobilePairingSettings: View {
     @EnvironmentObject private var client: HomeClient
-    @Environment(\.dynamicTypeSize) private var textSize
     @State private var showingCode = false
     @State private var creating = false
     @State private var revokeConfirmation = false
 
+    static var explanation: String { L("Чтобы открыть сотрудников этого устройства на другом, создайте ссылку подключения.") }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-        if client.isLocalConnection || client.canManageConnections {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(L("Чтобы открыть сотрудников этого устройства на другом, создайте ссылку подключения."))
-                .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-            let layout = textSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-                : AnyLayout(HStackLayout(spacing: 8))
-            layout {
-                Button {
-                    creating = true
-                    Task {
-                        await client.inviteMobile()
-                        showingCode = client.mobileInvitation != nil
-                        creating = false
-                    }
-                } label: {
-                    AdaptiveActionLabel(title: creating ? L("Готовим ссылку…") : L("Получить ссылку подключения"))
-                }.adaptiveActionStyle(.glass).disabled(creating)
-                if client.isLocalConnection && client.mobileConnections > 0 {
-                    Button(role: .destructive) { revokeConfirmation = true } label: {
-                        AdaptiveActionLabel(title: L("Отключить"))
-                    }
-                        .adaptiveActionStyle(.bordered)
-                        .tint(AppTheme.destructive)
-                }
+        // Always present: this row also learns whether the device lets this app create links.
+        Button(creating ? L("Готовим ссылку…") : L("Получить ссылку подключения")) {
+            creating = true
+            Task {
+                await client.inviteMobile()
+                showingCode = client.mobileInvitation != nil
+                creating = false
             }
         }
-        .settingsCard()
-        }
-        }
+        .disabled(creating || !(client.isLocalConnection || client.canManageConnections))
         .task { await client.refreshMobileStatus() }
-        .confirmationDialog(L("Отключить другие устройства? Чаты и сотрудники сохранятся."), isPresented: $revokeConfirmation) {
-            Button(L("Отключить"), role: .destructive) { Task { await client.revokeMobile() } }
-        }
         .sheet(isPresented: $showingCode, onDismiss: { Task { await client.cancelMobileInvitation() } }) {
             MobileQRCodeView().environmentObject(client)
+        }
+        if client.isLocalConnection && client.mobileConnections > 0 {
+            Button(L("Отключить"), role: .destructive) { revokeConfirmation = true }
+                .confirmationDialog(L("Отключить другие устройства? Чаты и сотрудники сохранятся."), isPresented: $revokeConfirmation) {
+                    Button(L("Отключить"), role: .destructive) { Task { await client.revokeMobile() } }
+                }
         }
     }
 }
@@ -64,10 +48,10 @@ private struct MobileQRCodeView: View {
     var body: some View {
         NavigationStack {
         ScrollView {
-        VStack(spacing: 20) {
-            Text(L("Продолжите на другом устройстве")).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
+        VStack(spacing: 16) {
+            Text(L("Продолжите на другом устройстве")).font(AppTypography.title).multilineTextAlignment(.center)
             Text(L("Отсканируйте QR в OpenStrudel\nили откройте ссылку на другом устройстве."))
-                .font(.body).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
+                .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
             if let invitation = client.mobileInvitation {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let remaining = invitation.remainingSeconds(at: context.date)
@@ -75,10 +59,10 @@ private struct MobileQRCodeView: View {
                         if remaining > 0, let code = qr(invitation.url.absoluteString) {
                             Image(decorative: code, scale: 1).interpolation(.none).resizable()
                                 .scaledToFit().frame(width: 236, height: 236)
-                                .padding(16).background(.white, in: RoundedRectangle(cornerRadius: 22))
+                                .padding(16).background(.white, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
                                 .accessibilityLabel(L("Одноразовая ссылка подключения OpenStrudel"))
                             Text(L("Ссылка действует ещё \(remaining / 60):\(String(format: "%02d", remaining % 60))"))
-                                .font(.caption).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                                .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
                             ShareLink(item: invitation.url) { AdaptiveActionLabel(title: L("Поделиться ссылкой")) }
                                 .adaptiveActionStyle(.glass)
                         } else {
@@ -91,15 +75,14 @@ private struct MobileQRCodeView: View {
                             Task { await client.inviteMobile(); refreshing = false }
                         } label: {
                             Text(refreshing ? L("Обновляем…") : L("Новая ссылка"))
-                                .frame(minHeight: 44).contentShape(Rectangle())
-                        }.buttonStyle(.plain).disabled(refreshing)
+                        }.secondaryAction().disabled(refreshing)
                     }
                 }
             }
             Text(L("Ссылка открывает чаты и настройки сотрудников.\nИспользуйте её только на своих устройствах."))
-                .font(.caption).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
+                .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
         }
-        .padding(30).frame(maxWidth: 420).frame(maxWidth: .infinity)
+        .padding(24).frame(maxWidth: 420).frame(maxWidth: .infinity)
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -108,6 +91,7 @@ private struct MobileQRCodeView: View {
             }
         }
         }
+        .tint(nil)
         #if os(macOS)
         .frame(width: 420, height: 620)
         #endif
@@ -138,64 +122,53 @@ struct MobileWelcomeView: View {
     @State private var invitation: MacPairing?
     @State private var cameraError: String?
     @State private var showingHelp = false
+    private var reconnecting: Bool { client.isConfigured && !client.connectionNeedsPairing }
 
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 48)
-                    OpenStrudelMark(size: 100)
-                        .accessibilityHidden(true).padding(.bottom, 30)
-                    Text(client.connectionNeedsPairing ? L("Подключитесь снова.") : client.isConfigured ? L("Нет связи с OpenStrudel") : client.isSignedOut ? L("Устройство отключено") : L("Ваши AI-помощники"))
-                        .font(.system(.largeTitle, design: .serif, weight: .medium))
-                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                    Text(client.connectionNeedsPairing ? L("Подключение отозвано. Получите новую ссылку на устройстве с сотрудниками.") : client.isConfigured
-                         ? L("«\(client.connectionName)» пока не на связи. Подключимся автоматически.")
-                         : L("Пишите, планируйте и обсуждайте идеи. Подключите свой Mac или сервер с OpenStrudel, чтобы продолжить те же чаты здесь."))
-                        .font(.body).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true).padding(.top, 14)
-                    if client.isConfigured && !client.connectionNeedsPairing {
-                        ProgressView().controlSize(.small).padding(.top, 24)
-                            .accessibilityLabel(L("Восстанавливаем связь"))
-                    }
-                    Spacer(minLength: 48)
-                    VStack(spacing: 14) {
-                        if client.isConfigured && !client.connectionNeedsPairing {
-                            Button { Task { await client.load(quiet: true) } } label: {
-                                SetupActionLabel(title: L("Проверить соединение"), icon: "arrow.clockwise")
-                            }.adaptiveActionStyle(.glassProminent).controlSize(.large)
-                                .disabled(client.isLoading).accessibilityIdentifier("retryHomeConnection")
-                        }
-                        Button { Task { await openScanner() } } label: {
-                            SetupActionLabel(title: textSize.isAccessibilitySize ? L("QR-код") : L("Сканировать QR"), icon: "qrcode.viewfinder")
-                                .foregroundStyle(.primary)
-                        }
-                        .adaptiveActionStyle(.glass).controlSize(.large)
-                        .accessibilityLabel(L("Сканировать QR")).accessibilityIdentifier("scanInvitation")
-                        Button { enteringInvitation = true } label: {
-                            SetupActionLabel(title: L("Вставить ссылку"), icon: "link")
-                                .foregroundStyle(.primary)
-                        }.adaptiveActionStyle(.glass).controlSize(.large)
-                            .accessibilityLabel(L("Вставить ссылку подключения")).accessibilityIdentifier("pasteInvitation")
-                        if client.isConfigured { DeviceSignOutButton {} }
-                        if let cameraError {
-                            Text(L10n.serviceText(cameraError)).font(.footnote).foregroundStyle(AppTheme.secondaryText)
-                                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                        }
-                        Button { showingHelp = true } label: {
-                            Text(L("Как начать?"))
-                                .font(.callout).multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }.buttonStyle(.plain).foregroundStyle(AppTheme.secondaryText)
-                            .accessibilityIdentifier("invitationHelp")
-                    }.frame(maxWidth: 340)
-                    Color.clear.frame(height: 32)
+        WelcomePage {
+            WelcomeHeader(title: client.connectionNeedsPairing ? L("Подключитесь снова.") : client.isConfigured ? L("Нет связи с OpenStrudel") : client.isSignedOut ? L("Устройство отключено") : L("Ваши AI-помощники"))
+            WelcomeText(client.connectionNeedsPairing ? L("Подключение отозвано. Получите новую ссылку на устройстве с сотрудниками.") : client.isConfigured
+                        ? L("«\(client.connectionName)» пока не на связи. Подключимся автоматически.")
+                        : L("Пишите, планируйте и обсуждайте идеи. Подключите свой Mac или сервер с OpenStrudel, чтобы продолжить те же чаты здесь."))
+                .padding(.top, 12)
+            if reconnecting {
+                ProgressView().padding(.top, 24).accessibilityLabel(L("Восстанавливаем связь"))
+            }
+            Group {
+                if reconnecting {
+                    Button { Task { await client.load(quiet: true) } } label: {
+                        SetupActionLabel(title: L("Проверить соединение"))
+                    }.primaryAction()
+                        .disabled(client.isLoading).accessibilityIdentifier("retryHomeConnection")
+                } else {
+                    // Scanning the code another device shows is the way in, so it leads unless a retry does.
+                    scanButton.primaryAction()
                 }
-                .padding(.horizontal, 28)
-                .frame(maxWidth: 480).frame(maxWidth: .infinity, minHeight: geometry.size.height)
-            }.scrollIndicators(.hidden)
+            }.padding(.top, 32)
+            VStack(spacing: 0) {
+                if reconnecting { scanButton.secondaryAction() }
+                Button { enteringInvitation = true } label: {
+                    SetupActionLabel(title: L("Вставить ссылку"), icon: "link")
+                }.secondaryAction()
+                    .accessibilityLabel(L("Вставить ссылку подключения")).accessibilityIdentifier("pasteInvitation")
+                if let cameraError {
+                    Text(L10n.serviceText(cameraError)).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            // Text actions are as tall as the capsule; the gaps subtract that, so the words sit 16 below it.
+            .padding(.top, 16 - TextAction.inset)
+            VStack(spacing: 0) {
+                if client.isConfigured { DeviceSignOutButton {}.frame(minHeight: controlTarget) }
+                Button { showingHelp = true } label: {
+                    Text(L("Как начать?"))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
+                }.buttonStyle(TextActionStyle(quiet: true))
+                    .accessibilityIdentifier("invitationHelp")
+            }
+            .font(AppTypography.interface).padding(.top, 32 - 2 * TextAction.inset)
         }
         .sheet(isPresented: $enteringInvitation, onDismiss: confirmInvitation) {
             ConnectionInvitationView { invitation = $0 }
@@ -219,6 +192,13 @@ struct MobileWelcomeView: View {
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { scanning = false } } }
             }
         }
+    }
+
+    private var scanButton: some View {
+        Button { Task { await openScanner() } } label: {
+            SetupActionLabel(title: textSize.isAccessibilitySize ? L("QR-код") : L("Сканировать QR"), icon: "qrcode.viewfinder")
+        }
+        .accessibilityLabel(L("Сканировать QR")).accessibilityIdentifier("scanInvitation")
     }
 
     private func confirmInvitation() {
@@ -251,33 +231,23 @@ struct MobileConnectionHelpView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L("Начните на своём Mac")).font(.title2.weight(.semibold)).foregroundStyle(Color.primary)
-                        Text(L("Установите бесплатный OpenStrudel с waiwai.is/openstrudel. Войдите в свой аккаунт OpenAI и создайте AI-помощника для личных или рабочих задач."))
-                        Text(L("Регистрация в OpenStrudel не нужна. Ссылку для своего iPhone или iPad вы создаёте сами."))
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L("Где получить ссылку")).font(.headline).foregroundStyle(Color.primary)
-                        Text(L("На Mac с сотрудниками откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения»."))
-                        Text(L("Для сервера откройте его веб-интерфейс → Настройки → Устройства."))
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L("Как подключиться")).font(.headline).foregroundStyle(Color.primary)
-                        Text(L("Отсканируйте QR или вставьте ссылку в OpenStrudel на этом устройстве."))
-                        Text(L("Ссылка одноразовая и действует пять минут. Если срок истёк, получите новую."))
-                    }
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L("Если нет связи")).font(.headline).foregroundStyle(Color.primary)
-                        Text(L("Устройство с сотрудниками должно быть включено и доступно по сети. Для подключения по локальной сети используйте один Wi-Fi."))
-                        Text(L("Связь восстановится автоматически. Новая ссылка нужна, только если подключение отозвано."))
-                    }
+                    topic(L("Начните на своём Mac"),
+                          L("Установите бесплатный OpenStrudel с waiwai.is/openstrudel. Войдите в свой аккаунт OpenAI и создайте AI-помощника для личных или рабочих задач."),
+                          L("Регистрация в OpenStrudel не нужна. Ссылку для своего iPhone или iPad вы создаёте сами."))
+                    topic(L("Где получить ссылку"),
+                          L("На Mac с сотрудниками откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения»."),
+                          L("Для сервера откройте его веб-интерфейс → Настройки → Устройства."))
+                    topic(L("Как подключиться"),
+                          L("Отсканируйте QR или вставьте ссылку в OpenStrudel на этом устройстве."),
+                          L("Ссылка одноразовая и действует пять минут. Если срок истёк, получите новую."))
+                    topic(L("Если нет связи"),
+                          L("Устройство с сотрудниками должно быть включено и доступно по сети. Для подключения по локальной сети используйте один Wi-Fi."),
+                          L("Связь восстановится автоматически. Новая ссылка нужна, только если подключение отозвано."))
                 }
-                .font(.body).foregroundStyle(AppTheme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(24).frame(maxWidth: 520, alignment: .leading)
+                .padding(.horizontal, OnboardingLayout.margin).padding(.vertical, 24)
+                .frame(maxWidth: OnboardingLayout.column, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
-            .background(Color(uiColor: .systemBackground))
             .navigationTitle(L("Подключение устройства"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -286,6 +256,17 @@ struct MobileConnectionHelpView: View {
                 }
             }
         }
+    }
+
+    private func topic(_ title: String, _ paragraphs: String...) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.headline).foregroundStyle(.primary).accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(paragraphs, id: \.self) { Text($0) }
+            }
+            .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
+        }
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -325,10 +306,9 @@ private struct QRScanner: UIViewControllerRepresentable {
 struct ConnectionInvitationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @Environment(\.dynamicTypeSize) private var textSize
     let onConfirm: (MacPairing) -> Void
     var onBack: (() -> Void)? = nil
-    @State private var invitation = ""
+    @State private var invitation = UserDefaults.standard.string(forKey: "qa.invitation") ?? "" // QA-TEMP
     @State private var error: String?
     @State private var openingPage = false
     @FocusState private var focused: Bool
@@ -340,63 +320,73 @@ struct ConnectionInvitationView: View {
         return url
     }
 
+    private var continueTitle: String {
+        openingPage ? L("Открываем…") : connectionPage == nil ? L("Продолжить") : L("Открыть страницу")
+    }
+
+    private var canContinue: Bool {
+        !openingPage && !invitation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(L("Подключить устройство"))
-                            .font(.system(textSize.isAccessibilitySize ? .title3 : .largeTitle, design: .serif, weight: .medium))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(L("1. На другом Mac откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения».\n\n2. Вставьте ссылку сюда. Для сервера получите её в его веб-интерфейсе: Настройки → Устройства."))
-                            .font(.body).foregroundStyle(AppTheme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
+            Form {
+                Section {
+                    HStack(spacing: 8) {
+                        SecureField(L("Ссылка подключения"), text: $invitation, prompt: Text(L("Ссылка подключения")))
+                            .labelsHidden()
+                            .focused($focused).accessibilityIdentifier("connectionInvitation")
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.continue)
+                            .frame(minHeight: controlTarget)
+                            #endif
+                            .onSubmit(confirm)
+                        PasteButton(payloadType: String.self) { values in
+                            if let value = values.first { invitation = value; error = nil }
+                        }.labelStyle(.titleOnly)
                     }
-                    VStack(alignment: .leading, spacing: 12) {
-                    SecureField(L("Ссылка подключения"), text: $invitation)
-                        .font(.body).textFieldStyle(.plain)
-                        .padding(.horizontal, 18).frame(minHeight: 56)
-                        .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
-                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.primary.opacity(0.12)))
-                        .focused($focused).accessibilityIdentifier("connectionInvitation")
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.continue)
-                        #endif
-                        .onSubmit(confirm)
-                    PasteButton(payloadType: String.self) { values in
-                        if let value = values.first { invitation = value; error = nil }
-                    }.labelStyle(.titleOnly).buttonStyle(.glass).controlSize(.large)
-                    }
+                } header: {
+                    SetupHeader(title: L("Подключить устройство"), paragraphs: L("1. На другом Mac откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения».\n\n2. Вставьте ссылку сюда. Для сервера получите её в его веб-интерфейсе: Настройки → Устройства.").components(separatedBy: "\n\n"))
+                } footer: {
                     if let error {
-                        Text(UserFacingError.text(error)).font(.callout).foregroundStyle(AppTheme.destructive)
+                        Text(UserFacingError.text(error)).foregroundStyle(AppTheme.destructive)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("invitationError")
-                    }
-                    if let page = connectionPage {
+                    } else if let page = connectionPage {
                         Text(L("Откроется \(page.host ?? L("страница подключения")) в браузере. На странице нажмите «Открыть OpenStrudel»."))
-                            .font(.callout).foregroundStyle(AppTheme.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Button(action: confirm) { SetupActionLabel(title: openingPage ? L("Открываем…") : connectionPage == nil ? L("Продолжить") : L("Открыть страницу")) }
-                        .buttonStyle(.glassProminent).controlSize(.large)
-                        .disabled(openingPage || invitation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .accessibilityIdentifier("continueConnection")
-                        .keyboardShortcut(.defaultAction)
-                }.padding(32).frame(maxWidth: 480).frame(maxWidth: .infinity)
+                }
             }
-            .defaultScrollAnchor(.center, for: .alignment)
-            .navigationTitle(L("Новое устройство"))
+            .formStyle(.grouped)
             #if os(iOS)
+            .safeAreaInset(edge: .bottom) {
+                Button(action: confirm) { SetupActionLabel(title: continueTitle) }
+                    .primaryAction()
+                    .disabled(!canContinue)
+                    .accessibilityIdentifier("continueConnection")
+                    .keyboardShortcut(.defaultAction)
+                    .padding(.horizontal, OnboardingLayout.margin).padding(.bottom, 8)
+            }
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(onBack == nil ? L("Отмена") : L("Назад")) { if let onBack { onBack() } else { dismiss() } }
                 }
+                #if os(macOS)
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(continueTitle, action: confirm)
+                        .disabled(!canContinue)
+                        .accessibilityIdentifier("continueConnection")
+                        .keyboardShortcut(.defaultAction)
+                }
+                #endif
             }
         }
+        .tint(nil)
         #if os(macOS)
-        .frame(width: 500, height: 530)
+        .frame(width: SetupSheet.size.width, height: SetupSheet.size.height)
         #else
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
