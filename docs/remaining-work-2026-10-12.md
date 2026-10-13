@@ -9,7 +9,8 @@ Published delivery: [release 35 acceptance](release-35-acceptance.md). The [Kama
 - [x] Create a server assistant in the native app, execute a real file task with tools, read the file back and open its attachment.
 - [x] Verify app restart and a deliberate interruption of the exact QA Home service. History, draft, device identity, certificate and employee records survived; the app reconnected automatically and the assistant read the file again.
 - [x] Implement final ChatGPT onboarding, atomic interrupted-install recovery, explicit saved-Keychain recovery and localized generated copy. TypeScript, 356 runtime tests, 163 native tests and Mac/iOS Simulator builds passed. These are the PR's source checks, not a claim of a released update.
-- [ ] Complete the latest QA bundle's macOS Keychain authorization and final connected account-sheet UI checks. The native authorization window requires human interaction; Computer Use refused control of SecurityAgent.
+- [x] Verify saved-connection recovery after macOS authorization. On 13 October the QA app showed the same server online, 16 existing assistants, Server Desk history and its file attachment. No credential replacement or second installation was used.
+- [ ] Finish the first-sign-in account-sheet visual checks on a fresh server. The recovered connection check above does not replace this onboarding check.
 - [ ] Verify the preserved failed Home 35 attempt and a clean-OS installation without overwriting the working authorized QA installation.
 - [ ] Restore provider access on Mac mini, then delete the exact paid disposable VM after acceptance and verify its absence in provider inventory. On 12 October at 22:59, 1Password CLI reported no signed-in account; the Kamatera browser session also showed its login page. The server still incurs its documented hourly charge.
 
