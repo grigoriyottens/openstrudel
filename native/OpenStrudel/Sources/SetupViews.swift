@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A generous, wrapping label; native glass supplies the material and interaction.
+/// A full-width, wrapping action label; the system button style supplies the capsule and its states.
 struct SetupActionLabel: View {
     @Environment(\.dynamicTypeSize) private var textSize
     let title: String
@@ -9,21 +9,62 @@ struct SetupActionLabel: View {
     var body: some View {
         let layout = textSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 8))
-            : AnyLayout(HStackLayout(spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 8))
         layout {
             if let icon { Image(systemName: icon).accessibilityHidden(true) }
             Text(title).fixedSize(horizontal: false, vertical: true)
         }
         #if os(macOS)
-        .font(.system(size: 16, weight: .semibold))
+        .font(AppTypography.interface)
         #else
-        .font(.body.weight(.semibold))
+        .font(AppTypography.interface.weight(.semibold))
         #endif
         .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity, minHeight: 32)
-        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity)
+        #if os(macOS)
+        // A large capsule grows to the 36-pt height macOS gives the actions people came to do.
+        .padding(.vertical, 4)
+        #endif
         .contentShape(Rectangle())
     }
+}
+
+/// The top of a setup sheet: the character, a display title and its explanation on the form's edge.
+struct SetupHeader: View {
+    let title: String
+    let paragraphs: [String]
+
+    init(title: String, paragraphs: [String]) {
+        self.title = title
+        self.paragraphs = paragraphs
+    }
+
+    init(title: String, _ paragraphs: String...) { self.init(title: title, paragraphs: paragraphs) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            AgentAvatar(appearance: nil, size: AvatarSize.hero)
+            Text(title)
+                .font(AppTypography.display).foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.top, 24)
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(paragraphs, id: \.self) { Text($0).fixedSize(horizontal: false, vertical: true) }
+            }
+            .font(AppTypography.interface).fontWeight(.regular)
+            .foregroundStyle(AppTheme.secondaryText)
+            .padding(.top, 12)
+        }
+        .textCase(nil)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 8)
+    }
+}
+
+/// Every page of the Connect a Device sheet shares one size, so moving between pages never resizes it.
+enum SetupSheet {
+    static let size = CGSize(width: 560, height: 640)
 }
 
 #if os(macOS)
@@ -72,62 +113,62 @@ struct ServerSetupView: View {
         }
     }
 
+    private var notes: [String] {
+        var notes: [String] = []
+        if cloud.phase == .idle {
+            notes.append(L("Понадобится аккаунт DigitalOcean и способ оплаты. Стоимость покажем до запуска."))
+        }
+        if cloud.phase == .readyToCreate, cloud.quote != nil {
+            notes.append(L("Оплата напрямую DigitalOcean. Подписка ChatGPT оплачивается отдельно."))
+            notes.append(L("Начисляется за время размещения, пока вы не удалите его в DigitalOcean. Налоги могут добавляться отдельно."))
+        }
+        if cloud.managementURL != nil, cloud.phase != .connected {
+            notes.append(L("Размещение оплачивается, пока вы не удалите его в DigitalOcean."))
+        }
+        return notes
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    Image(systemName: cloud.phase == .connected ? "checkmark" : "cloud")
-                        .font(.system(size: 34, weight: .light))
-                        .foregroundStyle(AppTheme.secondaryText).accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(title)
-                            .font(.system(.largeTitle, design: .serif, weight: .medium))
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(explanation)
-                            .font(.body).foregroundStyle(AppTheme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            Form {
+                Section {
                     if cloud.phase == .readyToCreate, let quote = cloud.quote {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(quote.monthlyPrice.formatted(.currency(code: "USD")) + L(" / месяц"))
-                                .font(.title2.weight(.semibold)).monospacedDigit()
-                            Text(L("Оплата напрямую DigitalOcean. Подписка ChatGPT оплачивается отдельно."))
-                                .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Text(L("Начисляется за время размещения, пока вы не удалите его в DigitalOcean. Налоги могут добавляться отдельно."))
-                                .font(.footnote).foregroundStyle(AppTheme.secondaryText)
-                                .fixedSize(horizontal: false, vertical: true)
+                        LabeledContent {
+                            Text(quote.monthlyPrice.formatted(.currency(code: "USD")) + L(" / месяц")).monospacedDigit()
+                        } label: { Text(verbatim: "DigitalOcean") }
+                    }
+                    if working {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text(cloud.phase == .signingIn ? L("Ожидаем входа") : L("Настраиваем OpenStrudel"))
+                                .foregroundStyle(AppTheme.secondaryText)
                         }.accessibilityElement(children: .combine)
                     }
                     if let message = connectionError ?? cloud.message {
-                        Text(message).font(.callout).foregroundStyle(AppTheme.secondaryText)
+                        Text(message).foregroundStyle(AppTheme.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("cloudSetupMessage")
                     }
-                    if working {
-                        HStack(spacing: 12) {
-                            ProgressView().controlSize(.small)
-                            Text(cloud.phase == .signingIn ? L("Ожидаем входа") : L("Настраиваем OpenStrudel"))
-                                .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                        }.accessibilityElement(children: .combine)
+                    if cloud.phase == .signingIn, let url = cloud.authorizationURL {
+                        SetupLinkRow(title: L("Открыть вход в браузере"), url: url)
                     }
-                    actions
+                    if cloud.phase == .billingRequired {
+                        SetupLinkRow(title: L("Добавить способ оплаты"), url: URL(string: "https://cloud.digitalocean.com/account/billing")!)
+                    }
                     if let url = cloud.managementURL, cloud.phase != .connected {
-                        Link(L("Открыть в DigitalOcean"), destination: url)
-                            .font(.callout)
-                            .buttonStyle(.plain).foregroundStyle(AppTheme.accent)
-                        Text(L("Размещение оплачивается, пока вы не удалите его в DigitalOcean."))
-                            .font(.footnote).foregroundStyle(AppTheme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
+                        SetupLinkRow(title: L("Открыть в DigitalOcean"), url: url)
                     }
-                    if cloud.phase == .idle {
-                        Text(L("Понадобится аккаунт DigitalOcean и способ оплаты. Стоимость покажем до запуска."))
-                            .font(.footnote).foregroundStyle(AppTheme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
+                } header: {
+                    SetupHeader(title: title, explanation)
+                } footer: {
+                    if !notes.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(notes, id: \.self) { Text($0).fixedSize(horizontal: false, vertical: true) }
+                        }
                     }
-                }.padding(32).frame(maxWidth: 480).frame(maxWidth: .infinity)
+                }
             }
-            .defaultScrollAnchor(.center, for: .alignment)
+            .formStyle(.grouped)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(working ? L("Продолжить позже") : L("Закрыть")) {
@@ -135,10 +176,10 @@ struct ServerSetupView: View {
                         if let onBack { onBack() } else { dismiss() }
                     }
                 }
+                if hasPrimaryAction {
+                    ToolbarItem(placement: .confirmationAction) { primaryAction }
+                }
             }
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
         }
         .task {
             await cloud.resume()
@@ -147,53 +188,36 @@ struct ServerSetupView: View {
         .onChange(of: cloud.connection?.url) { _, _ in
             Task { await finishConnection() }
         }
-        #if os(macOS)
-        .frame(width: 520, height: 620)
-        #else
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        #endif
+        .tint(nil)
+        .frame(width: SetupSheet.size.width, height: SetupSheet.size.height)
     }
 
-    @ViewBuilder private var actions: some View {
+    private var hasPrimaryAction: Bool {
+        switch cloud.phase {
+        case .signingIn, .creating, .waitingForServer: false
+        case .connected: connectionError != nil
+        case .idle, .billingRequired, .readyToCreate, .failed: true
+        }
+    }
+
+    /// The one step that moves setup forward, in the sheet's confirmation place.
+    @ViewBuilder private var primaryAction: some View {
         switch cloud.phase {
         case .idle:
-            Button { Task { await cloud.signIn() } } label: {
-                SetupActionLabel(title: L("Продолжить с DigitalOcean"), icon: "arrow.up.right")
-            }.buttonStyle(.glassProminent).controlSize(.large)
+            Button(L("Продолжить с DigitalOcean")) { Task { await cloud.signIn() } }
                 .accessibilityIdentifier("cloudSignIn")
         case .billingRequired:
-            VStack(spacing: 12) {
-                Link(destination: URL(string: "https://cloud.digitalocean.com/account/billing")!) {
-                    SetupActionLabel(title: L("Добавить способ оплаты"), icon: "arrow.up.right")
-                }.buttonStyle(.glassProminent).controlSize(.large)
-                Button { Task { await cloud.resume() } } label: {
-                    SetupActionLabel(title: L("Продолжить"))
-                }.buttonStyle(.glass).controlSize(.large)
-            }
+            Button(L("Продолжить")) { Task { await cloud.resume() } }
         case .readyToCreate:
-            Button { Task { await cloud.confirmCreate() } } label: {
-                SetupActionLabel(title: L("Подтвердить и запустить"), icon: "arrow.right")
-            }.buttonStyle(.glassProminent).controlSize(.large)
+            Button(L("Подтвердить и запустить")) { Task { await cloud.confirmCreate() } }
                 .accessibilityIdentifier("cloudConfirmCost")
         case .failed:
-            Button { Task { await cloud.resume() } } label: {
-                SetupActionLabel(title: L("Продолжить настройку"), icon: "arrow.clockwise")
-            }.buttonStyle(.glassProminent).controlSize(.large)
+            Button(L("Продолжить настройку")) { Task { await cloud.resume() } }
         case .connected:
             if connectionError != nil {
-                Button { Task { await finishConnection() } } label: {
-                    SetupActionLabel(title: L("Открыть команду"), icon: "arrow.right")
-                }.buttonStyle(.glassProminent).controlSize(.large).disabled(connecting)
+                Button(L("Открыть команду")) { Task { await finishConnection() } }.disabled(connecting)
             }
-        case .signingIn:
-            #if os(macOS)
-            if let url = cloud.authorizationURL {
-                Link(L("Открыть вход в браузере"), destination: url)
-                    .buttonStyle(.glass).controlSize(.large)
-            }
-            #endif
-        case .creating, .waitingForServer:
+        case .signingIn, .creating, .waitingForServer:
             EmptyView()
         }
     }
@@ -212,6 +236,19 @@ struct ServerSetupView: View {
     }
 }
 
+/// A form row that opens a page in the browser.
+private struct SetupLinkRow: View {
+    let title: String
+    let url: URL
+
+    var body: some View {
+        Link(destination: url) {
+            Label(title, systemImage: "arrow.up.right")
+        }
+        .foregroundStyle(AppTheme.accentText)
+    }
+}
+
 /// Both server routes finish with the same account step and first assistant.
 struct ServerAccountSetupView: View {
     @EnvironmentObject private var client: HomeClient
@@ -219,54 +256,73 @@ struct ServerAccountSetupView: View {
     @Environment(\.openURL) private var openURL
     let onDone: () -> Void
     private var connected: Bool { client.openAIAccount?.connected == true && !client.homeUnreachable }
+    /// Signing in is the next step: it takes the sheet's confirmation place. Once a sign-in is under
+    /// way, the account card in the form carries the code and the browser link.
+    private var readyToSignIn: Bool {
+        !connected && !client.homeUnreachable && client.canManageOpenAI && client.openAILogin == nil
+            && !client.openAILoginPending && client.openAIAccount?.isUnavailable != true
+    }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    OpenStrudelMark(size: 64)
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(connected ? L("Your server is ready") : L("Connect ChatGPT"))
-                            .font(.system(.largeTitle, design: .serif, weight: .medium))
-                        Text(connected
-                             ? L("Your assistants can now work here, even when your Mac is off.")
-                             : L("OpenStrudel is installed. Sign in to ChatGPT to let your assistants work on this server."))
-                            .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                        Label(client.displayName, systemImage: "server.rack").font(.callout)
-                    }
-                    if connected {
-                        if let account = client.openAIAccount {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Label(account.email ?? "ChatGPT", systemImage: "checkmark.circle.fill")
-                                    .font(.headline).textSelection(.enabled)
-                                Text([account.planLabel, account.categoryLabel].compactMap { $0 }.joined(separator: " · "))
-                                    .font(.callout).foregroundStyle(AppTheme.secondaryText)
+            Form {
+                Section {
+                    LabeledContent(L("Server"), value: client.displayName)
+                    if connected, let account = client.openAIAccount {
+                        LabeledContent {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(account.email ?? "ChatGPT").textSelection(.enabled)
+                                let plan = [account.planLabel, account.categoryLabel].compactMap { $0 }.joined(separator: " · ")
+                                if !plan.isEmpty { Text(plan).font(AppTypography.meta) }
                             }
-                        }
-                        Button {
-                            onDone()
-                            library.beginEmployee(on: client)
-                        } label: { SetupActionLabel(title: L("Create an assistant here"), icon: "plus") }
-                            .buttonStyle(.glassProminent).controlSize(.large)
-                            .accessibilityIdentifier("createFirstServerAssistant")
-                        Button(L("Open server")) { onDone(); library.select(client) }
-                            .buttonStyle(.plain).foregroundStyle(AppTheme.secondaryText)
-                    } else if client.homeUnreachable {
+                        } label: { Text(verbatim: "ChatGPT") }
+                    }
+                    if !connected && client.homeUnreachable {
                         Text(L("The server did not respond. Your installation is saved."))
                             .foregroundStyle(AppTheme.secondaryText)
-                        Button(L("Повторить")) { Task { await client.load(quiet: true) } }
-                            .buttonStyle(.glassProminent)
-                    } else {
-                        OpenAISettingsCard(showIdentity: false)
                     }
-                }.padding(32).frame(maxWidth: 470).frame(maxWidth: .infinity)
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L("Продолжить позже")) { onDone(); library.select(client) }
+                    if readyToSignIn, let error = client.openAIErrorMessage {
+                        Text(UserFacingError.text(error)).foregroundStyle(AppTheme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } header: {
+                    SetupHeader(title: connected ? L("Your server is ready") : L("Connect ChatGPT"),
+                                connected ? L("Your assistants can now work here, even when your Mac is off.")
+                                    : L("OpenStrudel is installed. Sign in to ChatGPT to let your assistants work on this server."))
+                }
+                if !connected && !client.homeUnreachable && !readyToSignIn {
+                    Section { OpenAISettingsCard(showIdentity: false) }
                 }
             }
-        }.frame(width: 540, height: 650)
+            .formStyle(.grouped)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(connected ? L("Open server") : L("Продолжить позже")) { onDone(); library.select(client) }
+                }
+                if connected {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(L("Create an assistant here")) {
+                            onDone()
+                            library.beginEmployee(on: client)
+                        }.accessibilityIdentifier("createFirstServerAssistant")
+                    }
+                } else if client.homeUnreachable {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(L("Повторить")) { Task { await client.load(quiet: true) } }
+                    }
+                } else if readyToSignIn {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(client.isStartingOpenAILogin ? L("Открываем OpenAI…") : L("Войти в OpenAI")) {
+                            Task { await client.beginOpenAILogin() }
+                        }
+                        .disabled(client.isStartingOpenAILogin)
+                        .accessibilityIdentifier("signInOpenAI")
+                    }
+                }
+            }
+        }
+        .tint(nil)
+        .frame(width: SetupSheet.size.width, height: SetupSheet.size.height)
         .onChange(of: client.openAILogin) { _, login in if let url = login?.url { openURL(url) } }
         .task(id: client.openAILogin?.loginId) {
             await client.refreshOpenAIAccount()
@@ -286,28 +342,25 @@ struct AIDataConsentView: View {
     let accept: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                OpenStrudelMark(size: 76)
-                Text(L("Ваши данные"))
-                    .font(.system(.largeTitle, design: .serif, weight: .medium))
-                Text(L("Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI получает сообщения, нужную часть переписки и выбранные файлы."))
-                    .font(.body).foregroundStyle(AppTheme.secondaryText)
-                Text(L("Другие сервисы получают данные только при обращении к ним."))
-                    .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                Link(destination: URL(string: "https://waiwai.is/openstrudel/privacy")!) {
-                    Text(L("Подробнее о данных")).frame(minHeight: 44).contentShape(Rectangle())
-                }
-                    .font(.callout)
-                    .buttonStyle(.plain).foregroundStyle(AppTheme.accent)
-                Button(action: accept) {
-                    SetupActionLabel(title: textSize.isAccessibilitySize ? L("Разрешить") : L("Разрешить и продолжить"))
-                }
-                    .adaptiveActionStyle(.glassProminent).controlSize(.large)
-                    .accessibilityLabel(L("Разрешить и продолжить"))
-                    .accessibilityIdentifier("acceptAIDataSharing")
-            }.multilineTextAlignment(.center).padding(32).frame(maxWidth: 480)
-                .frame(maxWidth: .infinity)
-        }.defaultScrollAnchor(.center, for: .alignment)
+        WelcomePage {
+            WelcomeHeader(title: L("Ваши данные"))
+            WelcomeText(L("Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI получает сообщения, нужную часть переписки и выбранные файлы."),
+                        L("Другие сервисы получают данные только при обращении к ним."))
+                .padding(.top, 12)
+            // The link's hit target reaches the control height, so the gaps around its text stay 12 and 32.
+            Link(destination: URL(string: "https://waiwai.is/openstrudel/privacy")!) {
+                Text(L("Подробнее о данных")).frame(minHeight: controlTarget).contentShape(Rectangle())
+            }
+                .font(AppTypography.interface)
+                .buttonStyle(.plain).foregroundStyle(AppTheme.accentText)
+                .padding(.top, 4)
+            Button(action: accept) {
+                SetupActionLabel(title: textSize.isAccessibilitySize ? L("Разрешить") : L("Разрешить и продолжить"))
+            }
+                .adaptiveActionStyle(.glassProminent).controlSize(.large)
+                .accessibilityLabel(L("Разрешить и продолжить"))
+                .accessibilityIdentifier("acceptAIDataSharing")
+                .padding(.top, 24)
+        }
     }
 }
