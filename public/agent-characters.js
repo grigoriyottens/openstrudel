@@ -16,7 +16,8 @@ function characterImage(appearance, size=32) {
   if(appearance) img.style.setProperty('--tone',agentAngles[appearance.tone]+'deg');
   return img;
 }
-function appearanceEditor(initial) {
+/* onChange hears every choice, so a header character can follow the editor. */
+function appearanceEditor(initial, onChange) {
   let selected={...initial};
   const root=document.createElement('section'); root.className='appearance-editor';
   root.setAttribute('aria-label',t("Образ сотрудника"));
@@ -38,5 +39,6 @@ function appearanceEditor(initial) {
       const swatch=document.createElement('span');swatch.className='tone-swatch'; swatch.style.setProperty('--tone',agentAngles[tone]+'deg');if(selected.tone===tone) swatch.append(icon('check'));
       button.append(swatch);button.onclick=()=>{selected.tone=tone;render();root.querySelector(`[aria-label="${label}"]`).focus();};tones.append(button);
     });root.append(tones);
+    onChange?.({...selected});
   };render();return {root,value:()=>({...selected})};
 }

@@ -316,7 +316,7 @@ struct MessageContent: View, Equatable {
             if let table = block.table { MarkdownTableView(table: table) }
         case "image":
             if let url = block.imageURL {
-                ChatImage(name: words, identity: url.absoluteString) {
+                ChatImage(name: words, identity: url.absoluteString, autoload: false, origin: url.host) {
                     try await ChatMedia.download(url)
                 }
             }

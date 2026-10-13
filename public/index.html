@@ -88,8 +88,8 @@
     .agent-sub { display: block; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-sub:empty { display: none; }
     /* Interface labels hold user text in its own direction but line up with the interface. */
-    .agent-name, .agent-sub, .row-title, .row-detail, .file-name { text-align: left; }
-    [dir=rtl] :is(.agent-name, .agent-sub, .row-title, .row-detail, .file-name) { text-align: right; }
+    .agent-name, .agent-sub, .row-title, .row-detail, .file-name, .details-name, .details-role { text-align: left; }
+    [dir=rtl] :is(.agent-name, .agent-sub, .row-title, .row-detail, .file-name, .details-name, .details-role) { text-align: right; }
     .avatar { flex: none; display: grid; place-items: center; }
     .character { display: block; object-fit: contain; filter: hue-rotate(var(--tone, 0deg)); transition: filter .4s cubic-bezier(.3, 1.3, .5, 1), opacity .4s cubic-bezier(.3, 1.3, .5, 1); user-select: none; -webkit-user-drag: none; }
     .offline .character, .character.offline { filter: hue-rotate(var(--tone, 0deg)) grayscale(1); opacity: .6; }
@@ -318,6 +318,19 @@
     progress::-webkit-progress-bar { background: var(--separator); }
     progress::-webkit-progress-value { background: var(--accent); }
     progress::-moz-progress-bar { background: var(--accent); }
+
+    /* Details header: the 64 character, the name as an editable title, the role. The name field shows its edge only
+       on hover and focus, and its text sits on the role's edge. */
+    .details-header { display: flex; align-items: center; gap: var(--space-3); padding-block: var(--space-1); }
+    .details-header .character { width: 64px; height: 64px; }
+    .details-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .details-name { font-size: 17px; line-height: 22px; font-weight: var(--semibold); overflow-wrap: anywhere; }
+    .page-content .details-name.field { min-height: 0; margin-inline: -5px; padding: 2px var(--space-1); border-color: transparent; font-weight: var(--semibold); line-height: 22px; }
+    .page-content .details-name.field:hover { border-color: var(--separator); }
+    .page-content .details-name.field:focus { border-color: var(--accent); }
+    .details-role { color: var(--secondary); line-height: 20px; overflow-wrap: anywhere; }
+    .page-content textarea.field.reading { font-size: 15px; line-height: 22px; }
+    @media (pointer: coarse) { .page-content textarea.field.reading { font-size: 16px; } }
 
     /* Appearance editor */
     .appearance-editor { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -740,8 +753,8 @@
     });
     $('composer').onsubmit = event => sendDraft(event);
     $('new-employee').onclick = () => openCreateAgent(); $('mobile-agents').onclick = () => openNavigation(); $('settings').onclick = () => openHomeSettings();
-    $('active-details').onclick = () => { state.fromSettings = false; void openCurrentAgent(); };
-    function showModal(content) { if(!$('modal').classList.contains('open')) state.modalFocus=document.activeElement; $('modal-content').replaceChildren(content); $('modal-content').setAttribute('aria-label',content.querySelector('h2')?.textContent||'OpenStrudel');$('modal').classList.add('open');document.querySelector('main').inert=true; } function closeModal() { $('modal').classList.remove('open');document.body.classList.remove('locked');state.fromSettings=false;document.querySelector('main').inert=false;state.modalFocus?.focus(); }
+    $('active-details').onclick = () => { state.back = null; void openCurrentAgent(); };
+    function showModal(content) { if(!$('modal').classList.contains('open')) state.modalFocus=document.activeElement; $('modal-content').replaceChildren(content); $('modal-content').setAttribute('aria-label',content.querySelector('h2')?.textContent||'OpenStrudel');$('modal').classList.add('open');document.querySelector('main').inert=true; } function closeModal() { $('modal').classList.remove('open');document.body.classList.remove('locked');state.back=null;document.querySelector('main').inert=false;state.modalFocus?.focus(); }
 
     function renderImportedChats() {
       const select = $('imported-chat'); select.replaceChildren();

@@ -1,5 +1,6 @@
 import Testing
 import SwiftUI
+import AppKit
 
 @MainActor
 struct MessageContentTests {
@@ -30,6 +31,27 @@ struct MessageContentTests {
     @Test func consecutiveImagesRemainSeparate() {
         let blocks = MessageContent(source: "![Первый](https://example.com/a.jpg) ![Второй](https://example.com/b.jpg)").blocks
         #expect(blocks.filter { $0.kind == "image" }.count == 2)
+    }
+
+    /// A web picture named in a reply waits for a click, so its address cannot carry data out unseen.
+    /// Attachments keep loading on sight.
+    @Test func webImagesWaitForAClick() async throws {
+        final class Loads { var count = 0 }
+        func show(autoload: Bool) async throws -> Int {
+            let loads = Loads()
+            let view = NSHostingView(rootView: ChatImage(name: "Chart", identity: "https://example.com/a.png", autoload: autoload) {
+                loads.count += 1
+                throw URLError(.cancelled)
+            })
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 240), styleMask: .borderless, backing: .buffered, defer: false)
+            window.contentView = view
+            view.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(300))
+            window.contentView = nil
+            return loads.count
+        }
+        #expect(try await show(autoload: false) == 0)
+        #expect(try await show(autoload: true) == 1)
     }
 
     @Test func imageMarkupInCodeDoesNotLoad() {

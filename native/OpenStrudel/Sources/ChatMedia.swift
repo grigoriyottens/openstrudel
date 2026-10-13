@@ -6,6 +6,11 @@ import QuickLook
 struct ChatImage: View {
     let name: String
     let identity: String
+    /// Attachments load on sight. A web picture named in a reply waits for a click,
+    /// because its address can carry data out of the conversation.
+    var autoload = true
+    /// Where a waiting picture would come from, shown under its download button.
+    var origin: String?
     let load: () async throws -> URL
     @State private var thumbnail: CGImage?
     @State private var fileURL: URL?
@@ -21,19 +26,26 @@ struct ChatImage: View {
                     .accessibilityLabel(L("Open image: \(name.isEmpty ? L("Фото") : name)"))
             } else {
                 VStack(spacing: 8) {
-                    if failed {
+                    if failed || (!autoload && attempt == 0) {
                         Image(systemName: "photo").font(.title2).foregroundStyle(AppTheme.secondaryText)
+                            .accessibilityHidden(true)
+                        if let origin {
+                            Text(origin).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                                .lineLimit(1).truncationMode(.middle)
+                        }
                         Button(L("Загрузить изображение")) { attempt += 1 }.font(AppTypography.interface)
                     } else {
                         ProgressView().controlSize(.small)
                     }
                 }
+                .padding(12)
                 .frame(width: 240, height: 180)
                 .chatSurface(AppTheme.surface, radius: Radius.card)
             }
         }
         .quickLookPreview($previewURL)
         .task(id: identity + ":" + String(attempt)) {
+            guard autoload || attempt > 0 else { return }
             failed = false
             do {
                 let url = try await load()

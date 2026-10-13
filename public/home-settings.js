@@ -1,10 +1,11 @@
 function element(tag, text, className) { const e = document.createElement(tag); if (text) e.textContent = text; if (className) e.className = className; return e; }
 /* A modal page: title, content, then a bottom bar with Cancel first and one main action last.
    close: 'done' (default), 'cancel', or false when the page owns its buttons or must not be dismissed.
-   A page reached from the Settings list leads with a way back to it; a locked page is the whole screen. */
-function modalPage(title, description, { close: closeKind = 'done', locked = false } = {}) {
+   back: the page this one was opened from ({label, open, row, back}); it leads with a way back to it.
+   A locked page is the whole screen. */
+function modalPage(title, description, { close: closeKind = 'done', locked = false, back = state.back } = {}) {
   const box = element('div', '', 'page');
-  if (state.fromSettings && !locked) { const back = element('button', '', 'back'); back.type = 'button'; back.append(icon('back', true), element('span', t("Настройки"))); back.onclick = () => void openHomeSettings(); box.append(back); }
+  if (back && !locked) { const button = element('button', '', 'back'), label = element('span', back.label); label.dir = 'auto'; button.type = 'button'; button.append(icon('back', true), label); button.onclick = () => void goBack(back); box.append(button); }
   box.append(element('h2', title)); if (description) box.append(element('p', description, 'description'));
   if (locked) box.dataset.locked = 'true';
   document.body.classList.toggle('locked', locked);
@@ -17,6 +18,14 @@ function modalPage(title, description, { close: closeKind = 'done', locked = fal
   arrange(page);
   showModal(box); (close || $('modal-content')).focus();
   return page;
+}
+/* One step back: the earlier page opens with its own way back, and focus returns to the row the person came from. */
+function goBack(back) {
+  state.back = back.back || null;
+  const opened = back.open();
+  const row = [...$('modal-content').querySelectorAll('.row')].find(node => node.querySelector('.row-title')?.textContent === back.row);
+  row?.focus();
+  return opened;
 }
 /* Keeps the bar in order: Cancel or Done, secondary actions, then the one main action. A page with no
    main action ends with Done as its default button. */
@@ -159,17 +168,18 @@ function showWelcome(error) {
 }
 window.addEventListener('hashchange',()=>{ if(new URLSearchParams(location.hash.slice(1)).has('invite')) void bootstrapWeb(); });
 async function openHomeSettings() {
-  state.fromSettings=false;
+  state.back=null;
   const page=modalPage(t("Настройки"),t("Сотрудники и переписка находятся на этом устройстве."));
-  languageField(page,()=>void openHomeSettings());
+  languageField(page,async()=>{await openHomeSettings();$('interface-language').focus();});
+  const via=(label,fn)=>()=>{state.back={label:t("Настройки"),open:openHomeSettings,row:label};return fn();};
   const entries=state.owner ? [[t("Устройства"),openDevices],[t("Настройки сотрудника"),openCurrentAgent],[t("Аккаунты и лимиты"),openAccounts],[t("Модель и скорость"),()=>openModelSettings()],[t("Резервная копия"),openSettings],['Telegram',openTelegramSettings]] : [[t("Аккаунты и лимиты"),openAccounts]];
   const list=group(page.content);
-  for(const [label,fn] of entries) row(list,label,()=>{state.fromSettings=true;return fn();});
+  for(const [label,fn] of entries) row(list,label,via(label,fn));
   if(state.hostingOrigin) {
     const hosting=new URL(state.hostingOrigin);
     if(hosting.protocol==='https:'||hosting.protocol==='http:') row(list,t("Серверы: создание и продление"),null,{href:hosting.href});
   }
-  row(group(page.content),t("Выйти на этом устройстве"),()=>{state.fromSettings=true;return openDeviceSignOut();},{className:'destructive-row'});
+  row(group(page.content),t("Выйти на этом устройстве"),via(t("Выйти на этом устройстве"),openDeviceSignOut),{className:'destructive-row'});
 }
 async function openDevices() {
   const page=modalPage(t("Устройства"),t("Сотрудники остаются на устройстве, где созданы. Для работы с несколькими устройствами откройте приложение OpenStrudel."));
@@ -190,34 +200,72 @@ async function openDevices() {
     }
   } catch(e) { page.report(e); }
 }
-async function openCurrentAgent() {
-  const agent=state.selected||'main', profile=state.profiles.find(p=>p.id===agent), name=profile?.name||'OpenStrudel';
-  const page=modalPage(name,'',{close:'cancel'});
+/* The assistant's details, as the Mac details sheet: the character, the name and the role, what the assistant does,
+   its look, its pages, its account, and deleting it last. Pages opened from here lead back here with the edits kept. */
+async function openCurrentAgent(draft) {
+  const agent=state.selected||'main', profile=state.profiles.find(p=>p.id===agent), name=profile?.name||'OpenStrudel', back=state.back;
+  const page=modalPage(t("Сотрудник"),'',{close:'cancel'});
+  let nameField=null, instructions=null, editor=null, select=null, initialAccount='';
+  const edits=()=>({name:nameField?.value,instructions:instructions?.value,appearance:editor?.value(),account:select?.value});
+  const here=row=>({label:name,open:()=>openCurrentAgent(edits()),row,back});
+  const sub=(label,fn)=>()=>{state.back=here(label);return fn();};
+  const header=element('div','','details-header'), avatar=element('span','','avatar'), titles=element('div','','details-titles');
+  avatar.append(characterImage(profile?agentAppearance(profile):null,64)); avatar.classList.toggle('offline',isOffline(profile));
+  if(profile) {
+    nameField=element('input','','field details-name'); nameField.dir='auto'; nameField.maxLength=80; nameField.autocomplete='off';
+    nameField.value=draft?.name??profile.name; nameField.setAttribute('aria-label',t("Имя сотрудника")); titles.append(nameField);
+  } else titles.append(element('span','OpenStrudel','details-name'));
+  const role=profile?profile.purpose:t("Помощник для ваших задач");
+  if(role) { const line=element('span',role,'details-role'); line.dir='auto'; titles.append(line); }
+  header.append(avatar,titles); page.content.append(header);
+  if(profile) {
+    const label=element('label',t("Чем занимается сотрудник")); instructions=element('textarea','','field reading'); instructions.rows=5; instructions.dir='auto'; instructions.maxLength=12000;
+    instructions.value=draft?.instructions??profile.instructions??''; label.append(instructions);
+    page.content.append(label,element('p',t("Опишите задачи и правила, которым он должен следовать."),'hint'));
+  }
+  if(profile && state.appearanceVersion===1) { editor=appearanceEditor(draft?.appearance||agentAppearance(profile),look=>avatar.replaceChildren(characterImage(look,64))); page.content.append(editor.root); }
   const list=group(page.content);
-  row(list,t("Модель и скорость"),()=>openModelSettings(agent));
-  row(list,t("Управление компьютером"),openComputerSettings);
-  let editor=null, select=null, initialAccount='';
-  if(profile && state.appearanceVersion===1) { editor=appearanceEditor(agentAppearance(profile)); page.content.append(editor.root); }
-  action(page,t("Сохранить"),async()=>{
-    if(editor && JSON.stringify(editor.value())!==JSON.stringify(agentAppearance(profile))) {
-      const result=await api('/v1/profiles/'+encodeURIComponent(profile.id),{method:'PATCH',body:JSON.stringify({name:profile.name,instructions:profile.instructions,appearance:editor.value()})});
-      if(JSON.stringify(result.profile?.appearance)!==JSON.stringify(editor.value())) throw new Error(t("Обновите OpenStrudel на устройстве этого сотрудника, чтобы сохранить образ."));
+  row(list,t("Модель и скорость"),sub(t("Модель и скорость"),()=>openModelSettings(agent)));
+  row(list,t("Управление компьютером"),sub(t("Управление компьютером"),openComputerSettings));
+  let danger=null;
+  if(profile && state.owner) { danger=group(page.content); row(danger,t("Удалить сотрудника…"),()=>confirmDelete(),{className:'destructive-row'}); }
+  const add=(...nodes)=>danger?danger.before(...nodes):page.content.append(...nodes);
+  function confirmDelete() {
+    const device=(state.devices||[]).find(d=>d.id===(profile.deviceId||state.nodeId))?.name||'OpenStrudel', from=here(t("Удалить сотрудника…"));
+    const confirm=modalPage(t("Удалить «{0}»?",profile.name),t("Сотрудник, переписка и расписания будут удалены с устройства «{0}». Отменить удаление нельзя.",device),{close:'cancel',back:null});
+    confirm.close.onclick=()=>void goBack(from);
+    action(confirm,t("Удалить"),async()=>{
+      await api('/v1/profiles/'+encodeURIComponent(profile.id),{method:'DELETE'});
+      state.profiles=state.profiles.filter(p=>p.id!==profile.id);
+      closeModal(); await selectAgent(null); await refresh();
+    },'destructive');
+  }
+  const save=action(page,t("Сохранить"),async()=>{
+    if(profile) {
+      const changes={name:nameField.value.trim(),instructions:instructions.value.trim()}, look=editor?.value();
+      const lookChanged=Boolean(editor)&&JSON.stringify(look)!==JSON.stringify(agentAppearance(profile));
+      if(changes.name!==profile.name||changes.instructions!==(profile.instructions||'')||lookChanged) {
+        const result=await api('/v1/profiles/'+encodeURIComponent(profile.id),{method:'PATCH',body:JSON.stringify({...changes,...(lookChanged?{appearance:look}:{})})});
+        if(lookChanged&&JSON.stringify(result.profile?.appearance)!==JSON.stringify(look)) throw new Error(t("Обновите OpenStrudel на устройстве этого сотрудника, чтобы сохранить образ."));
+      }
     }
     if(select && select.value!==initialAccount) await api('/v1/agents/'+agent+'/accounts',{method:'POST',body:JSON.stringify({accountIds:select.value?[select.value]:null})});
     closeModal();await refresh();
   },true);
+  if(nameField) { const named=()=>{save.disabled=!nameField.value.trim();}; nameField.addEventListener('input',named); named(); }
   try {
     const control=await api('/v1/home'), deviceId=profile?.deviceId||control.home.mainNodeId;
     const device=control.devices.find(d=>d.id===deviceId);
-    page.content.append(element('p',t("Работает на «{0}».",device?.name||t("вашем устройстве"))));
+    add(element('p',t("Работает на «{0}».",device?.name||t("вашем устройстве"))));
     const data=await api('/v1/accounts?deviceId='+encodeURIComponent(deviceId)), policy=await api('/v1/agents/'+agent+'/accounts');
-    const label=element('label',t("Аккаунт OpenAI")); select=element('select','','field'); label.append(select); page.content.append(label);
-    page.content.append(element('p',t("Настройки изменят новые поручения. Уже начатая работа продолжится с прежним аккаунтом."),'hint'));
+    const label=element('label',t("Аккаунт OpenAI")); select=element('select','','field'); label.append(select); add(label);
+    add(element('p',t("Настройки изменят новые поручения. Уже начатая работа продолжится с прежним аккаунтом."),'hint'));
     const defaultOption=element('option',t("По умолчанию")); defaultOption.value=''; select.append(defaultOption);
     for(const account of data.accounts) { const option=element('option',(account.account.email||account.name)+' · '+accountPlan(account.account.planType)); option.value=account.id; select.append(option); }
     if(policy.accountIds?.length===1) select.value=policy.accountIds[0];
-    else if(policy.accountIds?.length>1) page.content.append(element('p',t("Выбран отдельный порядок аккаунтов. Новый выбор заменит его.")));
+    else if(policy.accountIds?.length>1) add(element('p',t("Выбран отдельный порядок аккаунтов. Новый выбор заменит его.")));
     initialAccount=select.value;
+    if([...select.options].some(option=>option.value===draft?.account)) select.value=draft.account;
   } catch(e) { page.report(e); }
 }
 async function watchAgentMove(id) {
@@ -430,7 +478,7 @@ languageReady.then(()=>bootstrapWeb()).catch(()=>{ const retry=element('button',
 
 async function openDeviceSignOut() {
   const page=modalPage(t("Выйти на этом устройстве?"),t("Сотрудники, переписка, файлы и расписания сохранятся на ваших устройствах. Команда продолжит работать, пока её Mac или сервер включён. Для возвращения понадобится новое приглашение."),{close:'cancel'});
-  if(state.fromSettings) page.close.onclick=()=>void openHomeSettings();
+  const back=state.back; if(back) page.close.onclick=()=>void goBack(back);
   if($('draft').value.trim()) page.content.append(element('p',t("Черновик останется в этом браузере для повторного подключения к этой команде.")));
   action(page,t("Выйти"),async()=>{ saveDraft(); await api('/auth/logout',{method:'POST'}); clearInterval(state.refreshTimer); location.reload(); },'destructive');
   if(state.owner && state.archiveVersion===1) action(page,t("Сначала сохранить копию…"),openSettings);
