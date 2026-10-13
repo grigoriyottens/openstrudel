@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import type { Store } from "./store.js";
 import { CodexRpc, type RpcMessage } from "./rpc.js";
 import { isOpenAIAuthenticationError, openAILoginError } from "./account-errors.js";
@@ -25,6 +26,8 @@ export type LoginStatus = {
   status: "pending" | "completed" | "failed" | "canceled";
   error?: string;
   account?: OpenAIAccount;
+  accountId?: string;
+  alreadyConnected?: boolean;
 };
 
 type LoginSession = {
@@ -70,7 +73,8 @@ export class CodexAccountService {
     if (!this.reading) {
       const generation = this.generation;
       const reading = this.readAccount().then(account => {
-        if (generation === this.generation) this.cached = { account, until: Date.now() + (account.issue ? 5_000 : 30_000) };
+        if (generation !== this.generation) return this.read();
+        this.cached = { account, until: Date.now() + (account.issue ? 5_000 : 30_000) };
         return account;
       }).finally(() => { if (this.reading === reading) this.reading = undefined; });
       this.reading = reading;
@@ -83,6 +87,7 @@ export class CodexAccountService {
     this.cached = undefined;
     this.reading = undefined;
     this.usageCache = undefined;
+    this.usageReading = undefined;
   }
 
   get loginPending(): boolean {
@@ -91,20 +96,25 @@ export class CodexAccountService {
   }
 
   private async readAccount(): Promise<OpenAIAccount> {
+    const generation = this.generation;
     const managed = this.store.getSetting(this.modeKey) === "managed";
-    const disconnected: OpenAIAccount = { connected: false, email: null, planType: null, managed };
+    const remembered = JSON.parse(this.store.getSetting(this.modeKey + ".identity") ?? "null");
+    const disconnected: OpenAIAccount = { connected: false, email: remembered?.email ?? null, planType: remembered?.planType ?? null, managed };
     // A Codex installation on the same computer is not consent to connect it.
     // Only our completed OAuth flow grants access to this Home's account.
     if (!managed) return disconnected;
     try {
       const result = await this.withAuthRpc(rpc => rpc.request("account/read", { refreshToken: false }));
       const account = result.account;
-      return {
+      const value: OpenAIAccount = {
         connected: Boolean(account),
-        email: account?.type === "chatgpt" ? account.email ?? null : null,
-        planType: account?.type === "chatgpt" ? account.planType ?? null : null,
+        email: account?.type === "chatgpt" ? account.email ?? null : disconnected.email,
+        planType: account?.type === "chatgpt" ? account.planType ?? null : disconnected.planType,
         managed,
+        ...(!account ? { issue: "sign_in_required" as const } : {}),
       };
+      if (account && generation === this.generation) this.store.setSetting(this.modeKey + ".identity", JSON.stringify({ email: value.email, planType: value.planType }));
+      return value;
     } catch (error) {
       // OpenAI availability and login state must never make the Home itself
       // unreachable. Keep credentials and history intact so login can recover.
@@ -116,7 +126,9 @@ export class CodexAccountService {
   usage(force = false): Promise<AccountUsage> {
     if (!force && this.usageCache && this.usageCache.until > Date.now()) return Promise.resolve(this.usageCache.value);
     if (!this.executionHome()) return Promise.resolve({ checkedAt: new Date().toISOString(), ordinaryUsageAllowed: null, windows: [], unavailable: true });
-    if (!this.usageReading) this.usageReading = this.withAuthRpc(async rpc => {
+    if (!this.usageReading) {
+    const generation = this.generation;
+    const reading = this.withAuthRpc(async rpc => {
       const result = await rpc.request("account/rateLimits/read", { excludeResetCreditDetails: false });
       const windows: AccountUsage["windows"] = [];
       const buckets = result.rateLimitsByLimitId ?? { codex: result.rateLimits };
@@ -142,8 +154,11 @@ export class CodexAccountService {
         ? { availableCount: resets.availableCount as number, nextExpiresAt: expiries.length ? Math.min(...expiries) : null } : null;
       return { checkedAt: new Date().toISOString(), ordinaryUsageAllowed: typeof result.ordinaryUsageAllowed === "boolean" ? result.ordinaryUsageAllowed : null, windows, credits, resetCredits };
     }).catch(() => ({ checkedAt: new Date().toISOString(), ordinaryUsageAllowed: null, windows: [], unavailable: true })).then(value => {
+      if (generation !== this.generation) return this.usage();
       this.usageCache = { until: Date.now() + 30_000, value }; return value;
-    }).finally(() => { this.usageReading = undefined; });
+    }).finally(() => { if (this.usageReading === reading) this.usageReading = undefined; });
+    this.usageReading = reading;
+    }
     return this.usageReading;
   }
 
@@ -166,13 +181,64 @@ export class CodexAccountService {
   }
 
   private withAuthRpc<T>(work: (rpc: CodexRpc) => Promise<T>): Promise<T> {
-    const operation = this.authQueue.then(async () => {
+    return this.serializeAuth(async () => {
       const rpc = new CodexRpc(this.codexHome);
       try { await rpc.initialize(); return await work(rpc); }
       finally { rpc.close(); }
     });
+  }
+
+  private serializeAuth<T>(work: () => Promise<T>): Promise<T> {
+    const operation = this.authQueue.then(work);
     this.authQueue = operation.then(() => undefined, () => undefined);
     return operation;
+  }
+
+  /** Equality only: never return provider identity claims or credentials to clients.
+   * Account ID identifies a workspace, not a person; email identifies neither. */
+  identityKey(): string | undefined {
+    if (!this.executionHome()) return undefined;
+    try {
+      const tokens = JSON.parse(readFileSync(resolve(this.codexHome, "auth.json"), "utf8")).tokens;
+      const claims = JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64url").toString("utf8"));
+      if (typeof tokens.account_id !== "string" || !tokens.account_id || typeof claims.sub !== "string" || !claims.sub) return undefined;
+      return createHash("sha256").update(JSON.stringify([claims.sub, tokens.account_id])).digest("hex");
+    } catch { return undefined; }
+  }
+
+  credentialsUpdatedAt(): number {
+    try { return statSync(resolve(this.codexHome, "auth.json")).mtimeMs; } catch { return 0; }
+  }
+
+  async adoptCredentials(source: CodexAccountService): Promise<void> {
+    // Wait for all in-flight refreshes on both connections before replacing auth.
+    await source.serializeAuth(() => this.serializeAuth(async () => {
+      const identity = this.identityKey();
+      if (!identity || identity !== source.identityKey()) throw new Error("Account identity changed during sign-in. Try again.");
+      const data = readFileSync(resolve(source.codexHome, "auth.json"));
+      mkdirSync(this.codexHome, { recursive: true, mode: 0o700 });
+      const temp = resolve(this.codexHome, "auth-" + randomUUID() + ".tmp");
+      try { writeFileSync(temp, data, { mode: 0o600 }); renameSync(temp, resolve(this.codexHome, "auth.json")); }
+      finally { rmSync(temp, { force: true }); }
+      this.store.setSetting(this.modeKey, "managed");
+      this.invalidate();
+      this.onChange?.(false);
+      // Do this under the same locks: a queued source refresh must not rotate
+      // a token after it has been handed to the surviving connection.
+      source.forgetDuplicateFiles();
+    }));
+  }
+
+  /** Forget only this duplicate's local credentials. OAuth logout could revoke
+   * the connection we just kept, so merging must not call account/logout. */
+  async forgetDuplicate(): Promise<void> {
+    await this.serializeAuth(async () => this.forgetDuplicateFiles());
+  }
+  private forgetDuplicateFiles(): void {
+    rmSync(resolve(this.codexHome, "auth.json"), { force: true });
+    this.store.setSetting(this.modeKey, "signed-out");
+    this.invalidate();
+    this.onChange?.(false);
   }
 
   startLogin(method: "browser" | "device" = "browser"): Promise<LoginStart> {
@@ -246,13 +312,7 @@ export class CodexAccountService {
     this.loginGeneration++;
     for (const session of this.sessions.values()) session.rpc.close();
     this.sessions.clear();
-    const rpc = new CodexRpc(this.codexHome);
-    try {
-      await rpc.initialize();
-      await rpc.request("account/logout");
-    } finally {
-      rpc.close();
-    }
+    await this.withAuthRpc(rpc => rpc.request("account/logout"));
     this.store.setSetting(this.modeKey, "signed-out");
     this.invalidate();
     this.onChange?.(true);
@@ -266,6 +326,8 @@ export class CodexAccountService {
   }
 
   private accountID(): string | undefined {
+    const identity = this.identityKey();
+    if (identity) return identity;
     try { return JSON.parse(readFileSync(resolve(this.codexHome, "auth.json"), "utf8")).tokens?.account_id; }
     catch { return undefined; }
   }
@@ -286,9 +348,12 @@ export class CodexAccountService {
     if (!session || session.status !== "pending") return;
     if (params.success) {
       session.status = "completed";
+      session.rpc.close();
       this.store.setSetting(this.modeKey, "managed");
       this.invalidate();
-      this.onChange?.(!session.previousAccountID || session.previousAccountID !== this.accountID());
+      const changed = !session.previousAccountID || session.previousAccountID !== this.accountID();
+      if (changed) this.store.deleteSetting(this.modeKey + ".identity");
+      this.onChange?.(changed);
     } else {
       session.status = "failed";
       session.error = openAILoginError(params.error);

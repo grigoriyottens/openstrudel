@@ -1,17 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { CodexAccountService } from "./account.js";
+import { CodexAccountService, type OpenAIAccount, type AccountUsage } from "./account.js";
 import { HomeError, identifier } from "./home.js";
 import { ScopedCodexEngine } from "./scopes.js";
 import type { Store } from "./store.js";
 import type { CodexEngine } from "./types.js";
 import { AccountUnavailableError, isOpenAIAuthenticationError } from "./account-errors.js";
 
-type AccountEntry = { id: string; name: string };
+type AccountEntry = { id: string; name: string; customName?: boolean };
 export class Accounts {
   private services = new Map<string, CodexAccountService>();
   readonly active = new Map<string, number>();
   private readonly changing = new Set<string>();
+  private consolidating?: Promise<void>;
+  private readonly merged = new Map<string, string>();
   onChange?: (id: string) => void;
   constructor(readonly store: Store, readonly root: string, readonly primary: CodexAccountService) { this.services.set("default", primary); this.watch("default", primary); }
   private watch(id: string, service: CodexAccountService) {
@@ -39,14 +41,89 @@ export class Accounts {
     const entry = { id: randomUUID(), name: String(name || "Аккаунт").trim().slice(0, 80) };
     this.store.setSetting("codex.accounts", JSON.stringify([...this.entries(), entry])); return entry;
   }
-  async list(refresh = false) {
-    return Promise.all(this.entries().map(async entry => {
+  rename(id: string, name: string) {
+    this.get(id);
+    name = name.trim();
+    if (!name || name.length > 80) throw new HomeError("Use a name between 1 and 80 characters.");
+    this.store.setSetting("codex.accounts", JSON.stringify(this.entries().map(entry => entry.id === id ? { ...entry, name, customName: true } : entry)));
+  }
+  /** Old releases allowed several independent refresh-token stores for the
+   * same person/workspace. Collapse them once idle, retaining history/policies. */
+  private consolidate(): Promise<void> {
+    if (this.consolidating) return this.consolidating;
+    this.consolidating = this.consolidateDuplicates().finally(() => { this.consolidating = undefined; });
+    return this.consolidating;
+  }
+  private async consolidateDuplicates() {
+    const groups = new Map<string, AccountEntry[]>();
+    for (const entry of this.entries()) {
+      const identity = this.get(entry.id).identityKey();
+      if (identity) groups.set(identity, [...groups.get(identity) ?? [], entry]);
+    }
+    for (const group of groups.values()) {
+      if (group.length < 2 || group.some(entry => this.active.get(entry.id) || this.changing.has(entry.id) || this.get(entry.id).loginPending)) continue;
+      const keep = group.find(entry => entry.id === "default") ?? group[0]!;
+      const duplicates = group.filter(entry => entry.id !== keep.id);
+      for (const entry of group) this.changing.add(entry.id);
+      try {
+        const newest = [...group].sort((a, b) => this.get(b.id).credentialsUpdatedAt() - this.get(a.id).credentialsUpdatedAt())[0]!;
+        if (newest.id !== keep.id) await this.get(keep.id).adoptCredentials(this.get(newest.id));
+        const removed = new Set(duplicates.map(entry => entry.id));
+        this.store.db.exec("BEGIN IMMEDIATE");
+        try {
+          // Keep the group's priority even if the built-in default slot was later.
+          let inserted = false;
+          const entries = this.entries().flatMap(entry => {
+            if (!group.some(item => item.id === entry.id)) return [entry];
+            if (inserted) return []; inserted = true;
+            return [this.entries().find(item => item.id === keep.id)!];
+          });
+          this.store.setSetting("codex.accounts", JSON.stringify(entries));
+          for (const row of this.store.db.prepare("SELECT key, value FROM settings WHERE key LIKE 'agent.accounts.%'").all() as Array<{ key: string; value: string }>) {
+            const ids: string[] | null = JSON.parse(row.value);
+            if (ids?.some(id => removed.has(id))) this.store.setSetting(row.key, JSON.stringify([...new Set(ids.map(id => removed.has(id) ? keep.id : id))]));
+          }
+          for (const conversation of this.store.listConversations()) {
+            const ownerKey = "codex.threadOwner." + conversation.id;
+            if (removed.has(this.store.getSetting(ownerKey) ?? "")) {
+              this.store.setConversationThread(conversation.id, null);
+              this.store.deleteSetting(ownerKey);
+            }
+          }
+          this.store.db.exec("COMMIT");
+        } catch (error) { this.store.db.exec("ROLLBACK"); throw error; }
+        for (const entry of duplicates) {
+          this.merged.set(entry.id, keep.id);
+          await this.services.get(entry.id)!.forgetDuplicate();
+        }
+      } finally { for (const entry of group) this.changing.delete(entry.id); }
+    }
+  }
+  async loginStatus(id: string, loginId: string) {
+    // A polling client may still use the temporary slot after it was merged.
+    const service = this.services.get(id) ?? this.get(id);
+    const status = await service.status(loginId);
+    if (status.status !== "completed") return status;
+    await this.consolidate();
+    let accountId = id;
+    while (this.merged.has(accountId)) accountId = this.merged.get(accountId)!;
+    return { ...status, accountId, alreadyConnected: accountId !== id, account: await this.get(accountId).read() };
+  }
+  async list(refresh = false): Promise<Array<AccountEntry & { displayName: string; account: OpenAIAccount; usage: AccountUsage; activeRuns: number; loginPending: boolean }>> {
+    await this.consolidate();
+    const entries = this.entries();
+    const result = await Promise.all(entries.map(async entry => {
       const service = this.get(entry.id);
       const [account, usage] = await Promise.all([service.read(refresh), service.usage(refresh)]);
-      return { ...entry, account, usage, activeRuns: this.active.get(entry.id) ?? 0, loginPending: service.loginPending };
+      const generic = !entry.customName && ["Основной", "Аккаунт", "OpenAI", "Account", "ChatGPT", ""].includes(entry.name);
+      return { ...entry, displayName: generic ? account.email ?? "ChatGPT" : entry.name, account, usage, activeRuns: this.active.get(entry.id) ?? 0, loginPending: service.loginPending };
     }));
+    // Another client may rename/add/merge while usage is loading. Never return
+    // an older catalogue that makes an account appear to vanish or reappear.
+    return JSON.stringify(entries) === JSON.stringify(this.entries()) ? result : this.list();
   }
   async statusFor(agent: string, refresh = false) {
+    await this.consolidate();
     const ids = this.policy(agent) ?? this.entries().map(a => a.id);
     let first: { account: Awaited<ReturnType<CodexAccountService["read"]>>; accountId: string; loginPending: boolean } | undefined;
     for (const id of ids) {
@@ -65,6 +142,7 @@ export class Accounts {
     this.store.setSetting("agent.accounts." + agent, JSON.stringify(ids));
   }
   async choose(agent: string, checkQuota = true): Promise<{ id: string; service: CodexAccountService }> {
+    await this.consolidate();
     const ids = this.policy(agent) ?? this.entries().map(a => a.id);
     let limited = false, signingIn = false;
     for (const id of ids) {
@@ -129,7 +207,7 @@ export class AccountEngines implements CodexEngine {
           const ownerKey = options?.conversationId ? "codex.threadOwner." + options.conversationId : undefined;
           const owner = ownerKey ? this.accounts.store.getSetting(ownerKey) : null;
           const threadId = saved ?? (id === "default" && (!owner || owner === id) ? options?.threadId : undefined);
-          const history = !threadId && options?.conversationId && options.threadId ? this.accounts.store.listMessages(options.conversationId, 200).filter(m => m.kind !== "notice" && m.status === "completed").map(m => `${m.direction === "inbound" ? "User" : "Assistant"}: ${m.text}`).join("\n") : "";
+          const history = !threadId && options?.conversationId ? this.accounts.store.listMessages(options.conversationId, 200).filter(m => m.kind !== "notice" && m.status === "completed").map(m => `${m.direction === "inbound" ? "User" : "Assistant"}: ${m.text}`).join("\n") : "";
           const engine = this.scoped(id, service).forContext(context);
           runningEngine = engine;
           const result = await engine.run(history ? `Earlier chat (context only):\n${history}\n\nCurrent message:\n${input}` : input, { ...options, threadId,

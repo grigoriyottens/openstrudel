@@ -37,10 +37,12 @@ struct HomeMenu: View {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(account.account.email ?? account.name).font(.callout.weight(.medium)).textSelection(.enabled)
-                            Text(account.account.connected ? (index == 0 ? L("Первый для новых поручений") : L("Резервный по приоритету")) : L("Нужен вход в OpenAI"))
+                            Text(account.title).font(.callout.weight(.medium)).textSelection(.enabled)
+                            if let email = account.emailDetail { Text(email).font(.caption).foregroundStyle(.secondary) }
+                            Text(account.account.planLabel).font(.caption).foregroundStyle(.secondary)
+                            Text(account.account.connected ? (index == 0 ? L("Первый для новых поручений") : L("Резервный по приоритету")) : account.account.isUnavailable ? L("Не удалось проверить аккаунт") : L("Нужен вход в OpenAI"))
                                 .font(.caption).foregroundStyle(.secondary)
-                            UsageSummary(usage: account.usage)
+                            if account.account.connected { UsageSummary(usage: account.usage) }
                             if account.activeRuns > 0 { Text(L("В работе: \(account.activeRuns)")).font(.caption) }
                             if canManage && index > 0 && account.account.connected {
                                 Button(L("Использовать первым")) { Task {

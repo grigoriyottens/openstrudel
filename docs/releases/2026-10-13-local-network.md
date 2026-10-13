@@ -1,6 +1,6 @@
 # Mac server setup and local-network access, 13 October 2026
 
-Build 38 follows Mac 37. The iOS target remains build 36 in internal TestFlight. The Home release remains 36.
+Build 39 follows Mac 38, including its account-management improvements. The iOS target remains build 38. This Mac-only patch preserves the published Home runtime from build 38.
 
 ## Reproduced issue
 
@@ -17,4 +17,4 @@ This follows [Apple TN3179](https://developer.apple.com/documentation/technotes/
 - The displayed SSH fingerprint matched the server's independently inspected public host key.
 - A controlled restart of the disposable Lima VM regenerated its SSH host keys through cloud-init. The app correctly rejected that changed identity. This fixture behavior must not be counted as a successful native SSH retry or fixed by weakening host-key checks.
 
-Private logs and test results are under `.data/release/2026-10-13-37/`. Signing, distribution and deployment evidence for build 38 will be recorded separately after validation completes.
+Private logs and test results are under `.data/release/2026-10-13-37/`. Signing, distribution and deployment evidence for build 39 will be recorded separately after validation completes.

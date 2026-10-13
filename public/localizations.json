@@ -7517,6 +7517,69 @@
     "es": "Permite que OpenStrudel acceda a su conexión guardada en el Llavero y vuelve a intentarlo.",
     "he": "יש לאפשר ל-OpenStrudel לגשת לחיבור השמור בצרור המפתחות, ואז לנסות שוב."
   },
+  "Rename account…": {
+    "en": "Rename account…",
+    "ru": "Переименовать…",
+    "fr": "Renommer le compte…",
+    "es": "Cambiar nombre…",
+    "he": "שינוי שם החשבון…"
+  },
+  "Rename account": {
+    "en": "Rename account",
+    "ru": "Имя аккаунта",
+    "fr": "Nom du compte",
+    "es": "Nombre de la cuenta",
+    "he": "שם החשבון"
+  },
+  "Choose a name you recognise. Your OpenAI account stays the same.": {
+    "en": "Choose a name you recognise. Your OpenAI account stays the same.",
+    "ru": "Выберите понятное вам имя. Сам аккаунт OpenAI не изменится.",
+    "fr": "Choisissez un nom qui vous parle. Votre compte OpenAI reste inchangé.",
+    "es": "Elige un nombre que reconozcas. Tu cuenta de OpenAI no cambia.",
+    "he": "בחרו שם שקל לכם לזהות. חשבון OpenAI עצמו לא ישתנה."
+  },
+  "Already connected. Your account has been refreshed.": {
+    "en": "Already connected. Your account has been refreshed.",
+    "ru": "Этот аккаунт уже подключён. Вход обновлён.",
+    "fr": "Ce compte est déjà connecté. La connexion a été actualisée.",
+    "es": "Esta cuenta ya estaba conectada. Hemos actualizado la conexión.",
+    "he": "החשבון כבר מחובר. החיבור עודכן."
+  },
+  "Account connected.": {
+    "en": "Account connected.",
+    "ru": "Аккаунт подключён.",
+    "fr": "Compte connecté.",
+    "es": "Cuenta conectada.",
+    "he": "החשבון מחובר."
+  },
+  "Use a name between 1 and 80 characters.": {
+    "en": "Use a name between 1 and 80 characters.",
+    "ru": "Введите имя от 1 до 80 символов.",
+    "fr": "Saisissez un nom de 1 à 80 caractères.",
+    "es": "Escribe un nombre de entre 1 y 80 caracteres.",
+    "he": "הזינו שם באורך של 1 עד 80 תווים."
+  },
+  "Account identity changed during sign-in. Try again.": {
+    "en": "The account changed during sign-in. Please try again.",
+    "ru": "Аккаунт изменился во время входа. Попробуйте ещё раз.",
+    "fr": "Le compte a changé pendant la connexion. Veuillez réessayer.",
+    "es": "La cuenta cambió durante el inicio de sesión. Inténtalo de nuevo.",
+    "he": "החשבון השתנה במהלך ההתחברות. נסו שוב."
+  },
+  "Limits and credits": {
+    "en": "Limits and credits",
+    "ru": "Лимиты и кредиты",
+    "fr": "Limites et crédits",
+    "es": "Límites y créditos",
+    "he": "מגבלות וקרדיטים"
+  },
+  "Название аккаунта": {
+    "en": "Account name",
+    "ru": "Название аккаунта",
+    "fr": "Nom du compte",
+    "es": "Nombre de la cuenta",
+    "he": "שם החשבון"
+  },
   "Allow OpenStrudel to access the local network in System Settings → Privacy & Security → Local Network, then try again.": {
     "en": "Allow OpenStrudel to access the local network in System Settings → Privacy & Security → Local Network, then try again.",
     "ru": "Разрешите OpenStrudel доступ к локальной сети: «Системные настройки» → «Конфиденциальность и безопасность» → «Локальная сеть». Затем попробуйте ещё раз.",
