@@ -2428,6 +2428,13 @@
     "he": "לנתק מכשירים אחרים? השיחות והעוזרים יישמרו.",
     "ru": "Отключить другие устройства? Чаты и сотрудники сохранятся."
   },
+  "Подключено других устройств: {0}": {
+    "en": "Other devices connected: {0}",
+    "fr": "Autres appareils connectés : {0}",
+    "es": "Otros dispositivos conectados: {0}",
+    "he": "מכשירים אחרים מחוברים: {0}",
+    "ru": "Подключено других устройств: {0}"
+  },
   "Продолжите на другом устройстве": {
     "en": "Continue on the other device",
     "fr": "Continuez sur l’autre appareil",
@@ -2448,13 +2455,6 @@
     "es": "Enlace de conexión de OpenStrudel de un solo uso",
     "he": "קישור חד-פעמי לחיבור OpenStrudel",
     "ru": "Одноразовая ссылка подключения OpenStrudel"
-  },
-  "Ссылка действует ещё {0}:{1}": {
-    "en": "Link expires in {0}:{1}",
-    "fr": "Le lien expire dans {0}:{1}",
-    "es": "El enlace caduca en {0}:{1}",
-    "he": "הקישור יפוג בעוד {0}:{1}",
-    "ru": "Ссылка действует ещё {0}:{1}"
   },
   "Поделиться ссылкой": {
     "en": "Share link",

@@ -5,18 +5,40 @@ import VisionKit
 import AVFoundation
 #endif
 
-/// Rows for a device's section in Settings → Devices: a one-use connection link and, on this Mac,
-/// disconnecting the other devices. The section footer can use `explanation`.
+/// Rows for a device in Settings → Devices: a one-use connection link and, on this Mac,
+/// disconnecting the other devices. On the Mac each row explains itself with its action trailing;
+/// on iOS the action is the row.
 struct MobilePairingSettings: View {
     @EnvironmentObject private var client: HomeClient
     @State private var showingCode = false
     @State private var creating = false
     @State private var revokeConfirmation = false
 
-    static var explanation: String { L("Чтобы открыть сотрудников этого устройства на другом, создайте ссылку подключения.") }
-
     var body: some View {
-        // Always present: this row also learns whether the device lets this app create links.
+        #if os(macOS)
+        LabeledContent {
+            linkButton
+        } label: {
+            Text(L("Чтобы открыть сотрудников этого устройства на другом, создайте ссылку подключения.").withoutWidow)
+        }
+        .padding(.top, 8)
+        #else
+        linkButton
+        #endif
+        if client.isLocalConnection && client.mobileConnections > 0 {
+            LabeledContent {
+                Button(L("Отключить"), role: .destructive) { revokeConfirmation = true }
+                    .confirmationDialog(L("Отключить другие устройства? Чаты и сотрудники сохранятся."), isPresented: $revokeConfirmation) {
+                        Button(L("Отключить"), role: .destructive) { Task { await client.revokeMobile() } }
+                    }
+            } label: {
+                Text(L("Подключено других устройств: \(client.mobileConnections)")).monospacedDigit()
+            }
+        }
+    }
+
+    // Always present: this row also learns whether the device lets this app create links.
+    private var linkButton: some View {
         Button(creating ? L("Готовим ссылку…") : L("Получить ссылку подключения")) {
             creating = true
             Task {
@@ -28,17 +50,13 @@ struct MobilePairingSettings: View {
         .disabled(creating || !(client.isLocalConnection || client.canManageConnections))
         .task { await client.refreshMobileStatus() }
         .sheet(isPresented: $showingCode, onDismiss: { Task { await client.cancelMobileInvitation() } }) {
-            MobileQRCodeView().environmentObject(client)
-        }
-        if client.isLocalConnection && client.mobileConnections > 0 {
-            Button(L("Отключить"), role: .destructive) { revokeConfirmation = true }
-                .confirmationDialog(L("Отключить другие устройства? Чаты и сотрудники сохранятся."), isPresented: $revokeConfirmation) {
-                    Button(L("Отключить"), role: .destructive) { Task { await client.revokeMobile() } }
-                }
+            MobileQRCodeView().environmentObject(client).modifier(InterfaceLanguage())
         }
     }
 }
 
+/// A one-use link as a code and a share action. On the Mac the code sits beside its words so the
+/// sheet fits inside the Settings window; on iOS they stack.
 private struct MobileQRCodeView: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.dismiss) private var dismiss
@@ -46,54 +64,58 @@ private struct MobileQRCodeView: View {
     @State private var refreshing = false
 
     var body: some View {
+        let invitation = client.mobileInvitation
+        let code = invitation.flatMap { qr($0.url.absoluteString) }
         NavigationStack {
-        ScrollView {
-        VStack(spacing: 16) {
-            Text(L("Продолжите на другом устройстве")).font(AppTypography.title).multilineTextAlignment(.center)
-            Text(L("Отсканируйте QR в OpenStrudel\nили откройте ссылку на другом устройстве."))
-                .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
-            if let invitation = client.mobileInvitation {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    let remaining = invitation.remainingSeconds(at: context.date)
-                    VStack(spacing: 16) {
-                        if remaining > 0, let code = qr(invitation.url.absoluteString) {
-                            Image(decorative: code, scale: 1).interpolation(.none).resizable()
-                                .scaledToFit().frame(width: 236, height: 236)
-                                .padding(16).background(.white, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-                                .accessibilityLabel(L("Одноразовая ссылка подключения OpenStrudel"))
-                            Text(L("Ссылка действует ещё \(remaining / 60):\(String(format: "%02d", remaining % 60))"))
-                                .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
-                            ShareLink(item: invitation.url) { AdaptiveActionLabel(title: L("Поделиться ссылкой")) }
-                                .adaptiveActionStyle(.glass)
-                        } else {
-                            ContentUnavailableView(L("Срок ссылки истёк"), systemImage: "qrcode",
-                                description: Text(L("Получите новую, чтобы подключить устройство.")))
-                                .frame(height: 300)
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let remaining = invitation?.remainingSeconds(at: context.date) ?? 0
+                #if os(macOS)
+                VStack(alignment: .leading, spacing: 24) {
+                    HStack(spacing: 24) {
+                        codeView(remaining > 0 ? code : nil)
+                        VStack(alignment: .leading, spacing: 12) {
+                            title
+                            Text(L("Отсканируйте QR в OpenStrudel\nили откройте ссылку на другом устройстве.").replacingOccurrences(of: "\n", with: " ").withoutWidow)
+                            status(remaining)
+                            HStack(spacing: 16) { actions(remaining > 0 ? invitation : nil) }.padding(.top, 12)
                         }
-                        Button {
-                            refreshing = true
-                            Task { await client.inviteMobile(); refreshing = false }
-                        } label: {
-                            Text(refreshing ? L("Обновляем…") : L("Новая ссылка"))
-                        }.secondaryAction().disabled(refreshing)
+                        .fixedSize(horizontal: false, vertical: true)
                     }
+                    Text(L("Ссылка открывает чаты и настройки сотрудников.\nИспользуйте её только на своих устройствах.").replacingOccurrences(of: "\n", with: " ").withoutWidow)
+                        .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
+                .multilineTextAlignment(.leading)
+                .padding(24)
+                #else
+                ScrollView {
+                    VStack(spacing: 16) {
+                        title
+                        Text(L("Отсканируйте QR в OpenStrudel\nили откройте ссылку на другом устройстве."))
+                        codeView(remaining > 0 ? code : nil).padding(.vertical, 8)
+                        status(remaining)
+                        actions(remaining > 0 ? invitation : nil)
+                        Text(L("Ссылка открывает чаты и настройки сотрудников.\nИспользуйте её только на своих устройствах."))
+                            .font(AppTypography.meta).padding(.top, 16)
+                    }
+                    .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .padding(24).frame(maxWidth: 420).frame(maxWidth: .infinity)
+                }
+                #endif
+            }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("Готово")) { dismiss() }.keyboardShortcut(.defaultAction)
+                        .accessibilityIdentifier("closeMobileInvitation")
                 }
             }
-            Text(L("Ссылка открывает чаты и настройки сотрудников.\nИспользуйте её только на своих устройствах."))
-                .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText).multilineTextAlignment(.center)
         }
-        .padding(24).frame(maxWidth: 420).frame(maxWidth: .infinity)
-        }
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button(L("Готово")) { dismiss() }.keyboardShortcut(.defaultAction)
-                    .accessibilityIdentifier("closeMobileInvitation")
-            }
-        }
-        }
-        .tint(nil)
+        .sheetTint()
         #if os(macOS)
-        .frame(width: 420, height: 620)
+        .frame(width: SetupSheet.size.width)
+        .presentationSizing(.fitted)
         #endif
         .task {
             initialCount = client.mobileConnections
@@ -103,6 +125,74 @@ private struct MobileQRCodeView: View {
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
             }
         }
+    }
+
+    private var title: some View {
+        Text(L("Продолжите на другом устройстве")).font(AppTypography.title).foregroundStyle(Color.primary)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// The code on white so any camera reads it; once the link expires, an empty tile of the same size.
+    private func codeView(_ code: CGImage?) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+        return Group {
+            if let code {
+                Image(decorative: code, scale: 1).interpolation(.none).resizable().scaledToFit()
+                    .padding(16).background(.white, in: shape)
+                    .accessibilityElement().accessibilityLabel(L("Одноразовая ссылка подключения OpenStrudel"))
+            } else {
+                Image(systemName: "qrcode").font(.system(size: 48)).foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppTheme.surface, in: shape)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(width: Self.codeSize, height: Self.codeSize)
+    }
+
+    private static var textAlignment: HorizontalAlignment {
+        #if os(macOS)
+        .leading
+        #else
+        .center
+        #endif
+    }
+
+    private static var codeSize: CGFloat {
+        #if os(macOS)
+        216
+        #else
+        268
+        #endif
+    }
+
+    @ViewBuilder private func status(_ remaining: Int) -> some View {
+        if remaining > 0 {
+            // One argument, so in Hebrew the minutes and seconds stay in reading order.
+            let time = "\(remaining / 60):\(String(format: "%02d", remaining % 60))"
+            Text(L("Link expires in \(time)"))
+                .font(AppTypography.meta).monospacedDigit()
+        } else {
+            VStack(alignment: Self.textAlignment, spacing: 4) {
+                Text(L("Срок ссылки истёк")).foregroundStyle(Color.primary)
+                Text(L("Получите новую, чтобы подключить устройство."))
+            }
+        }
+    }
+
+    /// Share leads while the link is valid; afterwards a new link is the only step.
+    @ViewBuilder private func actions(_ invitation: MobileInvitation?) -> some View {
+        if let invitation {
+            ShareLink(item: invitation.url) { AdaptiveActionLabel(title: L("Поделиться ссылкой")) }
+                .adaptiveActionStyle(.glass)
+        }
+        Button {
+            refreshing = true
+            Task { await client.inviteMobile(); refreshing = false }
+        } label: {
+            Text(refreshing ? L("Обновляем…") : L("Новая ссылка"))
+        }
+        .secondaryAction().disabled(refreshing)
     }
 
     private func qr(_ value: String) -> CGImage? {
