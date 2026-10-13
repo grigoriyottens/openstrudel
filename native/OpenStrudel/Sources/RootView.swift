@@ -30,11 +30,6 @@ struct OpenStrudelRootView: View {
 
     var body: some View {
         screens
-        .overlay(alignment: .topTrailing) {
-            if client.health == nil || !aiConsent || client.openAIAccount?.connected == false && client.profiles.isEmpty {
-                LanguagePicker().padding(OnboardingLayout.margin)
-            }
-        }
         .task(id: "\(pollingPhase)-\(client.id)") {
             guard pollingPhase == .active else { return }
             #if os(macOS)

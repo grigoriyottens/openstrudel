@@ -18,6 +18,8 @@ struct WelcomePage<Content: View>: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
+        // The language menu belongs to the welcome screens only, never to the workspace.
+        .overlay(alignment: .topTrailing) { LanguagePicker().padding(OnboardingLayout.margin) }
         // Actions choose their own ink; glass inside shared cards stays clear.
         .tint(nil)
     }
