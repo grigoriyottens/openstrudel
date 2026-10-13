@@ -8,7 +8,7 @@ This is the contract for the Mac app, the iPhone and iPad app, and the local web
 
 1. **Content first, chrome steps back.** The transcript is the main area. The sidebar, toolbar and composer are quiet controls around it. Liquid Glass is only for controls, never for messages or cards.
 2. **Native before custom.** System sidebar, toolbar, Settings window, grouped forms, alerts, menus and buttons. Custom drawing only where the product is unique: the transcript and the characters.
-3. **One accent with three jobs:** the primary action, links, and selection or focus. Nothing else is plum. On macOS, system selection and focus show plum when the user's accent colour is Multicolor (the default).
+3. **Monochrome. The characters are the only colour.** The primary action is ink: a fill in the primary text colour with a canvas-coloured label. Links are ink with an underline. Selection, focus, switches and checkboxes use the warm graphite accent. No brand hue anywhere in the interface; warmth comes from the cream and graphite neutrals and from the buns. Warning and destructive colours stay for meaning only.
 4. **Hierarchy from weight and colour before size.** A screen uses at most four text sizes.
 5. **Shared edges.** Text in a column starts on one vertical line. Control edges line up with the column edges.
 6. **The characters carry the personality.** Everything around them stays plain.
@@ -49,22 +49,22 @@ One superfamily: SF Pro for the interface and reading, SF Pro Rounded for displa
 
 ## Colour
 
-Warm low-chroma neutrals and a richer plum. Values are light / dark / light increased contrast / dark increased contrast. Every text token passes 4.5:1 on canvas, surface and user bubble in all four appearances (computed).
+Warm low-chroma neutrals, ink and graphite. Values are light / dark / light increased contrast / dark increased contrast. Every text token passes 4.5:1 on canvas, surface and user bubble in all four appearances (computed).
 
 | Token | Values | Role |
 |---|---|---|
 | `CanvasColor` | `#F7F3EC` / `#1C1B1A` / `#FFFDF8` / `#121110` | main window background |
 | `SurfaceColor` (new) | `#EEE9E1` / `#262422` / `#EFE9E1` / `#211F1D` | code blocks, file chips, cards, table header, multi-author messages |
-| `UserBubbleColor` (new) | `#E7DAE9` / `#382E3A` / `#E2D2E5` / `#3E3341` | the person's message bubble |
+| `UserBubbleColor` (new) | `#E6DFD5` / `#34302D` / `#E0D8CC` / `#3B3633` | the person's message bubble, a step darker than the surface |
 | `SeparatorColor` (new) | `#DCD5CB` / `#3A3633` / `#8F887F` / `#77726D` | hairlines, table rules, quote rule, increased-contrast strokes. Never an input border |
-| `AccentColor` | `#74407A` / `#8E5A98` / `#5E2C64` / `#865390` | fills, selection, focus, the send button. White on it: 7.6 / 5.2 / 10.4 / 5.8 |
-| `AccentText` (new) | `#74407A` / `#D3A8DC` / `#5E2C64` / `#E8C9EE` | links and accent text on the canvas |
+| `AccentColor` | `#3D3936` / `#6E6964` / `#2B2826` / `#7A746F` | the system accent: selection, focus, switches, checkboxes, default buttons. White on it: 11.4 / 5.4 / 14.6 / 4.6 |
+| `AccentText` (new) | `#262422` / `#EDEAE6` / `#14120F` / `#FFFFFF` | ink: links (underlined), the primary action's fill (label in `CanvasColor`: 14.0 / 14.3 / 20.7 / 18.9), the send button |
 | `SecondaryText` | `#615B57` / `#ADA8A3` / `#45403C` / `#D2CEC9` | supporting text and meta |
 | `WarningText` | `#865021` / `#DFB681` / `#6D3B12` / `#F6D3A3` | warnings |
 | `DestructiveText` | `#A82029` / `#FF8A91` / `#850A12` / `#FFC7CB` | destructive text; destructive buttons use `role: .destructive` |
 
 - `MetadataText` is removed; meta uses `SecondaryText` at the meta size.
-- Primary text is the system `.primary`. Success is the accent plus a word or symbol. Colour is never the only signal of state.
+- Primary text is the system `.primary`. Success is a word or a symbol, never a colour alone. Colour is never the only signal of state.
 - Increased contrast: the user bubble, code blocks, file chips and tables add a 1-pt `SeparatorColor` stroke.
 - The canvas is the main window only. Sheets, the Settings window, popovers, menus and grouped forms keep system backgrounds.
 - Web only: `--control-border` `#86808C` / `#7C7781` / `#6F6A74` / `#8F8A94` for inputs (≥ 3:1).
@@ -96,17 +96,17 @@ The current navigation stays: conversation as the root of a `NavigationStack`, t
 - **Multi-author conversations** (imported history, Telegram groups): other people's messages are leading-aligned on `SurfaceColor`, radius 20, with "Anna · 12:04" above in meta style.
 - **Rhythm:** 32 between turns, 12 between consecutive messages from the same side, 12 between paragraphs, 6 between list items, 24 above and 8 below a heading, 48 above a time cluster header and 16 below it (none above the first).
 - **Time:** a centred cluster header in meta style when a new day starts or after a gap of 30 minutes or more ("Today, 12:02"; day only when a message has no time). Exact time: `.help` on Mac and `accessibilityValue` everywhere. Schedule and notice lines keep their time. Queued, failed and error states stay visible under their message.
-- **Markdown:** lists use a fixed marker column so bullets and right-aligned tabular numbers share one text edge. Quotes: 2-pt `SeparatorColor` rule, 12 gap, secondary text. Links: `AccentText`, underlined at rest (underline at 40 % accent); only `https`, `http` and `mailto` stay links, natively and on the web. Inline code: SF Mono 13 on `SurfaceColor`. Code blocks: `SurfaceColor`, radius 12, padding 12, copy button on hover (Mac) or always (iOS). Tables: `SurfaceColor` header, hairline rules, a column whose cells are all numbers is trailing-aligned with tabular figures; horizontal scroll when wider than the column.
+- **Markdown:** lists use a fixed marker column so bullets and right-aligned tabular numbers share one text edge. Quotes: 2-pt `SeparatorColor` rule, 12 gap, secondary text. Links: ink (`AccentText`), underlined at rest (underline in `SecondaryText`, solid ink on hover); only `https`, `http` and `mailto` stay links, natively and on the web. Inline code: SF Mono 13 on `SurfaceColor`. Code blocks: `SurfaceColor`, radius 12, padding 12, copy button on hover (Mac) or always (iOS). Tables: `SurfaceColor` header, hairline rules, a column whose cells are all numbers is trailing-aligned with tabular figures; horizontal scroll when wider than the column.
 - **Files:** chips on `SurfaceColor`, radius 12, padding 12, icon 20, name 13 Medium, size in meta. Images radius 12, max 320 × 240.
 - **Right to left:** each block aligns by the direction of its first strong letter, so English in the Hebrew interface stays left-aligned and Hebrew in the English interface is right-aligned. Directional symbols use `forward` and `backward` variants.
 
 ## Composer
 
-Liquid Glass, radius 24, minimum height 48, growing to 8 lines and then scrolling. Its edges are the transcript column edges. Mac: 32-pt controls with 8 padding. iOS: 44-pt targets with 2 vertical padding. Leading `plus` menu; trailing microphone and send. The send button is the only tinted element: an accent circle with a white arrow when there is content, the system disabled state otherwise; with an empty field while the employee answers it becomes Stop. With text while the employee answers, the steer / after-the-reply menu sits before the microphone. The queue tray and attachment chips sit inside the glass above the text. Text uses the reading style with the same line spacing as the transcript. Placeholder: "Message {Name}". Drop target: 2-pt accent stroke at the same radius. No glass inside the composer.
+Liquid Glass, radius 24, minimum height 48, growing to 8 lines and then scrolling. Its edges are the transcript column edges. Mac: 32-pt controls with 8 padding. iOS: 44-pt targets with 2 vertical padding. Leading `plus` menu; trailing microphone and send. The send button is the only filled element: an ink circle (`AccentText`) with a canvas-coloured arrow when there is content, the system disabled state otherwise; with an empty field while the employee answers it becomes Stop. With text while the employee answers, the steer / after-the-reply menu sits before the microphone. The queue tray and attachment chips sit inside the glass above the text. Text uses the reading style with the same line spacing as the transcript. Placeholder: "Message {Name}". Drop target: 2-pt ink stroke at the same radius. No glass inside the composer.
 
 ## Empty states and onboarding
 
-The character, one sentence, at most one action. Empty conversation: character 96 at 40 % of the height, the name in display, the role in at most two lines of 13 secondary within 360; the focused composer is the action. Welcome and onboarding: character 96, display title, body leading-aligned when it runs past two lines, one prominent capsule button. Optically centred at 40 % from the top.
+The character, one sentence, at most one action. Empty conversation: character 96 at 40 % of the height, the name in display, the role in at most two lines of 13 secondary within 360; the focused composer is the action. Welcome and onboarding: character 96, display title, body leading-aligned when it runs past two lines, one prominent capsule button in ink (canvas-coloured label); secondary actions are plain text buttons. Optically centred at 40 % from the top.
 
 ## Motion
 
