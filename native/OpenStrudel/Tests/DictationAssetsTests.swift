@@ -6,8 +6,8 @@ import Testing
         var ready = false
         var downloads = 0
         var canceled = false
-        func installed(locale: String) async throws -> Bool { ready }
-        func install(locale: String, progress: @escaping @MainActor (Double?) -> Void) async throws {
+        func installed() async throws -> Bool { ready }
+        func install(progress: @escaping @MainActor @Sendable (Double?) -> Void) async throws {
             downloads += 1
             progress(0.25)
             try await Task.sleep(for: .milliseconds(100))
@@ -18,21 +18,21 @@ import Testing
     @Test func checkingDoesNotDownloadOrAskForMicrophoneAccess() async {
         let backend = Backend()
         let assets = DictationAssets(backend: backend)
-        await assets.check(locale: "en-US")
+        await assets.check()
         #expect(assets.state == .available)
         #expect(backend.downloads == 0)
     }
     @Test func reusesAnInstalledModel() async {
         let backend = Backend(); backend.ready = true
         let assets = DictationAssets(backend: backend)
-        await assets.check(locale: "he-IL")
+        await assets.check()
         #expect(assets.state == .ready)
         #expect(backend.downloads == 0)
     }
     @Test func cancellationCannotTurnIntoALateSuccess() async throws {
         let backend = Backend()
         let controlled = DictationAssets(backend: backend)
-        await controlled.check(locale: "en-US")
+        await controlled.check()
         controlled.download()
         await Task.yield()
         controlled.cancel()
@@ -40,5 +40,18 @@ import Testing
         #expect(controlled.state == .available)
         #expect(controlled.progress == nil)
         #expect(backend.canceled)
+    }
+
+    @Test func changingInterfaceLanguageKeepsTheSameDownloadedModel() async {
+        let original = L10n.shared.language
+        defer { L10n.shared.language = original }
+        let backend = Backend(); backend.ready = true
+        let assets = DictationAssets(backend: backend)
+        for language in AppLanguage.allCases {
+            L10n.shared.language = language
+            await assets.check()
+            #expect(assets.state == .ready)
+        }
+        #expect(backend.downloads == 0)
     }
 }

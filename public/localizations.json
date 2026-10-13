@@ -7586,5 +7586,40 @@
     "fr": "Autorisez OpenStrudel à accéder au réseau local dans Réglages Système → Confidentialité et sécurité → Réseau local, puis réessayez.",
     "es": "Permite que OpenStrudel acceda a la red local en Ajustes del Sistema → Privacidad y seguridad → Red local y vuelve a intentarlo.",
     "he": "אפשרו ל־OpenStrudel לגשת לרשת המקומית בהגדרות המערכת ← פרטיות ואבטחה ← רשת מקומית, ונסו שוב."
+  },
+  "Speak naturally. Your language is recognized automatically, on this device.": {
+    "en": "Speak naturally. Your language is recognized automatically, on this device.",
+    "ru": "Говорите как обычно. Язык определяется автоматически, прямо на устройстве.",
+    "fr": "Parlez naturellement. La langue est reconnue automatiquement sur cet appareil.",
+    "es": "Habla con naturalidad. El idioma se reconoce automáticamente en este dispositivo.",
+    "he": "אפשר לדבר בטבעיות. השפה מזוהה אוטומטית במכשיר הזה."
+  },
+  "25 languages, including English, Russian, French and Spanish. Hebrew is not supported.": {
+    "en": "25 languages, including English, Russian, French and Spanish. Hebrew is not supported.",
+    "ru": "25 языков, включая русский, английский, французский и испанский. Иврит пока не поддерживается.",
+    "fr": "25 langues, dont le français, l’anglais, le russe et l’espagnol. L’hébreu n’est pas pris en charge.",
+    "es": "25 idiomas, entre ellos español, inglés, ruso y francés. No se admite el hebreo.",
+    "he": "25 שפות, בהן אנגלית, רוסית, צרפתית וספרדית. עברית אינה נתמכת."
+  },
+  "Download Parakeet once (740 MB). After that, dictation works offline.": {
+    "en": "Download Parakeet once (740 MB). After that, dictation works offline.",
+    "ru": "Скачайте Parakeet один раз (740 МБ). После этого диктовка работает без интернета.",
+    "fr": "Téléchargez Parakeet une seule fois (740 Mo). La dictée fonctionne ensuite hors ligne.",
+    "es": "Descarga Parakeet una sola vez (740 MB). Después podrás dictar sin conexión.",
+    "he": "יש להוריד את Parakeet פעם אחת (740 MB). לאחר מכן ההכתבה פועלת ללא אינטרנט."
+  },
+  "Download · 740 MB": {
+    "en": "Download · 740 MB",
+    "ru": "Скачать · 740 МБ",
+    "fr": "Télécharger · 740 Mo",
+    "es": "Descargar · 740 MB",
+    "he": "הורדה · 740 MB"
+  },
+  "Checking the download…": {
+    "en": "Checking the download…",
+    "ru": "Проверяем загрузку…",
+    "fr": "Vérification du téléchargement…",
+    "es": "Verificando la descarga…",
+    "he": "בודקים את ההורדה…"
   }
 }

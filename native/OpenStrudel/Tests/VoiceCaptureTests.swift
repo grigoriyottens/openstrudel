@@ -26,11 +26,10 @@ import Testing
     func recognizesAnActualRussianRecordingLocally() async throws {
         let path = try #require(ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_FIXTURE"])
         if ProcessInfo.processInfo.environment["OPENSTRUDEL_INSTALL_VOICE_FIXTURE"] == "1" {
-            let assets = AppleDictationAssets()
-            try await assets.install(locale: "ru-RU") { _ in }
+            let assets = ParakeetDictationAssets()
+            try await assets.install() { _ in }
         }
-        let module = try await VoiceCapture.prepare(locale: "ru-RU")
-        let text = try await VoiceCapture.transcribe(file: URL(fileURLWithPath: path), module: module)
+        let text = try await ParakeetTranscriber.shared.transcribe(file: URL(fileURLWithPath: path))
         #expect(text.localizedCaseInsensitiveContains("проверка"))
         #expect(text.localizedCaseInsensitiveContains("встреча"))
         #expect(text.contains("12") || text.localizedCaseInsensitiveContains("двенадцать"))
@@ -39,8 +38,8 @@ import Testing
 
 @Suite("Actual local dictation", .serialized, .enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_LANGUAGES"] != nil))
 @MainActor struct DictationLanguageIntegrationTests {
-    @Test(arguments: ["en-US", "ru-RU", "fr-FR", "es-ES", "he-IL"])
-    func recognizesRecordedSpeechInEachInterfaceLanguage(locale: String) async throws {
+    @Test(arguments: ["en-US", "ru-RU", "fr-FR", "es-ES"])
+    func recognizesRecordedSpeechWithoutChoosingItsLanguage(locale: String) async throws {
         let directory = try #require(ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_LANGUAGES"])
         let references: [String: [String]] = [
             "en-US": ["local", "meeting", "tomorrow"],
@@ -49,11 +48,10 @@ import Testing
             "es-ES": ["dictado", "reunión", "mañana"],
             "he-IL": ["בדיקה", "הפגישה", "מחר"]
         ]
-        let assets = AppleDictationAssets()
-        try await assets.install(locale: locale) { _ in }
-        let module = try await VoiceCapture.prepare(locale: locale)
+        let assets = ParakeetDictationAssets()
+        if try await !assets.installed() { try await assets.install() { _ in } }
         let started = ContinuousClock.now
-        let text = try await VoiceCapture.transcribe(file: URL(fileURLWithPath: directory).appending(path: locale + ".aiff"), module: module)
+        let text = try await ParakeetTranscriber.shared.transcribe(file: URL(fileURLWithPath: directory).appending(path: locale + ".aiff"))
         print("Local dictation \(locale): \(text) [\(started.duration(to: .now))]")
         for word in references[locale] ?? [] { #expect(text.localizedCaseInsensitiveContains(word), "Missing expected word: \(word)") }
     }

@@ -1118,7 +1118,6 @@ private struct Composer: View {
     @StateObject private var voice = VoiceCapture()
     @Environment(\.scenePhase) private var recordingScenePhase
     @ObservedObject private var dictationAssets = DictationAssets.shared
-    private var dictationLocale: String { DictationAssets.selectedLocale }
     @State private var showDictation = false
     @State private var editingMessage: HomeMessage?
     @State private var queuedContentHeight: CGFloat = 44
@@ -1133,7 +1132,7 @@ private struct Composer: View {
             guard voice.phase == .idle else { return false }
             importProviders(providers); return true
         }
-        .sheet(isPresented: $showDictation) { DictationSetupView { voice.start(locale: dictationLocale) } }
+        .sheet(isPresented: $showDictation) { DictationSetupView { voice.start() } }
         .sheet(item: $editingMessage) { message in QueuedMessageEditor(message: message).environmentObject(client) }
         .photosPicker(isPresented: $showPhotos, selection: $photoSelection, maxSelectionCount: max(1, AttachmentImport.countLimit - files.count), matching: .images)
         .onChange(of: photoSelection) { _, selection in
@@ -1173,7 +1172,7 @@ private struct Composer: View {
         .onDisappear { cancelImport(); voice.detach() }
         .onChange(of: recordingScenePhase) { _, phase in
             #if os(iOS)
-            if phase == .background && voice.phase == .recording { voice.finish(send: false, locale: dictationLocale) }
+            if phase == .background && voice.phase == .recording { voice.finish(send: false) }
             #endif
         }
         .alert(L("Не удалось добавить файл"), isPresented: Binding(get: { fileError != nil }, set: { if !$0 { fileError = nil } })) { Button(L("Понятно"), role: .cancel) {} } message: { Text(fileError ?? "") }
@@ -1232,7 +1231,7 @@ private struct Composer: View {
                 }.scrollIndicators(.hidden)
             }
             if voice.phase != .idle {
-                VoiceRecordingRow(voice: voice, locale: dictationLocale, canSend: canSend)
+                VoiceRecordingRow(voice: voice, canSend: canSend)
             } else {
                 if !voice.detail.isEmpty { Text(L10n.serviceText(voice.detail)).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16).padding(.top, 8) }
                 inputRow
@@ -1319,8 +1318,8 @@ private struct Composer: View {
                 Button {
                     focused = true
                     Task {
-                        await dictationAssets.check(locale: dictationLocale)
-                        if dictationAssets.state == .ready && UserDefaults.standard.bool(forKey: "openstrudel.dictationIntroduced") { voice.start(locale: dictationLocale) }
+                        await dictationAssets.check()
+                        if dictationAssets.state == .ready && UserDefaults.standard.bool(forKey: "openstrudel.dictationIntroduced") { voice.start() }
                         else { showDictation = true }
                     }
                 } label: { Image(systemName: "mic").font(.system(size: 18)).frame(width: controlTarget, height: controlTarget).contentShape(Rectangle()) }
