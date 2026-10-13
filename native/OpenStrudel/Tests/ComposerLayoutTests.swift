@@ -105,6 +105,13 @@ struct ComposerLayoutTests {
         #expect(alignments(blankLine) == [.right, .right, .left])
     }
 
+    @Test func readingDirectionFollowsTheFirstLetter() {
+        #expect(ReadingDirection.of("Then add the pricing link.") == .leftToRight)
+        #expect(ReadingDirection.of("12:30 — שלום") == .rightToLeft)
+        #expect(ReadingDirection.of("Привет") == .leftToRight)
+        #expect(ReadingDirection.of("42, 17 — !") == nil)
+    }
+
     @Test func anEmptyFieldStartsOnTheInterfaceSide() throws {
         let hebrew = readingEditor(interface: .rightToLeft)
         hebrew.placeholder = "הודעה ל־Launch Manager"

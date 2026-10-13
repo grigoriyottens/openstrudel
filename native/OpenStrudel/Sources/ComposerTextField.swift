@@ -1,5 +1,21 @@
-#if os(macOS)
 import SwiftUI
+
+/// The direction of a block's first letter; digits, spaces and punctuation are neutral. English
+/// stays left-aligned in the Hebrew interface, and Hebrew is right-aligned in English.
+enum ReadingDirection {
+    static func of(_ text: some StringProtocol) -> LayoutDirection? {
+        for scalar in text.unicodeScalars where scalar.properties.isAlphabetic {
+            switch scalar.value {
+            // Hebrew, Arabic, Syriac, Thaana, NKo and their presentation forms.
+            case 0x0590...0x08FF, 0xFB1D...0xFDFF, 0xFE70...0xFEFF: return .rightToLeft
+            default: return .leftToRight
+            }
+        }
+        return nil
+    }
+}
+
+#if os(macOS)
 import AppKit
 import UniformTypeIdentifiers
 
@@ -162,15 +178,8 @@ final class ComposerEditor: NSTextView {
         layout == .rightToLeft ? .rightToLeft : .leftToRight
     }
 
-    /// The direction of the first letter; digits, spaces and punctuation are neutral.
     static func direction(of text: some StringProtocol) -> NSWritingDirection? {
-        for scalar in text.unicodeScalars where scalar.properties.isAlphabetic {
-            switch scalar.value {
-            case 0x0590...0x08FF, 0xFB1D...0xFDFF, 0xFE70...0xFEFF: return .rightToLeft
-            default: return .leftToRight
-            }
-        }
-        return nil
+        ReadingDirection.of(text).map(writingDirection)
     }
 
     /// Aligns every paragraph by its first letter. A paragraph without letters follows the one

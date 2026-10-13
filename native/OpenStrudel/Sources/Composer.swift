@@ -171,6 +171,8 @@ struct Composer: View {
                 }
                 .padding(.vertical, 4)
                 .frame(maxWidth: .infinity, minHeight: controlTarget, alignment: .leading).contentShape(Rectangle())
+                // A queued message keeps the side it was typed on in the field below.
+                .environment(\.layoutDirection, ReadingDirection.of(queued.text) ?? layoutDirection)
             }.buttonStyle(.plain).disabled(client.health?.queueControlVersion != 1)
                 .accessibilityLabel(L("Edit message: \(queued.text.isEmpty ? L("Вложение") : queued.text)"))
                 .accessibilityIdentifier("editQueuedMessage-" + queued.id)
