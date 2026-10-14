@@ -173,7 +173,7 @@ struct BotDetailsView: View {
                     NavigationLink(value: DetailsPage.telegram) { DetailsRow(title: "Telegram", symbol: "paperplane", value: telegramChats) }
                 }
                 Section(L("Модель и скорость")) { ModelSettingsView(agentID: profile.id) }
-                if client.health?.homeProtocol == 1 { Section { AgentAccountPreference(profile: profile) } }
+                if client.health?.homeProtocol == 1 { AgentAccountPreference(profile: profile) }
                 if !client.schedules.isEmpty || client.scheduleRuns.first?.error != nil {
                     Section(L("Расписание")) { schedules }
                 }
