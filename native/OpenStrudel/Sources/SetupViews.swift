@@ -42,13 +42,16 @@ extension EnvironmentValues {
 
 extension View {
     /// The one prominent action of a screen: a capsule in ink with a canvas-coloured label. On the
-    /// Mac the system picks the label colour that reads on the ink and draws the inactive-window state.
+    /// Mac the system picks the label colour that reads on the ink and draws the inactive-window state,
+    /// and Return presses it, as it presses a sheet's confirmation.
     func primaryAction() -> some View {
         adaptiveActionStyle(.glassProminent)
             .tint(AppTheme.accentText)
             .controlSize(.extraLarge)
             #if os(iOS)
             .environment(\.inkCapsule, true)
+            #else
+            .keyboardShortcut(.defaultAction)
             #endif
     }
 
