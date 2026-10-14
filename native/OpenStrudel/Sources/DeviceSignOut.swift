@@ -21,35 +21,53 @@ struct DeviceSignOutView: View {
     @State private var showingBackup = false
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 20) {
-                Text(L("Убрать «\(client.displayName)» из приложения?")).font(.title2.weight(.semibold))
+            VStack(alignment: .leading, spacing: 12) {
+                Text(L("Убрать «\(client.displayName)» из приложения?")).font(AppTypography.title)
                 Text(L("Сотрудники и переписка останутся на устройстве. Их работа продолжится, пока оно включено."))
-                    .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                    .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
                 if client.canTransferAgents {
-                    Button(L("Сначала сохранить копию…")) { showingBackup = true }.disabled(client.isSigningOut)
+                    Button(L("Сначала сохранить копию…")) { showingBackup = true }
+                        .disabled(client.isSigningOut)
+                        .padding(.top, 4)
                 }
                 if client.isSigningOut { ProgressView(L("Отключаемся…")).controlSize(.small) }
-                HStack {
-                    Spacer()
-                    Button(L("Отмена")) { dismiss() }.keyboardShortcut(.cancelAction)
-                    Button(L("Убрать подключение")) {
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(24)
+            #if os(macOS)
+            .frame(width: 440, alignment: .leading)
+            #else
+            .navigationTitle(L("Подключение устройства"))
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("Отмена")) { dismiss() }.disabled(client.isSigningOut)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("Убрать подключение"), role: .destructive) {
                         let source = client
                         Task { await library.removeConnection(source); completed() }
-                    }.buttonStyle(.borderedProminent).accessibilityIdentifier("confirmDeviceSignOut")
-                }.disabled(client.isSigningOut)
-            }.padding(28).navigationTitle(L("Подключение устройства"))
-        }.interactiveDismissDisabled(client.isSigningOut)
+                    }
+                    .disabled(client.isSigningOut)
+                    .accessibilityIdentifier("confirmDeviceSignOut")
+                }
+            }
+        }
+        .interactiveDismissDisabled(client.isSigningOut)
+        .presentationSizing(.fitted)
         .sheet(isPresented: $showingBackup) {
             NavigationStack {
-                ScrollView { AgentTransferSettings().padding(24) }.navigationTitle(L("Резервная копия"))
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { showingBackup = false } } }
+                Form {
+                    Section { AgentTransferSettings() }
+                }
+                .formStyle(.grouped)
+                .navigationTitle(L("Резервная копия"))
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { showingBackup = false } } }
             }
             #if os(macOS)
-            .frame(width: 560, height: 450)
+            .frame(width: 480, height: 320)
             #endif
+            .presentationSizing(.fitted)
         }
-        #if os(macOS)
-        .frame(width: 500)
-        #endif
     }
 }
