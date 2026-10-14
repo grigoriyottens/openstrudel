@@ -287,7 +287,7 @@
     .page-content { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5) var(--modal-edge) 0; line-height: 20px; }
     .page-content .field { font-weight: var(--regular); }
     .page-content > :is(.group, .appearance-editor, .accounts) + *, .page-content > * + :is(.group, .appearance-editor, .accounts) { margin-top: var(--space-3); }
-    .page-content:empty { display: none; }
+    .page-content:not(:has(> :not(p:empty, [hidden]))) { display: none; }
     .page-content p { margin: 0; }
     .page-content p:empty { display: none; }
     .page-content .hint { margin-top: calc(var(--space-1) - var(--space-3)); color: var(--secondary); font-size: 12px; line-height: 16px; }
