@@ -29,11 +29,15 @@ struct ChatImage: View {
                     if failed || (!autoload && attempt == 0) {
                         Image(systemName: "photo").font(.title2).foregroundStyle(AppTheme.secondaryText)
                             .accessibilityHidden(true)
+                        if failed {
+                            Text(L("Не удалось загрузить изображение.")).font(AppTypography.meta).foregroundStyle(AppTheme.warning)
+                                .multilineTextAlignment(.center)
+                        }
                         if let origin {
                             Text(origin).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
                                 .lineLimit(1).truncationMode(.middle)
                         }
-                        Button(L("Загрузить изображение")) { attempt += 1 }.font(AppTypography.interface)
+                        Button(failed ? L("Повторить") : L("Загрузить изображение")) { attempt += 1 }.font(AppTypography.interface)
                     } else {
                         ProgressView().controlSize(.small)
                     }

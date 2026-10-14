@@ -622,6 +622,13 @@
     "he": "הורדת תמונה",
     "ru": "Загрузить изображение"
   },
+  "Не удалось загрузить изображение.": {
+    "en": "Couldn’t load the image.",
+    "fr": "Impossible de charger l’image.",
+    "es": "No se pudo cargar la imagen.",
+    "he": "לא ניתן לטעון את התמונה.",
+    "ru": "Не удалось загрузить изображение."
+  },
   "Управление компьютером": {
     "en": "Computer control",
     "fr": "Contrôle de l’ordinateur",
