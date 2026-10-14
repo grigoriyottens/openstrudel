@@ -201,6 +201,9 @@ struct BotDetailsView: View {
             .navigationTitle(L("Сотрудник"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #else
+            // On the Mac the header is the page's title, on the content edge; pushed pages show Back and theirs.
+            .toolbar(removing: .title)
             #endif
             .toolbar { saveItem }
             .interactiveDismissDisabled(hasChanges || isSaving)
@@ -309,6 +312,8 @@ struct MainAssistantDetailsView: View {
             .navigationTitle("OpenStrudel")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #else
+            .toolbar(removing: .title)
             #endif
             .navigationDestination(for: DetailsPage.self) { _ in ConnectionsView(embedded: true) }
         } bar: {

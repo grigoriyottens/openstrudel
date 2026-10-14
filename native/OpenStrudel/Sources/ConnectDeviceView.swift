@@ -58,12 +58,17 @@ struct ConnectDeviceView: View {
                 NavigationLink(value: Route.cloud) {
                     choice(L("Get a server with DigitalOcean"), detail: L("Размещение оплачивается, пока вы не удалите его в DigitalOcean."), symbol: "cloud")
                 }.accessibilityIdentifier("getCloudServer")
+            } header: {
+                // The first page carries its title in its content, on the rows' text edge.
+                Text(L("Connect a device")).font(AppTypography.title).foregroundStyle(Color.primary)
+                    .textCase(nil).accessibilityAddTraits(.isHeader)
             } footer: {
                 Text(L("Use assistants from your other devices here."))
             }
         }
         .formStyle(.grouped)
         .navigationTitle(L("Connect a device"))
+        .toolbar(removing: .title)
     }
 
     private func completeInstallation(_ client: HomeClient) {
