@@ -115,12 +115,15 @@ struct ConversationView: View {
     private func transcript(_ proxy: ScrollViewProxy) -> some View {
         ScrollView {
             if client.messages.isEmpty && client.visiblePendingMessages.isEmpty {
-                EmptyChat()
-                    #if os(macOS)
-                    .containerRelativeFrame(.vertical)
-                    #else
-                    .frame(maxWidth: .infinity, minHeight: 430)
-                    #endif
+                // While a chosen conversation loads, the canvas stays empty rather than flash the empty state.
+                if showsEmptyChat {
+                    EmptyChat()
+                        #if os(macOS)
+                        .containerRelativeFrame(.vertical)
+                        #else
+                        .frame(maxWidth: .infinity, minHeight: 430)
+                        #endif
+                }
             } else {
                 TranscriptRows(proxy: proxy, followsLatest: $followsLatest)
                     .frame(maxWidth: Layout.column, alignment: .leading)
@@ -176,6 +179,11 @@ struct ConversationView: View {
             await Task.yield()
             scrollToBottom(proxy, animated: false)
         }
+    }
+
+    /// A draft, a loaded conversation, or one that cannot load right now.
+    private var showsEmptyChat: Bool {
+        client.isEmployeeDraft || client.conversationID != nil || client.health == nil || client.homeUnreachable || client.syncError != nil
     }
 
     private var showsConnectionBanner: Bool { client.connectionNeedsPairing || client.homeUnreachable || client.health == nil }
