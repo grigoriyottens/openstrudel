@@ -1,6 +1,7 @@
 #if os(macOS)
 import Foundation
 import Security
+import Combine
 
 /// AgentMetal's direct checkout. Card details never enter OpenStrudel.
 enum AgentMetalFailure: Error, LocalizedError, Equatable {
@@ -9,11 +10,11 @@ enum AgentMetalFailure: Error, LocalizedError, Equatable {
         switch self {
         case .unavailable: L("No suitable servers are available. Try again later.")
         case .response: L("The provider returned an incomplete response. Your order has been kept.")
-        case .changedPrice: L("The price has changed. Refresh the offer before paying.")
+        case .changedPrice: L("The price has changed. Review the new total before paying.")
         case .storage: L("Could not save this order securely. Unlock your Mac and try again.")
         case .busy: L("An operation is already in progress.")
         case .pendingOrder: L("Finish your saved order before starting another.")
-        case .missingKey: L("The server is paid for, but its access key is missing. Recover it from your AgentMetal payment receipt.")
+        case .missingKey: L("The server is paid for, but its access key is missing. Contact AgentMetal with your payment receipt; do not pay again.")
         case .network: L("Could not reach AgentMetal. Your order is saved; try again.")
         case .expired: L("This server has expired. Check its status with AgentMetal before continuing.")
         }
@@ -25,6 +26,8 @@ struct AgentMetalOffer: Codable, Equatable {
     let location: String
     let days: Int
     let dailyPrice: Decimal
+    var memoryGB: Int?
+    var diskGB: Int?
     var amount: Decimal { dailyPrice * Decimal(days) }
 
     static func catalog(_ data: Data, days: Int) throws -> Self {
@@ -42,7 +45,7 @@ struct AgentMetalOffer: Codable, Equatable {
                 .sorted(by: { $0.memory_gb < $1.memory_gb }).first,
               let price = Decimal(string: plan.usd_per_day, locale: Locale(identifier: "en_US_POSIX")), price > 0, price < 100
         else { throw AgentMetalFailure.unavailable }
-        return Self(plan: plan.id, location: location, days: days, dailyPrice: price)
+        return Self(plan: plan.id, location: location, days: days, dailyPrice: price, memoryGB: plan.memory_gb, diskGB: plan.disk_gb)
     }
 }
 
@@ -67,12 +70,16 @@ struct AgentMetalCheckout: Codable, Equatable {
     }
 }
 
-struct AgentMetalServer: Codable, Equatable {
+struct AgentMetalServer: Codable, Equatable, Sendable {
     let id: String
     let ipv4: String
     let ssh_port: Int?
     let expires_at: String
-    var expiry: Date? { ISO8601DateFormatter().date(from: expires_at) }
+    var expiry: Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: expires_at) ?? ISO8601DateFormatter().date(from: expires_at)
+    }
     func validate() throws {
         guard id.range(of: "^srv_[A-Za-z0-9_-]{1,100}$", options: .regularExpression) != nil,
               DigitalOceanHomeTrust.isPublicIPv4(ipv4), (ssh_port ?? 22) == 22, expiry != nil
@@ -89,8 +96,14 @@ struct AgentMetalState: Codable {
     var receipt: Data?
     var server: AgentMetalServer?
     var privateKey: Data?
+    var hostKey: SSHHostKey?
     var installation: ServerInstallation?
     var connection: HomeConnection?
+}
+
+private struct AgentMetalLedger: Codable {
+    var active = AgentMetalState()
+    var completed: [AgentMetalState] = []
 }
 
 @MainActor protocol AgentMetalStore {
@@ -137,25 +150,52 @@ struct AgentMetalState: Codable {
 @MainActor final class AgentMetalClient {
     private let store: any AgentMetalStore
     private let transport: any AgentMetalTransport
-    private(set) var state: AgentMetalState
+    private var ledger: AgentMetalLedger
+    var state: AgentMetalState { ledger.active }
+    var completedOrders: [AgentMetalState] { ledger.completed }
     private var busy = false
+    private var erasing = false
+    // If Keychain locks just as the one-time key arrives, retain it in memory
+    // and retry the write before making another request to the provider.
+    private var unsavedReceipt: Data?
     init(store: any AgentMetalStore = AgentMetalKeychain(), transport: any AgentMetalTransport = AgentMetalHTTP()) throws {
         self.store = store; self.transport = transport
-        do { state = try store.load().map { try JSONDecoder().decode(AgentMetalState.self, from: $0) } ?? AgentMetalState() }
+        do {
+            if let data = try store.load() {
+                // Early checkout-only records remain recoverable.
+                if let saved = try? JSONDecoder().decode(AgentMetalLedger.self, from: data) { ledger = saved }
+                else {
+                    let legacy = try JSONDecoder().decode(AgentMetalState.self, from: data)
+                    guard legacy.intent != nil else { throw AgentMetalFailure.storage }
+                    ledger = AgentMetalLedger(active: legacy)
+                }
+            } else { ledger = AgentMetalLedger() }
+        }
         catch { throw AgentMetalFailure.storage }
     }
     private func save(_ next: AgentMetalState) throws {
-        do { try store.save(JSONEncoder().encode(next)); state = next }
+        var updated = ledger; updated.active = next
+        try saveLedger(updated)
+    }
+    private func saveLedger(_ next: AgentMetalLedger) throws {
+        guard !erasing else { throw CancellationError() }
+        do { try store.save(JSONEncoder().encode(next)); ledger = next }
         catch { throw AgentMetalFailure.storage }
     }
     private func request(_ path: String, body: Data? = nil, idempotency: String? = nil) async throws -> (Data, HTTPURLResponse) {
+        guard !erasing else { throw CancellationError() }
         var request = URLRequest(url: URL(string: "https://api.agentmetal.dev" + path)!)
         request.timeoutInterval = 25; request.httpMethod = body == nil ? "GET" : "POST"
         request.httpBody = body; request.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         if let idempotency { request.setValue(idempotency, forHTTPHeaderField: "Idempotency-Key") }
-        do { return try await transport.send(request) }
+        do {
+            let result = try await transport.send(request)
+            guard !erasing else { throw CancellationError() }
+            return result
+        }
         catch is CancellationError { throw CancellationError() }
+        catch let error as URLError where error.code == .cancelled { throw CancellationError() }
         catch let error as AgentMetalFailure { throw error }
         catch { throw AgentMetalFailure.network }
     }
@@ -181,16 +221,36 @@ struct AgentMetalState: Codable {
         var next = state; next.checkout = checkout; try save(next)
         return checkout
     }
+    func refreshPrice() async throws -> AgentMetalOffer {
+        guard !busy, let intent = state.intent, state.checkout == nil, state.receipt == nil else { throw AgentMetalFailure.pendingOrder }
+        busy = true; defer { busy = false }
+        let updated = try await offer(days: intent.offer.days)
+        // The idempotent request body stays identical. Only its displayed quote changes.
+        guard updated.plan == intent.offer.plan, updated.location == intent.offer.location else { throw AgentMetalFailure.unavailable }
+        var next = state; next.intent = .init(id: intent.id, offer: updated); try save(next)
+        return updated
+    }
     func poll() async throws -> AgentMetalServer? {
         guard !busy else { throw AgentMetalFailure.busy }
         busy = true; defer { busy = false }
         if let server = state.server { return server }
         if state.receipt == nil {
-            guard let checkout = state.checkout else { throw AgentMetalFailure.pendingOrder }
-            let (data, response) = try await request("/v1/orders/" + checkout.sessionID)
-            guard response.statusCode == 200, let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw AgentMetalFailure.response }
-            if value["status"] as? String == "pending" { return nil }
-            var next = state; next.receipt = data; try save(next)
+            if unsavedReceipt == nil {
+                guard let checkout = state.checkout else { throw AgentMetalFailure.pendingOrder }
+                // Do not consume the one-time key while secure storage is already unavailable.
+                try save(state)
+                let (data, response) = try await request("/v1/orders/" + checkout.sessionID)
+                guard response.statusCode == 200, let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw AgentMetalFailure.response }
+                // A key is valuable even when another field is malformed. Save
+                // it first; a transient provisioning reply is not a receipt.
+                if value["ssh_private_key"] != nil || value["status"] as? String == "ready" {
+                    unsavedReceipt = data
+                } else if ["pending", "paid", "processing", "provisioning"].contains(value["status"] as? String ?? "") {
+                    return nil
+                } else { throw AgentMetalFailure.response }
+            }
+            var next = state; next.receipt = unsavedReceipt; try save(next)
+            unsavedReceipt = nil
         }
         struct Ready: Decodable { let status: String; let server: AgentMetalServer; let ssh_private_key: String? }
         guard let receipt = state.receipt, let ready = try? JSONDecoder().decode(Ready.self, from: receipt), ready.status == "ready" else { throw AgentMetalFailure.response }
@@ -206,5 +266,25 @@ struct AgentMetalState: Codable {
     func saveConnection(_ connection: HomeConnection) throws {
         var next = state; next.connection = connection; try save(next)
     }
+    func saveHostKey(_ key: SSHHostKey) throws {
+        if let saved = state.hostKey {
+            guard saved == key else { throw ServerSetupFailure.hostKey }; return
+        }
+        var next = state; next.hostKey = key; try save(next)
+    }
+    func updateExpiry(_ expiry: String) throws {
+        guard let server = state.server else { throw AgentMetalFailure.response }
+        let updated = AgentMetalServer(id: server.id, ipv4: server.ipv4, ssh_port: server.ssh_port, expires_at: expiry)
+        try updated.validate()
+        var next = state; next.server = updated; try save(next)
+    }
+    func newOrder() throws {
+        guard !busy, state.connection != nil, unsavedReceipt == nil else { throw AgentMetalFailure.pendingOrder }
+        var next = ledger
+        next.completed.append(next.active)
+        next.active = AgentMetalState()
+        try saveLedger(next)
+    }
+    func suspendForLocalErase() { erasing = true; unsavedReceipt = nil }
 }
 #endif

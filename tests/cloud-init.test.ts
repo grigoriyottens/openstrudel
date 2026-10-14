@@ -22,6 +22,20 @@ function shell(code: string, root: string, args: string[] = []) {
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe("DigitalOcean cloud-init", () => {
+  it.each([["24.04", "noble"], ["26.04", "resolute"]])("uses the matching Docker repository on Ubuntu %s", (version, codename) => {
+    const root = fixture(); const release = join(root, "os-release"); const target = join(root, "docker.sources");
+    writeFileSync(release, `ID=ubuntu\nVERSION_ID="${version}"\nVERSION_CODENAME=${codename}\n`);
+    const result = shell('id() { printf "0\\n"; }; uname() { printf "x86_64\\n"; }; check_host "$1"; write_docker_source "$2" amd64 "$1"; write_docker_source "$2" amd64 "$1"', root, [release, target]);
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(target, "utf8")).toContain(`Suites: ${codename}\n`);
+  });
+  it.each([["ubuntu", "22.04", "jammy"], ["ubuntu", "24.10", "oracular"], ["ubuntu", "25.04", "plucky"], ["ubuntu", "26.04-beta", "resolute"], ["debian", "26.04", "resolute"], ["ubuntu", "26.04", "bad codename"]])("rejects incompatible system %s %s before writing a repository", (os, version, codename) => {
+    const root = fixture(); const release = join(root, "os-release"); const target = join(root, "docker.sources");
+    writeFileSync(release, `ID=${os}\nVERSION_ID="${version}"\nVERSION_CODENAME="${codename}"\n`);
+    const result = shell('id() { printf "0\\n"; }; uname() { printf "x86_64\\n"; }; check_host "$1"; write_docker_source "$2" amd64 "$1"', root, [release, target]);
+    expect(result.status).not.toBe(0);
+    expect(() => readFileSync(target)).toThrow();
+  });
   it("persists only a known completed phase transition, without inventing a percentage", () => {
     const root = fixture();
     expect(shell("mark_stage download", root).status).toBe(0);
@@ -180,12 +194,14 @@ install_apparmor_profile
   });
   it("can resume a matching Docker repository setup without replacing a different one", () => {
     const root = fixture(); const target = join(root, "docker.sources");
-    const first = shell('write_docker_source "$1" amd64; write_docker_source "$1" amd64', root, [target]);
+    const release = join(root, "os-release");
+    writeFileSync(release, 'ID=ubuntu\nVERSION_ID="24.04"\nVERSION_CODENAME=noble\n');
+    const first = shell('write_docker_source "$1" amd64 "$2"; write_docker_source "$1" amd64 "$2"', root, [target, release]);
     expect(first.status, first.stderr).toBe(0);
     const original = readFileSync(target, "utf8");
     expect(original).toContain("https://download.docker.com/linux/ubuntu");
     expect(original).toContain("Suites: noble");
-    const changed = shell('write_docker_source "$1" arm64', root, [target]);
+    const changed = shell('write_docker_source "$1" arm64 "$2"', root, [target, release]);
     expect(changed.status).not.toBe(0);
     expect(readFileSync(target, "utf8")).toBe(original);
   });

@@ -150,6 +150,8 @@ targets:
         buildPhase: resources
       - path: ../../scripts/server-setup.sh
         buildPhase: resources
+      - path: ../../scripts/agentmetal-firewall.sh
+        buildPhase: resources
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: is.openstrudel.mac
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -199,8 +201,11 @@ targets:
       - path: Sources/SSHConnectionReadiness.swift
       - path: Sources/WaiVDSContract.swift
       - path: Sources/AgentMetalCloud.swift
+      - path: Sources/AgentMetalSetup.swift
       - path: Sources/WaiVDSClient.swift
       - path: ../../scripts/server-setup.sh
+        buildPhase: resources
+      - path: ../../scripts/agentmetal-firewall.sh
         buildPhase: resources
       - path: ../../scripts/cloud-init.sh
         buildPhase: resources

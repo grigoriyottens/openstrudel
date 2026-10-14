@@ -106,20 +106,30 @@ PY
   RELEASE_SHA256=${RELEASE_SHA256//$'\n'/}
 }
 
+ubuntu_codename() {
+  local ID= VERSION_ID= VERSION_CODENAME= UBUNTU_CODENAME= year
+  . "${1:-/etc/os-release}"
+  [[ "$ID" == ubuntu && "$VERSION_ID" =~ ^([0-9]{2})\.04$ ]] || fail 'Setup requires Ubuntu 24.04 LTS or newer.'
+  year=$((10#${BASH_REMATCH[1]}))
+  [[ "$year" -ge 24 && $((year % 2)) == 0 ]] || fail 'Setup requires Ubuntu 24.04 LTS or newer.'
+  local codename=${UBUNTU_CODENAME:-$VERSION_CODENAME}
+  [[ "$codename" =~ ^[a-z]+$ ]] || fail 'The Ubuntu release codename is missing or invalid.'
+  printf '%s\n' "$codename"
+}
+
 check_host() {
   [[ "$(id -u)" == 0 ]] || fail 'Cloud initialization must run as root.'
-  local ID VERSION_ID
-  . /etc/os-release
-  [[ "$ID" == ubuntu && "$VERSION_ID" == 24.04 ]] || fail 'This cloud image requires Ubuntu 24.04.'
+  ubuntu_codename "${1:-/etc/os-release}" >/dev/null
   case "$(uname -m)" in x86_64|aarch64) ;; *) fail 'A 64-bit x86 or ARM VM is required.' ;; esac
 }
 
 write_docker_source() {
-  local target=$1 architecture=$2 source
+  local target=$1 architecture=$2 source codename
+  codename=$(ubuntu_codename "${3:-/etc/os-release}") || return 1
   source=$(cat <<EOF
 Types: deb
 URIs: https://download.docker.com/linux/ubuntu
-Suites: noble
+Suites: $codename
 Components: stable
 Architectures: $architecture
 Signed-By: /etc/apt/keyrings/docker.asc
