@@ -490,6 +490,14 @@ struct MarkdownTable {
     }
 
     var words: String { rows.joined().map { String($0.characters) }.joined(separator: " ") }
+
+    /// The column's longest word by letters, which a wrapped column should keep on one line.
+    func longestWord(_ column: Int) -> (text: String, inHeader: Bool) {
+        let words = rows.indices.flatMap { row in
+            String(rows[row][column].characters).split(whereSeparator: \.isWhitespace).map { (text: String($0), inHeader: row == 0) }
+        }
+        return words.max { $0.text.count < $1.text.count } ?? (text: "", inHeader: false)
+    }
 }
 
 private struct MarkdownTableView: View {
@@ -499,8 +507,6 @@ private struct MarkdownTableView: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
-    @State private var availableWidth: CGFloat = Layout.column
-    @State private var headerHeight: CGFloat = 0
     /// Below this, a column's text would break into single words, so the table scrolls instead.
     private let minimumColumn: CGFloat = 120
 
@@ -513,34 +519,40 @@ private struct MarkdownTableView: View {
     }
 
     var body: some View {
-        let minimumWidth = CGFloat(table.columns.count) * minimumColumn
         Group {
             if isCompact {
                 compact
-            } else if minimumWidth <= availableWidth {
-                grid
             } else {
-                ScrollView(.horizontal) { grid.frame(width: minimumWidth) }
+                // A table that fits never scrolls: it wraps first, and scrolls only when its columns
+                // could no longer keep their minimum width and their longest words.
+                ViewThatFits(in: .horizontal) {
+                    grid
+                    ScrollView(.horizontal) { grid }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
         .paragraphDirection(of: table.words)
     }
 
     private var grid: some View {
         let shape = RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-        return Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
+        return TableLayout(columns: table.columns.count, minimumColumn: minimumColumn) {
             ForEach(table.rows.indices, id: \.self) { row in
-                if row > 1 { Hairline().gridCellUnsizedAxes(.horizontal) }
-                GridRow {
-                    ForEach(table.rows[row].indices, id: \.self) { column in
-                        cell(row: row, column: column)
-                    }
+                ForEach(table.rows[row].indices, id: \.self) { column in
+                    cell(row: row, column: column)
                 }
             }
+            ForEach(table.columns.indices, id: \.self) { column in
+                let word = table.longestWord(column)
+                Text(word.text)
+                    .font(word.inHeader ? AppTypography.reading.weight(.semibold) : AppTypography.reading)
+                    .monospacedDigit()
+                    .padding(.horizontal, 12)
+                    .hidden()
+                    .accessibilityHidden(true)
+            }
         }
-        .background(alignment: .top) { AppTheme.surface.frame(height: headerHeight) }
         .clipShape(shape)
         .overlay { if contrast == .increased { shape.strokeBorder(AppTheme.separator, lineWidth: 1) } }
     }
@@ -555,12 +567,10 @@ private struct MarkdownTableView: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            // Header cells fill the row's height, so the surface band behind them matches it.
-            .frame(maxHeight: row == 0 ? .infinity : nil, alignment: .top)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                if row == 0 { headerHeight = height }
-            }
-            .gridColumnAlignment(alignment)
+            // Every cell fills its column and row, so the header band and the rules run edge to edge.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: Alignment(horizontal: alignment, vertical: .top))
+            .background { if row == 0 { AppTheme.surface } }
+            .overlay(alignment: .top) { if row > 1 { Hairline() } }
     }
 
     /// Narrow iPhones and accessibility sizes read a table as one card per row.
@@ -584,5 +594,71 @@ private struct MarkdownTableView: View {
             }
         }
         .lineSpacing(AppTypography.readingLineSpacing)
+    }
+}
+
+/// Table cells in rows, followed by one hidden longest word per column. A table that fits keeps every
+/// column at its natural width. A narrower one keeps short columns whole and shares the rest by natural
+/// width, never below `minimumColumn` or a column's longest word. Unconstrained, the table takes that
+/// minimum, so it wraps before it scrolls. Sizing and placement measure rows at the same widths, so a
+/// wrapped row is never clipped.
+struct TableLayout: SwiftUI.Layout {
+    let columns: Int
+    let minimumColumn: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let widths = columnWidths(proposal.width, subviews)
+        return CGSize(width: widths.reduce(0, +), height: rowHeights(widths, subviews).reduce(0, +))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let widths = columnWidths(proposal.width, subviews)
+        var y = bounds.minY
+        for (row, height) in rowHeights(widths, subviews).enumerated() {
+            var x = bounds.minX
+            for (column, width) in widths.enumerated() {
+                subviews[row * columns + column].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(width: width, height: height))
+                x += width
+            }
+            y += height
+        }
+        for word in subviews.suffix(columns) { word.place(at: bounds.origin, proposal: .zero) }
+    }
+
+    private func columnWidths(_ width: CGFloat?, _ subviews: Subviews) -> [CGFloat] {
+        guard columns > 0, subviews.count >= columns else { return [] }
+        let cells = subviews.dropLast(columns).map { $0.sizeThatFits(.unspecified).width }
+        let natural = (0..<columns).map { column in stride(from: column, to: cells.count, by: columns).map { cells[$0] }.max() ?? 0 }
+        let words = subviews.suffix(columns).map { $0.sizeThatFits(.unspecified).width }
+        return Self.columnWidths(natural: natural, words: words, width: width, minimum: minimumColumn)
+    }
+
+    static func columnWidths(natural: [CGFloat], words: [CGFloat], width: CGFloat?, minimum: CGFloat) -> [CGFloat] {
+        let floors = natural.indices.map { min(natural[$0], max(minimum, words[$0])) }
+        let width = width ?? floors.reduce(0, +)
+        guard width < natural.reduce(0, +) else { return natural }
+        guard width > floors.reduce(0, +) else { return floors }
+        var widths = natural, open = Set(natural.indices), room = width
+        while !open.isEmpty {
+            let scale = room / open.reduce(0) { $0 + natural[$1] }
+            let floored = open.filter { natural[$0] * scale < floors[$0] }
+            if floored.isEmpty {
+                for column in open { widths[column] = natural[column] * scale }
+                break
+            }
+            for column in floored {
+                widths[column] = floors[column]
+                room -= floors[column]
+                open.remove(column)
+            }
+        }
+        return widths
+    }
+
+    private func rowHeights(_ widths: [CGFloat], _ subviews: Subviews) -> [CGFloat] {
+        guard !widths.isEmpty else { return [] }
+        return stride(from: 0, to: subviews.count - columns, by: columns).map { start in
+            widths.indices.map { subviews[start + $0].sizeThatFits(ProposedViewSize(width: widths[$0], height: nil)).height }.max() ?? 0
+        }
     }
 }

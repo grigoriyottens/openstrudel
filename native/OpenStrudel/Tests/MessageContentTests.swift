@@ -172,6 +172,41 @@ struct MessageContentTests {
         #expect((0..<3).map(table.alignment) == [.center, .trailing, .trailing])
     }
 
+    @Test func aTableThatFitsKeepsItsNaturalColumns() {
+        #expect(TableLayout.columnWidths(natural: [90, 50, 50], words: [60, 40, 40], width: 560, minimum: 120) == [90, 50, 50])
+    }
+
+    @Test func anUnconstrainedTableTakesItsMinimumSoItWrapsBeforeItScrolls() {
+        // Short columns stay whole, a long one keeps the minimum, and a long word keeps its width.
+        #expect(TableLayout.columnWidths(natural: [900, 50, 400], words: [60, 40, 150], width: nil, minimum: 120) == [120, 50, 150])
+    }
+
+    @Test func aWrappedTableKeepsShortColumnsWholeAndSharesTheRestByLength() {
+        // A short label column stays whole; the long description takes the rest of the column.
+        expectWidths(TableLayout.columnWidths(natural: [100, 800], words: [80, 90], width: 560, minimum: 120), [100, 460])
+        // Long columns share by length, and none narrows below the minimum.
+        expectWidths(TableLayout.columnWidths(natural: [600, 300, 130], words: [90, 90, 90], width: 560, minimum: 120), [293.33, 146.67, 120])
+    }
+
+    @Test func aWrappedColumnKeepsItsLongestWordWhole() {
+        // “Neighbourhood” needs 134 and “Accessibility” 129, more than the 120 minimum; both stay whole.
+        let natural: [CGFloat] = [130, 180, 90, 330, 300, 125]
+        expectWidths(TableLayout.columnWidths(natural: natural, words: [84, 134, 50, 94, 129, 74], width: 720, minimum: 120), [120, 134, 90, 127, 129, 120])
+        // Narrower than that, the table keeps its minimum and scrolls.
+        expectWidths(TableLayout.columnWidths(natural: natural, words: [84, 134, 50, 94, 129, 74], width: 560, minimum: 120), [120, 134, 90, 120, 129, 120])
+    }
+
+    @Test func aColumnsLongestWordIsFoundByLetters() throws {
+        let table = try #require(MessageContent(source: "| Name | Responsible person |\n| --- | --- |\n| Hall | Anna |\n| Roof terrace | Roman |").blocks[0].table)
+        #expect(table.longestWord(0) == (text: "terrace", inHeader: false))
+        #expect(table.longestWord(1) == (text: "Responsible", inHeader: true))
+    }
+
+    private func expectWidths(_ widths: [CGFloat], _ expected: [CGFloat], sourceLocation: SourceLocation = #_sourceLocation) {
+        #expect(widths.count == expected.count, sourceLocation: sourceLocation)
+        for (width, value) in zip(widths, expected) { #expect(abs(width - value) < 0.01, "\(widths)", sourceLocation: sourceLocation) }
+    }
+
     @Test func blocksKeepTheReadingRhythm() {
         let blocks = MessageContent(source: "Intro\n\nSecond\n\n## Heading\n\n- One\n- Two\n\nAfter\n\n```\ncode\n```").blocks
         #expect(blocks.map(\.kind) == ["paragraph", "paragraph", "heading", "list", "list", "paragraph", "code"])
