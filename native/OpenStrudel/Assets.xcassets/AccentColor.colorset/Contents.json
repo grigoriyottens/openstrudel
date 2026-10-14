@@ -5,60 +5,51 @@
       "color": {
         "color-space": "srgb",
         "components": {
-          "red": "0.352941",
-          "green": "0.294118",
-          "blue": "0.384314",
+          "red": "0.333333",
+          "green": "0.313725",
+          "blue": "0.298039",
           "alpha": "1.000"
         }
       }
     },
     {
       "idiom": "universal",
-      "color": {
-        "color-space": "srgb",
-        "components": {
-          "red": "0.780392",
-          "green": "0.717647",
-          "blue": "0.811765",
-          "alpha": "1.000"
-        }
-      },
       "appearances": [
         {
           "appearance": "luminosity",
           "value": "dark"
         }
-      ]
-    },
-    {
-      "idiom": "universal",
+      ],
       "color": {
         "color-space": "srgb",
         "components": {
-          "red": "0.286275",
-          "green": "0.239216",
-          "blue": "0.313725",
+          "red": "0.482353",
+          "green": "0.458824",
+          "blue": "0.439216",
           "alpha": "1.000"
         }
-      },
+      }
+    },
+    {
+      "idiom": "universal",
       "appearances": [
         {
           "appearance": "contrast",
           "value": "high"
         }
-      ]
-    },
-    {
-      "idiom": "universal",
+      ],
       "color": {
         "color-space": "srgb",
         "components": {
-          "red": "0.898039",
-          "green": "0.850980",
-          "blue": "0.917647",
+          "red": "0.168627",
+          "green": "0.156863",
+          "blue": "0.149020",
           "alpha": "1.000"
         }
-      },
+      }
+    },
+    {
+      "idiom": "universal",
       "appearances": [
         {
           "appearance": "luminosity",
@@ -68,7 +59,16 @@
           "appearance": "contrast",
           "value": "high"
         }
-      ]
+      ],
+      "color": {
+        "color-space": "srgb",
+        "components": {
+          "red": "0.482353",
+          "green": "0.458824",
+          "blue": "0.439216",
+          "alpha": "1.000"
+        }
+      }
     }
   ],
   "info": {

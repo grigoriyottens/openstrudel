@@ -31,8 +31,16 @@ struct EmployeeMoveStatusButton: View {
         if let move = library.employeeMoves.operation, !move.phase.finished {
             Button { showing = true } label: {
                 Label(L("Перенос: \(move.name)"), systemImage: "arrow.right.square")
-                    .font(.callout).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-            }.buttonStyle(.plain).padding(12).accessibilityIdentifier("pendingEmployeeMove")
+                    #if os(iOS)
+                    .font(.callout)
+                    #endif
+                    .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+            }.buttonStyle(.plain)
+                #if os(iOS)
+                .padding(12)
+                #endif
+                // On the Mac it is a sidebar footer row, on the rows' text edge.
+                .accessibilityIdentifier("pendingEmployeeMove")
                 .sheet(isPresented: $showing) { EmployeeMoveView() }
         }
     }

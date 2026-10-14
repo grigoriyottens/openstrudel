@@ -1,24 +1,45 @@
 import Foundation
 
 enum MessagePages {
+    /// Half an hour of quiet, or a new day, opens a new time cluster.
+    static let clusterPause: TimeInterval = 30 * 60
+
     struct Row: Identifiable {
         let message: HomeMessage
-        let day: Date?
+        /// The moment shown above this message when it opens a time cluster.
+        let header: Date?
+        /// The previous message came from the other side, so a new turn begins.
+        let startsTurn: Bool
         var id: String { message.id }
     }
 
+    static func opensCluster(_ date: Date, after previous: Date?, calendar: Calendar = .current) -> Bool {
+        guard let previous else { return true }
+        return !calendar.isDate(date, inSameDayAs: previous) || date.timeIntervalSince(previous) >= clusterPause
+    }
+
     /// A lazy row may render after the selected conversation has changed.
-    /// Derive its date heading from the same snapshot as its message.
+    /// Derive its time heading and rhythm from the same snapshot as its message.
     static func rows(_ messages: [HomeMessage], calendar: Calendar = .current) -> [Row] {
-        var previous: Date?
+        var previous: HomeMessage?
         return messages.map { message in
             let sentAt = message.sentAt
-            let startsDay = sentAt.map { day in
-                previous.map { !calendar.isDate(day, inSameDayAs: $0) } ?? true
-            } ?? false
-            previous = sentAt
-            return Row(message: message, day: startsDay ? sentAt : nil)
+            let opens = sentAt.map { opensCluster($0, after: previous?.sentAt, calendar: calendar) } ?? false
+            let startsTurn = previous.map { $0.direction != message.direction } ?? false
+            previous = message
+            return Row(message: message, header: opens ? sentAt : nil, startsTurn: startsTurn)
         }
+    }
+
+    /// Imported history with several people's messages shows who wrote each one; history from
+    /// one person reads like any one-to-one conversation.
+    static func isMultiAuthor(_ messages: [HomeMessage]) -> Bool {
+        var authors = Set<String>()
+        for message in messages where message.imported == true && message.direction == "inbound" {
+            if let author = message.author { authors.insert(author) }
+            if authors.count > 1 { return true }
+        }
+        return false
     }
 
     /// Pages are ordered by the server, including messages with identical dates.

@@ -5,60 +5,51 @@
       "color": {
         "color-space": "srgb",
         "components": {
-          "red": "0.419608",
-          "green": "0.403922",
-          "blue": "0.439216",
+          "red": "0.901961",
+          "green": "0.874510",
+          "blue": "0.835294",
           "alpha": "1.000"
         }
       }
     },
     {
       "idiom": "universal",
-      "color": {
-        "color-space": "srgb",
-        "components": {
-          "red": "0.627451",
-          "green": "0.611765",
-          "blue": "0.647059",
-          "alpha": "1.000"
-        }
-      },
       "appearances": [
         {
           "appearance": "luminosity",
           "value": "dark"
         }
-      ]
-    },
-    {
-      "idiom": "universal",
+      ],
       "color": {
         "color-space": "srgb",
         "components": {
-          "red": "0.317647",
-          "green": "0.301961",
-          "blue": "0.341176",
+          "red": "0.203922",
+          "green": "0.188235",
+          "blue": "0.176471",
           "alpha": "1.000"
         }
-      },
+      }
+    },
+    {
+      "idiom": "universal",
       "appearances": [
         {
           "appearance": "contrast",
           "value": "high"
         }
-      ]
-    },
-    {
-      "idiom": "universal",
+      ],
       "color": {
         "color-space": "srgb",
         "components": {
-          "red": "0.780392",
-          "green": "0.764706",
+          "red": "0.878431",
+          "green": "0.847059",
           "blue": "0.800000",
           "alpha": "1.000"
         }
-      },
+      }
+    },
+    {
+      "idiom": "universal",
       "appearances": [
         {
           "appearance": "luminosity",
@@ -68,7 +59,16 @@
           "appearance": "contrast",
           "value": "high"
         }
-      ]
+      ],
+      "color": {
+        "color-space": "srgb",
+        "components": {
+          "red": "0.231373",
+          "green": "0.211765",
+          "blue": "0.200000",
+          "alpha": "1.000"
+        }
+      }
     }
   ],
   "info": {

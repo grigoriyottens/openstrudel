@@ -211,7 +211,6 @@ final class HomeClient: ObservableObject, Identifiable {
         self.selectedChatID = defaults.string(forKey: "openstrudel.selectedChatID")
         if let selectedProfileID, selectedProfileID.hasPrefix("draft:") {
             self.selectedChatID = nil
-            draftAppearance = .seeded(selectedProfileID)
             draftDeviceID = defaults.string(forKey: "openstrudel.draftDeviceID") ?? ""
         }
         if let url = URL(string: baseURLString), url.scheme == "https", session === URLSession.shared {
@@ -232,6 +231,9 @@ final class HomeClient: ObservableObject, Identifiable {
         } else if let cached = defaults.data(forKey: "openstrudel.employeeCatalog"),
                   let employees = try? decoder.decode([EmployeeProfile].self, from: cached) {
             profiles = employees
+        }
+        if isEmployeeDraft, let selectedProfileID {
+            draftAppearance = .seeded(selectedProfileID, avoiding: profiles.map(\.resolvedAppearance))
         }
         HomeDrafts.migrate(defaults, currentHome: baseURLString)
         do {
@@ -305,6 +307,13 @@ final class HomeClient: ObservableObject, Identifiable {
         } catch { if generation == connectionGeneration { connectionState = .unavailable; errorMessage = error.localizedDescription } }
     }
     #endif
+
+    /// Whether the device an employee runs on is out of reach. Nil means the main assistant.
+    func isOffline(_ profile: EmployeeProfile?) -> Bool {
+        if homeUnreachable || connectionNeedsPairing { return true }
+        guard let id = profile?.deviceId, let device = devices.first(where: { $0.id == id }) else { return false }
+        return !device.online
+    }
 
     var displayName: String {
         if isLocalConnection { return L("Этот Mac") }
@@ -1092,7 +1101,7 @@ final class HomeClient: ObservableObject, Identifiable {
         selectedChatID = nil; conversationID = nil
         messages = []; interactions = []; schedules = []
         draftEmployeeDomain = "personal"
-        draftAppearance = .seeded(selectedProfileID!)
+        draftAppearance = .seeded(selectedProfileID!, avoiding: profiles.map(\.resolvedAppearance))
         draftDeviceID = health?.nodeId ?? devices.first?.id ?? ""
         defaults.set(selectedProfileID, forKey: "openstrudel.profileID")
         defaults.set(draftDeviceID, forKey: "openstrudel.draftDeviceID")

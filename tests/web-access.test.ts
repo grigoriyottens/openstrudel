@@ -12,6 +12,7 @@ it("requires a Home invitation, protects cookie mutations with CSRF, and revokes
   const call = (path: string, method = "GET", body?: unknown, headers: Record<string, string> = {}) => fetch(base + path, { method, headers: { "content-type": "application/json", ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   try {
     expect((await call("/v1/profiles")).status).toBe(401);
+    const signedOut = await call("/auth/session"); expect(signedOut.status).toBe(200); expect(await signedOut.json()).toEqual({ authenticated: false });
     const page = await (await call("/")).text(); expect(page).not.toContain("test-owner"); expect(page).toContain('nonce="');
     const invite = runtime.api.web.invite(true);
     expect((await call("/auth/session", "POST", { key: invite.key }, { origin: "https://elsewhere.invalid" })).status).toBe(403);

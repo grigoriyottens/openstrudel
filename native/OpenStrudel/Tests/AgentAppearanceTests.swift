@@ -15,6 +15,16 @@ import Testing
         #expect(copy.resolvedAppearance == chosen.resolvedAppearance)
         #expect(copy.instructions == old.instructions)
     }
+    @Test func aDraftNeverWearsACharacterAlreadyTaken() {
+        let seed = AgentAppearance.seeded("draft:one")
+        #expect(AgentAppearance.seeded("draft:one", avoiding: []) == seed)
+        let next = AgentAppearance.seeded("draft:one", avoiding: [seed])
+        #expect(next != seed)
+        #expect(next.isValid)
+        let all = AgentAppearance.kinds.flatMap { kind in (0..<8).map { AgentAppearance(kind: kind, tone: $0) } }
+        #expect(AgentAppearance.seeded("draft:one", avoiding: all.filter { $0 != next }) == next)
+        #expect(AgentAppearance.seeded("draft:one", avoiding: all) == seed)
+    }
     @Test func shuffleChangesOnlyTheVisualIdentity() {
         for kind in AgentAppearance.kinds {
             for tone in 0..<8 {

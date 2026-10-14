@@ -12,15 +12,16 @@ struct OpenStrudelApp: App {
     var body: some Scene {
         #if os(macOS)
         mainWindow
-        .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unifiedCompact)
+        .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1120, height: 760)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button(L("Новый сотрудник")) { library.beginEmployee() }
-                    .keyboardShortcut("n", modifiers: .command)
-                    .disabled(client.isCreating || library.isErasing)
+                NewEmployeeCommand(busy: client.isCreating)
+                EmployeeDetailsCommand()
             }
+            CommandGroup(after: .textEditing) { FindChatCommand() }
+            // View › Show Sidebar / Hide Sidebar, the menu equivalent of the toolbar button.
+            SidebarCommands()
             CommandGroup(after: .appInfo) {
                 Button(L("Аккаунты и остатки")) {
                     Task { @MainActor in
@@ -40,6 +41,9 @@ struct OpenStrudelApp: App {
             }.tint(AppTheme.accent)
             .modifier(InterfaceLanguage())
         }.defaultSize(width: 1000, height: 760)
+        // It opens only from General's Servers row, which a build shows only when it has a hosting store.
+        .commandsRemoved()
+        .restorationBehavior(.disabled)
         Settings {
             Group {
                 if library.isErasing { LocalDataResetProgress() }
@@ -74,7 +78,8 @@ struct OpenStrudelApp: App {
             OpenStrudelRootView()
             #endif
         }
-            .id(client.id + "-" + String(library.viewGeneration))
+            // Only an erase rebuilds the window; each device's conversation keeps its own identity.
+            .id(library.viewGeneration)
             .tint(AppTheme.accent)
             .modifier(InterfaceLanguage())
             #if os(macOS)
@@ -103,3 +108,45 @@ struct OpenStrudelApp: App {
             .environmentObject(library)
     }
 }
+
+#if os(macOS)
+extension FocusedValues {
+    /// Starts a new employee. Only the workspace publishes it, so the welcome screens disable ⌘N.
+    @Entry var newEmployee: (() -> Void)?
+    /// Opens the selected employee's details from the menu bar.
+    @Entry var showEmployeeDetails: (() -> Void)?
+    /// Shows the sidebar and focuses its search field.
+    @Entry var findChat: (() -> Void)?
+}
+
+private struct NewEmployeeCommand: View {
+    @FocusedValue(\.newEmployee) private var newEmployee
+    let busy: Bool
+
+    var body: some View {
+        Button(L("Новый сотрудник")) { newEmployee?() }
+            .keyboardShortcut("n", modifiers: .command)
+            .disabled(newEmployee == nil || busy)
+    }
+}
+
+private struct FindChatCommand: View {
+    @FocusedValue(\.findChat) private var findChat
+
+    var body: some View {
+        Button(L("Найти чат")) { findChat?() }
+            .keyboardShortcut("f", modifiers: .command)
+            .disabled(findChat == nil)
+    }
+}
+
+private struct EmployeeDetailsCommand: View {
+    @FocusedValue(\.showEmployeeDetails) private var showDetails
+
+    var body: some View {
+        Button(L("Настройки сотрудника")) { showDetails?() }
+            .keyboardShortcut("i", modifiers: .command)
+            .disabled(showDetails == nil)
+    }
+}
+#endif

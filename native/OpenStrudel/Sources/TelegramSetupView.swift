@@ -1,5 +1,23 @@
 import SwiftUI
 
+/// The Telegram section of Settings › Accounts and the details sheet. Until a bot is connected, the footer
+/// says where its token is kept.
+struct TelegramSetupSection: View {
+    @EnvironmentObject private var client: HomeClient
+
+    var body: some View {
+        Section {
+            TelegramSetupView()
+        } header: {
+            Text(L("Telegram на «\(client.executionDeviceName)»"))
+        } footer: {
+            if client.telegram?.configured != true {
+                Text(L("Ключ хранится на устройстве сотрудника. Используйте отдельного бота для каждого устройства."))
+            }
+        }
+    }
+}
+
 struct TelegramSetupView: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
@@ -14,89 +32,15 @@ struct TelegramSetupView: View {
     private var privateChats: [TelegramChat] { (client.telegram?.chats ?? []).filter(\.isPairedOwner) }
     private var linked: Bool { !privateChats.isEmpty }
 
+    /// Rows only: TelegramSetupSection wraps them in a Form section.
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                if !contextual { Text(L("Telegram на «\(client.executionDeviceName)»")).font(.headline) }
-                Spacer()
-                if client.telegram?.configured == true && !contextual {
-                    Menu {
-                        Button(L("Проверить связь"), action: checkConnection).disabled(checking)
-                        Button(L("Отключить бота…"), role: .destructive) { confirmDisconnect = true }
-                    } label: { Image(systemName: "ellipsis.circle") }.menuIndicator(.hidden).accessibilityLabel(L("Настройки бота Telegram"))
-                }
+        Group {
+            if client.telegram?.configured == true { configuredRows } else { setupRows }
+            if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning) }
+            if client.telegram?.configured == true && !contextual {
+                Button(L("Отключить бота…"), role: .destructive) { confirmDisconnect = true }
+                    .foregroundStyle(AppTheme.destructive)
             }
-            if client.telegram?.configured == true {
-                if !contextual {
-                    Label(client.telegram?.connectionError != nil ? L("Telegram недоступен") : L("Бот подключён"), systemImage: client.telegram?.connectionError != nil ? "wifi.exclamationmark" : "checkmark.circle.fill").foregroundStyle(AppTheme.accent)
-                }
-                if let name = client.telegram?.botUsername { Text("@" + name).font(.callout).textSelection(.enabled) }
-                if linked {
-                    ForEach(privateChats) { chat in
-                        let name = client.profiles.first(where: { $0.id == chat.profileId })?.name ?? L("Общий помощник")
-                        Text(L("В Telegram отвечает \(name)")).font(.callout).foregroundStyle(AppTheme.secondaryText)
-                    }
-                } else if !contextual {
-                    Text(L("Подтвердите свой Telegram, чтобы писать боту и добавлять его в группы."))
-                        .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                }
-                if let problem = client.telegram?.lastError {
-                    Text(UserFacingError.text(problem)).font(.callout).foregroundStyle(AppTheme.destructive)
-                } else if client.telegram?.running != true {
-                    Text(L("Бот остановлен. Проверьте, что OpenStrudel работает на этом устройстве.")).font(.callout).foregroundStyle(AppTheme.secondaryText)
-                }
-                if !contextual && (checking || checked || client.telegram?.connectionError != nil || client.telegram?.lastError != nil || client.telegram?.running != true) { HStack {
-                    Button(checking ? L("Проверяем…") : L("Проверить связь"), action: checkConnection)
-                        .disabled(checking).accessibilityIdentifier("checkTelegramConnection")
-                    if checking { ProgressView().controlSize(.small) }
-                    else if checked && client.telegram?.connectionError == nil { Text(L("Telegram отвечает")).font(.caption).foregroundStyle(AppTheme.secondaryText) }
-                } }
-                Button(linking ? L("Открываем Telegram…") : linked ? L("Написать боту") : L("Связать мой Telegram")) {
-                    linking = true; error = nil
-                    Task {
-                        if linked, let name = client.telegram?.botUsername, let url = URL(string: "https://t.me/" + name) {
-                            openTelegram(url)
-                        } else {
-                            await client.createTelegramLink()
-                            if let url = client.telegramLink?.url { openTelegram(url) }
-                            else { error = client.errorMessage; client.errorMessage = nil }
-                        }
-                        linking = false
-                    }
-                }.buttonStyle(.borderedProminent).disabled(linking).accessibilityIdentifier("openPersonalTelegram")
-                if linked && !contextual {
-                    if let name = client.telegram?.botUsername, let url = URL(string: "https://t.me/" + name + "?startgroup=choose") {
-                        Button { openTelegram(url) } label: { Label(L("Добавить бота в группу"), systemImage: "person.2.badge.plus") }
-                            .buttonStyle(.bordered).accessibilityIdentifier("addTelegramGroup")
-                    }
-                    Text(L("Добавьте бота в группу и упомяните его. Он ответит сам или подключит подходящего сотрудника."))
-                        .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                }
-                if client.telegramLink != nil && !linked {
-                    Text(L("Нажмите «Начать» в Telegram. Здесь появится подтверждение подключения.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
-                }
-            } else {
-                Text(L("1. Откройте BotFather и создайте бота командой /newbot."))
-                    .font(.callout).fixedSize(horizontal: false, vertical: true)
-                Button(L("Открыть BotFather")) { openTelegram(URL(string: "https://t.me/BotFather")!) }
-                Text(L("2. Скопируйте выданный ключ и вставьте сюда.")).font(.callout)
-                SecureField(L("Ключ бота из BotFather"), text: $token).textFieldStyle(.roundedBorder)
-                    .accessibilityIdentifier("telegramBotToken")
-                Button {
-                    busy = true; error = nil
-                    Task {
-                        do { try await client.configureTelegram(token: token); token = "" }
-                        catch { self.error = UserFacingError.text(error.localizedDescription) }
-                        busy = false
-                    }
-                } label: {
-                    HStack { if busy { ProgressView().controlSize(.small) }; Text(busy ? L("Проверяем бота…") : L("Подключить бота")) }
-                }.buttonStyle(.borderedProminent).disabled(busy || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .accessibilityIdentifier("connectTelegramBot")
-                Text(L("Ключ хранится на устройстве сотрудника. Используйте отдельного бота для каждого устройства."))
-                    .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-            }
-            if let error { Text(L10n.serviceText(error)).font(.callout).foregroundStyle(AppTheme.destructive) }
         }
         .task { if !contextual { await client.loadChatSettings() } }
         .confirmationDialog(L("Отключить бота?"), isPresented: $confirmDisconnect, titleVisibility: .visible) {
@@ -114,6 +58,99 @@ struct TelegramSetupView: View {
                 do { try await Task.sleep(for: .seconds(5)) } catch { return }
                 await client.loadChatSettings()
             }
+        }
+    }
+
+    @ViewBuilder private var configuredRows: some View {
+        let unavailable = client.telegram?.connectionError != nil
+        LabeledContent {
+            if let name = client.telegram?.botUsername {
+                Text("@" + name).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled)
+            }
+        } label: {
+            Label {
+                Text(unavailable ? L("Telegram недоступен") : L("Бот подключён"))
+            } icon: {
+                Image(systemName: unavailable ? "wifi.exclamationmark" : "checkmark.circle.fill")
+                    .foregroundStyle(unavailable ? AppTheme.warning : AppTheme.accentText)
+            }
+        }
+        if linked {
+            ForEach(privateChats) { chat in
+                let name = client.profiles.first(where: { $0.id == chat.profileId })?.name ?? L("Общий помощник")
+                Text(L("В Telegram отвечает \(name)")).foregroundStyle(AppTheme.secondaryText)
+            }
+        } else if !contextual {
+            Text(L("Подтвердите свой Telegram, чтобы писать боту и добавлять его в группы."))
+                .foregroundStyle(AppTheme.secondaryText)
+        }
+        if let problem = client.telegram?.lastError {
+            Text(UserFacingError.text(problem)).foregroundStyle(AppTheme.warning)
+        } else if client.telegram?.running != true {
+            Text(L("Бот остановлен. Проверьте, что OpenStrudel работает на этом устройстве.")).foregroundStyle(AppTheme.secondaryText)
+        }
+        Button(linking ? L("Открываем Telegram…") : linked ? L("Написать боту") : L("Связать мой Telegram")) {
+            linking = true; error = nil
+            Task {
+                if linked, let name = client.telegram?.botUsername, let url = URL(string: "https://t.me/" + name) {
+                    openTelegram(url)
+                } else {
+                    await client.createTelegramLink()
+                    if let url = client.telegramLink?.url { openTelegram(url) }
+                    else { error = client.errorMessage; client.errorMessage = nil }
+                }
+                linking = false
+            }
+        }
+        .disabled(linking).accessibilityIdentifier("openPersonalTelegram")
+        if client.telegramLink != nil && !linked {
+            Text(L("Нажмите «Начать» в Telegram. Здесь появится подтверждение подключения."))
+                .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+        }
+        if linked && !contextual, let name = client.telegram?.botUsername, let url = URL(string: "https://t.me/" + name + "?startgroup=choose") {
+            LabeledContent {
+                Button(L("Добавить бота в группу")) { openTelegram(url) }
+                    .accessibilityIdentifier("addTelegramGroup")
+            } label: {
+                Text(L("Добавьте бота в группу и упомяните его. Он ответит сам или подключит подходящего сотрудника."))
+            }
+        }
+        if !contextual {
+            HStack(spacing: 8) {
+                Button(checking ? L("Проверяем…") : L("Проверить связь"), action: checkConnection)
+                    .disabled(checking).accessibilityIdentifier("checkTelegramConnection")
+                Spacer(minLength: 0)
+                if checking { ProgressView().controlSize(.small) }
+                else if checked && client.telegram?.connectionError == nil {
+                    Text(L("Telegram отвечает")).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var setupRows: some View {
+        LabeledContent {
+            Button(L("Открыть BotFather")) { openTelegram(URL(string: "https://t.me/BotFather")!) }
+        } label: {
+            Text(L("1. Откройте BotFather и создайте бота командой /newbot."))
+        }
+        Text(L("2. Скопируйте выданный ключ и вставьте сюда."))
+        // A labelled field, like the backup password: the label leads, the prompt sits in the field.
+        SecureField(L("Ключ бота"), text: $token, prompt: Text(L("Из BotFather")))
+            .accessibilityIdentifier("telegramBotToken")
+        HStack(spacing: 8) {
+            Button(busy ? L("Проверяем бота…") : L("Подключить бота")) {
+                busy = true; error = nil
+                Task {
+                    do { try await client.configureTelegram(token: token); token = "" }
+                    catch { self.error = UserFacingError.text(error.localizedDescription) }
+                    busy = false
+                }
+            }
+            .disabled(busy || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("connectTelegramBot")
+            Spacer(minLength: 0)
+            if busy { ProgressView().controlSize(.small) }
         }
     }
 

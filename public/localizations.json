@@ -158,7 +158,7 @@
     "fr": "Les connexions à ChatGPT et aux services ne sont pas incluses.",
     "es": "No se incluyen los accesos a ChatGPT ni a los servicios.",
     "he": "הגיבוי אינו כולל את פרטי הכניסה ל-ChatGPT ולשירותים.",
-    "ru": "Вход в OpenAI и сервисы в копию не входит."
+    "ru": "Вход в ChatGPT и сервисы в копию не входит."
   },
   "Защитить копию паролем": {
     "en": "Protect with a password",
@@ -350,11 +350,11 @@
     "ru": "Операция отменена."
   },
   "Эта команда уже добавлена": {
-    "en": "This team has already been added",
-    "fr": "Cette équipe a déjà été ajoutée",
-    "es": "Este equipo ya se ha añadido",
-    "he": "הצוות הזה כבר נוסף",
-    "ru": "Эта команда уже добавлена"
+    "en": "These assistants are already restored",
+    "fr": "Ces assistants sont déjà restaurés",
+    "es": "Estos asistentes ya están restaurados",
+    "he": "העוזרים האלה כבר שוחזרו",
+    "ru": "Эти сотрудники уже восстановлены"
   },
   "Повторный импорт этого файла не создаст дубликаты.": {
     "en": "Importing this file again will not create duplicates.",
@@ -493,7 +493,7 @@
     "en": "Codex reviews these actions and carries out the ones it allows.",
     "fr": "Codex vérifie ces actions et exécute celles qu’il autorise.",
     "es": "Codex revisa estas acciones y ejecuta las que autoriza.",
-    "he": "Codex בודק את הפעולות ומבצע את אלו שאושרו.",
+    "he": "‏Codex בודק את הפעולות ומבצע את אלו שאושרו.",
     "ru": "Codex проверяет такие действия и выполняет разрешённые."
   },
   "Сотрудники выполняют поручения без дополнительных разрешений.": {
@@ -621,6 +621,13 @@
     "es": "Descargar imagen",
     "he": "הורדת תמונה",
     "ru": "Загрузить изображение"
+  },
+  "Не удалось загрузить изображение.": {
+    "en": "Couldn’t load the image.",
+    "fr": "Impossible de charger l’image.",
+    "es": "No se pudo cargar la imagen.",
+    "he": "לא ניתן לטעון את התמונה.",
+    "ru": "Не удалось загрузить изображение."
   },
   "Управление компьютером": {
     "en": "Computer control",
@@ -761,6 +768,13 @@
     "es": "Aplicación",
     "he": "אפליקציה",
     "ru": "Приложение"
+  },
+  "Основные": {
+    "en": "General",
+    "fr": "Général",
+    "es": "General",
+    "he": "כללי",
+    "ru": "Основные"
   },
   "Настройки": {
     "en": "Settings",
@@ -906,7 +920,7 @@
     "en": "ChatGPT on “{0}”",
     "fr": "ChatGPT sur « {0} »",
     "es": "ChatGPT en «{0}»",
-    "he": "ChatGPT ב-״{0}״",
+    "he": "‏ChatGPT ב-״{0}״",
     "ru": "OpenAI на «{0}»"
   },
   "Устройство сотрудника": {
@@ -942,7 +956,7 @@
     "fr": "Se connecter à ChatGPT",
     "es": "Iniciar sesión en ChatGPT",
     "he": "כניסה ל-ChatGPT",
-    "ru": "Нужен вход в OpenAI"
+    "ru": "Нужен вход в ChatGPT"
   },
   "Использовать по умолчанию": {
     "en": "Use by default",
@@ -970,7 +984,7 @@
     "fr": "Se connecter à ChatGPT",
     "es": "Iniciar sesión en ChatGPT",
     "he": "כניסה ל-ChatGPT",
-    "ru": "Войти в OpenAI"
+    "ru": "Войти в ChatGPT"
   },
   "По умолчанию для новых поручений": {
     "en": "Default for new requests",
@@ -1005,7 +1019,7 @@
     "fr": "Ajouter un compte ChatGPT",
     "es": "Añadir cuenta de ChatGPT",
     "he": "הוספת חשבון ChatGPT",
-    "ru": "Добавить аккаунт OpenAI"
+    "ru": "Добавить аккаунт ChatGPT"
   },
   "Обновить остатки": {
     "en": "Refresh balances",
@@ -1040,7 +1054,7 @@
     "fr": "Se déconnecter de ChatGPT ?",
     "es": "¿Cerrar sesión en ChatGPT?",
     "he": "לצאת מחשבון ChatGPT?",
-    "ru": "Выйти из аккаунта OpenAI?"
+    "ru": "Выйти из аккаунта ChatGPT?"
   },
   "Выйти": {
     "en": "Sign out",
@@ -1067,7 +1081,7 @@
     "en": "OpenAI did not provide subscription limits.",
     "fr": "OpenAI n’a pas fourni les limites de l’abonnement.",
     "es": "OpenAI no ha proporcionado los límites de la suscripción.",
-    "he": "OpenAI לא מסר את מכסות המנוי.",
+    "he": "‏OpenAI לא מסר את מכסות המנוי.",
     "ru": "OpenAI не передал лимиты подписки."
   },
   "{0}% осталось": {
@@ -1097,6 +1111,13 @@
     "es": "Se restablece el {0}",
     "he": "מתאפס ב-{0}",
     "ru": "Сброс {0}"
+  },
+  "{0}% осталось · сброс {1}": {
+    "en": "{0}% left · resets {1}",
+    "fr": "{0} % restants · réinitialisation : {1}",
+    "es": "Queda un {0} % · se restablece: {1}",
+    "he": "נותרו {0}% · מתאפס ב-{1}",
+    "ru": "{0}% осталось · сброс {1}"
   },
   "Кредиты": {
     "en": "Credits",
@@ -1214,7 +1235,7 @@
     "en": "Basic · 2 CPUs · 4 GB",
     "fr": "Basic · 2 processeurs · 4 Go",
     "es": "Basic · 2 CPU · 4 GB",
-    "he": "Basic · 2 מעבדים · 4 GB",
+    "he": "‏Basic · 2 מעבדים · 4 GB",
     "ru": "Basic · 2 CPU · 4 ГБ"
   },
   "Условия установки обновились. Проверьте стоимость и подтвердите запуск ещё раз.": {
@@ -1256,21 +1277,21 @@
     "en": "DigitalOcean did not allow server creation. Sign in again and grant access.",
     "fr": "DigitalOcean n’a pas autorisé la création du serveur. Reconnectez-vous et accordez l’accès.",
     "es": "DigitalOcean no ha autorizado la creación del servidor. Vuelve a iniciar sesión y concede acceso.",
-    "he": "DigitalOcean לא אישר את יצירת השרת. יש להיכנס שוב ולאפשר גישה.",
+    "he": "‏DigitalOcean לא אישר את יצירת השרת. יש להיכנס שוב ולאפשר גישה.",
     "ru": "DigitalOcean не предоставил доступ для установки. Войдите ещё раз и разрешите создание сервера."
   },
   "DigitalOcean просит немного подождать. Продолжите настройку через несколько минут.": {
     "en": "DigitalOcean asks you to wait. Continue setup in a few minutes.",
     "fr": "DigitalOcean vous demande de patienter. Reprenez dans quelques minutes.",
     "es": "DigitalOcean pide que esperes. Continúa dentro de unos minutos.",
-    "he": "DigitalOcean מבקש להמתין. אפשר להמשיך בהגדרה בעוד כמה דקות.",
+    "he": "‏DigitalOcean מבקש להמתין. אפשר להמשיך בהגדרה בעוד כמה דקות.",
     "ru": "DigitalOcean просит немного подождать. Продолжите настройку через несколько минут."
   },
   "DigitalOcean пока не смог выполнить запрос. Настройка сохранена — продолжите немного позже.": {
     "en": "DigitalOcean could not complete the request. Your setup is saved; try again later.",
     "fr": "DigitalOcean n’a pas pu traiter la demande. La configuration est enregistrée ; réessayez plus tard.",
     "es": "DigitalOcean no ha podido completar la solicitud. La configuración está guardada; inténtalo más tarde.",
-    "he": "DigitalOcean לא הצליח להשלים את הבקשה. ההגדרה נשמרה; אפשר לנסות מאוחר יותר.",
+    "he": "‏DigitalOcean לא הצליח להשלים את הבקשה. ההגדרה נשמרה; אפשר לנסות מאוחר יותר.",
     "ru": "DigitalOcean пока не смог выполнить запрос. Настройка сохранена — продолжите немного позже."
   },
   "Не удалось безопасно сохранить настройку. Разблокируйте устройство и попробуйте ещё раз.": {
@@ -1956,7 +1977,7 @@
     "en": "OpenStrudel couldn’t complete the action (code {0}). Try again. If it keeps happening, contact support.",
     "fr": "OpenStrudel n’a pas pu terminer l’action (code {0}). Réessayez. Si le problème persiste, contactez l’assistance.",
     "es": "OpenStrudel no ha podido completar la acción (código {0}). Inténtalo de nuevo. Si persiste, contacta con soporte.",
-    "he": "OpenStrudel לא הצליח להשלים את הפעולה (קוד {0}). יש לנסות שוב. אם הבעיה נמשכת, אפשר לפנות לתמיכה.",
+    "he": "‏OpenStrudel לא הצליח להשלים את הפעולה (קוד {0}). יש לנסות שוב. אם הבעיה נמשכת, אפשר לפנות לתמיכה.",
     "ru": "OpenStrudel не смог выполнить действие (код {0}). Попробуйте ещё раз. Если ошибка повторится, обратитесь в поддержку."
   },
   "Действие отменено до передачи устройству.": {
@@ -2030,11 +2051,11 @@
     "ru": "Загружаем аккаунты…"
   },
   "Подключите аккаунт OpenAI в настройках, чтобы видеть остатки.": {
-    "en": "Connect an OpenAI account in Settings to see your remaining usage.",
-    "fr": "Connectez un compte OpenAI dans Réglages pour consulter vos limites restantes.",
-    "es": "Conecta una cuenta de OpenAI en Ajustes para ver el uso disponible.",
-    "he": "יש לחבר חשבון OpenAI בהגדרות כדי לראות את יתרת השימוש.",
-    "ru": "Подключите аккаунт OpenAI в настройках, чтобы видеть остатки."
+    "en": "Connect a ChatGPT account in Settings to see your remaining usage.",
+    "fr": "Connectez un compte ChatGPT dans Réglages pour consulter vos limites restantes.",
+    "es": "Conecta una cuenta de ChatGPT en Ajustes para ver el uso disponible.",
+    "he": "יש לחבר חשבון ChatGPT בהגדרות כדי לראות את יתרת השימוש.",
+    "ru": "Подключите аккаунт ChatGPT в настройках, чтобы видеть остатки."
   },
   "Открыть": {
     "en": "Open",
@@ -2054,7 +2075,7 @@
     "en": "OpenStrudel: accounts and usage",
     "fr": "OpenStrudel : comptes et utilisation",
     "es": "OpenStrudel: cuentas y uso",
-    "he": "OpenStrudel: חשבונות ושימוש",
+    "he": "‏OpenStrudel: חשבונות ושימוש",
     "ru": "OpenStrudel: аккаунты и остатки"
   },
   "Серверы": {
@@ -2138,7 +2159,7 @@
     "en": "OpenStrudel is still running on this Mac. No data has been deleted. Try continuing the reset.",
     "fr": "OpenStrudel est toujours en cours sur ce Mac. Aucune donnée n’a été effacée. Essayez de reprendre la réinitialisation.",
     "es": "OpenStrudel sigue ejecutándose en este Mac. No se han borrado datos. Prueba a continuar el restablecimiento.",
-    "he": "OpenStrudel עדיין פועל ב-Mac הזה. הנתונים לא נמחקו. אפשר לנסות להמשיך באיפוס.",
+    "he": "‏OpenStrudel עדיין פועל ב-Mac הזה. הנתונים לא נמחקו. אפשר לנסות להמשיך באיפוס.",
     "ru": "OpenStrudel на этом Mac ещё не остановился. Данные пока не удалены. Попробуйте продолжить сброс."
   },
   "Не удалось удалить все данные. Часть сброса уже выполнена. Проверьте доступ к папке пользователя и продолжите сброс.": {
@@ -2348,7 +2369,7 @@
     "en": "codex did not respond",
     "fr": "codex n’a pas répondu",
     "es": "codex no respondió",
-    "he": "codex לא השיב",
+    "he": "‏codex לא השיב",
     "ru": "codex не ответил"
   },
   "Сотрудник не ответил вовремя. Перед повторной отправкой проверьте, успел ли он выполнить задачу.": {
@@ -2414,6 +2435,13 @@
     "he": "לנתק מכשירים אחרים? השיחות והעוזרים יישמרו.",
     "ru": "Отключить другие устройства? Чаты и сотрудники сохранятся."
   },
+  "Подключено других устройств: {0}": {
+    "en": "Other devices connected: {0}",
+    "fr": "Autres appareils connectés : {0}",
+    "es": "Otros dispositivos conectados: {0}",
+    "he": "מכשירים אחרים מחוברים: {0}",
+    "ru": "Подключено других устройств: {0}"
+  },
   "Продолжите на другом устройстве": {
     "en": "Continue on the other device",
     "fr": "Continuez sur l’autre appareil",
@@ -2434,13 +2462,6 @@
     "es": "Enlace de conexión de OpenStrudel de un solo uso",
     "he": "קישור חד-פעמי לחיבור OpenStrudel",
     "ru": "Одноразовая ссылка подключения OpenStrudel"
-  },
-  "Ссылка действует ещё {0}:{1}": {
-    "en": "Link expires in {0}:{1}",
-    "fr": "Le lien expire dans {0}:{1}",
-    "es": "El enlace caduca en {0}:{1}",
-    "he": "הקישור יפוג בעוד {0}:{1}",
-    "ru": "Ссылка действует ещё {0}:{1}"
   },
   "Поделиться ссылкой": {
     "en": "Share link",
@@ -3097,7 +3118,7 @@
     "en": "OpenAI connected",
     "fr": "OpenAI connecté",
     "es": "OpenAI conectado",
-    "he": "OpenAI מחובר",
+    "he": "‏OpenAI מחובר",
     "ru": "OpenAI подключён"
   },
   "Проверить": {
@@ -3115,11 +3136,11 @@
     "ru": "Аккаунты и остатки"
   },
   "Аккаунт OpenAI": {
-    "en": "OpenAI account",
-    "fr": "Compte OpenAI",
-    "es": "Cuenta de OpenAI",
-    "he": "חשבון OpenAI",
-    "ru": "Аккаунт OpenAI"
+    "en": "ChatGPT account",
+    "fr": "Compte ChatGPT",
+    "es": "Cuenta de ChatGPT",
+    "he": "חשבון ChatGPT",
+    "ru": "Аккаунт ChatGPT"
   },
   "Работает на «{0}»": {
     "en": "Runs on “{0}”",
@@ -3170,40 +3191,40 @@
     "he": "עוזרים בענן",
     "ru": "Сотрудники в облаке"
   },
-  "Войдите в DigitalOcean.": {
-    "en": "Sign in to DigitalOcean.",
-    "fr": "Connectez-vous à DigitalOcean.",
-    "es": "Inicia sesión en DigitalOcean.",
-    "he": "יש להיכנס ל-DigitalOcean.",
-    "ru": "Войдите в DigitalOcean."
+  "Войдите в DigitalOcean": {
+    "en": "Sign in to DigitalOcean",
+    "fr": "Connectez-vous à DigitalOcean",
+    "es": "Inicia sesión en DigitalOcean",
+    "he": "יש להיכנס ל-DigitalOcean",
+    "ru": "Войдите в DigitalOcean"
   },
-  "Подключите оплату.": {
-    "en": "Add a payment method.",
-    "fr": "Ajoutez un moyen de paiement.",
-    "es": "Añade un método de pago.",
-    "he": "יש להוסיף אמצעי תשלום.",
-    "ru": "Подключите оплату."
+  "Подключите оплату": {
+    "en": "Add a payment method",
+    "fr": "Ajoutez un moyen de paiement",
+    "es": "Añade un método de pago",
+    "he": "יש להוסיף אמצעי תשלום",
+    "ru": "Подключите оплату"
   },
-  "Всё готово к запуску.": {
-    "en": "Ready to start.",
-    "fr": "Prêt à démarrer.",
-    "es": "Listo para empezar.",
-    "he": "מוכנים להפעלה.",
-    "ru": "Всё готово к запуску."
+  "Всё готово к запуску": {
+    "en": "Ready to start",
+    "fr": "Prêt à démarrer",
+    "es": "Listo para empezar",
+    "he": "מוכנים להפעלה",
+    "ru": "Всё готово к запуску"
   },
-  "Готовим вашу команду.": {
-    "en": "Setting up your team.",
-    "fr": "Préparation de votre équipe.",
-    "es": "Preparando tu equipo.",
-    "he": "מכינים את הצוות שלך.",
-    "ru": "Готовим вашу команду."
+  "Готовим вашу команду": {
+    "en": "Setting up your assistants",
+    "fr": "Préparation de vos assistants",
+    "es": "Preparando tus asistentes",
+    "he": "מכינים את העוזרים שלך",
+    "ru": "Готовим ваших сотрудников"
   },
-  "Всё готово.": {
-    "en": "All set.",
-    "fr": "Tout est prêt.",
-    "es": "Todo listo.",
-    "he": "הכול מוכן.",
-    "ru": "Всё готово."
+  "Всё готово": {
+    "en": "All set",
+    "fr": "Tout est prêt",
+    "es": "Todo listo",
+    "he": "הכול מוכן",
+    "ru": "Всё готово"
   },
   "Настройка не завершена": {
     "en": "Setup incomplete",
@@ -3237,7 +3258,7 @@
     "en": "OpenStrudel will be installed on a dedicated server in your DigitalOcean account. Review the price before starting.",
     "fr": "OpenStrudel sera installé sur un serveur distinct dans votre compte DigitalOcean. Vérifiez le prix avant de lancer l’installation.",
     "es": "OpenStrudel se instalará en un servidor propio de tu cuenta de DigitalOcean. Revisa el precio antes de empezar.",
-    "he": "OpenStrudel יותקן בשרת נפרד בחשבון DigitalOcean שלך. יש לבדוק את המחיר לפני ההפעלה.",
+    "he": "‏OpenStrudel יותקן בשרת נפרד בחשבון DigitalOcean שלך. יש לבדוק את המחיר לפני ההפעלה.",
     "ru": "OpenStrudel установится на отдельном сервере в вашем аккаунте DigitalOcean. Проверьте стоимость перед запуском."
   },
   "Обычно настройка занимает несколько минут. Можно закрыть окно и вернуться позже. Прогресс сохранится.": {
@@ -3353,11 +3374,11 @@
     "ru": "Продолжить настройку"
   },
   "Открыть команду": {
-    "en": "Open team",
-    "fr": "Ouvrir l’équipe",
-    "es": "Abrir equipo",
-    "he": "פתיחת הצוות",
-    "ru": "Открыть команду"
+    "en": "Open assistants",
+    "fr": "Ouvrir les assistants",
+    "es": "Abrir asistentes",
+    "he": "פתיחת העוזרים",
+    "ru": "Открыть сотрудников"
   },
   "Открыть вход в браузере": {
     "en": "Open sign-in in browser",
@@ -3419,7 +3440,7 @@
     "en": "Telegram on “{0}”",
     "fr": "Telegram sur « {0} »",
     "es": "Telegram en «{0}»",
-    "he": "Telegram ב-״{0}״",
+    "he": "‏Telegram ב-״{0}״",
     "ru": "Telegram на «{0}»"
   },
   "Проверить связь": {
@@ -3447,7 +3468,7 @@
     "en": "Telegram unavailable",
     "fr": "Telegram indisponible",
     "es": "Telegram no disponible",
-    "he": "Telegram אינו זמין",
+    "he": "‏Telegram אינו זמין",
     "ru": "Telegram недоступен"
   },
   "Бот подключён": {
@@ -3489,7 +3510,7 @@
     "en": "Telegram is responding",
     "fr": "Telegram répond",
     "es": "Telegram responde",
-    "he": "Telegram מגיב",
+    "he": "‏Telegram מגיב",
     "ru": "Telegram отвечает"
   },
   "Открываем Telegram…": {
@@ -3777,7 +3798,7 @@
     "fr": "Un assistant pour vos tâches",
     "es": "Un asistente para tus tareas",
     "he": "עוזר למשימות שלך",
-    "ru": "Помощник для ваших задач"
+    "ru": "Помощник для задач"
   },
   "Опишите его задачу": {
     "en": "Describe their role",
@@ -4007,7 +4028,7 @@
     "en": "Telegram · bot paused",
     "fr": "Telegram · bot en pause",
     "es": "Telegram · bot en pausa",
-    "he": "Telegram · הבוט מושהה",
+    "he": "‏Telegram · הבוט מושהה",
     "ru": "Telegram · бот на паузе"
   },
   "Настройки сотрудника": {
@@ -4059,12 +4080,12 @@
     "he": "מה נעשה היום?",
     "ru": "Напишите, что нужно"
   },
-  "Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты».": {
-    "en": "Describe what they should do. For example, “An editor who helps me write short posts.”",
-    "fr": "Décrivez son rôle. Par exemple : « Un rédacteur qui m’aide à écrire des publications courtes. »",
-    "es": "Describe lo que debe hacer. Por ejemplo: «Un editor que me ayude a escribir publicaciones breves».",
-    "he": "אפשר לתאר את התפקיד. למשל: ״עורך שיעזור לי לכתוב פוסטים קצרים״.",
-    "ru": "Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты»."
+  "Например: «Редактор, который помогает писать короткие посты».": {
+    "en": "For example, “An editor who helps me write short posts.”",
+    "fr": "Par exemple : « Un rédacteur qui m’aide à écrire des publications courtes. »",
+    "es": "Por ejemplo: «Un editor que me ayude a escribir publicaciones breves».",
+    "he": "למשל: ״עורך שיעזור לי לכתוב פוסטים קצרים״.",
+    "ru": "Например: «Редактор, который помогает писать короткие посты»."
   },
   "Создать на: ": {
     "en": "Create on: ",
@@ -4199,6 +4220,20 @@
     "he": "צירוף קובץ",
     "ru": "Прикрепить файл"
   },
+  "Выбрать фото…": {
+    "en": "Choose photo…",
+    "fr": "Choisir une photo…",
+    "es": "Elegir foto…",
+    "he": "בחירת תמונה…",
+    "ru": "Выбрать фото…"
+  },
+  "Прикрепить файл…": {
+    "en": "Attach file…",
+    "fr": "Joindre un fichier…",
+    "es": "Adjuntar archivo…",
+    "he": "צירוף קובץ…",
+    "ru": "Прикрепить файл…"
+  },
   "Голосовой ввод…": {
     "en": "Dictation…",
     "fr": "Dictée…",
@@ -4227,6 +4262,13 @@
     "he": "צירוף תמונה או קובץ עד 25 MB",
     "ru": "Прикрепить фото или файл до 25 МБ"
   },
+  "Выберите файл до 25 МБ": {
+    "en": "Choose a file up to 25 MB",
+    "fr": "Choisissez un fichier de 25 Mo maximum",
+    "es": "Elige un archivo de hasta 25 MB",
+    "he": "יש לבחור קובץ עד 25 MB",
+    "ru": "Выберите файл до 25 МБ"
+  },
   "Сообщение": {
     "en": "Message",
     "fr": "Message",
@@ -4238,7 +4280,7 @@
     "en": "Return sends. Shift+Return adds a new line.",
     "fr": "Entrée envoie le message. Maj+Entrée ajoute une ligne.",
     "es": "Intro envía el mensaje. Mayús+Intro añade una línea.",
-    "he": "Return שולח את ההודעה. Shift+Return מוסיף שורה.",
+    "he": "‏Return שולח את ההודעה. Shift+Return מוסיף שורה.",
     "ru": "Return отправляет сообщение. Shift+Return добавляет новую строку."
   },
   "Отправка во время ответа": {
@@ -4599,18 +4641,18 @@
     "ru": "Нужен вход владельца"
   },
   "Войдите в OpenAI снова": {
-    "en": "Sign in to OpenAI again",
-    "fr": "Se reconnecter à OpenAI",
-    "es": "Volver a iniciar sesión en OpenAI",
-    "he": "כניסה מחדש ל-OpenAI",
-    "ru": "Войдите в OpenAI снова"
+    "en": "Sign in to ChatGPT again",
+    "fr": "Se reconnecter à ChatGPT",
+    "es": "Volver a iniciar sesión en ChatGPT",
+    "he": "כניסה מחדש ל-ChatGPT",
+    "ru": "Войдите в ChatGPT снова"
   },
   "Подключите OpenAI": {
-    "en": "Connect OpenAI",
-    "fr": "Connecter OpenAI",
-    "es": "Conectar OpenAI",
-    "he": "חיבור OpenAI",
-    "ru": "Подключите OpenAI"
+    "en": "Connect ChatGPT",
+    "fr": "Connecter ChatGPT",
+    "es": "Conectar ChatGPT",
+    "he": "חיבור ChatGPT",
+    "ru": "Подключите ChatGPT"
   },
   "Проверьте подключение к интернету и попробуйте ещё раз. Ваши чаты и сотрудники сохранены.": {
     "en": "Check your internet connection and try again. Your chats and assistants are saved.",
@@ -4627,11 +4669,11 @@
     "ru": "Сохранённый вход больше не действует. Войдите снова для сотрудников этого устройства."
   },
   "Войдите на сайте OpenAI. Этот аккаунт будут использовать сотрудники на «{0}».": {
-    "en": "Sign in on the OpenAI website. Assistants on “{0}” will use this account.",
-    "fr": "Connectez-vous sur le site OpenAI. Les assistants de « {0} » utiliseront ce compte.",
-    "es": "Inicia sesión en la web de OpenAI. Los asistentes de «{0}» usarán esta cuenta.",
-    "he": "יש להיכנס באתר OpenAI. העוזרים ב-״{0}״ ישתמשו בחשבון הזה.",
-    "ru": "Войдите на сайте OpenAI. Этот аккаунт будут использовать сотрудники на «{0}»."
+    "en": "Sign in with your ChatGPT account. Assistants on “{0}” will use it.",
+    "fr": "Connectez-vous avec votre compte ChatGPT. Les assistants de « {0} » l’utiliseront.",
+    "es": "Inicia sesión con tu cuenta de ChatGPT. Los asistentes de «{0}» la usarán.",
+    "he": "יש להיכנס עם חשבון ChatGPT שלך. העוזרים ב-״{0}״ ישתמשו בו.",
+    "ru": "Войдите в свой аккаунт ChatGPT. Его будут использовать сотрудники на «{0}»."
   },
   "Отвечает на @упоминание и ответы боту": {
     "en": "Replies to @mentions and replies to the bot",
@@ -4655,18 +4697,18 @@
     "ru": "Не удалось проверить OpenAI. Подключение Telegram сохранено."
   },
   "Войдите в OpenAI, чтобы помощник мог отвечать.": {
-    "en": "Sign in to OpenAI so your assistant can reply.",
-    "fr": "Connectez-vous à OpenAI pour que votre assistant puisse répondre.",
-    "es": "Inicia sesión en OpenAI para que tu asistente pueda responder.",
-    "he": "יש להיכנס ל-OpenAI כדי שהעוזר יוכל להשיב.",
-    "ru": "Войдите в OpenAI, чтобы помощник мог отвечать."
+    "en": "Sign in to ChatGPT so your assistant can reply.",
+    "fr": "Connectez-vous à ChatGPT pour que votre assistant puisse répondre.",
+    "es": "Inicia sesión en ChatGPT para que tu asistente pueda responder.",
+    "he": "יש להיכנס ל-ChatGPT כדי שהעוזר יוכל להשיב.",
+    "ru": "Войдите в ChatGPT, чтобы помощник мог отвечать."
   },
   "Аккаунты OpenAI": {
-    "en": "OpenAI accounts",
-    "fr": "Comptes OpenAI",
-    "es": "Cuentas de OpenAI",
-    "he": "חשבונות OpenAI",
-    "ru": "Аккаунты OpenAI"
+    "en": "ChatGPT accounts",
+    "fr": "Comptes ChatGPT",
+    "es": "Cuentas de ChatGPT",
+    "he": "חשבונות ChatGPT",
+    "ru": "Аккаунты ChatGPT"
   },
   "Группы": {
     "en": "Groups",
@@ -5078,7 +5120,7 @@
     "en": "OpenRamble · recommended",
     "fr": "OpenRamble · recommandé",
     "es": "OpenRamble · recomendado",
-    "he": "OpenRamble · מומלץ",
+    "he": "‏OpenRamble · מומלץ",
     "ru": "Open Ramble · рекомендуем"
   },
   "Встроенное Apple": {
@@ -5092,7 +5134,7 @@
     "en": "OpenRamble turns speech into text on your Mac. Place the cursor in the message and use the OpenRamble shortcut. Review your text before sending.",
     "fr": "OpenRamble transcrit la parole sur votre Mac. Placez le curseur dans le message et utilisez le raccourci OpenRamble. Vérifiez le texte avant l’envoi.",
     "es": "OpenRamble convierte voz en texto en tu Mac. Coloca el cursor en el mensaje y usa el atajo de OpenRamble. Revisa el texto antes de enviarlo.",
-    "he": "OpenRamble ממיר דיבור לטקסט ב-Mac. יש למקם את הסמן בהודעה ולהשתמש בקיצור OpenRamble. אפשר לבדוק את הטקסט לפני השליחה.",
+    "he": "‏OpenRamble ממיר דיבור לטקסט ב-Mac. יש למקם את הסמן בהודעה ולהשתמש בקיצור OpenRamble. אפשר לבדוק את הטקסט לפני השליחה.",
     "ru": "Open Ramble превращает речь в текст на вашем Mac. Поставьте курсор в сообщение и используйте горячую клавишу из Open Ramble. Текст можно проверить перед отправкой."
   },
   "Открыть Open Ramble": {
@@ -5355,11 +5397,11 @@
     "ru": "Ожидаем оплату. Заказ сохранён."
   },
   "ChatGPT on {0}": {
-    "en": "ChatGPT on {0}",
+    "en": "ChatGPT on “{0}”",
     "ru": "ChatGPT на «{0}»",
-    "fr": "ChatGPT sur {0}",
-    "es": "ChatGPT en {0}",
-    "he": "ChatGPT ב-{0}"
+    "fr": "ChatGPT sur « {0} »",
+    "es": "ChatGPT en «{0}»",
+    "he": "‏ChatGPT ב-״{0}״"
   },
   "Connection {0}": {
     "en": "Connection {0}",
@@ -6107,7 +6149,7 @@
     "en": "OpenAI returned an unrecognized sign-in address.",
     "fr": "OpenAI a renvoyé une adresse de connexion inconnue.",
     "es": "OpenAI ha devuelto una dirección de acceso desconocida.",
-    "he": "OpenAI החזיר כתובת כניסה לא מוכרת.",
+    "he": "‏OpenAI החזיר כתובת כניסה לא מוכרת.",
     "ru": "OpenAI вернул неизвестный адрес входа."
   },
   "Проверить вход": {
@@ -6635,41 +6677,6 @@
     "he": "אפשר לכתוב מה צריך…",
     "ru": "Напишите, что нужно…"
   },
-  "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">Общий помощник</span></span>": {
-    "en": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">General assistant</span></span>",
-    "ru": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">Общий помощник</span></span>",
-    "fr": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">Assistant général</span></span>",
-    "es": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">Asistente general</span></span>",
-    "he": "<span class=\"avatar mark\" aria-hidden=\"true\"></span><span class=\"agent-copy\"><span class=\"agent-name\">OpenStrudel</span><span class=\"agent-sub\">עוזר כללי</span></span>"
-  },
-  "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>Что сделать?</h1><p>Напишите, с чем помочь. Чтобы обратиться к другому сотруднику, выберите его в списке.</p></div></div>": {
-    "en": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>What would you like to do?</h1><p>Tell me what you need. Choose another assistant from the list to work with them.</p></div></div>",
-    "ru": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>Что сделать?</h1><p>Напишите, с чем помочь. Чтобы обратиться к другому сотруднику, выберите его в списке.</p></div></div>",
-    "fr": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>Que souhaitez-vous faire ?</h1><p>Dites-moi ce qu’il vous faut. Pour travailler avec un autre assistant, choisissez-le dans la liste.</p></div></div>",
-    "es": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>¿Qué te gustaría hacer?</h1><p>Dime qué necesitas. Elige otro asistente de la lista para trabajar con él.</p></div></div>",
-    "he": "<div class=\"empty\"><div><span class=\"mark\" style=\"width:62px;height:62px;border-radius:21px;display:inline-grid;font-size:28px\"></span><h1>מה נעשה היום?</h1><p>אפשר לכתוב מה צריך. כדי לעבוד עם עוזר אחר, בוחרים אותו ברשימה.</p></div></div>"
-  },
-  "<b>●</b> готов": {
-    "en": "<b>●</b> ready",
-    "ru": "<b>●</b> готов",
-    "fr": "<b>●</b> prêt",
-    "es": "<b>●</b> listo",
-    "he": "<b>●</b> מוכן"
-  },
-  "<h2>Резервная копия сотрудников</h2><p id=\"backup-summary\">Сотрудники, переписка, файлы и расписания — в одном файле.</p><label>Устройство<select id=\"archive-device\" class=\"field\"></select></label><p>При импорте текущая команда сохранится. Новые расписания будут на паузе. Вход в OpenAI и доступ к сервисам не переносятся.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Защитить копию паролем</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Пароль · не менее 12 символов\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">Файл без пароля. Храните его в безопасном месте.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Сохранить копию</button><button class=\"secondary\" id=\"import-team\">Восстановить из копии</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Закрыть</button></div>": {
-    "en": "<h2>Back up your assistants</h2><p id=\"backup-summary\">Assistants, chats, files and schedules in one file.</p><label>Device<select id=\"archive-device\" class=\"field\"></select></label><p>Import keeps your current team. New schedules start paused. OpenAI sign-in and service access aren’t transferred.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Protect with a password</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Password · at least 12 characters\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">This file has no password. Keep it in a safe place.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Save backup</button><button class=\"secondary\" id=\"import-team\">Restore from backup</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Close</button></div>",
-    "ru": "<h2>Резервная копия сотрудников</h2><p id=\"backup-summary\">Сотрудники, переписка, файлы и расписания — в одном файле.</p><label>Устройство<select id=\"archive-device\" class=\"field\"></select></label><p>При импорте текущая команда сохранится. Новые расписания будут на паузе. Вход в OpenAI и доступ к сервисам не переносятся.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Защитить копию паролем</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Пароль · не менее 12 символов\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">Файл без пароля. Храните его в безопасном месте.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Сохранить копию</button><button class=\"secondary\" id=\"import-team\">Восстановить из копии</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Закрыть</button></div>",
-    "fr": "<h2>Sauvegarder vos assistants</h2><p id=\"backup-summary\">Assistants, conversations, fichiers et programmations dans un seul fichier.</p><label>Appareil<select id=\"archive-device\" class=\"field\"></select></label><p>L’importation conserve votre équipe actuelle. Les nouvelles programmations seront en pause. Les connexions OpenAI et aux services ne sont pas transférées.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Protéger par un mot de passe</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Mot de passe · 12 caractères minimum\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">Ce fichier n’a pas de mot de passe. Conservez-le en lieu sûr.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Enregistrer une sauvegarde</button><button class=\"secondary\" id=\"import-team\">Restaurer une sauvegarde</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Fermer</button></div>",
-    "es": "<h2>Copia de tus asistentes</h2><p id=\"backup-summary\">Asistentes, chats, archivos y programaciones en un solo archivo.</p><label>Dispositivo<select id=\"archive-device\" class=\"field\"></select></label><p>La importación conserva tu equipo actual. Las programaciones nuevas estarán en pausa. No se transfieren la sesión de OpenAI ni los accesos a servicios.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> Proteger con contraseña</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"Contraseña · al menos 12 caracteres\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">Este archivo no tiene contraseña. Guárdalo en un lugar seguro.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">Guardar copia</button><button class=\"secondary\" id=\"import-team\">Restaurar una copia</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">Cerrar</button></div>",
-    "he": "<h2>גיבוי העוזרים</h2><p id=\"backup-summary\">עוזרים, שיחות, קבצים ולוחות זמנים בקובץ אחד.</p><label>מכשיר<select id=\"archive-device\" class=\"field\"></select></label><p>הייבוא שומר על הצוות הנוכחי. לוחות הזמנים החדשים יהיו מושהים. הכניסה ל-OpenAI והגישה לשירותים לא מועברות.</p><label id=\"backup-protection\"><input type=\"checkbox\" id=\"protect-backup\"> הגנה באמצעות סיסמה</label><input id=\"backup-password\" type=\"password\" class=\"field\" placeholder=\"סיסמה · 12 תווים לפחות\" autocomplete=\"new-password\" hidden><p id=\"backup-protection-note\">הקובץ אינו מוגן בסיסמה. יש לשמור אותו במקום בטוח.</p><progress id=\"backup-progress\" hidden style=\"width:100%\"></progress><div class=\"modal-actions\"><button class=\"primary\" id=\"export-team\">שמירת גיבוי</button><button class=\"secondary\" id=\"import-team\">שחזור מגיבוי</button></div><p id=\"transfer-status\" role=\"status\" style=\"margin-top:16px\"></p><p id=\"transfer-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel\">סגירה</button></div>"
-  },
-  "<h2>Восстановить сотрудников</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Отмена</button><button class=\"primary\" id=\"confirm-import\">Добавить сотрудников</button></div>": {
-    "en": "<h2>Restore assistants</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Cancel</button><button class=\"primary\" id=\"confirm-import\">Add assistants</button></div>",
-    "ru": "<h2>Восстановить сотрудников</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Отмена</button><button class=\"primary\" id=\"confirm-import\">Добавить сотрудников</button></div>",
-    "fr": "<h2>Restaurer les assistants</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Annuler</button><button class=\"primary\" id=\"confirm-import\">Ajouter des assistants</button></div>",
-    "es": "<h2>Restaurar asistentes</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">Cancelar</button><button class=\"primary\" id=\"confirm-import\">Añadir asistentes</button></div>",
-    "he": "<h2>שחזור עוזרים</h2><p id=\"import-description\"></p><ul id=\"import-names\"></ul><p id=\"import-counts\"></p><p id=\"import-policy\"></p><p id=\"import-error\" role=\"alert\" tabindex=\"-1\"></p><div class=\"modal-actions\"><button class=\"secondary\" id=\"cancel-import\">ביטול</button><button class=\"primary\" id=\"confirm-import\">הוספת עוזרים</button></div>"
-  },
   "Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.": {
     "en": "Update OpenStrudel on this assistant’s device to choose a model.",
     "ru": "Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.",
@@ -6796,12 +6803,19 @@
     "es": "Abrir {0}",
     "he": "פתיחת {0}"
   },
-  "{0} is working": {
-    "en": "{0} is working",
-    "ru": "{0} работает",
-    "fr": "{0} travaille",
-    "es": "{0} está trabajando",
-    "he": "{0} עובד"
+  "{0} is working…": {
+    "en": "{0} is working…",
+    "ru": "{0} готовит ответ…",
+    "fr": "{0} travaille…",
+    "es": "{0} está trabajando…",
+    "he": "{0} עובד…"
+  },
+  "Вы": {
+    "en": "You",
+    "ru": "Вы",
+    "fr": "Vous",
+    "es": "Tú",
+    "he": "את/ה"
   },
   "Remove {0}": {
     "en": "Remove {0}",
@@ -7039,7 +7053,7 @@
     "ru": "OpenStrudel уже установлен. Подключитесь по ссылке из настроек устройства. Данные сохранятся.",
     "fr": "OpenStrudel est déjà installé. Connectez-vous avec le lien de ses réglages d’appareil. Ses données seront conservées.",
     "es": "OpenStrudel ya está instalado. Conéctate con el enlace de sus ajustes de dispositivo. Sus datos se conservarán.",
-    "he": "OpenStrudel כבר מותקן. אפשר להתחבר באמצעות קישור מהגדרות המכשיר שלו. הנתונים יישמרו."
+    "he": "‏OpenStrudel כבר מותקן. אפשר להתחבר באמצעות קישור מהגדרות המכשיר שלו. הנתונים יישמרו."
   },
   "Opening your server": {
     "en": "Opening your server",
@@ -7216,8 +7230,8 @@
     "es": "Usa un servidor Ubuntu 24.04 con 4 GB de memoria y 30 GB de almacenamiento.",
     "he": "נדרש שרת Ubuntu 24.04 עם 4 GB זיכרון ו־30 GB אחסון."
   },
-  "Use employees from your other devices here.": {
-    "en": "Use employees from your other devices here.",
+  "Use assistants from your other devices here.": {
+    "en": "Use assistants from your other devices here.",
     "ru": "Работайте здесь с сотрудниками с других устройств.",
     "fr": "Retrouvez ici les assistants de vos autres appareils.",
     "es": "Usa aquí los asistentes de tus otros dispositivos.",
@@ -7270,14 +7284,14 @@
     "ru": "OpenStrudel будет установлен на этом сервере. Сотрудники и их файлы будут храниться здесь.",
     "fr": "OpenStrudel sera installé sur ce serveur. Les assistants et leurs fichiers y seront conservés.",
     "es": "OpenStrudel se instalará en este servidor. Los asistentes y sus archivos se guardarán aquí.",
-    "he": "OpenStrudel יותקן בשרת הזה. העוזרים והקבצים שלהם יישמרו כאן."
+    "he": "‏OpenStrudel יותקן בשרת הזה. העוזרים והקבצים שלהם יישמרו כאן."
   },
   "OpenStrudel is installed, but this Mac cannot reach it. Allow incoming TCP connections on port 7789 in your server's firewall, then try again.": {
     "en": "OpenStrudel is installed, but this Mac cannot reach it. Allow incoming TCP connections on port 7789 in your server's firewall, then try again.",
     "ru": "OpenStrudel установлен, но этот Mac не может подключиться. Разрешите входящие TCP-подключения на порт 7789 в настройках сетевого экрана сервера и повторите попытку.",
     "fr": "OpenStrudel est installé, mais ce Mac ne parvient pas à le joindre. Autorisez les connexions TCP entrantes sur le port 7789 dans le pare-feu du serveur, puis réessayez.",
     "es": "OpenStrudel está instalado, pero este Mac no puede conectarse. Permite las conexiones TCP entrantes en el puerto 7789 del cortafuegos del servidor y vuelve a intentarlo.",
-    "he": "OpenStrudel מותקן, אבל ה־Mac הזה אינו מצליח להתחבר אליו. יש לאפשר חיבורי TCP נכנסים ביציאה 7789 בחומת האש של השרת ולנסות שוב."
+    "he": "‏OpenStrudel מותקן, אבל ה־Mac הזה אינו מצליח להתחבר אליו. יש לאפשר חיבורי TCP נכנסים ביציאה 7789 בחומת האש של השרת ולנסות שוב."
   },
   "This server already hosts other apps. Use a new Ubuntu server so their settings and data stay unchanged.": {
     "en": "This server already hosts other apps. Use a new Ubuntu server so their settings and data stay unchanged.",
@@ -7437,7 +7451,7 @@
     "en": "OpenStrudel is installed",
     "fr": "OpenStrudel est installé",
     "es": "OpenStrudel está instalado",
-    "he": "OpenStrudel מותקן",
+    "he": "‏OpenStrudel מותקן",
     "ru": "OpenStrudel установлен"
   },
   "Next, connect your ChatGPT account.": {
@@ -7465,7 +7479,7 @@
     "en": "OpenStrudel is installed. Sign in to ChatGPT to let your assistants work on this server.",
     "fr": "OpenStrudel est installé. Connectez-vous à ChatGPT pour que vos assistants puissent travailler sur ce serveur.",
     "es": "OpenStrudel está instalado. Inicia sesión en ChatGPT para que tus asistentes trabajen en este servidor.",
-    "he": "OpenStrudel מותקן. יש להיכנס ל-ChatGPT כדי שהעוזרים שלך יוכלו לעבוד בשרת הזה.",
+    "he": "‏OpenStrudel מותקן. יש להיכנס ל-ChatGPT כדי שהעוזרים שלך יוכלו לעבוד בשרת הזה.",
     "ru": "OpenStrudel установлен. Войдите в ChatGPT, чтобы сотрудники могли работать на этом сервере."
   },
   "Your assistants can now work here, even when your Mac is off.": {
@@ -7532,11 +7546,11 @@
     "he": "שם החשבון"
   },
   "Choose a name you recognise. Your OpenAI account stays the same.": {
-    "en": "Choose a name you recognise. Your OpenAI account stays the same.",
-    "ru": "Выберите понятное вам имя. Сам аккаунт OpenAI не изменится.",
-    "fr": "Choisissez un nom qui vous parle. Votre compte OpenAI reste inchangé.",
-    "es": "Elige un nombre que reconozcas. Tu cuenta de OpenAI no cambia.",
-    "he": "בחרו שם שקל לכם לזהות. חשבון OpenAI עצמו לא ישתנה."
+    "en": "Choose a name you recognise. Your ChatGPT account stays the same.",
+    "ru": "Выберите понятное вам имя. Сам аккаунт ChatGPT не изменится.",
+    "fr": "Choisissez un nom qui vous parle. Votre compte ChatGPT reste inchangé.",
+    "es": "Elige un nombre que reconozcas. Tu cuenta de ChatGPT no cambia.",
+    "he": "בחרו שם שקל לכם לזהות. חשבון ChatGPT עצמו לא ישתנה."
   },
   "Already connected. Your account has been refreshed.": {
     "en": "Already connected. Your account has been refreshed.",
@@ -7608,13 +7622,6 @@
     "es": "Descarga Parakeet una sola vez (740 MB). Después podrás dictar sin conexión.",
     "he": "יש להוריד את Parakeet פעם אחת (740 MB). לאחר מכן ההכתבה פועלת ללא אינטרנט."
   },
-  "Download · 740 MB": {
-    "en": "Download · 740 MB",
-    "ru": "Скачать · 740 МБ",
-    "fr": "Télécharger · 740 Mo",
-    "es": "Descargar · 740 MB",
-    "he": "הורדה · 740 MB"
-  },
   "Checking the download…": {
     "en": "Checking the download…",
     "ru": "Проверяем загрузку…",
@@ -7649,6 +7656,90 @@
     "fr": "Ajoutez la clé privée complète, avec les lignes BEGIN et END. Une clé publique ne permet pas de se connecter.",
     "es": "Añade la clave privada completa, incluidas las líneas BEGIN y END. Una clave pública no sirve para iniciar sesión.",
     "he": "יש להוסיף את המפתח הפרטי במלואו, כולל שורות BEGIN ו-END. מפתח ציבורי אינו מתאים לכניסה."
+  },
+  "Message {0}": {
+    "en": "Message {0}",
+    "fr": "Message à {0}",
+    "es": "Mensaje para {0}",
+    "he": "הודעה אל {0}",
+    "ru": "Сообщение для «{0}»"
+  },
+  "Перезапустить OpenStrudel?": {
+    "en": "Relaunch OpenStrudel?",
+    "fr": "Relancer OpenStrudel ?",
+    "es": "¿Reiniciar OpenStrudel?",
+    "he": "להפעיל מחדש את OpenStrudel?",
+    "ru": "Перезапустить OpenStrudel?"
+  },
+  "Направление интерфейса сменится после перезапуска.": {
+    "en": "The layout changes direction after a relaunch.",
+    "fr": "Le sens de l’interface change après une relance.",
+    "es": "La dirección de la interfaz cambia al reiniciar.",
+    "he": "כיוון הממשק ישתנה אחרי הפעלה מחדש.",
+    "ru": "Направление интерфейса сменится после перезапуска."
+  },
+  "Перезапустить": {
+    "en": "Relaunch",
+    "fr": "Relancer",
+    "es": "Reiniciar",
+    "he": "הפעלה מחדש",
+    "ru": "Перезапустить"
+  },
+  "Позже": {
+    "en": "Later",
+    "fr": "Plus tard",
+    "es": "Más tarde",
+    "he": "אחר כך",
+    "ru": "Позже"
+  },
+  "Required": {
+    "en": "Required",
+    "ru": "Обязательно",
+    "fr": "Obligatoire",
+    "es": "Obligatorio",
+    "he": "חובה"
+  },
+  "Optional": {
+    "en": "Optional",
+    "ru": "Необязательно",
+    "fr": "Facultatif",
+    "es": "Opcional",
+    "he": "אופציונלי"
+  },
+  "Не удалось получить ответ.": {
+    "en": "Couldn’t get a response.",
+    "fr": "Aucune réponse reçue.",
+    "es": "No se ha recibido una respuesta.",
+    "he": "לא התקבלה תשובה.",
+    "ru": "Не удалось получить ответ."
+  },
+  "Показать скрытых сотрудников…": {
+    "en": "Show hidden assistants…",
+    "fr": "Afficher les assistants masqués…",
+    "es": "Mostrar asistentes ocultos…",
+    "he": "הצגת עוזרים מוסתרים…",
+    "ru": "Показать скрытых сотрудников…"
+  },
+  "Ключ бота": {
+    "en": "Bot token",
+    "fr": "Clé du bot",
+    "es": "Clave del bot",
+    "he": "מפתח הבוט",
+    "ru": "Ключ бота"
+  },
+  "Из BotFather": {
+    "en": "From BotFather",
+    "fr": "Fournie par BotFather",
+    "es": "De BotFather",
+    "he": "מ-BotFather",
+    "ru": "Из BotFather"
+  },
+  "Не удалось скачать файл": {
+    "en": "Couldn’t download the file",
+    "fr": "Impossible de télécharger le fichier",
+    "es": "No se ha podido descargar el archivo",
+    "he": "לא ניתן להוריד את הקובץ",
+    "ru": "Не удалось скачать файл"
   },
   "Подключите оба устройства с доступом владельца и завершите предыдущий перенос.": {
     "ru": "Подключите оба устройства с доступом владельца и завершите предыдущий перенос.",

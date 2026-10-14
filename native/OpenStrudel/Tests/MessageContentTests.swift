@@ -1,5 +1,6 @@
 import Testing
 import SwiftUI
+import AppKit
 
 @MainActor
 struct MessageContentTests {
@@ -30,6 +31,27 @@ struct MessageContentTests {
     @Test func consecutiveImagesRemainSeparate() {
         let blocks = MessageContent(source: "![Первый](https://example.com/a.jpg) ![Второй](https://example.com/b.jpg)").blocks
         #expect(blocks.filter { $0.kind == "image" }.count == 2)
+    }
+
+    /// A web picture named in a reply waits for a click, so its address cannot carry data out unseen.
+    /// Attachments keep loading on sight.
+    @Test func webImagesWaitForAClick() async throws {
+        final class Loads { var count = 0 }
+        func show(autoload: Bool) async throws -> Int {
+            let loads = Loads()
+            let view = NSHostingView(rootView: ChatImage(name: "Chart", identity: "https://example.com/a.png", autoload: autoload) {
+                loads.count += 1
+                throw URLError(.cancelled)
+            })
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 240), styleMask: .borderless, backing: .buffered, defer: false)
+            window.contentView = view
+            view.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(300))
+            window.contentView = nil
+            return loads.count
+        }
+        #expect(try await show(autoload: false) == 0)
+        #expect(try await show(autoload: true) == 1)
     }
 
     @Test func imageMarkupInCodeDoesNotLoad() {
@@ -94,5 +116,108 @@ struct MessageContentTests {
         let blocks = MessageContent(source: "\\*\\*Буквальные звёздочки\\*\\*\n\n---\n\n## Заголовок").blocks
         #expect(blocks.map(\.kind) == ["paragraph", "rule", "heading"])
         #expect(String(blocks[0].content.characters) == "**Буквальные звёздочки**")
+    }
+    @Test func onlyWebAndMailLinksStayLinks() {
+        let source = "[a](file:///Applications/Calculator.app) [b](openstrudel://pair?code=1) [c](javascript:alert(1)) [d](x-apple.systempreferences:com.apple.preference.security) [e](relative/path) [f](https://example.com) [g](http://example.com) [h](mailto:team@example.com) [i](HTTPS://EXAMPLE.COM/A)"
+        let block = MessageContent(source: source).blocks[0]
+        #expect(String(block.content.characters) == "a b c d e f g h i")
+        #expect(block.content.runs.compactMap { $0.link?.absoluteString } == ["https://example.com", "http://example.com", "mailto:team@example.com", "HTTPS://EXAMPLE.COM/A"])
+    }
+
+    @Test func unsafeLinksInTablesKeepTheirText() throws {
+        let block = MessageContent(source: "| Файл | Сайт |\n| --- | --- |\n| [отчёт](file:///private/report.pdf) | [OpenAI](https://openai.com) |").blocks[0]
+        let table = try #require(block.table)
+        #expect(String(table.rows[1][0].characters) == "отчёт")
+        #expect(table.rows[1][0].runs.allSatisfy { $0.link == nil })
+        #expect(table.rows[1][1].runs.first?.link?.host() == "openai.com")
+    }
+
+    @Test func openingALinkAllowsOnlyWebAndMail() throws {
+        for allowed in ["https://example.com", "http://example.com", "mailto:team@example.com"] {
+            #expect(MessageContent.allowsLink(try #require(URL(string: allowed))))
+        }
+        for blocked in ["file:///Applications/Calculator.app", "openstrudel://pair?code=1", "javascript:alert(1)",
+                        "x-apple.systempreferences:com.apple.preference.security", "relative/path", "ftp://example.com"] {
+            #expect(!MessageContent.allowsLink(try #require(URL(string: blocked))))
+        }
+    }
+
+    @Test func linksAreInkWithAQuietUnderlineAtRest() throws {
+        let block = MessageContent(source: "Read [the guide](https://example.com) and [this](file:///private/x).").blocks[0]
+        let styled = MessageContent.styled(block.content)
+        let link = try #require(styled.runs.first { $0.link != nil })
+        #expect(link.foregroundColor == AppTheme.accentText)
+        #expect(link.underlineStyle == Text.LineStyle(pattern: .solid, color: AppTheme.secondaryText))
+        #expect(styled.runs.filter { $0.underlineStyle != nil }.count == 1)
+    }
+
+    @Test func blocksFollowTheDirectionOfTheirFirstStrongLetter() {
+        #expect(ParagraphDirection.of("שלום world") == .rightToLeft)
+        #expect(ParagraphDirection.of("Hello שלום") == .leftToRight)
+        #expect(ParagraphDirection.of("1. «مرحبا» again") == .rightToLeft)
+        #expect(ParagraphDirection.of("Привет, שלום") == .leftToRight)
+        #expect(ParagraphDirection.of("2026 — 15% (!)") == nil)
+        #expect(ParagraphDirection.of("") == nil)
+    }
+
+    @Test func numberColumnsAlignToTheirFigures() throws {
+        let source = "| Venue | Capacity | Price | Share | Distance | Note |\n| --- | --- | --- | --- | --- | --- |\n| Hangar 9 | 120 | €4,200 | 12.5% | 12 min | |\n| Glasshouse | 1 200 | $3,100.50 | −3% | 25 min | |\n| Mill | | 5 600 ₽ | +0.1 % | — | |"
+        let table = try #require(MessageContent(source: source).blocks[0].table)
+        #expect((0..<6).map(table.isNumeric) == [false, true, true, true, false, false])
+        #expect((0..<6).map(table.alignment) == [.leading, .trailing, .trailing, .trailing, .leading, .leading])
+    }
+
+    @Test func explicitTableAlignmentWins() throws {
+        let table = try #require(MessageContent(source: "| Name | Count | Code |\n| :---: | ---: | --- |\n| 10 | x | 42 |").blocks[0].table)
+        #expect((0..<3).map(table.alignment) == [.center, .trailing, .trailing])
+    }
+
+    @Test func aTableThatFitsKeepsItsNaturalColumns() {
+        #expect(TableLayout.columnWidths(natural: [90, 50, 50], words: [60, 40, 40], width: 560, minimum: 120) == [90, 50, 50])
+    }
+
+    @Test func anUnconstrainedTableTakesItsMinimumSoItWrapsBeforeItScrolls() {
+        // Short columns stay whole, a long one keeps the minimum, and a long word keeps its width.
+        #expect(TableLayout.columnWidths(natural: [900, 50, 400], words: [60, 40, 150], width: nil, minimum: 120) == [120, 50, 150])
+    }
+
+    @Test func aWrappedTableKeepsShortColumnsWholeAndSharesTheRestByLength() {
+        // A short label column stays whole; the long description takes the rest of the column.
+        expectWidths(TableLayout.columnWidths(natural: [100, 800], words: [80, 90], width: 560, minimum: 120), [100, 460])
+        // Long columns share by length, and none narrows below the minimum.
+        expectWidths(TableLayout.columnWidths(natural: [600, 300, 130], words: [90, 90, 90], width: 560, minimum: 120), [293.33, 146.67, 120])
+    }
+
+    @Test func aWrappedColumnKeepsItsLongestWordWhole() {
+        // “Neighbourhood” needs 134 and “Accessibility” 129, more than the 120 minimum; both stay whole.
+        let natural: [CGFloat] = [130, 180, 90, 330, 300, 125]
+        expectWidths(TableLayout.columnWidths(natural: natural, words: [84, 134, 50, 94, 129, 74], width: 720, minimum: 120), [120, 134, 90, 127, 129, 120])
+        // Narrower than that, the table keeps its minimum and scrolls.
+        expectWidths(TableLayout.columnWidths(natural: natural, words: [84, 134, 50, 94, 129, 74], width: 560, minimum: 120), [120, 134, 90, 120, 129, 120])
+    }
+
+    @Test func aColumnsLongestWordIsFoundByLetters() throws {
+        let table = try #require(MessageContent(source: "| Name | Responsible person |\n| --- | --- |\n| Hall | Anna |\n| Roof terrace | Roman |").blocks[0].table)
+        #expect(table.longestWord(0) == (text: "terrace", inHeader: false))
+        #expect(table.longestWord(1) == (text: "Responsible", inHeader: true))
+    }
+
+    private func expectWidths(_ widths: [CGFloat], _ expected: [CGFloat], sourceLocation: SourceLocation = #_sourceLocation) {
+        #expect(widths.count == expected.count, sourceLocation: sourceLocation)
+        for (width, value) in zip(widths, expected) { #expect(abs(width - value) < 0.01, "\(widths)", sourceLocation: sourceLocation) }
+    }
+
+    @Test func blocksKeepTheReadingRhythm() {
+        let blocks = MessageContent(source: "Intro\n\nSecond\n\n## Heading\n\n- One\n- Two\n\nAfter\n\n```\ncode\n```").blocks
+        #expect(blocks.map(\.kind) == ["paragraph", "paragraph", "heading", "list", "list", "paragraph", "code"])
+        let gaps = blocks.indices.map { MessageContent.spacing(before: blocks[$0], after: $0 == 0 ? nil : blocks[$0 - 1]) }
+        #expect(gaps == [0, 12, 24, 8, 6, 12, 12])
+    }
+
+    @Test func separateListsKeepParagraphSpacing() {
+        let blocks = MessageContent(source: "1. One\n2. Two\n\n- Other\n  - Nested").blocks
+        #expect(blocks.map(\.kind) == ["list", "list", "list", "list"])
+        let gaps = blocks.indices.map { MessageContent.spacing(before: blocks[$0], after: $0 == 0 ? nil : blocks[$0 - 1]) }
+        #expect(gaps == [0, 6, 12, 6])
     }
 }

@@ -14,6 +14,7 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
         }
     }
     var locale: Locale { Locale(identifier: rawValue) }
+    var isRightToLeft: Bool { self == .hebrew }
     var speechLocale: String {
         switch self { case .english: "en-US"; case .russian: "ru-RU"; case .french: "fr-FR"; case .spanish: "es-ES"; case .hebrew: "he-IL" }
     }
@@ -29,7 +30,13 @@ final class L10n: Observable, Sendable {
     init(suiteName: String? = nil) {
         self.suiteName = suiteName
         let selected = defaults.string(forKey: Self.preferenceKey).flatMap(AppLanguage.init(rawValue:)) ?? .english
-        defaults.set([selected.rawValue], forKey: "AppleLanguages")
+        Self.prepareLaunch(selected, in: defaults)
+    }
+    /// The system reads these when the app opens. AppKit mirrors windows from AppleTextDirection;
+    /// the language alone leaves them left to right.
+    private static func prepareLaunch(_ language: AppLanguage, in defaults: UserDefaults) {
+        defaults.set([language.rawValue], forKey: "AppleLanguages")
+        defaults.set(language.isRightToLeft, forKey: "AppleTextDirection")
     }
     private var defaults: UserDefaults { suiteName.flatMap(UserDefaults.init(suiteName:)) ?? .standard }
     var language: AppLanguage {
@@ -40,7 +47,7 @@ final class L10n: Observable, Sendable {
         set {
             observation.withMutation(of: self, keyPath: \.language) {
                 defaults.set(newValue.rawValue, forKey: Self.preferenceKey)
-                defaults.set([newValue.rawValue], forKey: "AppleLanguages")
+                Self.prepareLaunch(newValue, in: defaults)
             }
         }
     }
@@ -102,7 +109,9 @@ final class L10n: Observable, Sendable {
             guard let indexRange = Range(match.range(at: 1), in: template), let index = Int(template[indexRange]),
                   arguments.indices.contains(index), let range = Range(match.range, in: result) else { continue }
             let argument = arguments[index]
-            result.replaceSubrange(range, with: language == .hebrew ? "\u{2068}" + argument + "\u{2069}" : argument)
+            // Hebrew isolates names and dates. Numbers stay in the run of their %, which would otherwise render as %66.
+            let isolated = language == .hebrew && argument.unicodeScalars.contains(where: CharacterSet.letters.contains)
+            result.replaceSubrange(range, with: isolated ? "\u{2068}" + argument + "\u{2069}" : argument)
         }
         return result
     }
@@ -124,21 +133,19 @@ struct LocalizedMessage: ExpressibleByStringLiteral, ExpressibleByStringInterpol
 
 func L(_ message: LocalizedMessage) -> String { L10n.text(message.key, arguments: message.arguments) }
 
-struct LanguagePicker: View {
-    var compact = false
-    var body: some View {
-        Picker(selection: Binding(get: { L10n.shared.language }, set: { L10n.shared.language = $0 })) {
-            ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
-        } label: { Label(L("Language"), systemImage: "globe") }
-        .pickerStyle(.menu)
-        .accessibilityIdentifier("interfaceLanguage")
-        .environment(\.layoutDirection, .leftToRight)
-    }
-}
-
 struct InterfaceLanguage: ViewModifier {
     func body(content: Content) -> some View {
         content.environment(\.locale, L10n.locale)
-            .environment(\.layoutDirection, L10n.shared.language == .hebrew ? .rightToLeft : .leftToRight)
+            .environment(\.layoutDirection, Self.direction)
+    }
+
+    /// A Mac window takes one direction from AppKit, fixed when the app opens, so its split view, toolbar
+    /// and content always mirror together. A language that reads the other way applies after a relaunch.
+    private static var direction: LayoutDirection {
+        #if os(macOS)
+        NSApplication.shared.userInterfaceLayoutDirection == .rightToLeft ? .rightToLeft : .leftToRight
+        #else
+        L10n.shared.language.isRightToLeft ? .rightToLeft : .leftToRight
+        #endif
     }
 }

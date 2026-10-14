@@ -51,6 +51,8 @@ export class WebAccess {
       response.end(JSON.stringify({ csrf: session.csrf, owner: session.owner })); return true;
     }
     const session = this.authenticate(request);
+    // A browser that is not signed in asks this on every welcome page; the answer is "no", not an error.
+    if (!session && path === "/auth/session" && request.method === "GET") { response.end(JSON.stringify({ authenticated: false })); return true; }
     if (!session) throw new HomeError("Откройте приглашение для входа в свою команду.", 401);
     if (path === "/auth/session" && request.method === "GET") { response.end(JSON.stringify({ csrf: session.csrf, owner: session.owner })); return true; }
     if (path === "/auth/logout" && request.method === "POST") {

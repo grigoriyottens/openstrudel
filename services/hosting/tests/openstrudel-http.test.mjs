@@ -22,6 +22,11 @@ test('HTTP authorization uses browser login, nonce and CSRF; token exchange work
   r=await f.fetch('/oauth/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:form});assert.equal(r.status,200);const token=await r.json();assert.equal(token.expires_in,900);
   r=await f.fetch('/api/v2/openstrudel/orders',{headers:{Authorization:'Bearer '+token.access_token}});assert.equal(r.status,200);assert.deepEqual((await r.json()).orders,[]);
 });
+test('sign-in shows the strudel character without its tile, served next to the page',async t=>{
+  const f=await fixture(t),params=new URLSearchParams({client_id:'openstrudel',response_type:'code',redirect_uri:NATIVE_CALLBACK,state:randomUUID(),code_challenge_method:'S256',code_challenge:pkceChallenge('K'.repeat(43))});
+  assert((await (await f.fetch('/oauth/authorize?'+params)).text()).includes('<img class="mark" src="/strudel.png"'));
+  const mark=await f.fetch('/strudel.png');assert.equal(mark.status,200);assert.equal(mark.headers.get('content-type'),'image/png');
+});
 test('native API rejects ordinary API key, web cookie and arbitrary-origin bearer; OpenAPI is public',async t=>{
   const f=await fixture(t);
   for(const headers of [{Cookie:'wai_session='+f.owner.token},{Authorization:'Bearer '+f.owner.token},{Authorization:'Bearer '+f.a.access_token,Origin:'https://evil.test'}]){const r=await f.fetch('/api/v2/openstrudel/orders',{headers});assert([401,403].includes(r.status));}

@@ -23,56 +23,30 @@ enum HostingStore {
     }
 }
 
+/// A General settings section, shown only when this build has a hosting store.
 struct HostingStoreSettings: View {
     @Environment(\.openWindow) private var openWindow
     var body: some View {
         if HostingStore.origin != nil {
-            Button { openWindow(id: "servers") } label: {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "server.rack").font(.title2)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(L("Серверы")).font(.headline)
-                        Text(L("Создание, доступ и продление. Для команды и других проектов."))
-                            .font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0); Image(systemName: "chevron.right")
-                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 18))
-            }.buttonStyle(.plain)
+            Section {
+                LabeledContent {
+                    Button(L("Открыть")) { openWindow(id: "servers") }
+                } label: {
+                    Text(L("Серверы"))
+                    Text(L("Создание, доступ и продление. Для команды и других проектов."))
+                }
+            }
         }
     }
 }
 
-struct HostingStoreView: View {
-    @State private var loading = true
-    @State private var error: String?
-    @State private var reload = 0
-    var body: some View {
-        Group {
-            if let origin = HostingStore.origin {
-                ZStack {
-                    HostingBrowser(origin: origin, reload: reload, loading: $loading, error: $error)
-                    if loading { ProgressView(L("Открываем серверы…")).padding(20).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18)) }
-                    if let error {
-                        ContentUnavailableView {
-                            Label(L("Не удалось открыть серверы"), systemImage: "network.slash")
-                        } description: { Text(L10n.serviceText(error)) } actions: {
-                            Button(L("Попробовать ещё раз")) { self.error = nil; loading = true; reload += 1 }
-                        }.background(.background)
-                    }
-                }
-            } else {
-                ContentUnavailableView(L("Создание серверов пока недоступно"), systemImage: "server.rack", description: Text(L("Вы можете продолжать работу со своей командой.")))
-            }
-        }.frame(minWidth: 780, minHeight: 650)
-    }
-}
-
-private struct HostingBrowser: NSViewRepresentable {
+/// The store page. Navigation failures replace it with a message; a failed download or save leaves it loaded.
+struct HostingBrowser: NSViewRepresentable {
     let origin: URL
     let reload: Int
     @Binding var loading: Bool
     @Binding var error: String?
+    @Binding var downloadError: String?
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -136,7 +110,7 @@ private struct HostingBrowser: NSViewRepresentable {
                     let temporary = directory.appending(path: "download")
                     self.downloads[ObjectIdentifier(download)] = (temporary, destination)
                     completionHandler(temporary)
-                } catch { self.failed(error); completionHandler(nil) }
+                } catch { self.parent.downloadError = Self.saveFailure; completionHandler(nil) }
             }
         }
         func downloadDidFinish(_ download: WKDownload) {
@@ -147,11 +121,13 @@ private struct HostingBrowser: NSViewRepresentable {
                 if FileManager.default.fileExists(atPath: item.destination.path) {
                     _ = try FileManager.default.replaceItemAt(item.destination, withItemAt: item.temporary, options: .usingNewMetadataOnly)
                 } else { try FileManager.default.moveItem(at: item.temporary, to: item.destination) }
-            } catch { parent.error = L("Не удалось сохранить файл. Выберите личную папку и повторите скачивание.") }
+            } catch { parent.downloadError = Self.saveFailure }
         }
+        private static var saveFailure: String { L("Не удалось сохранить файл. Выберите личную папку и повторите скачивание.") }
         func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
             if let item = downloads.removeValue(forKey: ObjectIdentifier(download)) { try? FileManager.default.removeItem(at: item.temporary.deletingLastPathComponent()) }
-            failed(error)
+            guard (error as NSError).code != NSURLErrorCancelled else { return }
+            parent.downloadError = L("Проверьте соединение и повторите попытку. Это не прерывает работу агентов.")
         }
     }
 }

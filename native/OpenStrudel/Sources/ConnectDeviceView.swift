@@ -4,73 +4,170 @@ import AppKit
 import UniformTypeIdentifiers
 
 /// Existing devices and newly installed servers both join the same library.
+/// One stack and one sheet size for every page; each page has a navigation title and Back.
 struct ConnectDeviceView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var library: DeviceLibrary
     let onConfirm: (MacPairing) -> Void
-    @State private var route: Route = .choice
-    private enum Route { case choice, link, server, cloud, account }
+    @State private var path: [Route] = []
     @State private var connectedClient: HomeClient?
+    @State private var cloudWorking = false
+    private enum Route: Hashable { case link, server, cloud }
 
     var body: some View {
         Group {
-            switch route {
-            case .link: ConnectionInvitationView(onConfirm: onConfirm, onBack: { route = .choice })
-            case .server: OwnServerSetupView(onBack: { route = .choice }, onConnected: completeInstallation)
-            case .cloud: ServerSetupView(onBack: { route = .choice }, onConnected: completeInstallation)
-            case .account:
-                if let connectedClient {
-                    ServerAccountSetupView(onDone: { dismiss() }).environmentObject(connectedClient)
-                }
-            case .choice:
-                NavigationStack {
-                    VStack(alignment: .leading, spacing: 28) {
-                        Text(L("Connect a device"))
-                            .font(.system(.largeTitle, design: .serif, weight: .medium))
-                        Text(L("Use employees from your other devices here."))
-                            .foregroundStyle(AppTheme.secondaryText)
-                        VStack(spacing: 0) {
-                            choice("Connect with a link", detail: "Add a device using its connection link.", icon: "desktopcomputer", route: .link)
-                            Divider().padding(.leading, 52)
-                            choice(ServerSetupFlow.shared.installation == nil ? "Set up my server" : "Continue server setup", detail: "Already have a server? Enter its address and sign-in details.", icon: "server.rack", route: .server)
+            if let connectedClient {
+                ServerAccountSetupView(onDone: { dismiss() }).environmentObject(connectedClient)
+            } else {
+                NavigationStack(path: $path) {
+                    choices
+                        .navigationDestination(for: Route.self) { route in
+                            switch route {
+                            case .link: ConnectionLinkPage(onConfirm: onConfirm, close: { dismiss() })
+                            case .server: OwnServerSetupView(onConnected: completeInstallation)
+                            case .cloud: ServerSetupView(working: $cloudWorking, onConnected: completeInstallation)
+                            }
                         }
-                        Button { route = .cloud } label: {
-                            Label(L("Get a server with DigitalOcean"), systemImage: "cloud")
-                        }.buttonStyle(.plain).foregroundStyle(AppTheme.accent)
-                            .accessibilityIdentifier("getCloudServer")
-                        Spacer(minLength: 0)
-                    }.padding(32)
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } } }
-                }.frame(width: 520, height: 500)
+                }
+                .toolbar {
+                    // Cloud setup keeps going on the provider's side, so leaving it mid-way is not a cancel.
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(cloudWorking ? L("Продолжить позже") : L("Отмена")) { dismiss() }
+                    }
+                }
             }
-        }.environmentObject(library)
-            .modifier(InterfaceLanguage())
+        }
+        // The account step replaces the stack at the same size, so finishing setup never resizes the sheet.
+        .frame(width: Sheet.width, height: Sheet.height)
+        .presentationSizing(.form)
+        .tint(nil)
+        .environmentObject(library)
+        .modifier(InterfaceLanguage())
+    }
+
+    /// Three routes as one list: the same symbol column, title edge and chevron on every row.
+    private var choices: some View {
+        Form {
+            Section {
+                NavigationLink(value: Route.link) {
+                    choice(L("Connect with a link"), detail: L("Add a device using its connection link."), symbol: "link")
+                }.accessibilityIdentifier("connectDeviceLink")
+                NavigationLink(value: Route.server) {
+                    choice(ServerSetupFlow.shared.installation == nil ? L("Set up my server") : L("Continue server setup"),
+                           detail: L("Already have a server? Enter its address and sign-in details."), symbol: "server.rack")
+                }.accessibilityIdentifier("setUpOwnServer")
+                NavigationLink(value: Route.cloud) {
+                    choice(L("Get a server with DigitalOcean"), detail: L("Размещение оплачивается, пока вы не удалите его в DigitalOcean."), symbol: "cloud")
+                }.accessibilityIdentifier("getCloudServer")
+            } header: {
+                // The first page carries its title in its content, on the rows' text edge.
+                Text(L("Connect a device")).font(AppTypography.title).foregroundStyle(Color.primary)
+                    .textCase(nil).accessibilityAddTraits(.isHeader)
+            } footer: {
+                Text(L("Use assistants from your other devices here."))
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle(L("Connect a device"))
+        .toolbar(removing: .title)
     }
 
     private func completeInstallation(_ client: HomeClient) {
         connectedClient = client
-        route = .account
     }
 
-    private func choice(_ title: String, detail: String, icon: String, route next: Route) -> some View {
-        Button { route = next } label: {
-            HStack(spacing: 16) {
-                Image(systemName: icon).font(.title2).frame(width: 32).foregroundStyle(AppTheme.secondaryText)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.text(title)).font(.headline)
-                    Text(L10n.text(detail)).font(.callout).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
+    private func choice(_ title: String, detail: String, symbol: String) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } icon: { Image(systemName: symbol).frame(width: 20) }
+    }
+}
+
+/// Paste a connection link from another device. A web page link opens in the browser instead.
+private struct ConnectionLinkPage: View {
+    @Environment(\.openURL) private var openURL
+    let onConfirm: (MacPairing) -> Void
+    let close: () -> Void
+    @State private var invitation = ""
+    @State private var error: String?
+    @State private var openingPage = false
+
+    private var trimmed: String { invitation.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var connectionPage: URL? {
+        guard let url = URL(string: trimmed), url.scheme?.lowercased() == "https",
+              let host = url.host, !host.isEmpty, url.user == nil, url.password == nil else { return nil }
+        return url
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                // The link field takes the row; Paste sits beside it at the same control size.
+                HStack(spacing: 12) {
+                    SecureField(L("Ссылка подключения"), text: $invitation, prompt: Text(verbatim: "openstrudel://connect…")).labelsHidden()
+                        .environment(\.layoutDirection, .leftToRight)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("connectionInvitation")
+                        .onSubmit(confirm)
+                    PasteButton(payloadType: String.self) { values in
+                        if let value = values.first { invitation = value; error = nil }
+                    }.labelStyle(.titleOnly)
                 }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right").foregroundStyle(AppTheme.secondaryText)
-            }.padding(.vertical, 22).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityIdentifier(next == .server ? "setUpOwnServer" : "connectDeviceLink")
+                if let error {
+                    Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)
+                        .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("invitationError")
+                }
+            } header: {
+                // The page's title heads the field, as on the first page; the field keeps its own label.
+                SheetTitle(title: L("Connect with a link"))
+            } footer: {
+                if let page = connectionPage {
+                    Text(L("Откроется \(page.host ?? L("страница подключения")) в браузере. На странице нажмите «Открыть OpenStrudel»."))
+                } else {
+                    Text(L("1. На другом Mac откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения».\n\n2. Вставьте ссылку сюда. Для сервера получите её в его веб-интерфейсе: Настройки → Устройства."))
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .sheetPageTitle(L("Connect with a link"))
+        .onChange(of: invitation) { _, _ in error = nil }
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button(openingPage ? L("Открываем…") : connectionPage == nil ? L("Продолжить") : L("Открыть страницу"), action: confirm)
+                    .disabled(openingPage || trimmed.isEmpty)
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("continueConnection")
+            }
+        }
+    }
+
+    private func confirm() {
+        guard !openingPage, !trimmed.isEmpty else { return }
+        if let page = connectionPage {
+            openingPage = true
+            openURL(page) { accepted in
+                openingPage = false
+                if accepted { close() }
+                else { error = L("Не удалось открыть браузер. Откройте ссылку в браузере на этом устройстве и нажмите «Открыть OpenStrudel».") }
+            }
+            return
+        }
+        do {
+            guard let url = URL(string: trimmed) else { throw HomeClientError.invalidURL }
+            onConfirm(try MacPairing(url: url)); close()
+        } catch {
+            self.error = L("Это не ссылка подключения OpenStrudel. Скопируйте новую из настроек на устройстве с сотрудниками.")
+        }
     }
 }
 
 private struct OwnServerSetupView: View {
     @EnvironmentObject private var library: DeviceLibrary
     @StateObject private var flow = ServerSetupFlow.shared
-    let onBack: () -> Void
     let onConnected: (HomeClient) -> Void
     @State private var host = ""
     @State private var user = "root"
@@ -94,8 +191,8 @@ private struct OwnServerSetupView: View {
         case .installing: L("Preparing your server")
         case .connected: L("OpenStrudel is installed")
         case .paused: L("Continue server setup")
-        case .failed: flow.installation == nil ? L("Set up a server") : L("Setup needs attention")
-        default: L("Set up a server")
+        case .failed: flow.installation == nil ? L("Set up my server") : L("Setup needs attention")
+        default: L("Set up my server")
         }
     }
     private var stageTitle: String {
@@ -109,82 +206,91 @@ private struct OwnServerSetupView: View {
         }
     }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Text(title).font(.system(.largeTitle, design: .serif, weight: .medium))
-                        .fixedSize(horizontal: false, vertical: true)
-                    if editing { addressForm }
-                    if flow.phase == .confirmIdentity, let target = flow.target, let identity = flow.hostKey {
-                        Text(target.host).font(.title3.weight(.semibold)).textSelection(.enabled)
-                        Text(L("Compare this fingerprint with the one in your server provider's control panel."))
-                            .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                        Text(identity.fingerprint).font(.system(.callout, design: .monospaced))
-                            .textSelection(.enabled).environment(\.layoutDirection, .leftToRight)
-                            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
-                        Button(L("Confirm and connect")) { flow.confirm(access: access) }
-                            .buttonStyle(.glassProminent).controlSize(.large).keyboardShortcut(.defaultAction)
-                            .accessibilityIdentifier("confirmSSHIdentity")
-                    }
-                    if flow.phase == .ready {
-                        Text(flow.target?.host ?? "").font(.title3.weight(.semibold))
-                        if flow.installation == nil {
-                            Text(L("OpenStrudel will be installed on this server. Assistants and their files will stay here."))
-                                .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                            if let check = flow.preflight {
-                                Text("Ubuntu \(check.version) · \(Int((Double(check.memoryMiB) / 1024).rounded())) GB · \(check.diskGiB) GB")
-                                    .font(.callout).foregroundStyle(AppTheme.secondaryText)
-                                    .environment(\.layoutDirection, .leftToRight)
-                            }
-                        }
-                        Button(flow.installation == nil ? L("Install OpenStrudel") : L("Continue setup")) { flow.install(access: access) }
-                            .buttonStyle(.glassProminent).controlSize(.large).keyboardShortcut(.defaultAction)
-                            .accessibilityIdentifier("installOnServer")
-                    }
-                    if busy {
-                        HStack(spacing: 12) {
-                            ProgressView().controlSize(.small)
-                            Text(flow.phase == .checkingIdentity ? L("Checking the server's identity") : flow.phase == .checking ? L("Checking your server") : stageTitle)
-                                .font(.headline).fixedSize(horizontal: false, vertical: true)
-                        }.accessibilityElement(children: .combine).accessibilityIdentifier("serverSetupProgress")
-                        if flow.phase == .installing && flow.stage != "connecting" {
-                            Text(L("This can take a few minutes. You can close this window; installation continues on the server."))
-                                .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    if let error = localError ?? flow.error?.localizedDescription {
-                        Text(error).font(.callout).foregroundStyle(AppTheme.destructive)
-                            .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("serverSetupError")
-                    }
-                    if !flow.recoveryLoaded && !busy {
-                        Button(L("Повторить")) { flow.unlockRecovery() }
-                            .buttonStyle(.glassProminent).controlSize(.large)
-                    }
-                    if flow.phase == .failed, flow.installation != nil {
-                        credentials
-                        Button(L("Retry installation")) { validate { flow.install(access: access) } }
-                            .buttonStyle(.glassProminent).controlSize(.large)
-                    }
-                    if flow.phase == .connected {
-                        Label(flow.target?.host ?? "", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                        Text(L("Next, connect your ChatGPT account."))
-                            .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                        Button(L("Продолжить")) { Task { await finish() } }
-                            .buttonStyle(.glassProminent).controlSize(.large).disabled(saving)
-                            .accessibilityIdentifier("openNewServer")
-                    }
-                }.padding(32).frame(maxWidth: 500).frame(maxWidth: .infinity)
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(flow.installation == nil ? L("Назад") : L("Продолжить позже")) {
-                        flow.pause(); password = ""; passphrase = ""; key = nil; onBack()
-                    }.disabled(saving)
+    /// The one next step of the current phase. It sits in the confirmation placement.
+    private struct Step { let title: String; let id: String; var enabled = true; let run: () -> Void }
+    private var step: Step? {
+        if !flow.recoveryLoaded && !busy { return Step(title: L("Повторить"), id: "retryServerSetup") { flow.unlockRecovery() } }
+        if editing {
+            return Step(title: L("Продолжить"), id: "checkOwnServer") {
+                validate {
+                    if flow.installation != nil { flow.confirm(access: access) }
+                    else { flow.inspect(try ServerTarget(host: host, user: user, port: Int(port) ?? 0)) }
                 }
             }
-        }.frame(width: 540, height: 650)
+        }
+        switch flow.phase {
+        case .confirmIdentity: return Step(title: L("Confirm and connect"), id: "confirmSSHIdentity") { flow.confirm(access: access) }
+        case .ready: return Step(title: flow.installation == nil ? L("Install OpenStrudel") : L("Continue setup"), id: "installOnServer") { flow.install(access: access) }
+        case .failed where flow.installation != nil: return Step(title: L("Retry installation"), id: "retryInstallation") { validate { flow.install(access: access) } }
+        case .connected: return Step(title: L("Продолжить"), id: "openNewServer", enabled: !saving) { Task { await finish() } }
+        default: return nil
+        }
+    }
+
+    var body: some View {
+        Form {
+            SheetTitleSection(title: title)
+            if editing { addressForm }
+            if flow.phase == .confirmIdentity, let target = flow.target, let identity = flow.hostKey {
+                Section {
+                    LabeledContent(L("Server address")) { Text(target.host).textSelection(.enabled) }
+                    Text(identity.fingerprint).font(AppTypography.code).textSelection(.enabled)
+                        .environment(\.layoutDirection, .leftToRight)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } footer: {
+                    Text(L("Compare this fingerprint with the one in your server provider's control panel."))
+                }
+            }
+            if flow.phase == .ready {
+                Section {
+                    LabeledContent(L("Server address")) { Text(flow.target?.host ?? "") }
+                    if flow.installation == nil, let check = flow.preflight {
+                        Text("Ubuntu \(check.version) · \(Int((Double(check.memoryMiB) / 1024).rounded())) GB · \(check.diskGiB) GB")
+                            .foregroundStyle(AppTheme.secondaryText).monospacedDigit()
+                            .environment(\.layoutDirection, .leftToRight)
+                    }
+                } footer: {
+                    if flow.installation == nil {
+                        Text(L("OpenStrudel will be installed on this server. Assistants and their files will stay here."))
+                    }
+                }
+            }
+            if flow.phase == .failed, flow.installation != nil { credentials }
+            if flow.phase == .connected {
+                Section {
+                    Label { Text(flow.target?.host ?? "") } icon: { Image(systemName: "checkmark.circle.fill") }
+                } footer: { Text(L("Next, connect your ChatGPT account.")) }
+            }
+            if busy || localError != nil || flow.error != nil {
+                Section {
+                    if busy {
+                        Label {
+                            Text(flow.phase == .checkingIdentity ? L("Checking the server's identity") : flow.phase == .checking ? L("Checking your server") : stageTitle)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: { ProgressView().controlSize(.small).frame(width: 20) }
+                            .accessibilityElement(children: .combine).accessibilityIdentifier("serverSetupProgress")
+                    }
+                    if let error = localError ?? flow.error?.localizedDescription {
+                        Text(error).foregroundStyle(AppTheme.warning)
+                            .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("serverSetupError")
+                    }
+                } footer: {
+                    if busy && flow.phase == .installing && flow.stage != "connecting" {
+                        Text(L("This can take a few minutes. You can close this window; installation continues on the server."))
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .sheetPageTitle(title)
+        .toolbar {
+            if let step {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(step.title, action: step.run).disabled(!step.enabled || busy)
+                        .keyboardShortcut(.defaultAction).accessibilityIdentifier(step.id)
+                }
+            }
+        }
         .onAppear {
             if let target = flow.target { host = target.host; user = target.user; port = String(target.port) }
             flow.resume()
@@ -204,70 +310,57 @@ private struct OwnServerSetupView: View {
         }
     }
 
-    private var addressForm: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            if flow.installation == nil {
+    @ViewBuilder private var addressForm: some View {
+        if flow.installation == nil {
+            Section {
+                TextField(L("Server address"), text: $host, prompt: Text(verbatim: "203.0.113.10"))
+                    .accessibilityIdentifier("serverAddress")
+                TextField(L("Sign-in name"), text: $user, prompt: Text(verbatim: "root"))
+                    .accessibilityIdentifier("serverUser")
+                TextField(L("SSH port"), text: $port, prompt: Text(verbatim: "22")).monospacedDigit()
+            } footer: {
                 Text(L("Use an Ubuntu 24.04 server with 4 GB of memory and 30 GB of storage."))
-                    .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(L("Server address")).font(.headline)
-                    TextField("203.0.113.10", text: $host).textFieldStyle(.roundedBorder)
-                        .environment(\.layoutDirection, .leftToRight).accessibilityIdentifier("serverAddress")
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(L("Sign-in name")).font(.headline)
-                    TextField("root", text: $user).textFieldStyle(.roundedBorder)
-                        .environment(\.layoutDirection, .leftToRight).accessibilityIdentifier("serverUser")
-                }
-            } else {
-                Text(host).font(.title3.weight(.semibold))
+            }
+        } else {
+            Section {
+                LabeledContent(L("Server address")) { Text(host) }
+            } footer: {
                 Text(L("Enter your server credentials again to continue. Your installation is saved."))
-                    .foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
             }
-            credentials
-            if flow.installation == nil {
-                DisclosureGroup(L("SSH port")) {
-                    TextField("22", text: $port).textFieldStyle(.roundedBorder)
-                        .environment(\.layoutDirection, .leftToRight).frame(width: 100).padding(.top, 8)
-                }.foregroundStyle(AppTheme.secondaryText)
-            }
-            Button(L("Продолжить")) {
-                validate {
-                    if flow.installation != nil { flow.confirm(access: access) }
-                    else { flow.inspect(try ServerTarget(host: host, user: user, port: Int(port) ?? 0)) }
-                }
-            }.buttonStyle(.glassProminent).controlSize(.large).keyboardShortcut(.defaultAction)
-                .accessibilityIdentifier("checkOwnServer")
         }
+        credentials
     }
 
     private var credentials: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        Section {
             Picker(L("Sign in with"), selection: $useKey) {
                 Text(L("Пароль")).tag(false)
                 Text(L("SSH key")).tag(true)
-            }.pickerStyle(.segmented).labelsHidden().accessibilityIdentifier("serverAccessMethod")
+            }.pickerStyle(.segmented).accessibilityIdentifier("serverAccessMethod")
             if useKey {
-                HStack(spacing: 12) {
-                    Button(L("Choose private key…")) { choosingKey = true }.buttonStyle(.glass)
-                        .accessibilityIdentifier("chooseSSHKey")
-                    Button(L("Paste key")) {
-                        do {
-                            guard let text = NSPasteboard.general.string(forType: .string) else { throw ServerSetupFailure.privateKey }
-                            key = try SSHPrivateKey.normalized(Data(text.utf8)); keyName = L("Pasted SSH key"); passphrase = ""; localError = nil
-                        } catch { key = nil; keyName = nil; localError = ServerSetupFailure.privateKey.localizedDescription }
-                    }.buttonStyle(.glass).accessibilityIdentifier("pasteSSHKey")
+                LabeledContent(L("SSH key")) {
+                    HStack(spacing: 8) {
+                        Button(L("Choose private key…")) { choosingKey = true }.accessibilityIdentifier("chooseSSHKey")
+                        Button(L("Paste key")) {
+                            do {
+                                guard let text = NSPasteboard.general.string(forType: .string) else { throw ServerSetupFailure.privateKey }
+                                key = try SSHPrivateKey.normalized(Data(text.utf8)); keyName = L("Pasted SSH key"); passphrase = ""; localError = nil
+                            } catch { key = nil; keyName = nil; localError = ServerSetupFailure.privateKey.localizedDescription }
+                        }.accessibilityIdentifier("pasteSSHKey")
+                    }
                 }
                 if let keyName {
-                    Label(keyName, systemImage: "checkmark.circle").font(.callout).lineLimit(1).truncationMode(.middle)
-                        .accessibilityIdentifier("selectedSSHKey")
+                    Label { Text(keyName).lineLimit(1).truncationMode(.middle) } icon: {
+                        Image(systemName: "checkmark.circle").frame(width: 20)
+                    }.accessibilityIdentifier("selectedSSHKey")
                 }
-                SecureField(L("Key passphrase, if any"), text: $passphrase).textFieldStyle(.roundedBorder).accessibilityIdentifier("sshKeyPassphrase")
+                SecureField(L("Key passphrase, if any"), text: $passphrase, prompt: Text(L("Optional")))
+                    .accessibilityIdentifier("sshKeyPassphrase")
             } else {
-                SecureField(L("Пароль"), text: $password).textFieldStyle(.roundedBorder).accessibilityIdentifier("serverPassword")
+                SecureField(L("Пароль"), text: $password, prompt: Text(L("Required"))).accessibilityIdentifier("serverPassword")
             }
+        } footer: {
             Text(L("Your SSH password and key are used only for this setup session."))
-                .font(.caption).foregroundStyle(AppTheme.secondaryText).fixedSize(horizontal: false, vertical: true)
         }
     }
 
