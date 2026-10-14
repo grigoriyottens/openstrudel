@@ -12,8 +12,9 @@ struct WelcomePage<Content: View>: View {
                     VStack(spacing: 0) { content }
                         .frame(maxWidth: OnboardingLayout.column)
                         .padding(.horizontal, OnboardingLayout.margin)
-                        // The top band stays clear of the language menu when the content fills the height.
-                        .padding(.top, 64).padding(.bottom, 48)
+                        // Even bands keep the content's own centre at 40 %; the top one stays clear of the
+                        // language menu when the content fills the height.
+                        .padding(.vertical, 64)
                 }
             }
             .scrollBounceBehavior(.basedOnSize)
