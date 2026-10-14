@@ -142,11 +142,6 @@ struct SetupHeader: View {
     }
 }
 
-/// Every page of the Connect a Device sheet shares one size, so moving between pages never resizes it.
-enum SetupSheet {
-    static let size = CGSize(width: 560, height: 480)
-}
-
 #if os(macOS)
 /// Cloud setup keeps the provider's account and billing in the user's name. It is a page of the
 /// Connect a device sheet, which owns Back and Cancel; `working` tells the sheet while setup runs.
@@ -400,7 +395,6 @@ struct ServerAccountSetupView: View {
             }
         }
         .tint(nil)
-        .frame(width: SetupSheet.size.width, height: SetupSheet.size.height)
         .onChange(of: client.openAILogin) { _, login in if let url = login?.url { openURL(url) } }
         .task(id: client.openAILogin?.loginId) {
             await client.refreshOpenAIAccount()

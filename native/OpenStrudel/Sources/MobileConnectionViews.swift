@@ -114,7 +114,7 @@ private struct MobileQRCodeView: View {
         }
         .sheetTint()
         #if os(macOS)
-        .frame(width: SetupSheet.size.width)
+        .frame(width: Sheet.width)
         .presentationSizing(.fitted)
         #endif
         .task {

@@ -35,9 +35,10 @@ struct ConnectDeviceView: View {
                         Button(cloudWorking ? L("Продолжить позже") : L("Отмена")) { dismiss() }
                     }
                 }
-                .frame(width: Sheet.width, height: Sheet.height)
             }
         }
+        // The account step replaces the stack at the same size, so finishing setup never resizes the sheet.
+        .frame(width: Sheet.width, height: Sheet.height)
         .presentationSizing(.form)
         .tint(nil)
         .environmentObject(library)
