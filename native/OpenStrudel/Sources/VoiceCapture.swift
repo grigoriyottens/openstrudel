@@ -134,74 +134,111 @@ private struct VoiceFailure: LocalizedError {
     var errorDescription: String? { message }
 }
 
-struct DictationSettings: View {
-    var showsTitle = true
+/// What the composer's microphone opens until dictation is ready: one page with one filled
+/// action, Download model while the model is missing and Start dictating once it is ready.
+struct DictationSetupView: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var assets = DictationAssets.shared
+    let record: () -> Void
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if showsTitle { Text(L("Dictation")).font(.headline) }
-            Text(L("Speak naturally. Your language is recognized automatically, on this device."))
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Text(L("25 languages, including English, Russian, French and Spanish. Hebrew is not supported."))
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        NavigationStack {
+            page
+                .toolbar {
+                    // Closing never stops a download, so the way out is Done.
+                    ToolbarItem(placement: .cancellationAction) { Button(L("Done")) { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) { primaryAction }
+                }
+        }
+        #if os(macOS)
+        // The window's graphite tint would draw Done's label in grey, as if disabled.
+        .tint(nil)
+        .presentationSizing(.fitted)
+        #endif
+        .task { await assets.check() }
+    }
+
+    @ViewBuilder private var page: some View {
+        #if os(macOS)
+        content.frame(width: 480, alignment: .leading)
+        #else
+        ScrollView { content }
+            .navigationTitle(L("Dictation"))
+            .navigationBarTitleDisplayMode(.inline)
+        #endif
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 12) {
+                #if os(macOS)
+                // On the Mac a single-page sheet carries its title in its content, on the text's edge.
+                Text(L("Dictation")).font(AppTypography.title)
+                #endif
+                Text(L("Speak naturally. Your language is recognized automatically, on this device."))
+                    .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
+                Text(L("25 languages, including English, Russian, French and Spanish. Hebrew is not supported."))
+                    .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+            }
             DictationModelStatus()
         }
-        .task { await assets.check() }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(24)
+    }
+
+    /// One button whose title and action follow the model.
+    private var primaryAction: some View {
+        let needsModel = assets.state == .available || assets.state == .failed
+        return Button(needsModel ? L("Download model") : L("Start dictating")) {
+            if needsModel { assets.download(); return }
+            UserDefaults.standard.set(true, forKey: "openstrudel.dictationIntroduced")
+            dismiss(); record()
+        }
+        .disabled(!needsModel && assets.state != .ready)
+        .accessibilityIdentifier(needsModel ? "downloadDictationModel" : "startLocalDictation")
     }
 }
 
+/// The model's state in the words Settings › General uses; the actions live in the sheet's bar.
 private struct DictationModelStatus: View {
     @ObservedObject private var assets = DictationAssets.shared
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             switch assets.state {
             case .checking:
-                ProgressView(L("Checking the local model…"))
+                waiting(L("Checking the local model…"))
             case .ready:
-                Label(L("Ready for offline dictation"), systemImage: "checkmark.circle")
-                    .foregroundStyle(.secondary).accessibilityIdentifier("dictationReady")
+                Label {
+                    Text(L("Ready for offline dictation"))
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(AppTheme.accentText)
+                }
+                .accessibilityIdentifier("dictationReady")
             case .downloading:
                 if let progress = assets.progress {
                     ProgressView(value: progress) {
                         Text(progress < 1 ? L("Downloading the model…") : L("Checking the download…"))
-                    } currentValueLabel: { Text(progress, format: .percent.precision(.fractionLength(0))).monospacedDigit() }
-                } else { ProgressView(L("Preparing the download…")) }
+                    } currentValueLabel: {
+                        Text(progress, format: .percent.precision(.fractionLength(0)))
+                            .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                    }
+                } else {
+                    waiting(L("Preparing the download…"))
+                }
                 Button(L("Cancel download")) { assets.cancel() }.accessibilityIdentifier("cancelDictationDownload")
             case .available, .failed:
                 if let error = assets.error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning) }
                 Text(L("Download Parakeet once (740 MB). After that, dictation works offline."))
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button(L("Download · 740 MB")) { assets.download() }
-                    .buttonStyle(.borderedProminent).accessibilityIdentifier("downloadDictationModel")
-
             }
-        }.accessibilityElement(children: .contain)
-    }
-}
-
-struct DictationSetupView: View {
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var assets = DictationAssets.shared
-    let record: () -> Void
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Image(systemName: "waveform").font(.system(size: 36, weight: .light)).foregroundStyle(AppTheme.accent).accessibilityHidden(true)
-                    DictationSettings(showsTitle: false)
-                    if assets.state == .ready {
-                        Button(L("Start dictating")) {
-                            UserDefaults.standard.set(true, forKey: "openstrudel.dictationIntroduced")
-                            dismiss(); record()
-                        }.buttonStyle(.glassProminent).accessibilityIdentifier("startLocalDictation")
-                    }
-                }.padding(24)
-            }
-            .navigationTitle(L("Dictation"))
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Done")) { dismiss() } } }
         }
-        #if os(macOS)
-        .frame(width: 480, height: 340)
-        #endif
+        .font(AppTypography.interface)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func waiting(_ title: String) -> some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(title).foregroundStyle(AppTheme.secondaryText)
+        }
     }
 }
