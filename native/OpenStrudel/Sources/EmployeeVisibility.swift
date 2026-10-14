@@ -9,7 +9,7 @@ struct HiddenEmployeesButton: View {
         if count > 0 {
             Button { showing = true } label: {
                 Label(L("Скрытые сотрудники · \(count)"), systemImage: "eye.slash")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.secondaryText)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("hiddenEmployees")

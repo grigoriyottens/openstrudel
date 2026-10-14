@@ -52,9 +52,11 @@ struct Sidebar: View {
                 if !groups.isEmpty {
                     Section {
                         ForEach(groups) { group in
+                            let item = SidebarItem.group(client: source.id, conversation: group.conversationId ?? "")
                             SidebarRow(name: group.title, preview: group.enabled == false ? L("Бот на паузе") : L("Группа в Telegram"),
-                                       appearance: source.profiles.first { $0.id == group.profileId }?.resolvedAppearance)
-                                .tag(SidebarItem.group(client: source.id, conversation: group.conversationId ?? ""))
+                                       appearance: source.profiles.first { $0.id == group.profileId }?.resolvedAppearance,
+                                       selected: isSelected(item))
+                                .tag(item)
                                 .accessibilityIdentifier("telegramConversation-" + group.chatId)
                         }
                     } header: {
@@ -115,21 +117,25 @@ struct Sidebar: View {
 
     @ViewBuilder private func rows(_ source: HomeClient, _ people: [EmployeeProfile]) -> some View {
         if showsMain {
+            let item = SidebarItem.main(client: source.id)
             SidebarRow(name: "OpenStrudel",
                        preview: library.hasOtherDevices ? source.displayName : L("Помощник для ваших задач"),
-                       appearance: nil, offline: source.isOffline(nil))
-                .tag(SidebarItem.main(client: source.id))
+                       appearance: nil, offline: source.isOffline(nil), selected: isSelected(item))
+                .tag(item)
         }
         if source.isEmployeeDraft && searchTerm.isEmpty {
-            SidebarRow(name: L("Новый сотрудник"), preview: L("Опишите его задачу"), appearance: source.draftAppearance)
-                .tag(SidebarItem.draft(client: source.id))
+            let item = SidebarItem.draft(client: source.id)
+            SidebarRow(name: L("Новый сотрудник"), preview: L("Опишите его задачу"), appearance: source.draftAppearance,
+                       selected: isSelected(item))
+                .tag(item)
         }
         ForEach(people) { profile in
+            let item = SidebarItem.employee(client: source.id, profile: profile.id)
             // Every row keeps two lines: the last message, the role, or the empty conversation's prompt.
             SidebarRow(name: profile.name,
                        preview: !profile.previewText.isEmpty ? profile.previewText : !profile.roleText.isEmpty ? profile.roleText : L("Напишите, что нужно."),
-                       appearance: profile.resolvedAppearance, offline: source.isOffline(profile))
-                .tag(SidebarItem.employee(client: source.id, profile: profile.id))
+                       appearance: profile.resolvedAppearance, offline: source.isOffline(profile), selected: isSelected(item))
+                .tag(item)
                 .accessibilityIdentifier("employee-" + profile.id)
         }
     }
@@ -156,7 +162,7 @@ struct Sidebar: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(library.hasOtherDevices ? L("Мои устройства") : library.active.displayName)
                             .fontWeight(.medium).lineLimit(1).truncationMode(.middle)
-                        Text(L("Устройства и настройки")).foregroundStyle(.secondary).lineLimit(1)
+                        Text(L("Устройства и настройки")).foregroundStyle(AppTheme.secondaryText).lineLimit(1)
                     }
                 } icon: {
                     Image(systemName: !library.hasOtherDevices && library.active.isLocalConnection ? "laptopcomputer" : "desktopcomputer")
@@ -186,6 +192,8 @@ struct Sidebar: View {
         if let profile = source.selectedProfileID { return .employee(client: source.id, profile: profile) }
         return .main(client: source.id)
     }
+
+    private func isSelected(_ item: SidebarItem) -> Bool { (pendingSelection ?? currentItem) == item }
 
     private var selection: Binding<SidebarItem?> {
         Binding {
@@ -248,6 +256,8 @@ struct SidebarRow: View {
     let preview: String
     let appearance: AgentAppearance?
     var offline = false
+    var selected = false
+    @Environment(\.appearsActive) private var appearsActive
 
     var body: some View {
         HStack(spacing: 12) {
@@ -257,8 +267,15 @@ struct SidebarRow: View {
                 Text(name).fontWeight(.medium).lineLimit(1)
                 let text = offline ? L("Нет связи") : preview
                 if !text.isEmpty {
-                    // The system secondary follows the selection fill and the window's active state.
-                    Text(text).foregroundStyle(.secondary).lineLimit(1)
+                    if selected {
+                        // On the selection the preview takes the name's colour; weight alone carries the hierarchy.
+                        Text(text).lineLimit(1)
+                    } else {
+                        // The list dims the system secondary below 4.5:1, so an active window uses the token.
+                        // An inactive window dims the names, and the preview dims with them.
+                        Text(text).lineLimit(1)
+                            .foregroundStyle(appearsActive ? AnyShapeStyle(AppTheme.secondaryText) : AnyShapeStyle(.secondary))
+                    }
                 }
             }
         }
