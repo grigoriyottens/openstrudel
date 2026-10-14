@@ -623,6 +623,9 @@
       const inbound = message.direction === 'inbound';
       const side = context.multiAuthor && inbound ? 'other' : inbound ? 'person' : 'employee';
       const article = element('article', '', 'message ' + side); article.dataset.id = message.id;
+      // No avatars or author labels in a one-to-one chat, so screen readers hear the speaker here; the title keeps the time.
+      const speaker = side === 'person' ? t("Вы") : side === 'other' ? message.author : activeProfile()?.name || 'OpenStrudel';
+      if (speaker) article.setAttribute('aria-label', speaker);
       const moment = StrudelMarkdown.moment(message);
       if (moment) article.title = exactTime(moment);
       const timeSuffix = () => moment?.hasTime ? ' · ' + clock(moment.date) : '';
@@ -647,7 +650,7 @@
       return article;
     }
     function outboxArticle(item) {
-      const article = element('article', '', 'message person'); article.dataset.id = 'outbox:' + item.operationId;
+      const article = element('article', '', 'message person'); article.dataset.id = 'outbox:' + item.operationId; article.setAttribute('aria-label', t("Вы"));
       article.append(bubble(item.text));
       const meta = element('div', '', item.error ? 'meta warning' : 'meta'); meta.append(element('span', item.error || t("Сообщение сохранено. Ждём подключения устройства.")));
       if (!item.error && state.owner) {
@@ -659,7 +662,7 @@
       return article;
     }
     function pendingArticle(item) {
-      const article = element('article', '', 'message person'); article.dataset.id = 'sending:' + item.externalId;
+      const article = element('article', '', 'message person'); article.dataset.id = 'sending:' + item.externalId; article.setAttribute('aria-label', t("Вы"));
       if (item.text) article.append(bubble(item.text));
       if (item.attachments?.length) { const files = element('div', '', 'files'); files.append(...item.attachments.map(attachmentChip)); article.append(files); }
       if (item.error) {
@@ -738,7 +741,7 @@
         };
         state.messages.forEach((message, index) => {
           cluster(index, message.id);
-          items.push({ key: message.id, sig: [message.text, message.status, message.error, message.kind, JSON.stringify(message.attachments || []), multiAuthor, message.author, language].join('\u0000'), build: () => messageArticle(message, { multiAuthor }) });
+          items.push({ key: message.id, sig: [message.text, message.status, message.error, message.kind, JSON.stringify(message.attachments || []), multiAuthor, message.author, profile?.name, language].join('\u0000'), build: () => messageArticle(message, { multiAuthor }) });
         });
         for (const item of outbox) items.push({ key: 'outbox:' + item.operationId, sig: [item.text, item.error, state.owner, language].join('\u0000'), build: () => outboxArticle(item) });
         sending.forEach((item, index) => {
