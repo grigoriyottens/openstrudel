@@ -21,6 +21,8 @@ struct SheetStack<Root: View, Bar: ToolbarContent>: View {
         #if os(macOS)
         NavigationStack { root() }
             .toolbar(content: bar)
+            // The window's graphite tint would draw bordered labels in grey; sheets keep the system's colours.
+            .tint(nil)
             .frame(width: Sheet.width, height: Sheet.height)
             .presentationSizing(.form)
             .modifier(InterfaceLanguage())
@@ -176,6 +178,7 @@ struct BotDetailsView: View {
                 if client.canManageOpenAI {
                     Section {
                         Button(L("Удалить сотрудника…"), role: .destructive) { confirmDeletion = true }
+                            .foregroundStyle(AppTheme.destructive)
                             .disabled(isSaving || client.homeUnreachable)
                             .accessibilityIdentifier("deleteEmployee")
                     }
