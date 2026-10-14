@@ -109,7 +109,9 @@ final class L10n: Observable, Sendable {
             guard let indexRange = Range(match.range(at: 1), in: template), let index = Int(template[indexRange]),
                   arguments.indices.contains(index), let range = Range(match.range, in: result) else { continue }
             let argument = arguments[index]
-            result.replaceSubrange(range, with: language == .hebrew ? "\u{2068}" + argument + "\u{2069}" : argument)
+            // Hebrew isolates names and dates. Numbers stay in the run of their %, which would otherwise render as %66.
+            let isolated = language == .hebrew && argument.unicodeScalars.contains(where: CharacterSet.letters.contains)
+            result.replaceSubrange(range, with: isolated ? "\u{2068}" + argument + "\u{2069}" : argument)
         }
         return result
     }
