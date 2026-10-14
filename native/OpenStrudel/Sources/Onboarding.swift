@@ -169,26 +169,29 @@ struct WelcomeHeader: View {
     }
 }
 
-/// Body copy: centred and balanced while every paragraph fits on two lines, leading-aligned once one
-/// runs longer.
+/// Body copy: centred and balanced while the whole body fits on two lines, leading-aligned once it
+/// runs longer, counting the lines of every paragraph together.
 struct WelcomeText: View {
     let paragraphs: [String]
-    @State private var long: Set<Int> = []
+    @State private var lines: [Int: Int] = [:]
+    private var centred: Bool { lines.values.reduce(0, +) <= 2 }
 
     init(_ paragraphs: String...) { self.paragraphs = paragraphs.map(\.withoutWidow) }
 
     var body: some View {
         VStack(spacing: 12) {
             ForEach(paragraphs.indices, id: \.self) { index in
-                BalancedLines(centred: long.isEmpty) {
-                    Text(paragraphs[index]).multilineTextAlignment(long.isEmpty ? .center : .leading)
+                BalancedLines(centred: centred) {
+                    Text(paragraphs[index]).multilineTextAlignment(centred ? .center : .leading)
                 }
                 .background {
+                    // The paragraph's height over the height of its first line alone. Balancing keeps the
+                    // number of lines, so the count does not depend on the alignment it chooses.
                     GeometryReader { full in
-                        Text(paragraphs[index]).lineLimit(2).hidden()
-                            .onGeometryChange(for: Bool.self) { $0.size.height < full.size.height - 1 } action: { runsLonger in
-                                if runsLonger { long.insert(index) } else { long.remove(index) }
-                            }
+                        Text(paragraphs[index]).lineLimit(1).hidden()
+                            .onGeometryChange(for: Int.self) { line in
+                                line.size.height > 0 ? Int((full.size.height / line.size.height).rounded()) : 0
+                            } action: { lines[index] = $0 }
                     }
                 }
             }
