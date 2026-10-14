@@ -150,12 +150,23 @@ struct BotDetailsView: View {
                         .scrollContentBackground(.hidden)
                         // The text view insets its glyphs by 5; this puts them on the column's text edge.
                         .padding(.horizontal, -5)
+                        // An empty editor says what belongs in it, where its first line will start.
+                        .overlay(alignment: .topLeading) {
+                            if instructions.isEmpty {
+                                Text(L("Опишите задачи и правила, которым он должен следовать."))
+                                    .font(AppTypography.reading).lineSpacing(AppTypography.readingLineSpacing)
+                                    .foregroundStyle(AppTheme.secondaryText)
+                                    #if os(iOS)
+                                    .padding(.top, 8)
+                                    #endif
+                                    .allowsHitTesting(false).accessibilityHidden(true)
+                            }
+                        }
                         .frame(minHeight: 132)
                         .accessibilityLabel(L("Описание сотрудника"))
+                        .accessibilityHint(L("Опишите задачи и правила, которым он должен следовать."))
                 } header: {
                     Text(L("Чем занимается сотрудник"))
-                } footer: {
-                    Text(L("Опишите задачи и правила, которым он должен следовать."))
                 }
                 if client.health?.agentAppearanceVersion == 1 {
                     Section {
