@@ -5,7 +5,7 @@
   color-scheme: light dark;
   --page: #F7F3EC; --surface: #F7F3EC; --subtle: #EEE9E1; --selected: #EEE9E1;
   --ink: rgb(0 0 0 / .85); --muted: #615B57; --line: #DCD5CB; --control-line: #86808C;
-  --accent: #3D3936; --link: #262422; --positive: var(--ink); --positive-bg: var(--subtle);
+  --accent: #55504C; --link: #262422; --positive: var(--ink); --positive-bg: var(--subtle);
   --warning: #865021; --danger: #A82029;
   --warning-bg: color-mix(in srgb, var(--warning) 9%, var(--page)); --danger-bg: color-mix(in srgb, var(--danger) 7%, var(--page));
   --button: #262422; --on-button: var(--page); --button-hover: color-mix(in srgb, var(--button), var(--page) 16%); --scrim: rgb(28 27 26 / .28);
@@ -263,9 +263,9 @@ dialog p.field-help { font-size: 13px; line-height: 20px; margin: .75rem 0; }
   .key-row { align-items: start; }
 }
 @media(prefers-color-scheme:dark) {
-  :root { --page: #1C1B1A; --surface: #1C1B1A; --subtle: #262422; --selected: #262422; --ink: rgb(255 255 255 / .85); --muted: #ADA8A3; --line: #3A3633; --control-line: #7C7781; --accent: #6E6964; --link: #EDEAE6; --warning: #DFB681; --danger: #FF8A91; --button: #EDEAE6; --scrim: rgb(0 0 0 / .5); }
+  :root { --page: #1C1B1A; --surface: #1C1B1A; --subtle: #262422; --selected: #262422; --ink: rgb(255 255 255 / .85); --muted: #ADA8A3; --line: #3A3633; --control-line: #7C7781; --accent: #7B7570; --link: #EDEAE6; --warning: #DFB681; --danger: #FF8A91; --button: #EDEAE6; --scrim: rgb(0 0 0 / .5); }
 }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation: none!important; transition: none!important; scroll-behavior: auto!important; } .btn:active { transform: none; } }
 @media(prefers-reduced-transparency:reduce) { dialog::backdrop { backdrop-filter: none; background: rgb(28 27 26 / .7); } }
 @media(prefers-contrast:more) { :root { --page: #FFFDF8; --surface: #FFFDF8; --subtle: #EFE9E1; --selected: #EFE9E1; --ink: #000; --muted: #45403C; --line: #8F887F; --control-line: #6F6A74; --accent: #2B2826; --link: #14120F; --warning: #6D3B12; --danger: #850A12; --button: #14120F; } .status { border: 1px solid currentColor; } }
-@media(prefers-contrast:more) and (prefers-color-scheme:dark) { :root { --page: #121110; --surface: #121110; --subtle: #211F1D; --selected: #211F1D; --ink: #FFF; --muted: #D2CEC9; --line: #77726D; --control-line: #8F8A94; --accent: #7A746F; --link: #FFF; --warning: #F6D3A3; --danger: #FFC7CB; --button: #FFF; } }
+@media(prefers-contrast:more) and (prefers-color-scheme:dark) { :root { --page: #121110; --surface: #121110; --subtle: #211F1D; --selected: #211F1D; --ink: #FFF; --muted: #D2CEC9; --line: #77726D; --control-line: #8F8A94; --accent: #7B7570; --link: #FFF; --warning: #F6D3A3; --danger: #FFC7CB; --button: #FFF; } }

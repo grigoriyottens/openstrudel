@@ -4,16 +4,16 @@
 :root {
   color-scheme: light dark;
   --canvas: #F7F3EC; --surface: #EEE9E1; --text: rgb(0 0 0 / .85); --secondary: #615B57;
-  --accent: #3D3936; --ink: #262422; --control-border: #86808C; --warning: #865021;
+  --accent: #55504C; --ink: #262422; --control-border: #86808C; --warning: #865021;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, "Noto Sans", "Noto Sans Hebrew", "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   --font-display: ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, Menlo, Consolas, "DejaVu Sans Mono", monospace;
   font: 400 15px/22px var(--font-sans); color: var(--text); background: var(--canvas);
   font-synthesis: none; -webkit-font-smoothing: antialiased;
 }
-@media (prefers-color-scheme: dark) { :root { --canvas: #1C1B1A; --surface: #262422; --text: rgb(255 255 255 / .85); --secondary: #ADA8A3; --accent: #6E6964; --ink: #EDEAE6; --control-border: #7C7781; --warning: #DFB681; } }
+@media (prefers-color-scheme: dark) { :root { --canvas: #1C1B1A; --surface: #262422; --text: rgb(255 255 255 / .85); --secondary: #ADA8A3; --accent: #7B7570; --ink: #EDEAE6; --control-border: #7C7781; --warning: #DFB681; } }
 @media (prefers-contrast: more) { :root { --canvas: #FFFDF8; --surface: #EFE9E1; --text: #000; --secondary: #45403C; --accent: #2B2826; --ink: #14120F; --control-border: #6F6A74; --warning: #6D3B12; } }
-@media (prefers-contrast: more) and (prefers-color-scheme: dark) { :root { --canvas: #121110; --surface: #211F1D; --text: #FFF; --secondary: #D2CEC9; --accent: #7A746F; --ink: #FFF; --control-border: #8F8A94; --warning: #F6D3A3; } }
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) { :root { --canvas: #121110; --surface: #211F1D; --text: #FFF; --secondary: #D2CEC9; --accent: #7B7570; --ink: #FFF; --control-border: #8F8A94; --warning: #F6D3A3; } }
 * { box-sizing: border-box; }
 body { margin: 0; }
 main { max-width: 440px; margin: clamp(32px, 10vh, 108px) auto; padding: 0 24px 48px; }
