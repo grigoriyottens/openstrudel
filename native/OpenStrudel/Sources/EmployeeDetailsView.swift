@@ -318,15 +318,28 @@ struct MainAssistantDetailsView: View {
             .navigationBarTitleDisplayMode(.inline)
             #else
             .toolbar(removing: .title)
+            .toolbar { doneItem }
             #endif
-            .navigationDestination(for: DetailsPage.self) { _ in ConnectionsView(embedded: true) }
+            .navigationDestination(for: DetailsPage.self) { _ in
+                ConnectionsView(embedded: true)
+                    #if os(macOS)
+                    .toolbar { doneItem }
+                    #endif
+            }
         } bar: {
             #if os(macOS)
-            // Nothing here waits to be saved, so the way out is Done, and pages keep the confirmation place.
-            ToolbarItem(placement: .cancellationAction) { Button(L("Готово")) { dismiss() }.keyboardShortcut(.cancelAction) }
+            // The same bar as an employee's sheet: Cancel on every page, Done (Return) on the pages
+            // without an action of their own, so a pushed page's Add service stays the default button.
+            ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.keyboardShortcut(.cancelAction) }
             #else
             ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } }
             #endif
+        }
+    }
+
+    private var doneItem: some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button(L("Готово")) { dismiss() }.keyboardShortcut(.defaultAction)
         }
     }
 }
