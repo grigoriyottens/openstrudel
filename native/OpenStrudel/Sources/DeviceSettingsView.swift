@@ -493,7 +493,7 @@ struct DeviceAccountsView: View {
                     Button(L("Добавить аккаунт OpenAI")) { perform {
                         notice = nil
                         struct Added: Decodable { let id: String }
-                        let result: Added = try await client.management("/v1/accounts" + query, method: "POST", payload: ["name": "OpenAI"])
+                        let result: Added = try await client.management("/v1/accounts" + query, method: "POST", payload: ["name": "ChatGPT"])
                         try await signIn(result.id)
                     } }.disabled(busy)
                 }

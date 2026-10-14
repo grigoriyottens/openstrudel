@@ -14,8 +14,8 @@ struct OpenAISettingsCard: View {
                     if client.openAIAccount?.isUnavailable != true { ConnectionStatus(connected: connected) }
                 } label: {
                     if let account = client.openAIAccount, account.connected {
-                        Text(account.email ?? "OpenAI")
-                            .accessibilityLabel(L("Аккаунт OpenAI")).accessibilityValue(account.email ?? "OpenAI").accessibilityIdentifier("openAIAccountIdentity")
+                        Text(account.email ?? "ChatGPT")
+                            .accessibilityLabel(L("Аккаунт OpenAI")).accessibilityValue(account.email ?? "ChatGPT").accessibilityIdentifier("openAIAccountIdentity")
                         Text([account.planLabel, account.categoryLabel].compactMap { $0 }.joined(separator: " · "))
                     } else if client.openAIAccount?.isUnavailable == true {
                         Text(L("Нет связи с OpenAI"))

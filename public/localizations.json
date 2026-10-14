@@ -158,7 +158,7 @@
     "fr": "Les connexions à ChatGPT et aux services ne sont pas incluses.",
     "es": "No se incluyen los accesos a ChatGPT ni a los servicios.",
     "he": "הגיבוי אינו כולל את פרטי הכניסה ל-ChatGPT ולשירותים.",
-    "ru": "Вход в OpenAI и сервисы в копию не входит."
+    "ru": "Вход в ChatGPT и сервисы в копию не входит."
   },
   "Защитить копию паролем": {
     "en": "Protect with a password",
@@ -350,11 +350,11 @@
     "ru": "Операция отменена."
   },
   "Эта команда уже добавлена": {
-    "en": "This team has already been added",
-    "fr": "Cette équipe a déjà été ajoutée",
-    "es": "Este equipo ya se ha añadido",
-    "he": "הצוות הזה כבר נוסף",
-    "ru": "Эта команда уже добавлена"
+    "en": "These assistants are already restored",
+    "fr": "Ces assistants sont déjà restaurés",
+    "es": "Estos asistentes ya están restaurados",
+    "he": "העוזרים האלה כבר שוחזרו",
+    "ru": "Эти сотрудники уже восстановлены"
   },
   "Повторный импорт этого файла не создаст дубликаты.": {
     "en": "Importing this file again will not create duplicates.",
@@ -956,7 +956,7 @@
     "fr": "Se connecter à ChatGPT",
     "es": "Iniciar sesión en ChatGPT",
     "he": "כניסה ל-ChatGPT",
-    "ru": "Нужен вход в OpenAI"
+    "ru": "Нужен вход в ChatGPT"
   },
   "Использовать по умолчанию": {
     "en": "Use by default",
@@ -1054,7 +1054,7 @@
     "fr": "Se déconnecter de ChatGPT ?",
     "es": "¿Cerrar sesión en ChatGPT?",
     "he": "לצאת מחשבון ChatGPT?",
-    "ru": "Выйти из аккаунта OpenAI?"
+    "ru": "Выйти из аккаунта ChatGPT?"
   },
   "Выйти": {
     "en": "Sign out",
@@ -2051,11 +2051,11 @@
     "ru": "Загружаем аккаунты…"
   },
   "Подключите аккаунт OpenAI в настройках, чтобы видеть остатки.": {
-    "en": "Connect an OpenAI account in Settings to see your remaining usage.",
-    "fr": "Connectez un compte OpenAI dans Réglages pour consulter vos limites restantes.",
-    "es": "Conecta una cuenta de OpenAI en Ajustes para ver el uso disponible.",
-    "he": "יש לחבר חשבון OpenAI בהגדרות כדי לראות את יתרת השימוש.",
-    "ru": "Подключите аккаунт OpenAI в настройках, чтобы видеть остатки."
+    "en": "Connect a ChatGPT account in Settings to see your remaining usage.",
+    "fr": "Connectez un compte ChatGPT dans Réglages pour consulter vos limites restantes.",
+    "es": "Conecta una cuenta de ChatGPT en Ajustes para ver el uso disponible.",
+    "he": "יש לחבר חשבון ChatGPT בהגדרות כדי לראות את יתרת השימוש.",
+    "ru": "Подключите аккаунт ChatGPT в настройках, чтобы видеть остатки."
   },
   "Открыть": {
     "en": "Open",
@@ -3136,11 +3136,11 @@
     "ru": "Аккаунты и остатки"
   },
   "Аккаунт OpenAI": {
-    "en": "OpenAI account",
-    "fr": "Compte OpenAI",
-    "es": "Cuenta de OpenAI",
-    "he": "חשבון OpenAI",
-    "ru": "Аккаунт OpenAI"
+    "en": "ChatGPT account",
+    "fr": "Compte ChatGPT",
+    "es": "Cuenta de ChatGPT",
+    "he": "חשבון ChatGPT",
+    "ru": "Аккаунт ChatGPT"
   },
   "Работает на «{0}»": {
     "en": "Runs on “{0}”",
@@ -3213,11 +3213,11 @@
     "ru": "Всё готово к запуску."
   },
   "Готовим вашу команду.": {
-    "en": "Setting up your team.",
-    "fr": "Préparation de votre équipe.",
-    "es": "Preparando tu equipo.",
-    "he": "מכינים את הצוות שלך.",
-    "ru": "Готовим вашу команду."
+    "en": "Setting up your assistants.",
+    "fr": "Préparation de vos assistants.",
+    "es": "Preparando tus asistentes.",
+    "he": "מכינים את העוזרים שלך.",
+    "ru": "Готовим ваших сотрудников."
   },
   "Всё готово.": {
     "en": "All set.",
@@ -3374,11 +3374,11 @@
     "ru": "Продолжить настройку"
   },
   "Открыть команду": {
-    "en": "Open team",
-    "fr": "Ouvrir l’équipe",
-    "es": "Abrir equipo",
-    "he": "פתיחת הצוות",
-    "ru": "Открыть команду"
+    "en": "Open assistants",
+    "fr": "Ouvrir les assistants",
+    "es": "Abrir asistentes",
+    "he": "פתיחת העוזרים",
+    "ru": "Открыть сотрудников"
   },
   "Открыть вход в браузере": {
     "en": "Open sign-in in browser",
@@ -4697,18 +4697,18 @@
     "ru": "Не удалось проверить OpenAI. Подключение Telegram сохранено."
   },
   "Войдите в OpenAI, чтобы помощник мог отвечать.": {
-    "en": "Sign in to OpenAI so your assistant can reply.",
-    "fr": "Connectez-vous à OpenAI pour que votre assistant puisse répondre.",
-    "es": "Inicia sesión en OpenAI para que tu asistente pueda responder.",
-    "he": "יש להיכנס ל-OpenAI כדי שהעוזר יוכל להשיב.",
-    "ru": "Войдите в OpenAI, чтобы помощник мог отвечать."
+    "en": "Sign in to ChatGPT so your assistant can reply.",
+    "fr": "Connectez-vous à ChatGPT pour que votre assistant puisse répondre.",
+    "es": "Inicia sesión en ChatGPT para que tu asistente pueda responder.",
+    "he": "יש להיכנס ל-ChatGPT כדי שהעוזר יוכל להשיב.",
+    "ru": "Войдите в ChatGPT, чтобы помощник мог отвечать."
   },
   "Аккаунты OpenAI": {
-    "en": "OpenAI accounts",
-    "fr": "Comptes OpenAI",
-    "es": "Cuentas de OpenAI",
-    "he": "חשבונות OpenAI",
-    "ru": "Аккаунты OpenAI"
+    "en": "ChatGPT accounts",
+    "fr": "Comptes ChatGPT",
+    "es": "Cuentas de ChatGPT",
+    "he": "חשבונות ChatGPT",
+    "ru": "Аккаунты ChatGPT"
   },
   "Группы": {
     "en": "Groups",
@@ -7546,11 +7546,11 @@
     "he": "שם החשבון"
   },
   "Choose a name you recognise. Your OpenAI account stays the same.": {
-    "en": "Choose a name you recognise. Your OpenAI account stays the same.",
-    "ru": "Выберите понятное вам имя. Сам аккаунт OpenAI не изменится.",
-    "fr": "Choisissez un nom qui vous parle. Votre compte OpenAI reste inchangé.",
-    "es": "Elige un nombre que reconozcas. Tu cuenta de OpenAI no cambia.",
-    "he": "בחרו שם שקל לכם לזהות. חשבון OpenAI עצמו לא ישתנה."
+    "en": "Choose a name you recognise. Your ChatGPT account stays the same.",
+    "ru": "Выберите понятное вам имя. Сам аккаунт ChatGPT не изменится.",
+    "fr": "Choisissez un nom qui vous parle. Votre compte ChatGPT reste inchangé.",
+    "es": "Elige un nombre que reconozcas. Tu cuenta de ChatGPT no cambia.",
+    "he": "בחרו שם שקל לכם לזהות. חשבון ChatGPT עצמו לא ישתנה."
   },
   "Already connected. Your account has been refreshed.": {
     "en": "Already connected. Your account has been refreshed.",
