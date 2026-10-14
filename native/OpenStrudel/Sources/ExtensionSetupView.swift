@@ -196,7 +196,7 @@ struct ExtensionSetupView: View {
                         #if os(iOS)
                         .textInputAutocapitalization(.never).keyboardType(.URL)
                         #endif
-                    SecureField(L("Ключ, если сервис его требует"), text: $token)
+                    SecureField(L("Ключ, если сервис его требует"), text: $token, prompt: Text(L("Optional")))
                         .focused($focusedField, equals: .token)
                     DisclosureGroup(L("Название подключения")) {
                         TextField(L("Название латиницей"), text: $name, prompt: Text(verbatim: suggestedName)).autocorrectionDisabled()

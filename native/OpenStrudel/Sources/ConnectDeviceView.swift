@@ -350,9 +350,10 @@ private struct OwnServerSetupView: View {
                         Image(systemName: "checkmark.circle").frame(width: 20)
                     }.accessibilityIdentifier("selectedSSHKey")
                 }
-                SecureField(L("Key passphrase, if any"), text: $passphrase).accessibilityIdentifier("sshKeyPassphrase")
+                SecureField(L("Key passphrase, if any"), text: $passphrase, prompt: Text(L("Optional")))
+                    .accessibilityIdentifier("sshKeyPassphrase")
             } else {
-                SecureField(L("Пароль"), text: $password).accessibilityIdentifier("serverPassword")
+                SecureField(L("Пароль"), text: $password, prompt: Text(L("Required"))).accessibilityIdentifier("serverPassword")
             }
         } footer: {
             Text(L("Your SSH password and key are used only for this setup session."))

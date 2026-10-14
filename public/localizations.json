@@ -7677,5 +7677,19 @@
     "es": "Más tarde",
     "he": "אחר כך",
     "ru": "Позже"
+  },
+  "Required": {
+    "en": "Required",
+    "ru": "Обязательно",
+    "fr": "Obligatoire",
+    "es": "Obligatorio",
+    "he": "חובה"
+  },
+  "Optional": {
+    "en": "Optional",
+    "ru": "Необязательно",
+    "fr": "Facultatif",
+    "es": "Opcional",
+    "he": "אופציונלי"
   }
 }
