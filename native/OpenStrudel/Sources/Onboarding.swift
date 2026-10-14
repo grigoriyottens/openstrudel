@@ -271,7 +271,7 @@ struct HomeUnavailableView: View {
                 if client.isConfigured { DeviceSignOutButton {} }
                 InkLink(L("Конфиденциальность"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
             }
-            .font(AppTypography.meta).padding(.top, 24)
+            .font(AppTypography.interface).padding(.top, 24)
         }
         .sheet(isPresented: $showingInvitation, onDismiss: {
             if let invitation { client.pendingPairing = invitation; client.pairingError = nil; self.invitation = nil }
