@@ -2,7 +2,7 @@ import type { Store } from './store.js';
 import { HomeError } from './home.js';
 
 export type ModelSelection = { model: string | null; serviceTier: string | null };
-export type ModelChoice = { id: string; name: string; description: string; isDefault: boolean; defaultReasoningEffort?: string; speeds: Array<{ id: string; name: string; description: string }> };
+export type ModelChoice = { id: string; name: string; description: string; isDefault: boolean; defaultReasoningEffort?: string; speeds: Array<{ id: string; name: string; description: string }>; provider?: string };
 const defaultsKey = 'models.defaults';
 
 /** Capabilities come from the selected account's native Codex catalog. */
