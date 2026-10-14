@@ -493,7 +493,7 @@
     "en": "Codex reviews these actions and carries out the ones it allows.",
     "fr": "Codex vérifie ces actions et exécute celles qu’il autorise.",
     "es": "Codex revisa estas acciones y ejecuta las que autoriza.",
-    "he": "Codex בודק את הפעולות ומבצע את אלו שאושרו.",
+    "he": "‏Codex בודק את הפעולות ומבצע את אלו שאושרו.",
     "ru": "Codex проверяет такие действия и выполняет разрешённые."
   },
   "Сотрудники выполняют поручения без дополнительных разрешений.": {
@@ -913,7 +913,7 @@
     "en": "ChatGPT on “{0}”",
     "fr": "ChatGPT sur « {0} »",
     "es": "ChatGPT en «{0}»",
-    "he": "ChatGPT ב-״{0}״",
+    "he": "‏ChatGPT ב-״{0}״",
     "ru": "OpenAI на «{0}»"
   },
   "Устройство сотрудника": {
@@ -1074,7 +1074,7 @@
     "en": "OpenAI did not provide subscription limits.",
     "fr": "OpenAI n’a pas fourni les limites de l’abonnement.",
     "es": "OpenAI no ha proporcionado los límites de la suscripción.",
-    "he": "OpenAI לא מסר את מכסות המנוי.",
+    "he": "‏OpenAI לא מסר את מכסות המנוי.",
     "ru": "OpenAI не передал лимиты подписки."
   },
   "{0}% осталось": {
@@ -1228,7 +1228,7 @@
     "en": "Basic · 2 CPUs · 4 GB",
     "fr": "Basic · 2 processeurs · 4 Go",
     "es": "Basic · 2 CPU · 4 GB",
-    "he": "Basic · 2 מעבדים · 4 GB",
+    "he": "‏Basic · 2 מעבדים · 4 GB",
     "ru": "Basic · 2 CPU · 4 ГБ"
   },
   "Условия установки обновились. Проверьте стоимость и подтвердите запуск ещё раз.": {
@@ -1270,21 +1270,21 @@
     "en": "DigitalOcean did not allow server creation. Sign in again and grant access.",
     "fr": "DigitalOcean n’a pas autorisé la création du serveur. Reconnectez-vous et accordez l’accès.",
     "es": "DigitalOcean no ha autorizado la creación del servidor. Vuelve a iniciar sesión y concede acceso.",
-    "he": "DigitalOcean לא אישר את יצירת השרת. יש להיכנס שוב ולאפשר גישה.",
+    "he": "‏DigitalOcean לא אישר את יצירת השרת. יש להיכנס שוב ולאפשר גישה.",
     "ru": "DigitalOcean не предоставил доступ для установки. Войдите ещё раз и разрешите создание сервера."
   },
   "DigitalOcean просит немного подождать. Продолжите настройку через несколько минут.": {
     "en": "DigitalOcean asks you to wait. Continue setup in a few minutes.",
     "fr": "DigitalOcean vous demande de patienter. Reprenez dans quelques minutes.",
     "es": "DigitalOcean pide que esperes. Continúa dentro de unos minutos.",
-    "he": "DigitalOcean מבקש להמתין. אפשר להמשיך בהגדרה בעוד כמה דקות.",
+    "he": "‏DigitalOcean מבקש להמתין. אפשר להמשיך בהגדרה בעוד כמה דקות.",
     "ru": "DigitalOcean просит немного подождать. Продолжите настройку через несколько минут."
   },
   "DigitalOcean пока не смог выполнить запрос. Настройка сохранена — продолжите немного позже.": {
     "en": "DigitalOcean could not complete the request. Your setup is saved; try again later.",
     "fr": "DigitalOcean n’a pas pu traiter la demande. La configuration est enregistrée ; réessayez plus tard.",
     "es": "DigitalOcean no ha podido completar la solicitud. La configuración está guardada; inténtalo más tarde.",
-    "he": "DigitalOcean לא הצליח להשלים את הבקשה. ההגדרה נשמרה; אפשר לנסות מאוחר יותר.",
+    "he": "‏DigitalOcean לא הצליח להשלים את הבקשה. ההגדרה נשמרה; אפשר לנסות מאוחר יותר.",
     "ru": "DigitalOcean пока не смог выполнить запрос. Настройка сохранена — продолжите немного позже."
   },
   "Не удалось безопасно сохранить настройку. Разблокируйте устройство и попробуйте ещё раз.": {
@@ -1970,7 +1970,7 @@
     "en": "OpenStrudel couldn’t complete the action (code {0}). Try again. If it keeps happening, contact support.",
     "fr": "OpenStrudel n’a pas pu terminer l’action (code {0}). Réessayez. Si le problème persiste, contactez l’assistance.",
     "es": "OpenStrudel no ha podido completar la acción (código {0}). Inténtalo de nuevo. Si persiste, contacta con soporte.",
-    "he": "OpenStrudel לא הצליח להשלים את הפעולה (קוד {0}). יש לנסות שוב. אם הבעיה נמשכת, אפשר לפנות לתמיכה.",
+    "he": "‏OpenStrudel לא הצליח להשלים את הפעולה (קוד {0}). יש לנסות שוב. אם הבעיה נמשכת, אפשר לפנות לתמיכה.",
     "ru": "OpenStrudel не смог выполнить действие (код {0}). Попробуйте ещё раз. Если ошибка повторится, обратитесь в поддержку."
   },
   "Действие отменено до передачи устройству.": {
@@ -2068,7 +2068,7 @@
     "en": "OpenStrudel: accounts and usage",
     "fr": "OpenStrudel : comptes et utilisation",
     "es": "OpenStrudel: cuentas y uso",
-    "he": "OpenStrudel: חשבונות ושימוש",
+    "he": "‏OpenStrudel: חשבונות ושימוש",
     "ru": "OpenStrudel: аккаунты и остатки"
   },
   "Серверы": {
@@ -2152,7 +2152,7 @@
     "en": "OpenStrudel is still running on this Mac. No data has been deleted. Try continuing the reset.",
     "fr": "OpenStrudel est toujours en cours sur ce Mac. Aucune donnée n’a été effacée. Essayez de reprendre la réinitialisation.",
     "es": "OpenStrudel sigue ejecutándose en este Mac. No se han borrado datos. Prueba a continuar el restablecimiento.",
-    "he": "OpenStrudel עדיין פועל ב-Mac הזה. הנתונים לא נמחקו. אפשר לנסות להמשיך באיפוס.",
+    "he": "‏OpenStrudel עדיין פועל ב-Mac הזה. הנתונים לא נמחקו. אפשר לנסות להמשיך באיפוס.",
     "ru": "OpenStrudel на этом Mac ещё не остановился. Данные пока не удалены. Попробуйте продолжить сброс."
   },
   "Не удалось удалить все данные. Часть сброса уже выполнена. Проверьте доступ к папке пользователя и продолжите сброс.": {
@@ -2362,7 +2362,7 @@
     "en": "codex did not respond",
     "fr": "codex n’a pas répondu",
     "es": "codex no respondió",
-    "he": "codex לא השיב",
+    "he": "‏codex לא השיב",
     "ru": "codex не ответил"
   },
   "Сотрудник не ответил вовремя. Перед повторной отправкой проверьте, успел ли он выполнить задачу.": {
@@ -3111,7 +3111,7 @@
     "en": "OpenAI connected",
     "fr": "OpenAI connecté",
     "es": "OpenAI conectado",
-    "he": "OpenAI מחובר",
+    "he": "‏OpenAI מחובר",
     "ru": "OpenAI подключён"
   },
   "Проверить": {
@@ -3251,7 +3251,7 @@
     "en": "OpenStrudel will be installed on a dedicated server in your DigitalOcean account. Review the price before starting.",
     "fr": "OpenStrudel sera installé sur un serveur distinct dans votre compte DigitalOcean. Vérifiez le prix avant de lancer l’installation.",
     "es": "OpenStrudel se instalará en un servidor propio de tu cuenta de DigitalOcean. Revisa el precio antes de empezar.",
-    "he": "OpenStrudel יותקן בשרת נפרד בחשבון DigitalOcean שלך. יש לבדוק את המחיר לפני ההפעלה.",
+    "he": "‏OpenStrudel יותקן בשרת נפרד בחשבון DigitalOcean שלך. יש לבדוק את המחיר לפני ההפעלה.",
     "ru": "OpenStrudel установится на отдельном сервере в вашем аккаунте DigitalOcean. Проверьте стоимость перед запуском."
   },
   "Обычно настройка занимает несколько минут. Можно закрыть окно и вернуться позже. Прогресс сохранится.": {
@@ -3433,7 +3433,7 @@
     "en": "Telegram on “{0}”",
     "fr": "Telegram sur « {0} »",
     "es": "Telegram en «{0}»",
-    "he": "Telegram ב-״{0}״",
+    "he": "‏Telegram ב-״{0}״",
     "ru": "Telegram на «{0}»"
   },
   "Проверить связь": {
@@ -3461,7 +3461,7 @@
     "en": "Telegram unavailable",
     "fr": "Telegram indisponible",
     "es": "Telegram no disponible",
-    "he": "Telegram אינו זמין",
+    "he": "‏Telegram אינו זמין",
     "ru": "Telegram недоступен"
   },
   "Бот подключён": {
@@ -3503,7 +3503,7 @@
     "en": "Telegram is responding",
     "fr": "Telegram répond",
     "es": "Telegram responde",
-    "he": "Telegram מגיב",
+    "he": "‏Telegram מגיב",
     "ru": "Telegram отвечает"
   },
   "Открываем Telegram…": {
@@ -4021,7 +4021,7 @@
     "en": "Telegram · bot paused",
     "fr": "Telegram · bot en pause",
     "es": "Telegram · bot en pausa",
-    "he": "Telegram · הבוט מושהה",
+    "he": "‏Telegram · הבוט מושהה",
     "ru": "Telegram · бот на паузе"
   },
   "Настройки сотрудника": {
@@ -4259,7 +4259,7 @@
     "en": "Return sends. Shift+Return adds a new line.",
     "fr": "Entrée envoie le message. Maj+Entrée ajoute une ligne.",
     "es": "Intro envía el mensaje. Mayús+Intro añade una línea.",
-    "he": "Return שולח את ההודעה. Shift+Return מוסיף שורה.",
+    "he": "‏Return שולח את ההודעה. Shift+Return מוסיף שורה.",
     "ru": "Return отправляет сообщение. Shift+Return добавляет новую строку."
   },
   "Отправка во время ответа": {
@@ -5099,7 +5099,7 @@
     "en": "OpenRamble · recommended",
     "fr": "OpenRamble · recommandé",
     "es": "OpenRamble · recomendado",
-    "he": "OpenRamble · מומלץ",
+    "he": "‏OpenRamble · מומלץ",
     "ru": "Open Ramble · рекомендуем"
   },
   "Встроенное Apple": {
@@ -5113,7 +5113,7 @@
     "en": "OpenRamble turns speech into text on your Mac. Place the cursor in the message and use the OpenRamble shortcut. Review your text before sending.",
     "fr": "OpenRamble transcrit la parole sur votre Mac. Placez le curseur dans le message et utilisez le raccourci OpenRamble. Vérifiez le texte avant l’envoi.",
     "es": "OpenRamble convierte voz en texto en tu Mac. Coloca el cursor en el mensaje y usa el atajo de OpenRamble. Revisa el texto antes de enviarlo.",
-    "he": "OpenRamble ממיר דיבור לטקסט ב-Mac. יש למקם את הסמן בהודעה ולהשתמש בקיצור OpenRamble. אפשר לבדוק את הטקסט לפני השליחה.",
+    "he": "‏OpenRamble ממיר דיבור לטקסט ב-Mac. יש למקם את הסמן בהודעה ולהשתמש בקיצור OpenRamble. אפשר לבדוק את הטקסט לפני השליחה.",
     "ru": "Open Ramble превращает речь в текст на вашем Mac. Поставьте курсор в сообщение и используйте горячую клавишу из Open Ramble. Текст можно проверить перед отправкой."
   },
   "Открыть Open Ramble": {
@@ -5380,7 +5380,7 @@
     "ru": "ChatGPT на «{0}»",
     "fr": "ChatGPT sur « {0} »",
     "es": "ChatGPT en «{0}»",
-    "he": "ChatGPT ב-״{0}״"
+    "he": "‏ChatGPT ב-״{0}״"
   },
   "Connection {0}": {
     "en": "Connection {0}",
@@ -6128,7 +6128,7 @@
     "en": "OpenAI returned an unrecognized sign-in address.",
     "fr": "OpenAI a renvoyé une adresse de connexion inconnue.",
     "es": "OpenAI ha devuelto una dirección de acceso desconocida.",
-    "he": "OpenAI החזיר כתובת כניסה לא מוכרת.",
+    "he": "‏OpenAI החזיר כתובת כניסה לא מוכרת.",
     "ru": "OpenAI вернул неизвестный адрес входа."
   },
   "Проверить вход": {
@@ -7032,7 +7032,7 @@
     "ru": "OpenStrudel уже установлен. Подключитесь по ссылке из настроек устройства. Данные сохранятся.",
     "fr": "OpenStrudel est déjà installé. Connectez-vous avec le lien de ses réglages d’appareil. Ses données seront conservées.",
     "es": "OpenStrudel ya está instalado. Conéctate con el enlace de sus ajustes de dispositivo. Sus datos se conservarán.",
-    "he": "OpenStrudel כבר מותקן. אפשר להתחבר באמצעות קישור מהגדרות המכשיר שלו. הנתונים יישמרו."
+    "he": "‏OpenStrudel כבר מותקן. אפשר להתחבר באמצעות קישור מהגדרות המכשיר שלו. הנתונים יישמרו."
   },
   "Opening your server": {
     "en": "Opening your server",
@@ -7263,14 +7263,14 @@
     "ru": "OpenStrudel будет установлен на этом сервере. Сотрудники и их файлы будут храниться здесь.",
     "fr": "OpenStrudel sera installé sur ce serveur. Les assistants et leurs fichiers y seront conservés.",
     "es": "OpenStrudel se instalará en este servidor. Los asistentes y sus archivos se guardarán aquí.",
-    "he": "OpenStrudel יותקן בשרת הזה. העוזרים והקבצים שלהם יישמרו כאן."
+    "he": "‏OpenStrudel יותקן בשרת הזה. העוזרים והקבצים שלהם יישמרו כאן."
   },
   "OpenStrudel is installed, but this Mac cannot reach it. Allow incoming TCP connections on port 7789 in your server's firewall, then try again.": {
     "en": "OpenStrudel is installed, but this Mac cannot reach it. Allow incoming TCP connections on port 7789 in your server's firewall, then try again.",
     "ru": "OpenStrudel установлен, но этот Mac не может подключиться. Разрешите входящие TCP-подключения на порт 7789 в настройках сетевого экрана сервера и повторите попытку.",
     "fr": "OpenStrudel est installé, mais ce Mac ne parvient pas à le joindre. Autorisez les connexions TCP entrantes sur le port 7789 dans le pare-feu du serveur, puis réessayez.",
     "es": "OpenStrudel está instalado, pero este Mac no puede conectarse. Permite las conexiones TCP entrantes en el puerto 7789 del cortafuegos del servidor y vuelve a intentarlo.",
-    "he": "OpenStrudel מותקן, אבל ה־Mac הזה אינו מצליח להתחבר אליו. יש לאפשר חיבורי TCP נכנסים ביציאה 7789 בחומת האש של השרת ולנסות שוב."
+    "he": "‏OpenStrudel מותקן, אבל ה־Mac הזה אינו מצליח להתחבר אליו. יש לאפשר חיבורי TCP נכנסים ביציאה 7789 בחומת האש של השרת ולנסות שוב."
   },
   "This server already hosts other apps. Use a new Ubuntu server so their settings and data stay unchanged.": {
     "en": "This server already hosts other apps. Use a new Ubuntu server so their settings and data stay unchanged.",
@@ -7430,7 +7430,7 @@
     "en": "OpenStrudel is installed",
     "fr": "OpenStrudel est installé",
     "es": "OpenStrudel está instalado",
-    "he": "OpenStrudel מותקן",
+    "he": "‏OpenStrudel מותקן",
     "ru": "OpenStrudel установлен"
   },
   "Next, connect your ChatGPT account.": {
@@ -7458,7 +7458,7 @@
     "en": "OpenStrudel is installed. Sign in to ChatGPT to let your assistants work on this server.",
     "fr": "OpenStrudel est installé. Connectez-vous à ChatGPT pour que vos assistants puissent travailler sur ce serveur.",
     "es": "OpenStrudel está instalado. Inicia sesión en ChatGPT para que tus asistentes trabajen en este servidor.",
-    "he": "OpenStrudel מותקן. יש להיכנס ל-ChatGPT כדי שהעוזרים שלך יוכלו לעבוד בשרת הזה.",
+    "he": "‏OpenStrudel מותקן. יש להיכנס ל-ChatGPT כדי שהעוזרים שלך יוכלו לעבוד בשרת הזה.",
     "ru": "OpenStrudel установлен. Войдите в ChatGPT, чтобы сотрудники могли работать на этом сервере."
   },
   "Your assistants can now work here, even when your Mac is off.": {
