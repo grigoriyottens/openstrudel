@@ -2,16 +2,25 @@ import SwiftUI
 
 struct HiddenEmployeesButton: View {
     @EnvironmentObject private var library: DeviceLibrary
+    /// A settings row: a standard push button like its neighbours. Otherwise the sidebar's quiet row.
+    var prominent = false
     @State private var showing = false
     private var count: Int { library.visibleClients.reduce(0) { $0 + library.hiddenProfiles(on: $1).count } }
 
     var body: some View {
         if count > 0 {
-            Button { showing = true } label: {
-                Label(L("Скрытые сотрудники · \(count)"), systemImage: "eye.slash")
-                    .foregroundStyle(AppTheme.secondaryText)
+            Group {
+                if prominent {
+                    // The count stays in the sidebar; beside an ellipsis it would read as cut off.
+                    Button(L("Показать скрытых сотрудников…")) { showing = true }
+                } else {
+                    Button { showing = true } label: {
+                        Label(L("Скрытые сотрудники · \(count)"), systemImage: "eye.slash")
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
             .accessibilityIdentifier("hiddenEmployees")
             .sheet(isPresented: $showing) { HiddenEmployeesView() }
         }

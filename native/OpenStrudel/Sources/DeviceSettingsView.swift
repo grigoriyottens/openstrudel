@@ -211,7 +211,7 @@ private struct DevicesPane: View {
             Section {
                 Button(L("Подключить устройство…")) { adding = true }
                     .accessibilityIdentifier("addDevice")
-                HiddenEmployeesButton()
+                HiddenEmployeesButton(prominent: true)
                 #if os(macOS)
                 if !library.visibleClients.contains(where: \.isLocalConnection), LocalHome.isAvailable {
                     Button(localStarting ? L("Запускаем этот Mac…") : L("Работать также на этом Mac")) {

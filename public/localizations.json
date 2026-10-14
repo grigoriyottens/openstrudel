@@ -7712,5 +7712,12 @@
     "es": "No se ha recibido una respuesta.",
     "he": "לא התקבלה תשובה.",
     "ru": "Не удалось получить ответ."
+  },
+  "Показать скрытых сотрудников…": {
+    "en": "Show hidden assistants…",
+    "fr": "Afficher les assistants masqués…",
+    "es": "Mostrar asistentes ocultos…",
+    "he": "הצגת עוזרים מוסתרים…",
+    "ru": "Показать скрытых сотрудников…"
   }
 }
