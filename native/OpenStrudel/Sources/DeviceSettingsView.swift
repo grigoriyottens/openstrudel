@@ -270,9 +270,7 @@ private struct GeneralPane: View {
         Section(L("Модель и скорость")) {
             ModelSettingsView().environmentObject(selected)
         }.id("models-" + selected.id)
-        Section(L("Действия сотрудников")) {
-            ApprovalSettingsView().environmentObject(selected)
-        }.id("approvals-" + selected.id)
+        ApprovalSettingsView().environmentObject(selected).id("approvals-" + selected.id)
         DictationSection()
         #if os(macOS)
         UpdatesSection()

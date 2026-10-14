@@ -24,7 +24,7 @@ struct EmployeeApprovalSettings: Decodable {
     let canManage: Bool
 }
 
-/// Rows only: the caller wraps them in a Form section.
+/// A whole Form section: the mode as a radio group, its explanation in the footer.
 struct ApprovalSettingsView: View {
     @EnvironmentObject private var client: HomeClient
     @State private var settings: EmployeeApprovalSettings?
@@ -35,6 +35,17 @@ struct ApprovalSettingsView: View {
     @State private var confirmAll = false
 
     var body: some View {
+        Section { rows } header: {
+            Text(L("Действия сотрудников"))
+        } footer: {
+            if let settings {
+                Text((choice ?? settings.mode).explanation + "\n"
+                     + (settings.canManage ? L("Режим меняется со следующего поручения. Доступ к сервисам и правила сотрудника сохраняются.") : L("Режим меняет владелец этого устройства.")))
+            }
+        }
+    }
+
+    private var rows: some View {
         Group {
             if let settings {
                 let mode = choice ?? settings.mode
@@ -52,13 +63,6 @@ struct ApprovalSettingsView: View {
                 .pickerStyle(.inline)
                 #endif
                 .disabled(!settings.canManage || saving)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(mode.explanation)
-                    Text(settings.canManage ? L("Режим меняется со следующего поручения. Доступ к сервисам и правила сотрудника сохраняются.") : L("Режим меняет владелец этого устройства."))
-                        .font(AppTypography.meta)
-                }
-                .foregroundStyle(AppTheme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
             } else if loading {
                 LabeledContent(L("Загружаем режим…")) { ProgressView().controlSize(.small) }
             }
