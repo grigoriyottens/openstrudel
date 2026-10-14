@@ -125,6 +125,9 @@
     .cluster { text-align: center; color: var(--secondary); font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; }
     .message { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
     .message.person { align-items: flex-end; }
+    /* The person's bubbles sit opposite the employee's latest reply, whatever the interface direction. */
+    .messages[data-reply-dir=ltr] .message.person { direction: ltr; }
+    .messages[data-reply-dir=rtl] .message.person { direction: rtl; }
     .reading, .bubble, .md { font-size: 15px; line-height: 22px; }
     .bubble { max-width: 75%; padding: 9px var(--space-4); border-radius: var(--radius-bubble); background: var(--user-bubble); white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: inset 0 0 0 var(--stroke) var(--separator); }
     .message.other .bubble { background: var(--surface); }
@@ -666,12 +669,16 @@
       box.append(element('span', '', 'avatar'), element('span', '', 'words'));
       return box;
     }
+    /* The direction of the employee's latest reply, by its first letter as on the Mac; '' when it has none.
+       The helper sits where that reply starts and the person's bubbles sit opposite it, so English replies keep them apart in Hebrew too. */
+    function replyDirection() {
+      const reply = state.messages.findLast(m => m.direction === 'outbound' && m.kind !== 'notice')?.text || '';
+      const letter = reply.match(/\p{Alphabetic}/u)?.[0];
+      return letter ? (/[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/.test(letter) ? 'rtl' : 'ltr') : '';
+    }
     function paintHelper(box, profile, working) {
       const [avatar, words] = box.children, look = JSON.stringify(profile ? agentAppearance(profile) : null);
-      // The helper sits where the latest reply starts, so English replies keep it on the left in Hebrew too.
-      const reply = state.messages.findLast(m => m.direction === 'outbound')?.text || '';
-      const strong = reply.match(/[A-Za-z\u00C0-\u024F\u0370-\u04FF\u0590-\u06FF]/)?.[0];
-      box.dir = strong ? (/[\u0590-\u06FF]/.test(strong) ? 'rtl' : 'ltr') : '';
+      box.dir = replyDirection();
       words.dir = i18n.direction;
       if (avatar.dataset.look !== look) { avatar.replaceChildren(characterImage(profile ? agentAppearance(profile) : null, 24)); avatar.dataset.look = look; }
       avatar.classList.toggle('offline', isOffline(profile));
@@ -714,6 +721,7 @@
         const working = sending.some(item => !item.error) || state.messages.some(m => m.status === 'queued' || m.status === 'running');
         items.push({ key: 'helper', sig: 'helper', build: helperNode, update: node => paintHelper(node, profile, working) });
       }
+      root.dataset.replyDir = replyDirection() || i18n.direction;
       const existing = new Map();
       for (const child of root.children) { const key = rendered.get(child)?.key; if (key) existing.set(key, child); }
       items.forEach((item, index) => {
