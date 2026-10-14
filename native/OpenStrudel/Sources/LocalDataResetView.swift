@@ -73,7 +73,7 @@ struct LocalDataResetConfirmation: View {
                 .navigationTitle(L("Копия сотрудников этого Mac"))
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { backup = nil } } }
             }
-            .frame(width: 480, height: 320)
+            .frame(width: 480)
             .presentationSizing(.fitted)
         }
     }

@@ -66,7 +66,7 @@ struct DeviceSignOutView: View {
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { showingBackup = false } } }
             }
             #if os(macOS)
-            .frame(width: 480, height: 320)
+            .frame(width: 480)
             #endif
             .presentationSizing(.fitted)
         }

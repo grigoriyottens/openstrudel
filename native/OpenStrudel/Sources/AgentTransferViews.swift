@@ -180,7 +180,7 @@ struct AgentTransferSettings: View {
                 }
             }
             #if os(macOS)
-            .frame(width: 440, height: error == nil ? 200 : 260)
+            .frame(width: 440)
             #endif
             .presentationSizing(.fitted)
         }
