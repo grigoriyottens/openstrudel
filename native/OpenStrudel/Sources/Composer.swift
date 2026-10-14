@@ -400,6 +400,65 @@ private struct ControlGlyph: View {
     }
 }
 
+/// Dictation takes the input row's place on the same grid: the waveform and status start on the
+/// text edge, stop sits in the microphone's column and send in its own, so the glass stays 48 tall.
+private struct VoiceRecordingRow: View {
+    @ObservedObject var voice: VoiceCapture
+    @Environment(\.dynamicTypeSize) private var textSize
+    let canSend: Bool
+
+    var body: some View {
+        let layout = textSize.isAccessibilitySize && voice.phase != .recording
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: ComposerMetrics.spacing))
+            : AnyLayout(HStackLayout(spacing: ComposerMetrics.spacing))
+        layout {
+            Button { voice.cancel() } label: { ControlGlyph(name: "xmark", font: ComposerMetrics.glyph) }
+                .buttonStyle(.borderless).accessibilityLabel(L("Отменить запись"))
+            if voice.phase == .recording {
+                waveform
+                Text(String(format: "%d:%02d", voice.seconds / 60, voice.seconds % 60))
+                    .font(AppTypography.meta.monospacedDigit()).foregroundStyle(AppTheme.secondaryText)
+                HStack(spacing: 0) {
+                    Button { voice.finish(send: false) } label: { ControlGlyph(name: "stop.fill", font: ComposerMetrics.glyph) }
+                        .buttonStyle(.borderless).accessibilityLabel(L("Остановить и проверить текст"))
+                    Button { voice.finish(send: true) } label: { Image(systemName: "arrow.up").font(.system(size: 13, weight: .bold)) }
+                        .buttonStyle(SendButtonStyle()).disabled(!canSend).accessibilityLabel(L("Распознать и отправить"))
+                }
+            } else {
+                Text(L10n.serviceText(voice.detail)).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if voice.phase == .saved {
+                    Button { voice.finish(send: false) } label: {
+                        Text(L("Распознать")).font(AppTypography.interface.weight(.medium)).foregroundStyle(AppTheme.accentText)
+                            .padding(.horizontal, 8).frame(minHeight: controlTarget).contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                } else {
+                    // Where the microphone stands, like the progress of an import.
+                    ProgressView().controlSize(.small).frame(width: controlTarget, height: controlTarget)
+                }
+            }
+        }
+        .padding(ComposerMetrics.padding)
+        .accessibilityElement(children: .contain).accessibilityLabel(voice.phase == .recording ? L("Идёт запись") : L("Голосовой ввод"))
+    }
+
+    private var waveform: some View {
+        Canvas { context, size in
+            let count = min(VoiceCapture.maximumLevels, max(1, Int(size.width / 6)))
+            let samples = Array(voice.levels.suffix(count))
+            for index in 0..<count {
+                let sampleIndex = index - (count - samples.count)
+                let level = sampleIndex < 0 ? 0 : samples[sampleIndex]
+                let height = max(3, level * size.height)
+                let rect = CGRect(x: CGFloat(index) * size.width / CGFloat(count), y: (size.height - height) / 2, width: 3, height: height)
+                context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .foreground)
+            }
+        }
+        // As tall as the send circle.
+        .frame(height: ComposerMetrics.send).accessibilityHidden(true)
+    }
+}
+
 /// A picked photo or file, 48 tall with radius 12 so it nests in the glass.
 private struct AttachmentTile: View {
     @Environment(\.colorSchemeContrast) private var contrast

@@ -134,47 +134,6 @@ private struct VoiceFailure: LocalizedError {
     var errorDescription: String? { message }
 }
 
-struct VoiceRecordingRow: View {
-    @ObservedObject var voice: VoiceCapture
-    @Environment(\.dynamicTypeSize) private var textSize
-    let canSend: Bool
-    var body: some View {
-        let layout = textSize.isAccessibilitySize && voice.phase != .recording
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-            : AnyLayout(HStackLayout(spacing: 12))
-        layout {
-            Button { voice.cancel() } label: { Image(systemName: "xmark").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
-                .buttonStyle(.plain).accessibilityLabel(L("Отменить запись"))
-            if voice.phase == .recording {
-                Canvas { context, size in
-                    let count = min(VoiceCapture.maximumLevels, max(1, Int(size.width / 6)))
-                    let samples = Array(voice.levels.suffix(count))
-                    for index in 0..<count {
-                        let sampleIndex = index - (count - samples.count)
-                        let level = sampleIndex < 0 ? 0 : samples[sampleIndex]
-                        let height = max(3, level * size.height)
-                        let rect = CGRect(x: CGFloat(index) * size.width / CGFloat(count), y: (size.height - height) / 2, width: 3, height: height)
-                        context.fill(Path(roundedRect: rect, cornerRadius: 2), with: .foreground)
-                    }
-                }.frame(height: 28).accessibilityHidden(true)
-                Text(String(format: "%d:%02d", voice.seconds / 60, voice.seconds % 60)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                Button { voice.finish(send: false) } label: { Image(systemName: "stop.fill").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
-                    .buttonStyle(.plain).accessibilityLabel(L("Остановить и проверить текст"))
-                Button { voice.finish(send: true) } label: { Image(systemName: "arrow.up").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle()) }
-                    .buttonStyle(.glassProminent).buttonBorderShape(.circle).disabled(!canSend).accessibilityLabel(L("Распознать и отправить"))
-            } else {
-                if voice.phase == .preparing || voice.phase == .transcribing { ProgressView().controlSize(.small) }
-                Text(L10n.serviceText(voice.detail)).font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                if voice.phase == .saved {
-                    Button { voice.finish(send: false) } label: { AdaptiveActionLabel(title: L("Распознать")) }
-                        .adaptiveActionStyle(.glass)
-                }
-            }
-        }.padding(.horizontal, 8).padding(.vertical, 6)
-        .accessibilityElement(children: .contain).accessibilityLabel(voice.phase == .recording ? L("Идёт запись") : L("Голосовой ввод"))
-    }
-}
-
 struct DictationSettings: View {
     var showsTitle = true
     @ObservedObject private var assets = DictationAssets.shared
