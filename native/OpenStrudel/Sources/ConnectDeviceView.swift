@@ -116,7 +116,7 @@ private struct ConnectionLinkPage: View {
                     }.labelStyle(.titleOnly)
                 }
                 if let error {
-                    Text(UserFacingError.text(error)).foregroundStyle(AppTheme.destructive)
+                    Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)
                         .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("invitationError")
                 }
             } header: {
@@ -267,7 +267,7 @@ private struct OwnServerSetupView: View {
                             .accessibilityElement(children: .combine).accessibilityIdentifier("serverSetupProgress")
                     }
                     if let error = localError ?? flow.error?.localizedDescription {
-                        Text(error).foregroundStyle(AppTheme.destructive)
+                        Text(error).foregroundStyle(AppTheme.warning)
                             .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("serverSetupError")
                     }
                 } footer: {

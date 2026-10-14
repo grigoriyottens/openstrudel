@@ -351,7 +351,7 @@ struct TelegramChatsView: View {
                     }
                 }
             }
-            if let error { Section { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) } }
+            if let error { Section { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning) } }
         }
         .formStyle(.grouped)
         .navigationTitle(client.activeTelegramGroup?.title ?? "Telegram")
@@ -615,6 +615,10 @@ struct ConnectionsView: View {
                 Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
                 Button(L("Повторить")) { Task { await refresh() } }.disabled(loading)
             }
+            // Every notice but the catalog's is a failure to load, so it reads as one, not as a hint.
+            if let extensionNotice, !extensionNotice.hasPrefix(L("Каталог OpenAI")) {
+                Text(L10n.serviceText(extensionNotice)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
+            }
         } footer: {
             let notes = scopeNotes
             if !notes.isEmpty { Text(notes.joined(separator: "\n")) }
@@ -626,7 +630,6 @@ struct ConnectionsView: View {
         var notes: [String] = []
         if scope?.isGroup == true { notes.append(L("Подключения для этой группы.")) }
         if let shared = scope?.sharedNotice { notes.append(shared) }
-        if let extensionNotice, !extensionNotice.hasPrefix(L("Каталог OpenAI")) { notes.append(extensionNotice) }
         if results.isEmpty && query.isEmpty && !loading && error == nil {
             notes.append(extensions.isEmpty && !availableConnections.contains(where: { $0.id == "mcp:cua_repl" })
                 ? L("Пока без подключений. Нажмите «Добавить», чтобы сотрудник мог работать с вашими сервисами.")

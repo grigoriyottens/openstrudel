@@ -440,7 +440,7 @@ struct ConnectionInvitationView: View {
                     SetupHeader(title: L("Подключить устройство"), paragraphs: L("1. На другом Mac откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения».\n\n2. Вставьте ссылку сюда. Для сервера получите её в его веб-интерфейсе: Настройки → Устройства.").components(separatedBy: "\n\n"))
                 } footer: {
                     if let error {
-                        Text(UserFacingError.text(error)).foregroundStyle(AppTheme.destructive)
+                        Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("invitationError")
                     } else if let page = connectionPage {

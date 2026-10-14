@@ -209,7 +209,7 @@ private struct DictationModelStatus: View {
                 } else { ProgressView(L("Preparing the download…")) }
                 Button(L("Cancel download")) { assets.cancel() }.accessibilityIdentifier("cancelDictationDownload")
             case .available, .failed:
-                if let error = assets.error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
+                if let error = assets.error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning) }
                 Text(L("Download Parakeet once (740 MB). After that, dictation works offline."))
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Button(L("Download · 740 MB")) { assets.download() }

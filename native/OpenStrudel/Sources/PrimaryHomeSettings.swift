@@ -30,7 +30,7 @@ struct AgentAccountPreference: View {
                 }.disabled(busy)
             }
             Text(L("Выбор изменит следующие поручения. Начатая работа продолжится с прежним аккаунтом.")).font(.caption).foregroundStyle(AppTheme.secondaryText)
-            if let error { Text(L10n.serviceText(error)).font(.caption).foregroundStyle(AppTheme.destructive) }
+            if let error { Text(L10n.serviceText(error)).font(.caption).foregroundStyle(AppTheme.warning) }
         }.task {
             do {
                 struct Policy: Decodable { let accountIds: [String]? }
