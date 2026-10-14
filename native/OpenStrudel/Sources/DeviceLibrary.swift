@@ -273,14 +273,22 @@ final class DeviceLibrary: ObservableObject {
 
     #if os(macOS)
     /// Adds a server whose installation answered over its pinned HTTPS and forgets the saved setup.
+    /// The watcher and an open setup page can finish the same server together: both get one client.
     func adoptServer(_ connection: HomeConnection, from flow: ServerSetupFlow) async throws -> HomeClient {
-        let client = clients.first { $0.savedBaseURL == connection.url } ?? newConnection()
-        guard await client.connectToCloud(connection) else { throw HomeClientError.server(client.pairingError ?? L("Не удалось получить ответ. Попробуйте ещё раз.")) }
-        // Not selected: an open setup sheet stays on its account step.
-        add(client, select: false)
-        try flow.finish()
-        return client
+        if let adoption = adoptions[connection.url] { return try await adoption.value }
+        let adoption = Task { @MainActor in
+            let client = clients.first { $0.savedBaseURL == connection.url } ?? newConnection()
+            guard await client.connectToCloud(connection) else { throw HomeClientError.server(client.pairingError ?? L("Не удалось получить ответ. Попробуйте ещё раз.")) }
+            // Not selected: an open setup sheet stays on its account step.
+            add(client, select: false)
+            try flow.finish()
+            return client
+        }
+        adoptions[connection.url] = adoption
+        defer { adoptions[connection.url] = nil }
+        return try await adoption.value
     }
+    private var adoptions: [String: Task<HomeClient, Error>] = [:]
 
     /// A server that finishes after its setup window closed joins the list by itself.
     func watchPendingServer(_ flow: ServerSetupFlow = .shared) async {

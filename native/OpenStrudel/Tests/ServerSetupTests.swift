@@ -359,6 +359,25 @@ struct ServerSetupTests {
         #expect(await flow.finishedConnection() == nil)
     }
 
+    @Test @MainActor func theWatcherAndAnOpenSetupPageAdoptAFinishedServerOnce() async throws {
+        let store = ServerSetupMemoryStore(installation: try pendingInstallation())
+        let key = String(repeating: "c", count: 64)
+        let connection = HomeConnection(url: "https://127.0.0.1:9", token: key, pin: key, name: "Server")
+        let flow = ServerSetupFlow(store: store, probe: { _ in connection })
+        let suite = "OpenStrudel.adopted-once." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(connection.url, forKey: "openstrudel.homeURL")
+        let client = HomeClient(defaults: defaults, connectionID: suite, credentialReader: { _, _ in nil }, credentialWriter: { _, _ in })
+        let library = DeviceLibrary(defaults: defaults, clients: [client])
+        async let watcher = library.adoptServer(connection, from: flow)
+        async let page = library.adoptServer(connection, from: flow)
+        let (first, second) = try await (watcher, page)
+        #expect(first === client && second === client, "Both get the one connection; no second client or credential")
+        #expect(library.clients.count == 1)
+        #expect(store.installation == nil)
+    }
+
     private func pendingInstallation() throws -> ServerInstallation {
         let target = try ServerTarget(host: "server.example.com", user: "root", port: 22)
         let key = try SSHHostKey(line: "host ssh-ed25519 " + Data(repeating: 1, count: 51).base64EncodedString(), target: target)

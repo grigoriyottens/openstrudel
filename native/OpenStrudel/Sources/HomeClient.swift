@@ -9,14 +9,26 @@ import UIKit
 /// Legacy macOS keychains can ignore kSecUseAuthenticationUIFail, so the app
 /// switches the process-wide user interaction flag around each Keychain call.
 /// Calls take turns: a background call never runs inside the window an explicit
-/// recovery opened for its dialog. Only that recovery may allow one.
+/// recovery opened for its dialog. Only that recovery may allow one. A silent call
+/// never waits for that dialog either: until it is answered the Keychain counts as
+/// locked, so the app stays responsive and the caller's usual recovery applies.
 enum KeychainInteraction {
     #if os(macOS)
-    private static let turn = NSLock()
+    private static let turn = NSCondition()
+    /// Whether the call taking its turn may show a dialog; nil between calls.
+    nonisolated(unsafe) private static var holder: Bool?
     #endif
-    static func run<T>(allowing interaction: Bool = false, _ body: () throws -> T) rethrows -> T {
+    static func run<T>(allowing interaction: Bool = false, _ body: () throws -> T) throws -> T {
         #if os(macOS)
-        turn.lock(); defer { turn.unlock() }
+        turn.lock()
+        while let current = holder, interaction || !current { turn.wait() }
+        guard holder == nil else {
+            turn.unlock()
+            throw HomeClientError.server(L("Allow OpenStrudel to access its saved connection in Keychain, then try again."))
+        }
+        holder = interaction
+        turn.unlock()
+        defer { turn.lock(); holder = nil; turn.broadcast(); turn.unlock() }
         var allowed = DarwinBoolean(true)
         SecKeychainGetUserInteractionAllowed(&allowed)
         SecKeychainSetUserInteractionAllowed(interaction)
@@ -114,7 +126,7 @@ final class HomeClient: ObservableObject, Identifiable {
         guard acceptsOperations else { throw CancellationError() }
         try KeychainInteraction.run { try credentialWriter(credentialPrefix + account, value) }
     }
-    private func removeCredential(account: String = "home-api-token") { KeychainInteraction.run { try? credentialWriter(credentialPrefix + account, nil) } }
+    private func removeCredential(account: String = "home-api-token") { try? KeychainInteraction.run { try credentialWriter(credentialPrefix + account, nil) } }
     @Published var pendingPairing: MacPairing?
     @Published var pairingError: String?
     @Published private(set) var isPairing = false
@@ -127,11 +139,17 @@ final class HomeClient: ObservableObject, Identifiable {
     @Published private(set) var mobileInvitation: MobileInvitation?
     @Published private(set) var mobileConnections = 0
     @Published private(set) var mobileClients: [MobileClient] = []
+    @Published private(set) var colleagueInvitations: [ColleagueInvitation] = []
     @Published private(set) var canManageConnections = false
     @Published var baseURLString: String
     @Published private(set) var health: HomeHealth? {
         // An offline launch keeps the screens this Home served last time.
-        didSet { if let health { servedTimeline = health.employeeTimelineVersion == 1; defaults.set(servedTimeline, forKey: "openstrudel.employeeTimeline") } }
+        didSet {
+            guard let health else { return }
+            servedTimeline = health.employeeTimelineVersion == 1; defaults.set(servedTimeline, forKey: "openstrudel.employeeTimeline")
+            // However the feed is found, a group opened before it closes, so the composer stays private.
+            if usesEmployeeTimeline && selectedChatID != nil { selectedChatID = nil; conversationID = nil; resetHistory() }
+        }
     }
     private var servedTimeline = false
     @Published private var timelineSupport: [String: Bool] = [:]
@@ -364,14 +382,18 @@ final class HomeClient: ObservableObject, Identifiable {
     /// An older Home keeps listing its previous name, so a rename would silently revert.
     var canRenameDevice: Bool { health?.homeProtocol == 1 && health?.deviceRenameVersion == 1 && (canManageOpenAI || canManageConnections) && !homeUnreachable }
 
+    /// An unchanged name saves nothing, so a translated default never becomes everyone's fixed name.
     func renameDevice(_ name: String) async throws {
         struct Response: Decodable { let home: HomeManagement.State }
-        let response: Response = try await request("/v1/home", method: "PATCH", body: try JSONSerialization.data(withJSONObject: ["name": name.trimmingCharacters(in: .whitespacesAndNewlines)]))
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name != displayName else { return }
+        let response: Response = try await request("/v1/home", method: "PATCH", body: try JSONSerialization.data(withJSONObject: ["name": name]))
         rememberDeviceName(response.home.name)
     }
 
-    private func rememberDeviceName(_ name: String) {
-        guard !name.isEmpty, name != deviceName else { return }
+    /// Nil forgets the shared name, so the saved connection name shows again.
+    private func rememberDeviceName(_ name: String?) {
+        guard name?.isEmpty != true, name != deviceName else { return }
         deviceName = name
         defaults.set(name, forKey: "openstrudel.deviceName")
     }
@@ -614,25 +636,31 @@ final class HomeClient: ObservableObject, Identifiable {
         hasOpenedConversation = false; checkingOpenAIAccount = false
         errorMessage = nil; syncError = nil; homeUnreachable = false
         connectionNeedsPairing = false; connectionNeedsUnlock = false; isLoading = false
-        canManageConnections = false; mobileConnections = 0; mobileClients = []; mobileInvitation = nil
+        canManageConnections = false; mobileConnections = 0; mobileClients = []; colleagueInvitations = []; mobileInvitation = nil
     }
 
+    /// A new colleague link replaces the one on screen; links already sent stay valid.
     func inviteMobile(owner: Bool = true) async {
+        let replaced = owner ? nil : mobileInvitation?.id
         mobileInvitation = nil
         await refreshMobileStatus()
-        do { mobileInvitation = try await request("/v1/mobile/pairing", method: "POST", body: try JSONSerialization.data(withJSONObject: ["owner": owner])) }
-        catch { errorMessage = error.localizedDescription }
+        do {
+            mobileInvitation = try await request("/v1/mobile/pairing", method: "POST", body: try JSONSerialization.data(withJSONObject: ["owner": owner]))
+            if let replaced { try await cancelColleagueInvitation(replaced) }
+        } catch { errorMessage = error.localizedDescription }
     }
 
     func refreshMobileStatus() async {
-        struct Status: Decodable { let connections: Int; let clients: [MobileClient]? }
+        struct Status: Decodable { let connections: Int; let clients: [MobileClient]?; let invitations: [ColleagueInvitation]? }
         if let status: Status = try? await request("/v1/mobile") {
             mobileConnections = status.connections
             let clients = supportsColleagueInvites ? status.clients ?? [] : []
             if mobileClients != clients { mobileClients = clients }
+            let invitations = supportsColleagueInvites ? status.invitations ?? [] : []
+            if colleagueInvitations != invitations { colleagueInvitations = invitations }
             canManageConnections = true
             if openAIAccount != nil { canManageOpenAI = true }
-        } else { canManageConnections = false; mobileClients = [] }
+        } else { canManageConnections = false; mobileClients = []; colleagueInvitations = [] }
     }
 
     /// Several colleague links can wait for 24 hours, and the owner sees each paired device.
@@ -642,6 +670,13 @@ final class HomeClient: ObservableObject, Identifiable {
     /// knows the owner's own connection as a paired device.
     func revokeMobileClient(_ id: String) async throws {
         guard let path = ("/v1/mobile/clients/" + id).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { throw HomeClientError.invalidURL }
+        _ = try await requestData(path, method: "DELETE")
+        await refreshMobileStatus()
+    }
+
+    /// Ends a colleague's link that nobody has used yet.
+    func cancelColleagueInvitation(_ id: String) async throws {
+        guard let path = ("/v1/mobile/pairing/" + id).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { throw HomeClientError.invalidURL }
         _ = try await requestData(path, method: "DELETE")
         await refreshMobileStatus()
     }
@@ -679,9 +714,6 @@ final class HomeClient: ObservableObject, Identifiable {
             let catalogueLoaded = await catalogue
             guard generation == connectionGeneration else { return }
             if !connectionNeedsPairing { health = loadedHealth }
-            if usesEmployeeTimeline && selectedChatID != nil {
-                selectedChatID = nil; conversationID = nil; resetHistory()
-            }
             if let homeId = loadedHealth.homeId { defaults.set(homeId, forKey: "openstrudel.catalogueIdentity") }
             await refreshDevicePresence(generation: generation)
             guard generation == connectionGeneration else { return }
@@ -784,11 +816,14 @@ final class HomeClient: ObservableObject, Identifiable {
             health = loaded
             if let homeId = loaded.homeId { defaults.set(homeId, forKey: "openstrudel.catalogueIdentity") }
         }
+        // Only a Home that shares names has replaced technical ones, such as an
+        // older server's container ID. Before that the saved connection name stays.
+        if let health, health.deviceRenameVersion != 1 { rememberDeviceName(nil) }
         guard health?.homeProtocol == 1 else { return }
         if let result: HomeDevices = try? await request("/v1/devices"),
            generation == connectionGeneration {
             if devices != result.devices { devices = result.devices }
-            if let own = result.devices.first(where: { $0.id == health?.nodeId }) { rememberDeviceName(own.name) }
+            if health?.deviceRenameVersion == 1, let own = result.devices.first(where: { $0.id == health?.nodeId }) { rememberDeviceName(own.name) }
         }
     }
 
@@ -873,6 +908,7 @@ final class HomeClient: ObservableObject, Identifiable {
     private func drainSendQueue() async {
         defer { isDrainingSendQueue = false }
         while let pending = pendingMessages.first(where: { $0.error == nil && $0.deliveryState == nil }) {
+            var refusal: Int?
             do {
                 var profileID = pending.profileID
                 if let draftID = profileID, draftID.hasPrefix("draft:") {
@@ -908,7 +944,8 @@ final class HomeClient: ObservableObject, Identifiable {
                 if let replyToID = pending.telegramReplyToID, let chatID = pending.conversationID {
                     struct Receipt: Decodable { let messageId: String?; let operationId: String? }
                     payload["replyToId"] = replyToID
-                    let result: Receipt = try await request("/v1/conversations/" + chatID + "/telegram-reply", method: "POST", body: try JSONSerialization.data(withJSONObject: payload))
+                    let data = try await requestData("/v1/conversations/" + chatID + "/telegram-reply", method: "POST", body: try JSONSerialization.data(withJSONObject: payload), refused: { refusal = $0 })
+                    let result = try decoder.decode(Receipt.self, from: data)
                     if let operation = result.operationId, let index = pendingMessages.firstIndex(where: { $0.id == pending.id }) {
                         pendingMessages[index].operationID = operation
                         pendingMessages[index].deliveryState = "queued"
@@ -930,7 +967,10 @@ final class HomeClient: ObservableObject, Identifiable {
                 try savePending()
             } catch {
                 if let i = pendingMessages.firstIndex(where: { $0.id == pending.id }) {
-                    pendingMessages[i].error = L("Не удалось подтвердить доставку. Повтор проверит это же сообщение.")
+                    // The Home refused this Telegram reply before sending anything: say why, never offer the same retry.
+                    if let refusal, (400..<500).contains(refusal), case HomeClientError.server(let reason) = error {
+                        pendingMessages[i].error = reason; pendingMessages[i].deliveryState = "not_sent"
+                    } else { pendingMessages[i].error = L("Не удалось подтвердить доставку. Повтор проверит это же сообщение.") }
                     try? savePending()
                 }
             }
@@ -993,6 +1033,13 @@ final class HomeClient: ObservableObject, Identifiable {
         guard !isDrainingSendQueue else { return }
         isDrainingSendQueue = true
         await drainSendQueue()
+    }
+
+    /// Only a reply the Home refused for good can be dropped: nothing of it reached Telegram.
+    func discardPending(_ pending: PendingHomeMessage) {
+        guard pendingMessages.contains(where: { $0.id == pending.id && $0.deliveryState == "not_sent" }) else { return }
+        pendingMessages.removeAll { $0.id == pending.id }
+        try? savePending()
     }
 
     func refreshConversation() async {
@@ -1088,10 +1135,13 @@ final class HomeClient: ObservableObject, Identifiable {
         do {
             let value: TelegramEnvelope = try await request("/v1/integrations" + employeeDeviceQuery)
             telegram = value.telegram
-            if let conversationID {
-                let result: SchedulesEnvelope = try await request("/v1/conversations/" + conversationID + "/schedules")
-                schedules = result.schedules; scheduleRuns = result.runs
+            // The employee card keeps a schedule made in any of its chats, with that chat's latest run.
+            var found: [ChatSchedule] = [], latest: [ScheduleRun] = [], scopes = Set<String>()
+            for scope in ([conversationID] + employeeTelegramChats.map(\.conversationId)).compactMap({ $0 }) where scopes.insert(scope).inserted {
+                let result: SchedulesEnvelope = try await request("/v1/conversations/" + scope + "/schedules")
+                found += result.schedules; latest += result.runs.prefix(1)
             }
+            schedules = found; scheduleRuns = latest
         } catch { syncError = error.localizedDescription }
     }
 
@@ -1226,13 +1276,14 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     func selectProfile(_ profileID: String?) async {
+        // Switch first: the feed decision belongs to the employee being opened, not the one left.
+        selectedProfileID = profileID
         let remembered = defaults.string(forKey: conversationSelectionKey(profileID))
         selectedChatID = usesEmployeeTimeline ? nil : (telegram?.chats ?? []).first { $0.profileId == profileID && $0.conversationId == remembered }?.conversationId
         conversationID = nil; connections = []; connectionNotice = nil; schedules = []; telegramLink = nil
         resetHistory()
         messages = []
         interactions = []
-        selectedProfileID = profileID
         if let profileID {
             defaults.set(profileID, forKey: "openstrudel.profileID")
         } else {
@@ -1527,7 +1578,7 @@ final class HomeClient: ObservableObject, Identifiable {
         }
     }
 
-    private func requestData(_ path: String, method: String = "GET", body: Data? = nil, mayRelocate: Bool = true, progress: (@MainActor @Sendable (Int64, Int64?) -> Void)? = nil, ifNoneMatch: String? = nil, responseETag: ((String?) -> Void)? = nil) async throws -> Data {
+    private func requestData(_ path: String, method: String = "GET", body: Data? = nil, mayRelocate: Bool = true, progress: (@MainActor @Sendable (Int64, Int64?) -> Void)? = nil, ifNoneMatch: String? = nil, responseETag: ((String?) -> Void)? = nil, refused: ((Int) -> Void)? = nil) async throws -> Data {
         guard acceptsOperations else { throw CancellationError() }
         guard !connectionNeedsUnlock else { throw HomeClientError.authenticationExpired }
         let generation = connectionGeneration
@@ -1572,7 +1623,8 @@ final class HomeClient: ObservableObject, Identifiable {
                     if method == "GET" { return try await requestData(path, mayRelocate: false, responseETag: responseETag) }
                     throw HomeClientError.server(L("Адрес устройства изменился. Действие не отправлено: повторите его на новом подключении."))
                 }
-                if let message = envelope.error { throw HomeClientError.server(message) }
+                // The Home's own answer, with the status that tells a refusal from a failure.
+                if let message = envelope.error { refused?(http.statusCode); throw HomeClientError.server(message) }
             }
             throw HomeClientError.server(L("OpenStrudel не смог выполнить действие (код \(http.statusCode)). Попробуйте ещё раз. Если ошибка повторится, обратитесь в поддержку."))
         }

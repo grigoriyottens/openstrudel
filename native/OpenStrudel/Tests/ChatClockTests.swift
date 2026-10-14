@@ -137,8 +137,8 @@ struct ChatClockTests {
 /// The employee's one feed: who wrote each message, what a failed delivery offers, and what waits for a decision.
 struct EmployeeFeedTests {
     private func message(_ id: String, direction: String = "inbound", channel: String = "telegram", replyTo: String? = nil, status: String = "completed",
-                         author: String? = nil, imported: Bool? = nil, origin: MessageOrigin? = nil, delivery: String? = nil) -> HomeMessage {
-        HomeMessage(id: id, conversationId: "group", channel: channel, direction: direction, replyToId: replyTo, text: "Text " + id,
+                         author: String? = nil, imported: Bool? = nil, origin: MessageOrigin? = nil, delivery: String? = nil, conversation: String = "group") -> HomeMessage {
+        HomeMessage(id: id, conversationId: conversation, channel: channel, direction: direction, replyToId: replyTo, text: "Text " + id,
                     externalId: nil, createdAt: "2026-10-14T12:00:00.000Z", status: status, error: nil, kind: "text", author: author,
                     imported: imported, origin: origin, delivery: delivery.map { MessageDelivery(state: $0) })
     }
@@ -184,5 +184,25 @@ struct EmployeeFeedTests {
         ]
         #expect(MessagePages.feed(feed, decidingChats: ["-1"]).map(\.id) == ["taken", "failed", "mentioned", "app"])
         #expect(MessagePages.feed(feed, decidingChats: []).map(\.id) == feed.map(\.id))
+    }
+
+    @Test func aRequestWaitingForTheOwnersApprovalStaysVisibleWithItsCard() {
+        let rules = MessageOrigin(channel: "telegram", title: "Rules", chatId: "-1")
+        let feed = [message("asking", status: "running", origin: rules), message("deciding", status: "running", origin: rules)]
+        #expect(MessagePages.feed(feed, decidingChats: ["-1"], awaiting: ["asking"]).map(\.id) == ["asking"])
+    }
+
+    /// Group B's reply follows group A's request on screen, so it names group B again and quotes its request.
+    @Test func eachRowFollowsTheRowShownAboveItNotAHiddenMessage() {
+        let a = MessageOrigin(channel: "telegram", title: "A", chatId: "-1"), b = MessageOrigin(channel: "telegram", title: "B", chatId: "-2")
+        let feed = MessagePages.feed([
+            message("requestB", origin: b, conversation: "b"),
+            message("requestA", origin: a, conversation: "a"),
+            message("hiddenB", status: "queued", origin: b, conversation: "b"),
+            message("replyB", direction: "outbound", replyTo: "requestB", origin: b, conversation: "b"),
+        ], decidingChats: ["-2"])
+        let rows = MessagePages.rows(feed)
+        #expect(rows.map(\.id) == ["requestB", "requestA", "replyB"])
+        #expect(rows.map(\.previous?.id) == [nil, "requestB", "requestA"])
     }
 }

@@ -31,6 +31,7 @@ struct MobilePairingSettings: View {
             .accessibilityIdentifier("inviteColleague")
         if client.supportsColleagueInvites {
             ForEach(client.mobileClients) { MobileClientRow(item: $0) }
+            ForEach(client.colleagueInvitations) { ColleagueInvitationRow(item: $0) }
         } else if client.isLocalConnection && client.mobileConnections > 0 {
             LabeledContent {
                 Button(L("Отключить"), role: .destructive) { revokeConfirmation = true }
@@ -65,8 +66,8 @@ struct MobilePairingSettings: View {
     }
 }
 
-/// One device paired with this Home. Only a colleague's device is disconnected here, on its own:
-/// an app-installed server also counts the owner's Mac among its devices.
+/// One device paired with this Home. The owner disconnects any other device on its own, a lost
+/// phone of their own included; the device asking keeps its access.
 private struct MobileClientRow: View {
     @EnvironmentObject private var client: HomeClient
     let item: MobileClient
@@ -76,7 +77,7 @@ private struct MobileClientRow: View {
 
     var body: some View {
         LabeledContent {
-            if item.isColleague && item.current != true {
+            if item.canDisconnect {
                 Button(L("Отключить"), role: .destructive) { confirming = true }
                     .accessibilityIdentifier("disconnectClient-" + item.id)
                     .confirmationDialog(L("Отключить «\(name)»?"), isPresented: $confirming) {
@@ -87,7 +88,8 @@ private struct MobileClientRow: View {
                             }
                         }
                     } message: {
-                        Text(L("Коллега больше не сможет открыть сотрудников этого устройства. Чаты и сотрудники сохранятся."))
+                        Text(item.isColleague ? L("Коллега больше не сможет открыть сотрудников этого устройства. Чаты и сотрудники сохранятся.")
+                             : L("Устройство больше не сможет открыть сотрудников и управлять доступом. Чаты и сотрудники сохранятся."))
                     }
             }
         } label: {
@@ -101,6 +103,31 @@ private struct MobileClientRow: View {
         [item.isColleague ? L("Коллега") : L("Владелец"),
          item.pairedDate.map { L("подключено \($0.formatted(.dateTime.day().month(.abbreviated).year().locale(L10n.locale)))") },
          item.current == true ? L("это устройство") : nil].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+/// A colleague's link nobody has used yet. Cancelling it ends the link at once.
+private struct ColleagueInvitationRow: View {
+    @EnvironmentObject private var client: HomeClient
+    let item: ColleagueInvitation
+    @State private var error: String?
+
+    var body: some View {
+        LabeledContent {
+            Button(L("Отменить"), role: .destructive) {
+                Task {
+                    do { try await client.cancelColleagueInvitation(item.id); error = nil }
+                    catch { self.error = error.localizedDescription }
+                }
+            }
+            .accessibilityIdentifier("cancelInvitation-" + item.id)
+        } label: {
+            Text(item.label ?? L("Ссылка для коллеги"))
+            if let expiry = item.expiryDate {
+                Text(L("действует до \(expiry.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)))")).monospacedDigit()
+            }
+            if let error { Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning) }
+        }
     }
 }
 

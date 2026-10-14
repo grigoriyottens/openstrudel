@@ -360,9 +360,12 @@ struct HomeDevice: Decodable, Identifiable, Equatable {
 }
 
 /// A Home's shared name as people read it: the server default in the interface
-/// language, and a Mac's network hostname without its ".local" suffix.
+/// language, and a Mac's network hostname without its ".local" suffix. An older
+/// server Home still names itself by its container ID, which reads as the default.
 func deviceTitle(_ name: String, language: AppLanguage? = nil) -> String {
-    if name == "Server" { return L10n.text("Server", language: language) }
+    if name == "Server" || name.range(of: "^[a-f0-9]{12}([a-f0-9]{52})?$", options: [.regularExpression, .caseInsensitive]) != nil {
+        return L10n.text("Server", language: language)
+    }
     return name.count > 6 && name.lowercased().hasSuffix(".local") ? String(name.dropLast(6)) : name
 }
 
@@ -374,6 +377,8 @@ struct MobileClient: Decodable, Identifiable, Equatable {
     var pairedAt: String? = nil
     var current: Bool? = nil
     var isColleague: Bool { role == "colleague" }
+    /// Any other device, an owner's lost phone included. The Home refuses the one asking.
+    var canDisconnect: Bool { current != true }
     var pairedDate: Date? {
         guard let pairedAt else { return nil }
         let formatter = ISO8601DateFormatter()

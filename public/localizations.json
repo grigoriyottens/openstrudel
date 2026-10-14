@@ -8574,6 +8574,55 @@
     "es": "Desconecta los dispositivos de uno en uno para no perder el acceso a este dispositivo.",
     "he": "נתקו חיבורים אחד אחד כדי לא לאבד גישה למכשיר הזה."
   },
+  "Введите название до 120 символов.": {
+    "en": "Enter a name of up to 120 characters.",
+    "ru": "Введите название до 120 символов.",
+    "fr": "Saisissez un nom de 120 caractères maximum.",
+    "es": "Escribe un nombre de hasta 120 caracteres.",
+    "he": "יש להזין שם של עד 120 תווים."
+  },
+  "Сотрудник не найден.": {
+    "en": "Assistant not found.",
+    "ru": "Сотрудник не найден.",
+    "fr": "Assistant introuvable.",
+    "es": "No se encontró el asistente.",
+    "he": "העוזר לא נמצא."
+  },
+  "Сотрудник не найден": {
+    "en": "Assistant not found",
+    "ru": "Сотрудник не найден",
+    "fr": "Assistant introuvable",
+    "es": "No se encontró el asistente",
+    "he": "העוזר לא נמצא"
+  },
+  "Сотрудник удалён.": {
+    "en": "This assistant was deleted.",
+    "ru": "Сотрудник удалён.",
+    "fr": "Cet assistant a été supprimé.",
+    "es": "Este asistente se eliminó.",
+    "he": "העוזר נמחק."
+  },
+  "Сотрудник с таким именем уже есть": {
+    "en": "An assistant with this name already exists",
+    "ru": "Сотрудник с таким именем уже есть",
+    "fr": "Un assistant porte déjà ce nom",
+    "es": "Ya existe un asistente con este nombre",
+    "he": "כבר קיים עוזר בשם הזה"
+  },
+  "Проверьте имя и длину характера": {
+    "en": "Check the name and the length of the instructions",
+    "ru": "Проверьте имя и длину характера",
+    "fr": "Vérifiez le nom et la longueur des instructions",
+    "es": "Revisa el nombre y la longitud de las instrucciones",
+    "he": "יש לבדוק את השם ואת אורך ההנחיות"
+  },
+  "Сотрудник переносится. Новое поручение можно отправить после завершения.": {
+    "en": "This assistant is being moved. You can send a new request once the move finishes.",
+    "ru": "Сотрудник переносится. Новое поручение можно отправить после завершения.",
+    "fr": "Cet assistant est en cours de transfert. Vous pourrez envoyer une nouvelle demande une fois le transfert terminé.",
+    "es": "Este asistente se está trasladando. Podrás enviar un nuevo encargo cuando termine el traslado.",
+    "he": "העוזר מועבר כעת. אפשר לשלוח בקשה חדשה בסיום ההעברה."
+  },
   "Установка на сервере не началась. Нажмите «Продолжить», чтобы запустить её; уже сохранённая настройка не потеряется.": {
     "en": "Installation has not started on the server. Select Continue to start it; your saved setup stays as it is.",
     "fr": "L’installation n’a pas démarré sur le serveur. Sélectionnez Continuer pour la lancer ; la configuration enregistrée est conservée.",
@@ -8643,6 +8692,27 @@
     "es": "Tu colega ya no podrá abrir los asistentes de este dispositivo. Los chats y los asistentes se conservan.",
     "he": "העמית לא יוכל עוד לפתוח את העוזרים במכשיר הזה. הצ׳אטים והעוזרים יישמרו.",
     "ru": "Коллега больше не сможет открыть сотрудников этого устройства. Чаты и сотрудники сохранятся."
+  },
+  "Устройство больше не сможет открыть сотрудников и управлять доступом. Чаты и сотрудники сохранятся.": {
+    "en": "The device will no longer be able to open the assistants or manage access. Chats and assistants stay as they are.",
+    "fr": "L’appareil ne pourra plus ouvrir les assistants ni gérer les accès. Les conversations et les assistants sont conservés.",
+    "es": "El dispositivo ya no podrá abrir los asistentes ni gestionar el acceso. Los chats y los asistentes se conservan.",
+    "he": "המכשיר לא יוכל עוד לפתוח את העוזרים או לנהל גישה. הצ׳אטים והעוזרים יישמרו.",
+    "ru": "Устройство больше не сможет открыть сотрудников и управлять доступом. Чаты и сотрудники сохранятся."
+  },
+  "Ссылка для коллеги": {
+    "en": "Link for a colleague",
+    "fr": "Lien pour un collègue",
+    "es": "Enlace para un colega",
+    "he": "קישור לעמית",
+    "ru": "Ссылка для коллеги"
+  },
+  "действует до {0}": {
+    "en": "valid until {0}",
+    "fr": "valable jusqu’au {0}",
+    "es": "válido hasta el {0}",
+    "he": "בתוקף עד {0}",
+    "ru": "действует до {0}"
   },
   "Это не QR-код подключения OpenStrudel.": {
     "en": "This isn’t an OpenStrudel connection QR code.",

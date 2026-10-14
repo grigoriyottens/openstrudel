@@ -24,6 +24,58 @@ import Testing
         await client.refreshConversation()
         #expect(client.usesEmployeeTimeline)
     }
+    /// The private composer must never post into a group the employee's feed only remembers.
+    @Test func leavingAnOlderWorkerNeverReopensARememberedGroupUnderTheFeed() async throws {
+        let fixture = CatalogueFixture(); fixture.timeline = true; fixture.telegram = CatalogueFixture.boundGroup
+        let (client, session, defaults, suite) = makeClient(fixture)
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite) }
+        await client.load(); await client.selectChat("group")
+        await client.selectProfile("worker")
+        #expect(!client.usesEmployeeTimeline)
+        await client.selectProfile("employee")
+        #expect(client.usesEmployeeTimeline)
+        #expect(client.selectedChatID == nil)
+    }
+    @Test func aFeedFoundAfterAnOfflineUpgradeLaunchClosesTheOldGroup() async throws {
+        let fixture = CatalogueFixture(); fixture.timeline = true; fixture.telegram = CatalogueFixture.boundGroup
+        let (_, session, defaults, suite) = makeClient(fixture)
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite) }
+        defaults.set("employee", forKey: "openstrudel.profileID"); defaults.set("group", forKey: "openstrudel.selectedChatID")
+        let upgraded = HomeClient(defaults: defaults, session: session, pendingDirectory: fixture.pendingDirectory, connectionID: suite, credentialReader: { _, _ in nil })
+        #expect(upgraded.selectedChatID == "group")
+        await upgraded.refreshCatalogue()
+        #expect(upgraded.usesEmployeeTimeline)
+        #expect(upgraded.selectedChatID == nil)
+    }
+    @Test func groupSchedulesStayInTheEmployeeCardUnderTheFeed() async throws {
+        let fixture = CatalogueFixture(); fixture.timeline = true; fixture.telegram = CatalogueFixture.boundGroup
+        fixture.schedules["app-conversation"] = #"{"schedules":[],"runs":[{"id":"ok","status":"completed","error":null},{"id":"old","status":"failed","error":"Old failure"}]}"#
+        fixture.schedules["group"] = #"{"schedules":[{"id":"digest","conversationId":"group","name":"Digest","prompt":"Summarise","cron":"0 9 * * *","timezone":"UTC","enabled":true,"nextRunAt":"2026-10-15T09:00:00.000Z","delivery":"bound"}],"runs":[{"id":"run","status":"failed","error":"Model unavailable"}]}"#
+        let (client, session, defaults, suite) = makeClient(fixture)
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite) }
+        await client.load(); await client.selectProfile("employee"); await client.loadChatSettings()
+        #expect(client.conversationID == "app-conversation")
+        #expect(client.schedules.map(\.id) == ["digest"])
+        #expect(client.scheduleRuns.compactMap(\.error) == ["Model unavailable"])
+    }
+    @Test func aTelegramReplyTheHomeRefusesIsNotSentAndNeverOffersARetry() async throws {
+        let fixture = CatalogueFixture(); fixture.timeline = true
+        let (client, session, defaults, suite) = makeClient(fixture)
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite) }
+        await client.load(); await client.selectProfile("employee")
+        let request = try #require(client.messages.first)
+        fixture.replyStatus = 400; fixture.replyError = "Подключение этой группы изменилось. Откройте её в Telegram."
+        try client.sendTelegramReply(to: request, text: "Reply for the group", files: [])
+        for _ in 0..<100 where client.visiblePendingMessages.first?.error == nil { try await Task.sleep(for: .milliseconds(5)) }
+        let pending = try #require(client.visiblePendingMessages.first)
+        #expect(pending.error == fixture.replyError)
+        #expect(pending.deliveryState == "not_sent")
+        await client.retry(pending)
+        #expect(fixture.replyBodies.count == 1)
+        client.discardPending(pending)
+        #expect(client.visiblePendingMessages.isEmpty)
+        #expect(try PendingMessagesFile.read(directory: fixture.pendingDirectory, home: client.baseURLString).isEmpty)
+    }
     @Test func anOfflineLaunchKeepsTheFeedItsHomeServedAndNeverReopensAnOldGroup() async throws {
         let fixture = CatalogueFixture(); fixture.timeline = true
         let (client, session, defaults, suite) = makeClient(fixture)
@@ -355,6 +407,10 @@ import Testing
     var timeline = false
     var timelineResponse = true
     var timelineFinished = false
+    var replyError = "Lost acknowledgement"
+    /// Schedules and runs per conversation.
+    var schedules: [String: String] = [:]
+    static let boundGroup = #"{"configured":true,"running":true,"linkedChats":["-42"],"chats":[{"chatId":"-42","title":"Team","conversationId":"group","profileId":"employee","allowedSenders":[]}] }"#
     func respond(_ request: URLRequest) async -> (Int, Data, [String: String]) {
         requests.append(request)
         let path = request.url!.path
@@ -386,7 +442,10 @@ import Testing
                 }
             }
             replyBodies.append(body)
-            return (replyStatus, Data((replyStatus == 200 ? #"{"messageId":"explicit-reply"}"# : #"{"error":"Lost acknowledgement"}"#).utf8), [:])
+            return (replyStatus, replyStatus == 200 ? Data(#"{"messageId":"explicit-reply"}"#.utf8) : try! JSONSerialization.data(withJSONObject: ["error": replyError]), [:])
+        }
+        if path.hasPrefix("/v1/conversations/"), path.hasSuffix("/schedules") {
+            return (200, Data((schedules[String(path.split(separator: "/")[2])] ?? #"{"schedules":[],"runs":[]}"#).utf8), [:])
         }
         if path == "/health", timeline { return (200, Data(#"{"ok":true,"employeeTimelineVersion":1}"#.utf8), [:]) }
         if path == "/v1/agents/employee/conversation", timeline, timelineResponse {
@@ -432,7 +491,7 @@ import Testing
         if path == "/v1/account", let accountDelay { try? await Task.sleep(for: accountDelay) }
         let body: String
         switch path {
-        case "/health": body = deviceOnline == nil ? #"{"ok":true,"homeId":"home-fixture"}"# : #"{"ok":true,"homeId":"home-fixture","homeProtocol":1,"nodeId":"node"}"#
+        case "/health": body = deviceOnline == nil ? #"{"ok":true,"homeId":"home-fixture"}"# : #"{"ok":true,"homeId":"home-fixture","homeProtocol":1,"nodeId":"node","deviceRenameVersion":1}"#
         case "/v1/account": body = #"{"account":{"connected":true,"managed":true},"canManage":true}"#
         case "/v1/integrations": body = "{\"telegram\":" + (telegram ?? #"{"configured":false,"running":false,"linkedChats":[]}"#) + "}"
         default: body = #"{"conversation":{"id":"conversation","channel":"api","createdAt":"2026-10-09","updatedAt":"2026-10-09"},"messages":[],"interactions":[]}"#

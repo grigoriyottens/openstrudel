@@ -125,7 +125,7 @@ struct ConversationView: View {
 
     private func transcript(_ proxy: ScrollViewProxy) -> some View {
         ScrollView {
-            if client.messages.isEmpty && client.visiblePendingMessages.isEmpty {
+            if client.feedMessages.isEmpty && client.visiblePendingMessages.isEmpty {
                 // While a chosen conversation loads, the canvas stays empty rather than flash the empty state.
                 if showsEmptyChat {
                     EmptyChat()

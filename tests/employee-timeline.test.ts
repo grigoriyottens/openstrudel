@@ -37,7 +37,7 @@ it("pages one employee's accepted requests across audiences without mixing conte
   expect(store.listMessages(groups[1]!.conversationId!)).toHaveLength(1);
 });
 
-it("removes a silently declined request from a loaded timeline while retaining its context and cursor", async () => {
+it.each(["NO_REPLY", "NO_REPLY\n", " NO_REPLY"])("removes a silently declined request (%j) from a loaded timeline while retaining its context and cursor", async response => {
   const { store, profile, groups } = fixture();
   let finish!: (v: any) => void;
   const messages = new MessageService(store, { run: () => new Promise(resolve => { finish = resolve; }) });
@@ -45,7 +45,7 @@ it("removes a silently declined request from a loaded timeline while retaining i
   await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
   const initial = store.employeeMessagePage(profile.id, new URLSearchParams());
   expect(initial.messages).toHaveLength(1);
-  finish({ threadId: "test", response: "NO_REPLY", events: [] });
+  finish({ threadId: "test", response, events: [] });
   await turn.completion;
   const delta = store.employeeMessagePage(profile.id, new URLSearchParams({ after: initial.pagination.newerCursor!, watch: turn.receipt.messageId }));
   expect(delta.messages).toEqual([]);

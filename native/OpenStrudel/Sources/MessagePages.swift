@@ -10,6 +10,8 @@ enum MessagePages {
         let header: Date?
         /// The previous message came from the other side, so a new turn begins.
         let startsTurn: Bool
+        /// The message shown right above, never one the feed hides.
+        let previous: HomeMessage?
         var id: String { message.id }
     }
 
@@ -26,8 +28,8 @@ enum MessagePages {
             let sentAt = message.sentAt
             let opens = sentAt.map { opensCluster($0, after: previous?.sentAt, calendar: calendar) } ?? false
             let startsTurn = previous.map { $0.direction != message.direction || $0.conversationId != message.conversationId } ?? false
-            previous = message
-            return Row(message: message, header: opens ? sentAt : nil, startsTurn: startsTurn)
+            defer { previous = message }
+            return Row(message: message, header: opens ? sentAt : nil, startsTurn: startsTurn, previous: previous)
         }
     }
 
@@ -50,10 +52,11 @@ enum MessagePages {
 
     /// In a group where the employee decides by its own rules, a message still being decided is not
     /// a request yet: it joins the feed with its reply, and never if the employee stays silent.
-    static func feed(_ messages: [HomeMessage], decidingChats: Set<String>) -> [HomeMessage] {
+    /// A request whose approval card waits for the owner stays visible with it.
+    static func feed(_ messages: [HomeMessage], decidingChats: Set<String>, awaiting: Set<String> = []) -> [HomeMessage] {
         guard !decidingChats.isEmpty else { return messages }
         return messages.filter { message in
-            !(message.direction == "inbound" && message.origin?.channel == "telegram" && (message.status == "queued" || message.status == "running")
+            awaiting.contains(message.id) || !(message.direction == "inbound" && message.origin?.channel == "telegram" && (message.status == "queued" || message.status == "running")
               && decidingChats.contains(message.origin?.chatId ?? ""))
         }
     }

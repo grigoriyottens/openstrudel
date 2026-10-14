@@ -73,6 +73,14 @@ describe("iPhone pairing", () => {
       expect((await send(port, "/health", { token: yulia })).status).toBe(401);
       expect((await send(port, "/health", { token: owner })).status).toBe(200);
       expect((await send(port, "/health", { token: dasha })).status).toBe(200);
+      // Another owner device, such as a lost phone, can be cut off from an owner device or from the Mac itself.
+      const mac = await pair(await invite({ owner: true }), "Mik's Mac");
+      const other = (await local("/v1/mobile")).body.clients.at(-1);
+      expect(other).toMatchObject({ label: "Mik's Mac", role: "owner", pairedAt: expect.any(String), current: false });
+      expect((await send(port, "/v1/mobile/clients/" + other.id, { token: owner, method: "DELETE" })).status).toBe(200);
+      expect((await send(port, "/health", { token: mac })).status).toBe(401);
+      expect((await local("/v1/mobile/clients/" + mine.id, "DELETE")).body.clients.map((c: any) => c.label)).toEqual(["iPhone Даши"]);
+      expect((await send(port, "/health", { token: owner })).status).toBe(401);
     } finally { await runtime.stop(); await rm(root, { recursive: true, force: true }); }
   });
 
@@ -156,6 +164,46 @@ describe("iPhone pairing", () => {
       expect((await call(mobile.port!, "/pair", key)).status).toBe(401);
       mobile.revokeClient(mobile.status().clients[0]!.id);
       expect((await call(mobile.port!, "/pair", key, undefined, attempt)).status).toBe(401);
+    } finally { await mobile.close(); store.close(); await rm(directory, { recursive: true, force: true }); }
+  });
+  it("keeps each lost pairing response recoverable until its own invitation is replaced or cancelled", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "strudel-pair-receipts-")), store = new Store(":memory:");
+    const mobile = new MobileAccess(store, (_req, res) => res.end('{}'), { directory, port: 0, host: "127.0.0.1" });
+    try {
+      const key = (invitation: { url: string }) => new URL(invitation.url).searchParams.get("key")!;
+      const attempt = (n: number) => `${n}2345678-1234-1234-1234-123456789012`;
+      const yulia = key(await mobile.invite(false, "Юля")), dasha = await mobile.invite(false, "Даша"), owner = key(await mobile.invite(true));
+      const first = (await call(mobile.port!, "/pair", yulia, undefined, attempt(1))).body;
+      await call(mobile.port!, "/pair", key(dasha), undefined, attempt(2));
+      await call(mobile.port!, "/pair", owner, undefined, attempt(3));
+      await mobile.invite(false); await mobile.invite(true); mobile.cancelInvite(); mobile.cancelInvite(dasha.id);
+      expect((await call(mobile.port!, "/pair", yulia, undefined, attempt(1))).body).toEqual(first);
+      expect((await call(mobile.port!, "/pair", key(dasha), undefined, attempt(2))).status).toBe(401);
+      expect((await call(mobile.port!, "/pair", owner, undefined, attempt(3))).status).toBe(401);
+    } finally { await mobile.close(); store.close(); await rm(directory, { recursive: true, force: true }); }
+  });
+  it("clears a plain pairing credential once the device uses it or its window ends", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "strudel-pair-plain-")), store = new Store(":memory:");
+    let offset = 0;
+    const mobile = new MobileAccess(store, (_req, res) => res.end('{}'), { directory, port: 0, host: "127.0.0.1", now: () => Date.now() + offset });
+    const stored = (token: string) => (store.db.prepare("SELECT value FROM settings").all() as { value: string }[]).some(row => row.value.includes(token));
+    try {
+      const pair = async (n: number) => {
+        const key = new URL((await mobile.invite(false)).url).searchParams.get("key")!;
+        return (await call(mobile.port!, "/pair", key, undefined, `${n}2345678-1234-1234-1234-123456789012`)).body.token as string;
+      };
+      const used = await pair(1), lost = await pair(2);
+      expect([stored(used), stored(lost)]).toEqual([true, true]);
+      expect((await call(mobile.port!, "/health", used)).status).toBe(200);
+      expect([stored(used), stored(lost)]).toEqual([false, true]);
+      offset += 301_000;
+      expect((await call(mobile.port!, "/health", used)).status).toBe(200);
+      expect(stored(lost)).toBe(false);
+      const later = await pair(3), legacy = "f".repeat(64);
+      store.setSetting("mobile.pair_receipt", JSON.stringify({ keyHash: "0".repeat(64), nonce: "x", token: legacy, expires: 0 }));
+      offset += 301_000;
+      await mobile.close(); await mobile.restore();
+      expect([stored(later), stored(legacy)]).toEqual([false, false]);
     } finally { await mobile.close(); store.close(); await rm(directory, { recursive: true, force: true }); }
   });
   it("issues owner access only from an owner invitation and retains ordinary clients as clients", async () => {

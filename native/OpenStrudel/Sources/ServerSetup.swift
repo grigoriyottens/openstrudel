@@ -356,7 +356,8 @@ extension ServerSetupStore {
         return try JSONDecoder().decode(ServerInstallation.self, from: data)
     }
     func save(_ installation: ServerInstallation?) throws {
-        try KeychainInteraction.run { try write(installation) }
+        // A Keychain that is locked, or busy with an unlock dialog, is a storage failure, never the server's.
+        do { try KeychainInteraction.run { try write(installation) } } catch { throw ServerSetupFailure.storage }
     }
     private func write(_ installation: ServerInstallation?) throws {
         guard let installation else {

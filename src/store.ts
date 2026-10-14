@@ -441,7 +441,7 @@ export class Store {
     if (before && after) throw new Error("Выберите одно направление истории");
     const scope = "FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.profile_id IS ?";
     const visible = `m.hidden=0 AND m.context_only=0 AND NOT EXISTS (
-      SELECT 1 FROM messages reply WHERE reply.reply_to_id=m.id AND reply.hidden=1 AND reply.text='NO_REPLY'
+      SELECT 1 FROM messages reply WHERE reply.reply_to_id=m.id AND reply.hidden=1 AND TRIM(reply.text, char(32,9,10,13))='NO_REPLY'
     )`;
     // A pending request may disappear after NO_REPLY. Its cursor must still advance.
     const cursor = before || after;

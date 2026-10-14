@@ -46,6 +46,8 @@ enum UserFacingError {
 }
 
 struct MobileInvitation: Decodable {
+    /// An older Home sends no id: its single link ends when the sheet closes.
+    var id: String? = nil
     let url: URL
     let expiresAt: String
 
@@ -58,6 +60,18 @@ struct MobileInvitation: Decodable {
     /// A Mac invites with its ".local" name, which only its own network can reach.
     var isLocalNetworkOnly: Bool {
         URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "host" }?.value?.lowercased().hasSuffix(".local") == true
+    }
+}
+
+/// A colleague's link nobody has used yet. The Home lists it without the link itself.
+struct ColleagueInvitation: Decodable, Identifiable, Equatable {
+    let id: String
+    var label: String? = nil
+    let expiresAt: String
+    var expiryDate: Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: expiresAt) ?? ISO8601DateFormatter().date(from: expiresAt)
     }
 }
 

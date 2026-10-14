@@ -96,6 +96,8 @@ struct MessageBubble: View {
     /// so inbound messages sit on the surface under their author.
     let shared: Bool
     let bubbleWidth: CGFloat
+    /// The row shown above, so the source and the quoted request follow what is on screen.
+    var previous: HomeMessage?
     /// A time heading above already shows this message's time.
     var headed = false
     /// The direction of the employee's text. The person's bubbles sit on the opposite edge,
@@ -106,19 +108,15 @@ struct MessageBubble: View {
     private var fromSomeoneElse: Bool { isInbound && shared }
     /// The owner wrote it through the explicit Telegram reply, so it sits on the person's side.
     private var ownerReply: Bool { MessagePages.isOwnerReply(message) }
-    private var previousMessage: HomeMessage? {
-        guard let index = client.messages.firstIndex(where: { $0.id == message.id }), index > 0 else { return nil }
-        return client.messages[index - 1]
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let origin = message.origin, origin.channel != "api", isInbound || ownerReply || previousMessage?.conversationId != message.conversationId {
+            if let origin = message.origin, origin.channel != "api", isInbound || ownerReply || previous?.conversationId != message.conversationId {
                 sourceCaption(origin).frame(maxWidth: .infinity, alignment: ownerReply ? .trailing : .leading)
             } else if message.direction == "inbound", client.messages.contains(where: { $0.origin?.channel == "telegram" }) {
                 Text(L("В приложении")).modifier(MetaLine()).frame(maxWidth: .infinity, alignment: .trailing)
             }
-            if let parentID = message.replyToId, message.channel == "telegram", previousMessage?.id != parentID,
+            if let parentID = message.replyToId, message.channel == "telegram", previous?.id != parentID,
                let parent = client.messages.first(where: { $0.id == parentID }) {
                 Text(L("В ответ на: \(String(parent.text.prefix(140)))"))
                     .modifier(MetaLine()).lineLimit(2)
@@ -589,7 +587,7 @@ struct TranscriptRows: View {
                 // Keep one stable layout node per message, including its optional time heading.
                 VStack(alignment: .leading, spacing: 16) {
                     if let header = row.header { ClusterHeader(date: header, hasTime: row.message.hasTime) }
-                    MessageBubble(message: row.message, shared: shared || row.message.origin?.channel == "telegram" || row.message.origin?.channel == "archive", bubbleWidth: bubbleWidth, headed: row.header != nil, replySide: replySide)
+                    MessageBubble(message: row.message, shared: shared || row.message.origin?.channel == "telegram" || row.message.origin?.channel == "archive", bubbleWidth: bubbleWidth, previous: row.previous, headed: row.header != nil, replySide: replySide)
                         #if os(macOS)
                         .help(exactTime(row.message))
                         #endif
@@ -609,9 +607,17 @@ struct TranscriptRows: View {
                     if let title = message.telegramChatTitle { Text("Telegram · " + title).modifier(MetaLine()) }
                     PendingMessageBubble(text: message.text, files: message.files, bubbleWidth: bubbleWidth)
                     if let error = message.error {
-                        Text(UserFacingError.text(error)).modifier(MetaLine()).foregroundStyle(AppTheme.warning)
+                        let notSent = message.deliveryState == "not_sent"
+                        Text((notSent ? L("Не отправлено в Telegram") + ". " : "") + UserFacingError.text(error)).modifier(MetaLine()).foregroundStyle(AppTheme.warning)
                             .multilineTextAlignment(.trailing).padding(.trailing, 16)
-                        if message.operationID == nil {
+                        if notSent {
+                            // The Home refused it, so nothing reached Telegram: open the group there, or drop the text.
+                            if let raw = client.messages.first(where: { $0.id == message.telegramReplyToID })?.origin?.url, let url = URL(string: raw), url.scheme == "https", url.host == "t.me" {
+                                Link(L("Открыть в Telegram"), destination: url).modifier(StatusAction())
+                            }
+                            Button(L("Удалить")) { client.discardPending(message) }
+                                .modifier(StatusAction()).accessibilityIdentifier("discardTelegramReply-" + message.id.uuidString)
+                        } else if message.operationID == nil {
                             Button(L("Проверить доставку и повторить")) { Task { await client.retry(message) } }
                                 .modifier(StatusAction())
                         }
@@ -690,7 +696,8 @@ extension HomeClient {
     /// The messages the feed shows. In a group where the employee decides by its rules, a message waits
     /// for that decision; a mention group sends the employee only real requests.
     var feedMessages: [HomeMessage] {
-        MessagePages.feed(messages, decidingChats: Set((telegram?.chats ?? []).filter { $0.isGroup && $0.replies != "mentions" }.map(\.chatId)))
+        MessagePages.feed(messages, decidingChats: Set((telegram?.chats ?? []).filter { $0.isGroup && $0.replies != "mentions" }.map(\.chatId)),
+                          awaiting: Set(interactions.map(\.messageId)))
     }
 
     /// The employee's latest words, without service notices. Their direction is the conversation's text edge.

@@ -449,10 +449,13 @@ export class TelegramAdapter {
         this.lastError = "Не удалось сохранить часть контекста группы. Отправьте нужное вложение в ответ на сообщение бота.";
         this.store.markTelegramUpdate(update.update_id); return;
       }
-      // A file Telegram could not hand over never reached the employee. Keep the request visible.
-      if (!received && !agentTransfer(this.store, conversation.profileId ?? "main") && !this.store.findMessageByExternal("telegram", externalId)) {
+      // A file Telegram could not hand over never reached the employee. Keep the request visible
+      // and the update done, so a replay cannot turn it into a duplicate.
+      const recorded = !received && !agentTransfer(this.store, conversation.profileId ?? "main") && !this.store.findMessageByExternal("telegram", externalId);
+      if (recorded) {
         const failed = this.store.addMessage({ conversationId: conversation.id, channel: "telegram", direction: "inbound", text, externalId, author });
         this.store.setMessageStatus(failed.id, "failed", error instanceof TelegramRequestError ? "Не удалось получить файл до 20 МБ" : error instanceof Error ? error.message : "Не удалось скачать вложение");
+        this.store.markTelegramUpdate(update.update_id);
       }
       if (error instanceof AccountUnavailableError && Number(chatId) < 0) {
         // A group may send an album or carry on talking during an account
@@ -464,7 +467,8 @@ export class TelegramAdapter {
           await this.sendMessage(message.chat.id, error.message, `error:${update.update_id}`);
         }
       } else {
-        await this.sendMessage(message.chat.id, error instanceof Error ? error.message : "Не удалось завершить ответ",`error:${update.update_id}`);
+        // A lost notice leaves a recorded request as it is.
+        await this.sendMessage(message.chat.id, error instanceof Error ? error.message : "Не удалось завершить ответ",`error:${update.update_id}`).catch(notice => { if (!recorded) throw notice; });
       }
     } finally {
       if(this.preparations.get(chatId)===prepared) this.preparations.delete(chatId);
