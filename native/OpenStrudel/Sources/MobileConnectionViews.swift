@@ -392,13 +392,12 @@ private struct QRScanner: UIViewControllerRepresentable {
         }
     }
 }
-#endif
 
+/// Paste a connection link on iPhone and iPad. The Mac pastes it on a page of Connect a device.
 struct ConnectionInvitationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     let onConfirm: (MacPairing) -> Void
-    var onBack: (() -> Void)? = nil
     @State private var invitation = ""
     @State private var error: String?
     @State private var openingPage = false
@@ -427,10 +426,8 @@ struct ConnectionInvitationView: View {
                         SecureField(L("Ссылка подключения"), text: $invitation, prompt: Text(L("Ссылка подключения")))
                             .labelsHidden()
                             .focused($focused).accessibilityIdentifier("connectionInvitation")
-                            #if os(iOS)
                             .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.continue)
                             .frame(minHeight: controlTarget)
-                            #endif
                             .onSubmit(confirm)
                         PasteButton(payloadType: String.self) { values in
                             if let value = values.first { invitation = value; error = nil }
@@ -450,7 +447,6 @@ struct ConnectionInvitationView: View {
                 }
             }
             .formStyle(.grouped)
-            #if os(iOS)
             .safeAreaInset(edge: .bottom) {
                 Button(action: confirm) { SetupActionLabel(title: continueTitle) }
                     .primaryAction()
@@ -460,28 +456,15 @@ struct ConnectionInvitationView: View {
                     .padding(.horizontal, OnboardingLayout.margin).padding(.bottom, 8)
             }
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(onBack == nil ? L("Отмена") : L("Назад")) { if let onBack { onBack() } else { dismiss() } }
+                    Button(L("Отмена")) { dismiss() }
                 }
-                #if os(macOS)
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(continueTitle, action: confirm)
-                        .disabled(!canContinue)
-                        .accessibilityIdentifier("continueConnection")
-                        .keyboardShortcut(.defaultAction)
-                }
-                #endif
             }
         }
         .sheetTint()
-        #if os(macOS)
-        .frame(width: SetupSheet.size.width, height: SetupSheet.size.height)
-        #else
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        #endif
         .onChange(of: invitation) { _, _ in error = nil }
     }
 
@@ -506,3 +489,4 @@ struct ConnectionInvitationView: View {
         }
     }
 }
+#endif
