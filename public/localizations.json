@@ -4220,6 +4220,20 @@
     "he": "צירוף קובץ",
     "ru": "Прикрепить файл"
   },
+  "Выбрать фото…": {
+    "en": "Choose photo…",
+    "fr": "Choisir une photo…",
+    "es": "Elegir foto…",
+    "he": "בחירת תמונה…",
+    "ru": "Выбрать фото…"
+  },
+  "Прикрепить файл…": {
+    "en": "Attach file…",
+    "fr": "Joindre un fichier…",
+    "es": "Adjuntar archivo…",
+    "he": "צירוף קובץ…",
+    "ru": "Прикрепить файл…"
+  },
   "Голосовой ввод…": {
     "en": "Dictation…",
     "fr": "Dictée…",

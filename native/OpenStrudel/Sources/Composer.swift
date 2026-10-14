@@ -222,8 +222,8 @@ struct Composer: View {
     /// which drops the 32-pt target and the secondary colour.
     private var attachmentMenu: some View {
         Menu {
-            Button(L("Фото"), systemImage: "photo") { showPhotos = true }
-            Button(L("Прикрепить файл"), systemImage: "paperclip") { showFiles = true }
+            Button(L("Выбрать фото…"), systemImage: "photo") { showPhotos = true }
+            Button(L("Прикрепить файл…"), systemImage: "paperclip") { showFiles = true }
         } label: { controlGlyph("plus") }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
             .accessibilityLabel(L("Прикрепить фото или файл"))
