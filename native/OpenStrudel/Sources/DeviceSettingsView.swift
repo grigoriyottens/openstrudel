@@ -614,7 +614,8 @@ struct DeviceAccountsView: View {
         } label: {
             Image(systemName: "ellipsis.circle")
         }
-        .menuStyle(.button).buttonStyle(.borderless).menuIndicator(.hidden).fixedSize()
+        // Plain, so the glyph ends on the values' trailing edge; borderless adds an inset.
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
         .accessibilityLabel(L("Действия с аккаунтом"))
         .accessibilityIdentifier("accountActions-" + account.id)
     }
