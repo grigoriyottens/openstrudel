@@ -224,8 +224,6 @@ struct Composer: View {
         Menu {
             Button(L("Фото"), systemImage: "photo") { showPhotos = true }
             Button(L("Прикрепить файл"), systemImage: "paperclip") { showFiles = true }
-            Divider()
-            Button(L("Голосовой ввод…"), systemImage: "mic") { showDictation = true }
         } label: { controlGlyph("plus") }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
             .accessibilityLabel(L("Прикрепить фото или файл"))
