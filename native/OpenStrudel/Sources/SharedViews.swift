@@ -100,6 +100,14 @@ struct OpenAISettingsCard: View {
     }
 }
 
+extension UserFacingError {
+    /// An error beside its own Try again button: the generic sentence drops its own "Try again".
+    static func besideRetry(_ error: any Error) -> String {
+        let message = text(error.localizedDescription)
+        return message == L("Не удалось получить ответ. Попробуйте ещё раз.") ? L("Не удалось получить ответ.") : message
+    }
+}
+
 /// A connection's state as a word and a symbol; colour is never the only signal.
 struct ConnectionStatus: View {
     let connected: Bool

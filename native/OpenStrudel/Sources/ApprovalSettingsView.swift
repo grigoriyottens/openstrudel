@@ -68,7 +68,7 @@ struct ApprovalSettingsView: View {
             }
             if let error {
                 HStack(spacing: 12) {
-                    Text(UserFacingError.text(error.localizedDescription)).foregroundStyle(AppTheme.warning)
+                    Text(UserFacingError.besideRetry(error)).foregroundStyle(AppTheme.warning)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Button(L("Повторить")) { Task { await load() } }.disabled(loading || saving)

@@ -33,8 +33,18 @@ struct ComputerUseSettingsView: View {
                         .accessibilityIdentifier("connectComputerUse")
                 }
             } label: {
-                Label(L("Управление компьютером"), systemImage: "desktopcomputer")
-                if let settings { Text(summary(settings)) }
+                // The icon column and text edge of the other service rows.
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L("Управление компьютером"))
+                        if let settings {
+                            Text(summary(settings)).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "desktopcomputer").frame(width: 20)
+                }
             }
             if let settings, !settings.configured, settings.platform == "darwin" {
                 if isGroup { Text(L("Доступ будет у сотрудника в этой группе Telegram. Участники смогут поручать ему действия на компьютере.")) }
@@ -46,7 +56,7 @@ struct ComputerUseSettingsView: View {
             }
             if let error {
                 HStack(spacing: 12) {
-                    Text(UserFacingError.text(error.localizedDescription)).foregroundStyle(AppTheme.warning)
+                    Text(UserFacingError.besideRetry(error)).foregroundStyle(AppTheme.warning)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Button(L("Повторить")) { Task { await load() } }.disabled(busy)

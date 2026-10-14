@@ -7705,5 +7705,12 @@
     "fr": "Facultatif",
     "es": "Opcional",
     "he": "אופציונלי"
+  },
+  "Не удалось получить ответ.": {
+    "en": "Couldn’t get a response.",
+    "fr": "Aucune réponse reçue.",
+    "es": "No se ha recibido una respuesta.",
+    "he": "לא התקבלה תשובה.",
+    "ru": "Не удалось получить ответ."
   }
 }
