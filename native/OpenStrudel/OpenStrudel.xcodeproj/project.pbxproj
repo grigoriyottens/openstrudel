@@ -46,6 +46,7 @@
 		28A9DA1110E1BA1B0F865DEE /* DeviceLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECDE7BFB212A84C42AEC2A3 /* DeviceLibraryTests.swift */; };
 		29226C16C0B45821737ED60A /* ComposerTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = F35580B8698D54DD1416DD25 /* ComposerTextField.swift */; };
 		29266C725949B6930C224FC9 /* MessagePages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11DF3BC1500A7B883ABFF774 /* MessagePages.swift */; };
+		299F9B17F8DAFA03B5331695 /* AgentMetalCloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8E46F909140D82CDAC3536 /* AgentMetalCloud.swift */; };
 		2A2EDFB745D490042D3AAE58 /* Transcript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83AF568810BAD713BF382ED0 /* Transcript.swift */; };
 		2D09788DED8F1C5EDE458BE2 /* iPhoneSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1132C0F7932A6440305D150A /* iPhoneSmokeTests.swift */; };
 		2F7A1F01537586579154FC86 /* HomeAccountRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59124750DE089CC23DCB20B9 /* HomeAccountRecoveryTests.swift */; };
@@ -98,6 +99,7 @@
 		631BE06D25300A0E399F2E28 /* AppIconAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9B3467FCD3522515AD8F38 /* AppIconAppearance.swift */; };
 		63497E44A5FAA3B8E94C0FF6 /* StorePreviewUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63F40AD948917E9AE1685058 /* StorePreviewUITests.swift */; };
 		64365D840FC1C3F656F9447B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E29C1F0D3A0FE125E35B565D /* PrivacyInfo.xcprivacy */; };
+		65B4211FF5BCED8897D1019F /* AgentMetalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB6A073363637CAE0C3852B9 /* AgentMetalTests.swift */; };
 		698163891F3C00BC237D6C1C /* cloud-init.sh in Resources */ = {isa = PBXBuildFile; fileRef = 62EF729943001B623EBE767B /* cloud-init.sh */; };
 		6EBA29F09BC6522B0D1E8BC6 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31C465091E283CD04778E7DC /* RootView.swift */; };
 		6FE221DABABB34CD632FF08D /* ComposerTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = F35580B8698D54DD1416DD25 /* ComposerTextField.swift */; };
@@ -124,6 +126,7 @@
 		86E2BB9EAE968F71E04032EB /* EmployeeVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBEFEA4F5B39F397C767F97E /* EmployeeVisibility.swift */; };
 		8769E196AFD3136FF6469A32 /* DigitalOceanCloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF338D2C3249DC58392487E /* DigitalOceanCloud.swift */; };
 		87816A6CD5C75D29103B8A80 /* WaiVDSContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A4BCF298A1E1126E8D3482 /* WaiVDSContract.swift */; };
+		87D804BC32C8DEDD1AE2568D /* AgentMetalCloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8E46F909140D82CDAC3536 /* AgentMetalCloud.swift */; };
 		8948A7997B267280DC592F77 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E29C1F0D3A0FE125E35B565D /* PrivacyInfo.xcprivacy */; };
 		8B0DD4E8C65EC9C02924DE59 /* DigitalOceanCloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF338D2C3249DC58392487E /* DigitalOceanCloud.swift */; };
 		8C0B60605D75DD5E9713446C /* TranscriptStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEB733894E124793EDA9ACA3 /* TranscriptStack.swift */; };
@@ -181,6 +184,7 @@
 		D24C4F8AD7FB5F62D4495C35 /* ChatClockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DA7A5FC9D1A46B7D5486153 /* ChatClockTests.swift */; };
 		D2B1B0617ED09760DD5C2BA4 /* DictationAssetsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08E6A923D429082A0E616493 /* DictationAssetsTests.swift */; };
 		D5584A21F55C33689E507922 /* cloud-init.sh in Resources */ = {isa = PBXBuildFile; fileRef = 62EF729943001B623EBE767B /* cloud-init.sh */; };
+		D60AB99BD569C3F6E8F9D770 /* AgentMetalCloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8E46F909140D82CDAC3536 /* AgentMetalCloud.swift */; };
 		D6790CAE62F99F0BC7EB7C64 /* localizations.json in Resources */ = {isa = PBXBuildFile; fileRef = 089A150028F2831092DACE85 /* localizations.json */; };
 		D6AD9142F9898555BFB5F801 /* CatalogueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBE9BCE39D4B9FA1A854FCF /* CatalogueTests.swift */; };
 		D82AA6EE44DD86534C229446 /* EmployeeMove.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8625D9EDF41016BA302F31B9 /* EmployeeMove.swift */; };
@@ -302,6 +306,7 @@
 		8709EBB6593952ABF30E9889 /* DeviceSignOut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSignOut.swift; sourceTree = "<group>"; };
 		89AF14BBE5DEB4CAEEE0237C /* AppleReviewUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleReviewUITests.swift; sourceTree = "<group>"; };
 		89CC1AF65BEFB205E41E3BC8 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		8B8E46F909140D82CDAC3536 /* AgentMetalCloud.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMetalCloud.swift; sourceTree = "<group>"; };
 		8C5697D28D27A1636C95E5E2 /* OpenStrudel Text Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "OpenStrudel Text Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		96A2DF3BB4A7D519FA68EA0F /* LiveCloudPairingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCloudPairingUITests.swift; sourceTree = "<group>"; };
 		97A6C72C5E00D5723795E8B1 /* AgentTransfer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTransfer.swift; sourceTree = "<group>"; };
@@ -327,6 +332,7 @@
 		C7D69A9EDA344A443227E0B2 /* WaiVDSClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaiVDSClient.swift; sourceTree = "<group>"; };
 		C89E66060821227C1F39AD78 /* DeviceLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLibrary.swift; sourceTree = "<group>"; };
 		C9FCFCC5FBCE6D6D6D612458 /* MessageContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageContent.swift; sourceTree = "<group>"; };
+		CB6A073363637CAE0C3852B9 /* AgentMetalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMetalTests.swift; sourceTree = "<group>"; };
 		CBEFEA4F5B39F397C767F97E /* EmployeeVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmployeeVisibility.swift; sourceTree = "<group>"; };
 		D671F62812BA20E0AF9CB2FA /* HomeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeClient.swift; sourceTree = "<group>"; };
 		D6E988F61680172334C63B12 /* PrimaryHomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimaryHomeTests.swift; sourceTree = "<group>"; };
@@ -411,6 +417,7 @@
 			children = (
 				9A54DEED2D78EBBD77B24825 /* AgentAppearance.swift */,
 				4D96F9460E173BD6E9269AE3 /* AgentAppearanceViews.swift */,
+				8B8E46F909140D82CDAC3536 /* AgentMetalCloud.swift */,
 				97A6C72C5E00D5723795E8B1 /* AgentTransfer.swift */,
 				31C9D3DF0BCBDC8DE546D88B /* AgentTransferViews.swift */,
 				4B9B3467FCD3522515AD8F38 /* AppIconAppearance.swift */,
@@ -506,6 +513,7 @@
 			children = (
 				4FF3B00343E901A071B57444 /* AccountPresentationTests.swift */,
 				ACD91A75580ED25308693AB1 /* AgentAppearanceTests.swift */,
+				CB6A073363637CAE0C3852B9 /* AgentMetalTests.swift */,
 				5A087F040F8395EFA9DA4306 /* AgentTransferTests.swift */,
 				A6EBF07406C0F7BBD5F47800 /* AttachmentImportTests.swift */,
 				DDBE9BCE39D4B9FA1A854FCF /* CatalogueTests.swift */,
@@ -775,6 +783,8 @@
 				A2F6451B2ED5D4B7D2BCB49F /* AccountPresentationTests.swift in Sources */,
 				76A9DEA63806F5B706E1F523 /* AgentAppearance.swift in Sources */,
 				588CD75B3C1F9C3EE35BC4F4 /* AgentAppearanceTests.swift in Sources */,
+				299F9B17F8DAFA03B5331695 /* AgentMetalCloud.swift in Sources */,
+				65B4211FF5BCED8897D1019F /* AgentMetalTests.swift in Sources */,
 				FE16FE1017F5BA162CF34398 /* AgentTransfer.swift in Sources */,
 				7731DA55E2CDCA3C6C0735AE /* AgentTransferTests.swift in Sources */,
 				954CECC367D15575AF45868F /* AppTheme.swift in Sources */,
@@ -835,6 +845,7 @@
 			files = (
 				F6604979C497258E987E2193 /* AgentAppearance.swift in Sources */,
 				850B934B29DF93BD5D94629D /* AgentAppearanceViews.swift in Sources */,
+				87D804BC32C8DEDD1AE2568D /* AgentMetalCloud.swift in Sources */,
 				605C0ED95C9C79FCD1EACED1 /* AgentTransfer.swift in Sources */,
 				A468660D4A41BD2C0F719FDB /* AgentTransferViews.swift in Sources */,
 				631BE06D25300A0E399F2E28 /* AppIconAppearance.swift in Sources */,
@@ -901,6 +912,7 @@
 			files = (
 				7F3CBCD184E1FE8592F1625E /* AgentAppearance.swift in Sources */,
 				088E7C7AA2674D44C3751AE5 /* AgentAppearanceViews.swift in Sources */,
+				D60AB99BD569C3F6E8F9D770 /* AgentMetalCloud.swift in Sources */,
 				33E5289AE4FCC51707985917 /* AgentTransfer.swift in Sources */,
 				0E0F3C4329E1EA2E6C689738 /* AgentTransferViews.swift in Sources */,
 				BD17762CF52EB077E6C09EC9 /* AppIconAppearance.swift in Sources */,

@@ -198,6 +198,7 @@ targets:
       - path: Sources/ServerSetup.swift
       - path: Sources/SSHConnectionReadiness.swift
       - path: Sources/WaiVDSContract.swift
+      - path: Sources/AgentMetalCloud.swift
       - path: Sources/WaiVDSClient.swift
       - path: ../../scripts/server-setup.sh
         buildPhase: resources
