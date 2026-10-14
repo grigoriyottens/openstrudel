@@ -4073,12 +4073,12 @@
     "he": "מה נעשה היום?",
     "ru": "Напишите, что нужно"
   },
-  "Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты».": {
-    "en": "Describe what they should do. For example, “An editor who helps me write short posts.”",
-    "fr": "Décrivez son rôle. Par exemple : « Un rédacteur qui m’aide à écrire des publications courtes. »",
-    "es": "Describe lo que debe hacer. Por ejemplo: «Un editor que me ayude a escribir publicaciones breves».",
-    "he": "אפשר לתאר את התפקיד. למשל: ״עורך שיעזור לי לכתוב פוסטים קצרים״.",
-    "ru": "Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты»."
+  "Например: «Редактор, который помогает писать короткие посты».": {
+    "en": "For example, “An editor who helps me write short posts.”",
+    "fr": "Par exemple : « Un rédacteur qui m’aide à écrire des publications courtes. »",
+    "es": "Por ejemplo: «Un editor que me ayude a escribir publicaciones breves».",
+    "he": "למשל: ״עורך שיעזור לי לכתוב פוסטים קצרים״.",
+    "ru": "Например: «Редактор, который помогает писать короткие посты»."
   },
   "Создать на: ": {
     "en": "Create on: ",

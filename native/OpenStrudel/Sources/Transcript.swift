@@ -27,7 +27,8 @@ struct EmptyChat: View {
 
     @ViewBuilder private var detail: some View {
         if client.isEmployeeDraft {
-            line(L("Напишите, чем он должен заниматься. Например: «Редактор, который помогает писать короткие посты»."), limit: nil)
+            // The composer's placeholder asks for the role; this line only shows what an answer looks like.
+            BalancedLines { line(L("Например: «Редактор, который помогает писать короткие посты»."), limit: nil) }
             if library.employeeDestinations.count > 1 {
                 // The composer is the action; choosing the device is a quiet text menu in the line's place.
                 Menu {
