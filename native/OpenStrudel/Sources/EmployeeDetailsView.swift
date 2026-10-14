@@ -681,7 +681,8 @@ struct ConnectionsView: View {
         var notes: [String] = []
         if scope?.isGroup == true { notes.append(L("Подключения для этой группы.")) }
         if let shared = scope?.sharedNotice { notes.append(shared) }
-        if results.isEmpty && query.isEmpty && !loading && error == nil {
+        // "No connections yet" is a claim; after a failed load the warning above says what is known.
+        if results.isEmpty && query.isEmpty && !loading && error == nil && extensionNotice == nil {
             notes.append(extensions.isEmpty && !availableConnections.contains(where: { $0.id == "mcp:cua_repl" })
                 ? L("Пока без подключений. Нажмите «Добавить», чтобы сотрудник мог работать с вашими сервисами.")
                 : L("Другие сервисы можно подключить через «Добавить»."))
