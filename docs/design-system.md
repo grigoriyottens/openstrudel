@@ -106,7 +106,7 @@ Liquid Glass, radius 24, minimum height 48, growing to 8 lines and then scrollin
 
 ## Empty states and onboarding
 
-The character, one sentence, at most one action. Empty conversation: character 96 at 40 % of the height, the name in display, the role in at most two lines of 13 secondary within 360; the focused composer is the action. Welcome and onboarding: character 96, display title, body leading-aligned when it runs past two lines, one prominent capsule button in ink (canvas-coloured label); secondary actions are plain text buttons. Optically centred at 40 % from the top.
+The character, one sentence, at most one action. Empty conversation: character 96 at 40 % of the height, the name in display, the role in at most two lines of 13 secondary within 360; the composer is the action. On the Mac the keyboard stays on the chosen sidebar row, so arrows and Delete keep working; Tab reaches the composer after the search field. A new employee's draft focuses its composer. Welcome and onboarding: character 96, display title, body leading-aligned when it runs past two lines, one prominent capsule button in ink (canvas-coloured label); secondary actions are plain text buttons. Optically centred at 40 % from the top.
 
 ## Motion
 
