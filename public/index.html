@@ -131,6 +131,7 @@
     .reading, .bubble, .md { font-size: 15px; line-height: 22px; }
     .bubble { max-width: 75%; padding: 9px var(--space-4); border-radius: var(--radius-bubble); background: var(--user-bubble); white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: inset 0 0 0 var(--stroke) var(--separator); }
     .message.other .bubble { background: var(--surface); }
+    .message > .bubble + .bubble, .message > .files + .bubble { margin-top: var(--space-2); }
     .author { color: var(--secondary); font-size: 12px; line-height: 16px; margin: 0 0 var(--space-1); font-variant-numeric: tabular-nums; }
     .message .md { width: 100%; overflow-wrap: break-word; container-type: inline-size; }
     .meta { color: var(--secondary); font-size: 12px; line-height: 16px; margin-top: var(--space-1); display: flex; align-items: center; gap: var(--space-1); font-variant-numeric: tabular-nums; }
@@ -299,6 +300,7 @@
     .page-content progress { width: 100%; }
     .modal-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-2); padding: var(--space-5) var(--modal-edge) var(--modal-edge); background: var(--canvas); }
     .modal-actions:empty { display: none; }
+    .document { white-space: pre-wrap; overflow-wrap: anywhere; }
     .code-display { font: var(--semibold) 24px/32px var(--font-mono); user-select: all; font-variant-numeric: tabular-nums; }
     .group { display: flex; flex-direction: column; border-radius: var(--radius-card); background: var(--surface); overflow: hidden; box-shadow: inset 0 0 0 var(--stroke) var(--separator); }
     .row { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3); text-align: start; color: var(--text); text-decoration: none; transition: background-color .15s; }
@@ -590,6 +592,32 @@
       button.onclick = async () => { try { const blob = await api('/v1/files/' + encodeURIComponent(attachment.id), {}, true); download(blob, attachment.name, attachment.mimeType); } catch (e) { notify(e.message); } };
       return button;
     }
+    /* Imported history, as on the Mac: each passage on its own bubble, each inline text file as a chip that opens its text. */
+    const importedFile = /<file name="([^"\r\n]+)" mime="[^"\r\n]+">\s*([\s\S]*?)\s*<\/file>/g;
+    const untrustedEnvelope = /^\s*<<<EXTERNAL_UNTRUSTED_CONTENT id="([a-zA-Z0-9_-]+)">>>\r?\nSource: External\r?\n---\r?\n([\s\S]*?)\r?\n<<<END_EXTERNAL_UNTRUSTED_CONTENT id="\1">>>\s*$/;
+    function bubble(text) { const node = element('div', text, 'bubble'); node.dir = 'auto'; return node; }
+    function importedChip(name, text) {
+      const button = element('button', '', 'file'); button.type = 'button';
+      button.setAttribute('aria-label', t("Открыть текст файла «{0}»", name));
+      const words = element('span'), title = element('span', name, 'file-name'); title.dir = 'auto';
+      words.append(title, element('span', t("Открыть текст из истории"), 'file-size'));
+      button.append(icon('doc'), words);
+      button.onclick = () => { const page = modalPage(name, ''), body = element('div', text, 'reading document'); body.dir = 'auto'; page.content.append(body); };
+      return button;
+    }
+    function importedParts(source) {
+      const matches = [...source.matchAll(importedFile)];
+      if (!matches.length) return [bubble(source)];
+      const nodes = []; let files = null, start = 0;
+      const passage = text => { text = text.trim(); if (text) { nodes.push(bubble(text)); files = null; } };
+      for (const match of matches) {
+        passage(source.slice(start, match.index)); start = match.index + match[0].length;
+        if (!files) { files = element('div', '', 'files'); nodes.push(files); }
+        files.append(importedChip(match[1], match[2].match(untrustedEnvelope)?.[2] ?? match[2]));
+      }
+      passage(source.slice(start));
+      return nodes;
+    }
     const markdownOptions = { label: key => t(key), icon };
     function messageArticle(message, context) {
       const inbound = message.direction === 'inbound';
@@ -607,7 +635,7 @@
       } else {
         if (side === 'other' && message.author) article.append(element('div', message.author + timeSuffix(), 'author'));
         if (message.text) {
-          if (inbound) { const bubble = element('div', message.text, 'bubble'); bubble.dir = 'auto'; article.append(bubble); }
+          if (inbound) article.append(...(message.imported ? importedParts(message.text) : [bubble(message.text)]));
           else { const body = element('div', '', 'md'); body.append(StrudelMarkdown.render(message.text, document, markdownOptions)); article.append(body); }
         }
         if (message.attachments?.length) { const files = element('div', '', 'files'); files.append(...message.attachments.map(attachmentChip)); article.append(files); }
@@ -620,7 +648,7 @@
     }
     function outboxArticle(item) {
       const article = element('article', '', 'message person'); article.dataset.id = 'outbox:' + item.operationId;
-      const bubble = element('div', item.text, 'bubble'); bubble.dir = 'auto'; article.append(bubble);
+      article.append(bubble(item.text));
       const meta = element('div', '', item.error ? 'meta warning' : 'meta'); meta.append(element('span', item.error || t("Сообщение сохранено. Ждём подключения устройства.")));
       if (!item.error && state.owner) {
         const cancel = element('button', t("Отменить доставку")); cancel.type = 'button';
@@ -632,7 +660,7 @@
     }
     function pendingArticle(item) {
       const article = element('article', '', 'message person'); article.dataset.id = 'sending:' + item.externalId;
-      if (item.text) { const bubble = element('div', item.text, 'bubble'); bubble.dir = 'auto'; article.append(bubble); }
+      if (item.text) article.append(bubble(item.text));
       if (item.attachments?.length) { const files = element('div', '', 'files'); files.append(...item.attachments.map(attachmentChip)); article.append(files); }
       if (item.error) {
         const meta = element('div', '', 'meta warning'); meta.append(element('span', item.error));
