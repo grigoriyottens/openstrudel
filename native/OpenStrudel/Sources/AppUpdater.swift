@@ -46,27 +46,4 @@ final class AppUpdater: ObservableObject {
         controller.updater.checkForUpdates()
     }
 }
-
-struct UpdateSettings: View {
-    @ObservedObject private var updater = AppUpdater.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(L("Версия \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))"))
-                .font(.callout).foregroundStyle(AppTheme.secondaryText)
-            Toggle(L("Проверять обновления автоматически"), isOn: Binding(
-                get: { updater.automaticChecksEnabled }, set: { updater.automaticChecksEnabled = $0 }
-            ))
-            Text(L("Сообщим о новой версии. Установка начнётся только после вашего подтверждения."))
-                .font(.caption).foregroundStyle(AppTheme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-            if let failure = updater.startupFailure {
-                Text(L10n.serviceText(failure)).font(.callout).foregroundStyle(AppTheme.warning)
-            }
-            Button(L("Проверить обновления…"), action: updater.checkForUpdates)
-                .buttonStyle(.bordered).disabled(!updater.canCheckForUpdates)
-                .accessibilityIdentifier("checkForUpdates")
-        }.settingsCard()
-    }
-}
 #endif

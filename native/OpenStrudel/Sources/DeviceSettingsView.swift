@@ -58,7 +58,6 @@ struct SettingsView: View {
 
     var body: some View {
         settings
-            .environment(\.settingsCardIsPlain, true)
             .modifier(InterfaceLanguage())
             .onAppear {
                 selectedID = client.id

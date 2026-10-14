@@ -114,27 +114,7 @@ struct ConnectionStatus: View {
     }
 }
 
-extension EnvironmentValues {
-    /// A settings Form already groups its rows, so a card inside one drops its own surface.
-    @Entry var settingsCardIsPlain = false
-}
-
-private struct SettingsCard: ViewModifier {
-    @Environment(\.settingsCardIsPlain) private var plain
-    func body(content: Content) -> some View {
-        if plain {
-            content.frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            content.padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-        }
-    }
-}
-
 extension View {
-    func settingsCard() -> some View { modifier(SettingsCard()) }
-
     /// Settings switches: mini on the Mac, so a row with a switch is as tall as any other row.
     func settingsSwitch() -> some View {
         #if os(macOS)
