@@ -3,6 +3,7 @@ import SwiftUI
 struct TelegramSetupView: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
+    @Environment(\.layoutDirection) private var layoutDirection
     var contextual = false
     @State private var token = ""
     @State private var busy = false
@@ -119,6 +120,9 @@ struct TelegramSetupView: View {
         Text(L("2. Скопируйте выданный ключ и вставьте сюда."))
         SecureField(text: $token, prompt: Text(L("Ключ бота из BotFather"))) { Text(L("Ключ бота из BotFather")) }
             .labelsHidden()
+            // A Mac field aligns by its own text's direction; keep it on the interface edge like the rows.
+            .multilineTextAlignment(layoutDirection == .rightToLeft ? .trailing : .leading)
+            .environment(\.layoutDirection, .leftToRight)
             .accessibilityIdentifier("telegramBotToken")
         HStack(spacing: 12) {
             Text(L("Ключ хранится на устройстве сотрудника. Используйте отдельного бота для каждого устройства."))
