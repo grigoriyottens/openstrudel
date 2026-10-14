@@ -4,6 +4,7 @@ import { Scheduler } from "../src/scheduler.js";
 import { MessageService } from "../src/messages.js";
 import { TelegramAdapter } from "../src/telegram.js";
 import { AccountUnavailableError } from "../src/account-errors.js";
+import { ProviderKeyError, providerFailure, providerInfo, providerNotConnected } from "../src/providers.js";
 const stores:Store[]=[];
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();for(const s of stores.splice(0))s.close();});
 function setup() {
@@ -32,6 +33,23 @@ it("keeps ordinary group chatter quiet during an account incident and sends one 
  await restarted.processUpdate(update(5,"ordinary conversation after recovery"));
  run.mockRejectedValue(new AccountUnavailableError("sign_in_required"));
  await restarted.processUpdate(update(6,"@core_bot hello"));expect(fetch).toHaveBeenCalledTimes(2);
+ await m.close();
+});
+it("announces a key provider incident in a group once, like an account incident",async()=>{
+ const {s,m,a,run}=setup();s.setSetting("telegram.bot_username","core_bot");
+ s.bindTelegramChat("-100",s.createProfile({name:"Core"}).id);
+ const update=(id:number,text:string)=>({update_id:id,message:{message_id:id,from:{id:7},chat:{id:-100,type:"group"},text}});
+ const sent=()=>vi.mocked(fetch).mock.calls.map(c=>JSON.parse(String(c[1]!.body)).text);
+ run.mockRejectedValue(new ProviderKeyError(providerInfo("anthropic")!));
+ await a.processUpdate(update(1,"ordinary conversation"));
+ await a.processUpdate(update(2,"@core_bot check"));
+ await a.processUpdate(update(3,"@core_bot again"));
+ expect(sent()).toEqual(["Anthropic не принял ключ. Замените его в настройках аккаунтов."]);
+ run.mockRejectedValue(providerFailure(providerInfo("anthropic")!,new Error("429 rate_limit_error")));
+ await a.processUpdate(update(4,"@core_bot limits"));await a.processUpdate(update(5,"@core_bot limits again"));
+ run.mockRejectedValue(providerNotConnected("anthropic"));
+ await a.processUpdate(update(6,"ordinary conversation"));await a.processUpdate(update(7,"@core_bot moved"));
+ expect(sent()).toEqual(["Anthropic не принял ключ. Замените его в настройках аккаунтов.","У ключа Anthropic закончился лимит или баланс. Проверьте оплату у провайдера или повторите позже.","Подключите Anthropic на этом устройстве или выберите другую модель."]);
  await m.close();
 });
 it("restricts a linked group to its approved senders",async()=>{

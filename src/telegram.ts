@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { telegramText } from "./telegram-format.js";
 import { transcribeVoice } from "./voice.js";
 import { AccountUnavailableError } from "./account-errors.js";
+import { ProviderIncident } from "./providers.js";
 import type { MessageService } from "./messages.js";
 import type { Store } from "./store.js";
 
@@ -395,9 +396,9 @@ export class TelegramAdapter {
         this.lastError = "Не удалось сохранить часть контекста группы. Отправьте нужное вложение в ответ на сообщение бота.";
         this.store.markTelegramUpdate(update.update_id); return;
       }
-      if (error instanceof AccountUnavailableError && Number(chatId) < 0) {
-        // A group may send an album or carry on talking during an account
-        // outage. Keep each failed input in Home, but announce one incident
+      if ((error instanceof AccountUnavailableError || error instanceof ProviderIncident) && Number(chatId) < 0) {
+        // A group may send an album or carry on talking during an account or
+        // key outage. Keep each failed input in Home, but announce one incident
         // only when addressed. A successful turn ends the incident.
         const addressed = replyToBot || Boolean(username && new RegExp(`@${username}(?![\\w])`, "i").test(text));
         if (addressed && this.store.getSetting(accountNoticeKey) !== error.reason) {

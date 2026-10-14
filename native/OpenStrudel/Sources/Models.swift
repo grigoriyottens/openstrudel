@@ -366,6 +366,8 @@ struct ProviderSummary: Decodable, Identifiable, Equatable {
     let keyHint: String?; let keysUrl: String?; let usedBy: Int
     var canAddKey: Bool { auth == "key" && !connected }
     var connectedKey: Bool { auth == "key" && connected }
+    /// `usedBy` counts employees, the main chat and the device default together, so it is not a number of employees.
+    var removalWarning: String { L("Сотрудников и настроек на этом ключе: \(usedBy). Их модель станет «Как на устройстве» или «Автоматически».") }
 }
 struct ProviderList: Decodable { let providers: [ProviderSummary]; let canManage: Bool }
 
@@ -406,12 +408,17 @@ struct ModelSettings: Decodable {
         return providers.map { provider in Group(provider: provider, models: models.filter { $0.provider == provider.id }) }.filter { !$0.models.isEmpty }
     }
     func model(_ ref: ModelRef?) -> ModelChoice? { models.first { $0.ref == ref } }
-    /// ChatGPT and the OpenAI API both recommend OpenAI's choice.
-    func recommender(of model: ModelChoice) -> String {
-        guard let provider = model.provider, !["chatgpt", "openai"].contains(provider),
-              let name = providers?.first(where: { $0.id == provider })?.name else { return "OpenAI" }
-        return name
+    /// With several providers a name alone is ambiguous: ChatGPT and an OpenAI key share models, OpenRouter repeats vendors' names.
+    func title(_ model: ModelChoice) -> String {
+        guard let providers, providers.count > 1, let name = providers.first(where: { $0.id == model.provider })?.name else { return model.name }
+        return model.name + " · " + name
     }
+    /// Only OpenAI's catalog marks its own default; for another provider the recommended model is our pick.
+    func recommendation(_ model: ModelChoice) -> String {
+        !model.isDefault ? L("Модель по умолчанию") : [nil, "chatgpt", "openai"].contains(model.provider) ? L("Рекомендует OpenAI") : L("Рекомендуем")
+    }
+    /// An OpenAI account choice applies only on ChatGPT; older Homes know nothing else.
+    var runsOnChatGPT: Bool { (effective.provider ?? "chatgpt") == "chatgpt" }
 }
 struct HomeActionResult: Decodable { let ok: Bool?; let status: String?; let operationId: String? }
 struct HomeRequestStatus: Decodable {

@@ -197,7 +197,7 @@ export class AccountEngines implements CodexEngine {
     this.engines.set(id, engine);
     return engine;
   }
-  /** The scope also manages a Claude route's services and skills, which every route of a context shares. */
+  /** A Claude route keeps its MCP services in the context's Codex scope; skills and plugins there apply only to Codex routes. */
   private keyed(id: string): { info: ProviderInfo; engine: CodexEngine; scope: ScopedCodexEngine } {
     const info = providerInfo(id);
     if (!info || !providerKey(this.accounts.store, id)) throw providerNotConnected(id);
@@ -215,9 +215,10 @@ export class AccountEngines implements CodexEngine {
     let connectionEngine: CodexEngine | undefined;
     let runningEngine: CodexEngine | undefined;
     const selection = () => locked ? Promise.resolve(locked) : this.accounts.choose(agent, false);
-    const current = async (scope = false) => {
+    /** The context's Codex scope, which also keeps a Claude route's services. */
+    const current = async () => {
       const provider = resolveModelSelection(this.accounts.store, agent).provider!;
-      if (provider !== "chatgpt") { const keyed = this.keyed(provider); return (scope ? keyed.scope : keyed.engine).forContext!(context); }
+      if (provider !== "chatgpt") return this.keyed(provider).scope.forContext(context);
       const selected = await selection(); return this.scoped(selected.id, selected.service).forContext(context);
     };
     return {
@@ -234,7 +235,12 @@ export class AccountEngines implements CodexEngine {
           const ownerKey = options?.conversationId ? "codex.threadOwner." + options.conversationId : undefined;
           const owner = ownerKey ? this.accounts.store.getSetting(ownerKey) : null;
           const threadId = saved ?? (id === "default" && (!owner || owner === id) ? options?.threadId : undefined);
-          const history = !threadId && options?.conversationId ? this.accounts.store.listMessages(options.conversationId, 200).filter(m => m.kind !== "notice" && m.status === "completed").map(m => `${m.direction === "inbound" ? "User" : "Assistant"}: ${m.text}`).join("\n") : "";
+          // A new thread is seeded with the chat. A thread resumed after another route answered gets the turns made since its last one.
+          const checkpointKey = options?.conversationId ? `codex.threadCheckpoint.${id}.${options.conversationId}` : undefined;
+          const checkpoint = threadId && owner && owner !== id && checkpointKey ? this.accounts.store.getSetting(checkpointKey) : null;
+          const recent = options?.conversationId && (!threadId || checkpoint) ? this.accounts.store.listMessages(options.conversationId, 200) : [];
+          const history = recent.slice(recent.findIndex(m => m.id === checkpoint) + 1).filter(m => m.kind !== "notice" && m.status === "completed" && (!checkpoint || m.replyToId !== checkpoint))
+            .map(m => `${m.direction === "inbound" ? "User" : "Assistant"}: ${m.text}`).join("\n");
           const engine = keyed ? keyed.engine.forContext!(context) : this.scoped(id, service!).forContext(context);
           runningEngine = engine;
           const result = await engine.run(history ? `Earlier chat (context only):\n${history}\n\nCurrent message:\n${input}` : input, { ...options, threadId,
@@ -249,6 +255,7 @@ export class AccountEngines implements CodexEngine {
             } });
           if (threadKey) this.accounts.store.setSetting(threadKey, result.threadId);
           if (ownerKey) this.accounts.store.setSetting(ownerKey, id);
+          if (checkpointKey && options?.messageId) this.accounts.store.setSetting(checkpointKey, options.messageId);
           return result;
         } catch (error) {
           if (keyed) throw providerFailure(keyed.info, error);
@@ -262,13 +269,23 @@ export class AccountEngines implements CodexEngine {
         const chatgpt = chatgptSignedIn(this.accounts.store) ? await selection().then(selected => this.scoped(selected.id, selected.service).forContext(context).models!(refresh))
           .catch(error => { if (error instanceof AccountUnavailableError) return []; throw error; }) : [];
         const keyed = await Promise.all(providerInfos().filter(p => providerKey(this.accounts.store, p.id))
-          .map(p => p.models.length ? providerModels(p) : this.keyed(p.id).engine.forContext!(context).models!(refresh)));
+          .map(p => p.models.length ? providerModels(p) : this.keyed(p.id).scope.forContext(context).models!(refresh)));
         return [...chatgpt, ...keyed.flat()];
       },
-      connections: async refresh => { connectionEngine = await current(); return connectionEngine.connections?.(refresh) ?? []; },
-      connect: async name => (await current()).connect!(name),
+      connections: async refresh => {
+        connectionEngine = await current();
+        const all = await connectionEngine.connections?.(refresh) ?? [];
+        // Computer Use is a Codex plugin; the Claude engine never loads it.
+        return providerInfo(resolveModelSelection(this.accounts.store, agent).provider!)?.engine === "claude" ? all.filter(c => c.id !== "mcp:cua_repl") : all;
+      },
+      connect: async name => {
+        // Codex keeps a browser sign-in in its own home, where the Claude engine cannot use it.
+        const info = providerInfo(resolveModelSelection(this.accounts.store, agent).provider!);
+        if (info?.engine === "claude") throw new HomeError(`С ${info.name} вход в сервисы через браузер недоступен. Добавьте сервис с ключом доступа в «Сервисы и навыки».`, 409);
+        return (await current()).connect!(name);
+      },
       isConnected: async name => (await current()).isConnected!(name),
-      extensions: async () => (await current(true)).extensions!(),
+      extensions: async () => (await current()).extensions!(),
     };
   }
   forContext(context: string): CodexEngine { return this.forAgent("main", context); }

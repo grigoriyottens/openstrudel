@@ -1,5 +1,5 @@
-import { automaticProvider, parseModelSelection, readModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, validateModelSelection } from "./model-settings.js";
-import { connectProvider, disconnectProvider, providerKey, providerNotConnected, providerSummaries } from "./providers.js";
+import { automaticProvider, checkModelSelection, parseModelSelection, readModelSelection, recommendedModel, resolveModelSelection, saveModelSelection } from "./model-settings.js";
+import { connectProvider, disconnectProvider, providerInfo, providerSummaries } from "./providers.js";
 import { deleteEmployee } from "./employee-delete.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -221,10 +221,8 @@ export class HttpApi {
         if (request.method === "POST") {
           const selection = parseModelSelection(await this.body(request),Boolean(agent));
           if (agent) assertAgentWritable(this.store,agent);
-          const checked = agent && !selection.model ? readModelSelection(this.store) : selection;
-          const provider = checked.model ? checked.provider! : automatic;
-          if (provider !== "chatgpt" && !providerKey(this.store,provider)) throw providerNotConnected(provider);
-          validateModelSelection(checked,models.filter(m=>m.provider === provider));
+          // Inheriting checks the device default as it runs: a registry provider has only the default speed.
+          checkModelSelection(this.store,agent && !selection.model ? resolveModelSelection(this.store) : selection,models);
           saveModelSelection(this.store,selection,agent);
         }
         this.send(response,200,{models,providers:providerSummaries(this.store).filter(p=>p.connected),recommended:{...recommendedModel(models.filter(m=>m.provider === automatic)),provider:automatic},
@@ -415,6 +413,13 @@ export class HttpApi {
 
         const tokenLimit = body.tokenLimit == null ? undefined : Number(body.tokenLimit);
         if (tokenLimit !== undefined && (!Number.isFinite(tokenLimit) || tokenLimit <= 0)) throw new Error("tokenLimit must be a positive number");
+        // A model chosen at creation is the same owner-only choice as in the model settings.
+        const choice = body.provider == null && body.model == null ? null : parseModelSelection({ provider: body.provider, model: body.model ?? null, serviceTier: body.serviceTier ?? "default" }, true);
+        if (choice) {
+          if (!canManageAccount) throw new HomeError("Настройки меняет владелец устройства.", 403);
+          const engine = this.engine?.forAgent?.("main", "personal") ?? this.engine?.forContext?.("personal") ?? this.engine;
+          checkModelSelection(this.store, choice, await engine?.models?.() ?? []);
+        }
         this.store.db.exec("SAVEPOINT create_profile");
         let profile;
         try {
@@ -423,8 +428,9 @@ export class HttpApi {
             defaultName: typeof body.defaultName === "string" ? body.defaultName : undefined,
             instructions,
             capabilities: Array.isArray(body.capabilities) ? body.capabilities.filter((item): item is string => typeof item === "string") : [],
-            provider: body.provider == null ? undefined : String(body.provider),
-            model: body.model == null ? undefined : String(body.model),
+            provider: choice?.provider ?? undefined,
+            model: choice?.model ?? undefined,
+            serviceTier: choice?.serviceTier ?? undefined,
             tokenLimit,
             domain: body.domain == null ? undefined : body.domain as import("./types.js").EmployeeProfile["domain"],
             purpose: body.purpose == null ? undefined : String(body.purpose),
@@ -527,7 +533,12 @@ export class HttpApi {
         else if (request.method === "GET" && path === "/v1/extensions/computer") this.send(response,200,extensions.computerUse());
         else if (request.method === "POST" && path === "/v1/extensions/computer") this.send(response,200,await extensions.connectComputerUse());
         else if (request.method === "DELETE" && path === "/v1/extensions/computer") this.send(response,200,await extensions.removeMcp("cua_repl"));
-        else if (request.method === "GET" && path === "/v1/extensions") this.send(response,200,await extensions.list());
+        else if (request.method === "GET" && path === "/v1/extensions") {
+          // A context's skills and plugins stay listed for every route, but the Claude engine loads only its MCP services.
+          const provider = providerInfo(resolveModelSelection(this.store,conversation.profileId ?? "main").provider ?? "");
+          const state = await extensions.list();
+          this.send(response,200,provider?.engine === "claude" ? {...state,notice:`С ${provider.name} сотрудник использует только сервисы MCP. Навыки и плагины работают с ChatGPT, OpenAI API и xAI.`} : state);
+        }
         else if (request.method === "POST" && path === "/v1/extensions/install") this.send(response,200,await extensions.install(body.files,String(body.digest ?? ""),body.replaces == null ? undefined : String(body.replaces)));
         else if (request.method === "POST" && path === "/v1/extensions/mcp") this.send(response,200,await extensions.addMcp(body));
         else if (request.method === "POST" && path === "/v1/extensions/mcp/remove") this.send(response,200,await extensions.removeMcp(String(body.name ?? "")));

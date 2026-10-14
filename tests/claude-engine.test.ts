@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import vm from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CanUseTool, Options, query as sdkQuery, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
@@ -113,13 +114,14 @@ it("asks the owner through the same requests Codex makes", async () => {
     if (method === "mcpServer/elicitation/request") return { action: "decline", content: null, _meta: null };
     return { decision };
   } });
-  const call = calls[0]!, cwd = join(root, ".data/workspace/personal");
-  expect(call.options.sandbox).toEqual({ enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: true, failIfUnavailable: false });
+  const call = calls[0]!, cwd = join(root, ".data/workspace/personal"), outside = join(realpathSync(root), "outside.md");
+  expect(call.options.sandbox).toEqual({ enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: true, failIfUnavailable: false,
+    filesystem: { denyRead: [realpathSync(join(root, ".data")), realpathSync(homedir())], allowRead: [realpathSync(cwd)] } });
   expect(await allow(call, "Bash", { command: "rm -rf build", description: "Clean" })).toMatchObject({ behavior: "allow" });
   decision = "decline";
   expect(await allow(call, "Bash", { command: "curl x", description: "Fetch" })).toMatchObject({ behavior: "deny" });
   expect(await allow(call, "Write", { file_path: join(cwd, "notes/a.md"), content: "x" })).toMatchObject({ behavior: "allow" });
-  expect(await allow(call, "Edit", { file_path: "/etc/hosts", old_string: "a", new_string: "b" })).toMatchObject({ behavior: "deny" });
+  expect(await allow(call, "Edit", { file_path: outside, old_string: "a", new_string: "b" })).toMatchObject({ behavior: "deny" });
   const question = { question: "Pick one?", header: "Pick", multiSelect: false, options: [{ label: "A", description: "a" }, { label: "B", description: "b" }] };
   expect(await allow(call, "AskUserQuestion", { questions: [question] })).toEqual({ behavior: "allow", updatedInput: { questions: [question], answers: { "Pick one?": "B" } } });
   expect(await allow(call, "mcp__notion__search", { query: "q" }, { mcpServer: { name: "notion", source: "dynamic" } })).toMatchObject({ behavior: "deny" });
@@ -128,7 +130,7 @@ it("asks the owner through the same requests Codex makes", async () => {
   expect(requests).toEqual([
     ["item/commandExecution/requestApproval", { command: "rm -rf build", cwd, reason: "Clean" }],
     ["item/commandExecution/requestApproval", { command: "curl x", cwd, reason: "Fetch" }],
-    ["item/fileChange/requestApproval", { reason: "Edit /etc/hosts", grantRoot: "/etc" }],
+    ["item/fileChange/requestApproval", { reason: `Edit ${outside}`, grantRoot: realpathSync(root) }],
     ["item/tool/requestUserInput", { questions: [{ id: "0", header: "Pick", question: "Pick one?", options: question.options }] }],
     ["mcpServer/elicitation/request", { mode: "form", serverName: "notion", message: 'Allow the notion MCP server to run tool "search"?',
       requestedSchema: { type: "object", properties: {} }, _meta: { codex_approval_kind: "mcp_tool_call", tool_params: { query: "q" } } }],
@@ -143,7 +145,8 @@ it("keeps approve-all writes in the workspace and never runs commands for a grou
   await engine("kimi", query).forContext("group-" + "a".repeat(64)).run("Hi", { approvalMode: "approve_all", groupContext: true, onRequest });
   await engine("kimi", query).run("Hi", { approvalMode: "ask" });
   const [all, group, unattended] = calls as [Call, Call, Call];
-  expect(all.options.sandbox).toEqual({ enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false, failIfUnavailable: true });
+  expect(all.options.sandbox).toEqual({ enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false, failIfUnavailable: true,
+    filesystem: { denyRead: [realpathSync(join(root, ".data")), realpathSync(homedir())], allowRead: [realpathSync(join(root, ".data/workspace/personal"))] } });
   expect(await allow(all, "Bash", { command: "make" })).toMatchObject({ behavior: "allow" });
   expect(await allow(all, "mcp__notion__search", {}, { mcpServer: { name: "notion", source: "dynamic" } })).toMatchObject({ behavior: "allow" });
   expect(await allow(all, "Write", { file_path: "report.md", content: "x" })).toMatchObject({ behavior: "allow" });
@@ -202,19 +205,76 @@ it("sends images only to models that accept them", async () => {
   expect(calls[1]!.prompt[0]!.message.content).toEqual([{ type: "text", text: "Что на фото?" }]);
 });
 
-it("brings the context's MCP services and lists the registry models", async () => {
+it("brings the context's MCP services like Codex, from a private file instead of the command line", async () => {
   mkdirSync(join(root, ".data/extensions/work"), { recursive: true });
+  mkdirSync(join(root, ".data/connections"), { recursive: true });
   writeFileSync(join(root, ".data/extensions/work/config.toml"), `[mcp_servers.notion]\nenabled = true\nurl = "https://mcp.notion.com/mcp"\n[mcp_servers.notion.http_headers]\nAuthorization = "Bearer n"\n
 [mcp_servers.files]\ncommand = "/usr/bin/files-mcp"\nargs = ["--root", "."]\n[mcp_servers.files.env]\nMODE = "read"\n
 [mcp_servers.off]\nenabled = false\ncommand = "off"\n[mcp_servers.cua_repl]\nenabled = true\ncommand = "/Applications/Codex.app/cua"\n`);
-  const { query, calls } = fake();
-  await engine("openrouter", query).forContext("work").run("Hi", { tools: { definitions: [], call: async () => null } });
-  const servers = calls[0]!.options.mcpServers!;
-  expect(Object.keys(servers).sort()).toEqual(["files", "notion", "openstrudel"]);
-  expect(servers.notion).toEqual({ type: "http", url: "https://mcp.notion.com/mcp", headers: { Authorization: "Bearer n" } });
-  expect(servers.files).toEqual({ type: "stdio", command: "/usr/bin/files-mcp", args: ["--root", "."], env: { MODE: "read" } });
+  // Installer-provisioned services, and Telegram services that act as the verified sender only.
+  writeFileSync(join(root, ".data/connections/work.toml"), `[mcp_servers.wai_company]\nurl = "https://wai.example/mcp"\n[mcp_servers.wai_company.http_headers]\nAuthorization = "Bearer w"\n`);
+  writeFileSync(join(root, ".data/connections/work.telegram.json"), JSON.stringify({ wai_telegram: { url: "https://tg.example/mcp", http_headers: { Authorization: "Bearer t", "x-hermes-user-id": "1" } } }));
+  const files: Array<{ servers: Record<string, unknown>; mode: number }> = [];
+  const { query, calls } = fake(call => {
+    const path = call.options.extraArgs!["mcp-config"]!;
+    files.push({ servers: JSON.parse(readFileSync(path, "utf8")).mcpServers, mode: statSync(path).mode & 0o777 });
+    return [init(), success("Привет")];
+  });
+  await engine("openrouter", query).forContext("work").run("Hi", { tools: { definitions: [], call: async () => null },
+    telegramActor: { userId: "42", chatId: "-100123", messageId: "7" }, conversationId: "c-1" });
+  await engine("openrouter", query).forContext("work").run("Hi");
+  const [telegram, plain] = files as [typeof files[0], typeof files[0]];
+  expect(Object.keys(calls[0]!.options.mcpServers!)).toEqual(["openstrudel"]);
+  expect(calls[1]!.options.mcpServers).toEqual({});
+  expect(telegram.mode).toBe(0o600);
+  expect(telegram.servers).toEqual({
+    notion: { type: "http", url: "https://mcp.notion.com/mcp", headers: { Authorization: "Bearer n" } },
+    files: { type: "stdio", command: "/usr/bin/files-mcp", args: ["--root", "."], env: { MODE: "read" } },
+    wai_company: { type: "http", url: "https://wai.example/mcp", headers: { Authorization: "Bearer w" } },
+    wai_telegram: { type: "http", url: "https://tg.example/mcp", headers: { Authorization: "Bearer t", "x-hermes-platform": "telegram",
+      "x-hermes-user-id": "42", "x-hermes-chat-id": "-100123", "x-hermes-message-id": "7", "x-hermes-session-id": "openstrudel:c-1" } },
+  });
+  expect(Object.keys(plain.servers).sort()).toEqual(["files", "notion", "wai_company"]);
+  expect(readdirSync(join(root, ".data/providers/openrouter/claude/work")).filter(f => f.startsWith("mcp-"))).toEqual([]);
   expect(calls[0]!.options.disallowedTools).toContain("WebSearch");
-  const models = await engine("openrouter", query).models();
-  expect(models[0]).toMatchObject({ id: "anthropic/claude-opus-5.5", isDefault: true, provider: "openrouter", speeds: [{ id: "default", name: "Обычная", description: "" }] });
-  expect(models.filter(m => m.isDefault)).toHaveLength(1);
+});
+
+it("reads and changes only the real workspace, in every mode", async () => {
+  const { query, calls } = fake();
+  const asked: string[] = [];
+  const onRequest = async (method: string, params: any) => { asked.push(`${method} ${params.reason}`); return { decision: "accept" }; };
+  await engine("kimi", query).run("Hi", { approvalMode: "approve_all", onRequest });
+  await engine("kimi", query).run("Hi", { approvalMode: "ask", onRequest });
+  await engine("kimi", query).forContext("group-" + "b".repeat(64)).run("Hi", { approvalMode: "approve_all", groupContext: true, onRequest });
+  const [all, ask, group] = calls as [Call, Call, Call];
+  const cwd = join(root, ".data/workspace/personal"), data = realpathSync(join(root, ".data"));
+  mkdirSync(join(root, ".data/codex"));
+  writeFileSync(join(root, ".data/codex/auth.json"), "{}");
+  writeFileSync(join(cwd, "notes.md"), "x");
+  // A command inside the workspace can leave links that point anywhere.
+  symlinkSync(join(root, ".data"), join(cwd, "escape"));
+  symlinkSync(join(root, ".data/extensions/new.toml"), join(cwd, "dangling"));
+  for (const call of [all, ask, group]) for (const path of [join(root, ".data/codex/auth.json"), join(cwd, "escape/codex/auth.json"), "/etc/hosts"])
+    expect(await allow(call, "Read", { file_path: path }), path).toMatchObject({ behavior: "deny" });
+  for (const call of [all, ask]) expect(await allow(call, "Read", { file_path: join(cwd, "notes.md") })).toMatchObject({ behavior: "allow" });
+  for (const path of ["escape/extensions/work/config.toml", "dangling"])
+    expect(await allow(all, "Write", { file_path: join(cwd, path), content: "x" }), path).toMatchObject({ behavior: "deny" });
+  expect(await allow(all, "Workflow", { script: "x" })).toMatchObject({ behavior: "deny" });
+  expect(asked).toEqual([]);
+  // Asking shows the owner where the change really goes.
+  expect(await allow(ask, "Write", { file_path: join(cwd, "escape/pwned.txt"), content: "x" })).toMatchObject({ behavior: "allow" });
+  expect(asked).toEqual([`item/fileChange/requestApproval Write ${join(data, "pwned.txt")}`]);
+});
+
+it("states turn failures and stops as catalog text", async () => {
+  const context = vm.createContext({});
+  vm.runInContext(readFileSync("public/localization.js", "utf8"), context);
+  const english = context.StrudelLocale.create(JSON.parse(readFileSync("public/localizations.json", "utf8")), "en");
+  const failed = fake(() => [init(), { type: "result", subtype: "success", is_error: true, api_error_status: 400, result: "API Error: 400 model glm-9 does not exist", session_id: "s-1" }]);
+  const failure = await engine("zai", failed.query).run("Hi").catch(e => e.message);
+  expect(english.error(failure)).toBe("GLM did not finish the reply: 400 model glm-9 does not exist");
+  const stop = new AbortController();
+  stop.abort();
+  const stopped = fake(async function* (call) { yield init(); await call.interrupted; yield interrupted; });
+  expect(english.error(await engine("zai", stopped.query).run("Hi", { signal: stop.signal }).catch(e => e.message))).toBe("Reply stopped");
 });

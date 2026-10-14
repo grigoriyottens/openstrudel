@@ -71,6 +71,8 @@ export interface CodexEngine {
     options?: {
       threadId?: string | null;
       conversationId?: string;
+      /** The inbound message this turn answers. */
+      messageId?: string;
       signal?: AbortSignal;
       onEvent?: (event: EngineEvent) => void;
       profile?: string | null;

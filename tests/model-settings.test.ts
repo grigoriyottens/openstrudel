@@ -129,3 +129,21 @@ it('serves account capabilities, validates writes and denies members before chan
  expect((await call(defaults,'POST',{model:null,serviceTier:'ultra'})).status).toBe(409);
  }finally{await runtime.stop();}
 });
+
+it('lets an employee follow an automatic device default saved with a speed the automatic key provider lacks',async()=>{
+ const {OpenStrudelRuntime}=await import('../src/runtime.js');
+ const {providerInfo,providerModels}=await import('../src/providers.js');
+ const runtime=new OpenStrudelRuntime({dbPath:':memory:',startTelegram:false,apiToken:'owner',engine:{models:async()=>[...catalog,...providerModels(providerInfo('anthropic')!)],run:async()=>({threadId:'t',response:'OK',events:[]})}});
+ const addr=await runtime.api.listen('127.0.0.1',0);
+ const call=(path:string,method='GET',body?:any)=>fetch(`http://127.0.0.1:${addr.port}${path}`,{method,headers:{'content-type':'application/json',authorization:'Bearer owner'},body:body===undefined?undefined:JSON.stringify(body)});
+ try{
+  // Saved as Automatic + Fast while ChatGPT was automatic; ChatGPT is gone and Anthropic is automatic now.
+  saveModelSelection(runtime.store,{provider:null,model:null,serviceTier:'priority'});
+  runtime.store.setSetting('providers.anthropic.key','ant-key');
+  const employee=runtime.store.createProfile({name:'QA'}),override='/v1/settings/models?agentId='+employee.id;
+  const inherited=await call(override,'POST',{provider:null,model:null,serviceTier:null});
+  expect(inherited.status).toBe(200);
+  expect((await inherited.json()).effective).toEqual({provider:'anthropic',model:'claude-fable-5-1',serviceTier:'default'});
+  expect((await call('/v1/settings/models?agentId=main','POST',{provider:null,model:null,serviceTier:null})).status).toBe(200);
+ }finally{await runtime.stop();}
+});

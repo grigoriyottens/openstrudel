@@ -1,7 +1,7 @@
 import type { Store } from './store.js';
 import { HomeError } from './home.js';
 import { chatgptSignedIn } from './account.js';
-import { providerInfo, providerInfos, providerKey, providerModels } from './providers.js';
+import { providerInfo, providerInfos, providerKey, providerModels, providerNotConnected } from './providers.js';
 
 /** `provider` is null only with a null model: as on the device, or automatic for the device itself. */
 export type ModelSelection = { provider: string | null; model: string | null; serviceTier: string | null };
@@ -52,6 +52,12 @@ export function validateModelSelection(value: Pick<ModelSelection, 'model' | 'se
   const model = value.model ? models.find(m=>m.id === value.model) : recommendedModel(models);
   if (!model) throw new HomeError('Эта модель недоступна для аккаунта. Выберите другую в настройках модели.',409);
   if (!model.speeds.some(s=>s.id === value.serviceTier)) throw new HomeError('Эта скорость недоступна для выбранной модели. Выберите другую в настройках.',409);
+}
+/** A saved choice must run here: its provider is connected and offers the model and speed. */
+export function checkModelSelection(store: Store, value: ModelSelection, models: ModelChoice[]) {
+  const provider = value.model ? value.provider! : automaticProvider(store);
+  if (provider !== 'chatgpt' && !providerKey(store,provider)) throw providerNotConnected(provider);
+  validateModelSelection(value,models.filter(m=>m.provider === provider));
 }
 /** Older apps send no provider: their models are ChatGPT models. */
 export function parseModelSelection(value: any, allowInherit: boolean): ModelSelection {

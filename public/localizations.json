@@ -8287,6 +8287,20 @@
     "es": "{0} no pudo confirmar la clave: {1}",
     "he": "{0} לא אישר את המפתח: {1}"
   },
+  "{0} не завершил ответ: {1}": {
+    "en": "{0} did not finish the reply: {1}",
+    "ru": "{0} не завершил ответ: {1}",
+    "fr": "{0} n’a pas terminé la réponse : {1}",
+    "es": "{0} no terminó la respuesta: {1}",
+    "he": "{0} לא סיים את התשובה: {1}"
+  },
+  "Ответ остановлен": {
+    "en": "Reply stopped",
+    "ru": "Ответ остановлен",
+    "fr": "Réponse arrêtée",
+    "es": "Respuesta detenida",
+    "he": "התשובה הופסקה"
+  },
   "Не удалось связаться с {0}. Проверьте подключение к интернету и попробуйте ещё раз.": {
     "en": "Couldn’t reach {0}. Check your internet connection and try again.",
     "ru": "Не удалось связаться с {0}. Проверьте подключение к интернету и попробуйте ещё раз.",
@@ -8314,6 +8328,20 @@
     "fr": "Connectez {0} sur cet appareil ou choisissez un autre modèle.",
     "es": "Conecta {0} en este dispositivo o elige otro modelo.",
     "he": "יש לחבר את {0} במכשיר הזה או לבחור מודל אחר."
+  },
+  "С {0} вход в сервисы через браузер недоступен. Добавьте сервис с ключом доступа в «Сервисы и навыки».": {
+    "en": "Browser sign-in to services isn’t available with {0}. Add the service with an access key in “Services and skills”.",
+    "ru": "С {0} вход в сервисы через браузер недоступен. Добавьте сервис с ключом доступа в «Сервисы и навыки».",
+    "fr": "La connexion aux services par le navigateur n’est pas disponible avec {0}. Ajoutez le service avec une clé d’accès dans « Services et compétences ».",
+    "es": "El inicio de sesión en servicios desde el navegador no está disponible con {0}. Añade el servicio con una clave de acceso en «Servicios y habilidades».",
+    "he": "התחברות לשירותים דרך הדפדפן אינה זמינה עם {0}. הוסיפו את השירות עם מפתח גישה ב״שירותים ומיומנויות״."
+  },
+  "С {0} сотрудник использует только сервисы MCP. Навыки и плагины работают с ChatGPT, OpenAI API и xAI.": {
+    "en": "With {0}, the assistant uses only MCP services. Skills and plugins work with ChatGPT, OpenAI API and xAI.",
+    "ru": "С {0} сотрудник использует только сервисы MCP. Навыки и плагины работают с ChatGPT, OpenAI API и xAI.",
+    "fr": "Avec {0}, l’assistant utilise uniquement les services MCP. Les compétences et les plugins fonctionnent avec ChatGPT, OpenAI API et xAI.",
+    "es": "Con {0}, el asistente usa solo servicios MCP. Las habilidades y los plugins funcionan con ChatGPT, OpenAI API y xAI.",
+    "he": "עם {0} העוזר משתמש רק בשירותי MCP. מיומנויות ותוספים עובדים עם ChatGPT, ‏OpenAI API ו־xAI."
   },
   "У ключа {0} закончился лимит или баланс. Проверьте оплату у провайдера или повторите позже.": {
     "en": "The {0} key has run out of quota or credit. Check billing with the provider or try again later.",
@@ -8371,12 +8399,12 @@
     "es": "Eliminar clave",
     "he": "הסרת המפתח"
   },
-  "Сотрудников на этом ключе: {0}. Они перейдут на модель по умолчанию.": {
-    "en": "Assistants on this key: {0}. They will switch to the default model.",
-    "ru": "Сотрудников на этом ключе: {0}. Они перейдут на модель по умолчанию.",
-    "fr": "Assistants utilisant cette clé : {0}. Ils passeront au modèle par défaut.",
-    "es": "Asistentes con esta clave: {0}. Pasarán al modelo predeterminado.",
-    "he": "עוזרים שמשתמשים במפתח: {0}. הם יעברו למודל ברירת המחדל."
+  "Сотрудников и настроек на этом ключе: {0}. Их модель станет «Как на устройстве» или «Автоматически».": {
+    "en": "Assistants and settings on this key: {0}. Their model will become “Device default” or “Automatic”.",
+    "ru": "Сотрудников и настроек на этом ключе: {0}. Их модель станет «Как на устройстве» или «Автоматически».",
+    "fr": "Assistants et réglages sur cette clé : {0}. Leur modèle passera à « Réglage de l’appareil » ou « Automatique ».",
+    "es": "Asistentes y ajustes con esta clave: {0}. Su modelo pasará a «Predeterminado del dispositivo» o «Automático».",
+    "he": "עוזרים והגדרות שמשתמשים במפתח: {0}. המודל שלהם יהפוך ל״ברירת המחדל של המכשיר״ או ל״אוטומטי״."
   },
   "Ключ будет удалён с «{0}».": {
     "en": "The key will be removed from “{0}”.",
@@ -8420,12 +8448,12 @@
     "es": "Tengo una clave de API",
     "he": "יש לי מפתח API"
   },
-  "Рекомендует {0}": {
-    "en": "Recommended by {0}",
-    "ru": "Рекомендует {0}",
-    "fr": "Recommandé par {0}",
-    "es": "Recomendado por {0}",
-    "he": "בהמלצת {0}"
+  "Рекомендуем": {
+    "en": "Recommended",
+    "ru": "Рекомендуем",
+    "fr": "Recommandé",
+    "es": "Recomendado",
+    "he": "מומלץ"
   },
   "Нужен ключ {0}": {
     "en": "{0} key needed",
@@ -8475,5 +8503,19 @@
     "fr": "Les conversations sont stockées sur votre Mac ou serveur. Pour répondre, OpenAI ou un autre fournisseur de votre choix reçoit vos messages, l’historique pertinent et les fichiers sélectionnés.",
     "es": "Los chats se guardan en tu Mac o servidor. Para responder, OpenAI u otro proveedor que elijas recibe tus mensajes, el historial relevante y los archivos seleccionados.",
     "he": "השיחות נשמרות ב-Mac או בשרת שלך. כדי להשיב, OpenAI או ספק אחר שבחרת מקבל את ההודעות, את היסטוריית השיחה הרלוונטית ואת הקבצים שנבחרו."
+  },
+  "Войдите в OpenAI снова или выберите в настройках сотрудника модель с API-ключом. Чаты и черновики сохранены.": {
+    "en": "Sign in to OpenAI again, or choose a model on an API key in Assistant settings. Chats and drafts are saved.",
+    "ru": "Войдите в OpenAI снова или выберите в настройках сотрудника модель с API-ключом. Чаты и черновики сохранены.",
+    "fr": "Reconnectez-vous à OpenAI ou choisissez un modèle avec une clé API dans les réglages de l’assistant. Conversations et brouillons sont conservés.",
+    "es": "Vuelve a iniciar sesión en OpenAI o elige un modelo con clave de API en los ajustes del asistente. Los chats y borradores están guardados.",
+    "he": "יש להיכנס שוב ל-OpenAI או לבחור בהגדרות העוזר מודל עם מפתח API. השיחות והטיוטות נשמרו."
+  },
+  "Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз.": {
+    "en": "The device didn’t confirm the key. Check that it’s online and add the key again.",
+    "ru": "Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз.",
+    "fr": "L’appareil n’a pas confirmé la clé. Vérifiez qu’il est en ligne et ajoutez la clé à nouveau.",
+    "es": "El dispositivo no confirmó la clave. Comprueba que esté en línea y vuelve a añadir la clave.",
+    "he": "המכשיר לא אישר את המפתח. יש לוודא שהוא מחובר ולהוסיף את המפתח שוב."
   }
 }

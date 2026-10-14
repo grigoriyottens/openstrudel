@@ -5,6 +5,8 @@ import SwiftUI
 struct ModelSettingsView: View {
     @EnvironmentObject private var client: HomeClient
     var agentID: String? = nil
+    /// The employee card shows its OpenAI account only while the saved model runs on ChatGPT.
+    var onLoad: (ModelSettings) -> Void = { _ in }
     @State private var settings: ModelSettings?
     /// Nil: as on the device, or automatic for the device itself.
     @State private var choice: ModelRef?
@@ -28,6 +30,17 @@ struct ModelSettingsView: View {
         return selected.speeds.count > 1 || !selected.speeds.contains { $0.id == speed }
     }
 
+    /// The first row: what an employee inherits, or what Automatic picks for the device.
+    private func defaultTitle(_ settings: ModelSettings) -> String {
+        if agentID != nil { return L("Как на устройстве · \(settings.model(settings.defaults.ref).map(settings.title) ?? settings.defaults.model ?? "")") }
+        return settings.recommended.map { L("Автоматически · \(settings.title($0))") } ?? ""
+    }
+    /// Rows sit under their provider's header; the closed picker names the provider itself.
+    private func choiceTitle(_ settings: ModelSettings) -> String {
+        guard let choice else { return defaultTitle(settings) }
+        return settings.model(choice).map(settings.title) ?? L("\(choice.model) · unavailable")
+    }
+
     private var scope: String {
         agentID == nil ? L("По умолчанию для сотрудников на «\(client.displayName)»") : L("Для этого сотрудника · на «\(client.displayName)»")
     }
@@ -37,11 +50,7 @@ struct ModelSettingsView: View {
         Group {
             if let settings {
                 Picker(selection: $choice) {
-                    if agentID != nil {
-                        Text(L("Как на устройстве · \(settings.model(settings.defaults.ref)?.name ?? settings.defaults.model ?? "")")).tag(ModelRef?.none)
-                    } else if let recommended = settings.recommended {
-                        Text(L("Автоматически · \(recommended.name)")).tag(ModelRef?.none)
-                    }
+                    if agentID != nil || settings.recommended != nil { Text(defaultTitle(settings)).tag(ModelRef?.none) }
                     if let choice, settings.model(choice) == nil { Text(L("\(choice.model) · unavailable")).tag(Optional(choice)) }
                     ForEach(settings.groups) { group in
                         if let provider = group.provider {
@@ -53,6 +62,8 @@ struct ModelSettingsView: View {
                 } label: {
                     Text(L("Модель"))
                     Text(scope)
+                } currentValueLabel: {
+                    Text(choiceTitle(settings))
                 }
                 .accessibilityIdentifier("modelChoice").disabled(saving || !settings.canManage)
                 if showsSpeed {
@@ -65,8 +76,7 @@ struct ModelSettingsView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         if choice == nil && agentID == nil, let recommended = settings.recommended {
-                            Text((recommended.isDefault ? L("Рекомендует \(settings.recommender(of: recommended))") : L("Модель по умолчанию"))
-                                 + (recommended.defaultReasoningEffort.map { " · " + $0.capitalized } ?? ""))
+                            Text(settings.recommendation(recommended) + (recommended.defaultReasoningEffort.map { " · " + $0.capitalized } ?? ""))
                         }
                         if speed != "default" { Text(L("Ускоренный режим может расходовать больше лимита аккаунта.")) }
                         if !settings.canManage { Text(L("Настройки меняет владелец устройства.")) }
@@ -113,6 +123,7 @@ struct ModelSettingsView: View {
     private func apply(_ value: ModelSettings) {
         settings = value; choice = value.selection.ref
         speed = value.selection.serviceTier ?? value.defaults.serviceTier ?? "default"
+        onLoad(value)
     }
     private func load() async {
         loading = true; error = nil

@@ -1,11 +1,14 @@
 import { createSdkMcpServer, query as sdkQuery, tool, type CanUseTool, type McpServerConfig, type PermissionResult, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { mkdirSync, readFileSync } from "node:fs";
-import { resolve, sep } from "node:path";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, resolve, sep } from "node:path";
 import { z } from "zod";
 import { INSTRUCTIONS } from "./codex.js";
 import { readToml } from "./extensions.js";
-import type { ModelChoice } from "./model-settings.js";
-import { ProviderKeyError, providerModels, providerNotConnected, type ProviderInfo } from "./providers.js";
+import { ProviderKeyError, providerNotConnected, type ProviderInfo } from "./providers.js";
+import { contextPattern } from "./scopes.js";
+import { telegramMcpConfig } from "./telegram-mcp.js";
 import type { CodexEngine, CodexRunResult } from "./types.js";
 
 export interface ClaudeEngineOptions {
@@ -21,8 +24,8 @@ export interface ClaudeEngineOptions {
 
 type RunOptions = NonNullable<Parameters<CodexEngine["run"]>[1]>;
 
-const contexts = /^(personal|work|group-[a-f0-9]{64}|(?:import|agent)-[a-f0-9]{32})$/;
 const instructions = INSTRUCTIONS.replace("Use Codex's native tools, memory, skills and connectors.", "Use your native tools and connected services.")
+  .replace("where the owner can add MCP services, SKILL.md skills and local Codex plugins", "where the owner can add MCP services")
   .replace("request_user_input", "AskUserQuestion").replace("Follow Codex's native approval policy", "Follow the approval policy");
 // Claude Code sends background and helper work to Claude aliases; another vendor must only see its own model.
 const aliases = ["ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"];
@@ -34,11 +37,10 @@ export class ClaudeEngine implements CodexEngine {
   private readonly running = new Set<AbortController>();
   constructor(readonly options: ClaudeEngineOptions) {}
   forContext(context: string): CodexEngine {
-    if (!contexts.test(context)) throw new Error("Область не найдена");
-    return { run: (input, options) => this.turn(context, input, options), models: () => this.models() };
+    if (!contextPattern.test(context)) throw new Error("Область не найдена");
+    return { run: (input, options) => this.turn(context, input, options) };
   }
   run: CodexEngine["run"] = (input, options) => this.forContext("personal").run(input, options);
-  async models(): Promise<ModelChoice[]> { return providerModels(this.options.provider); }
   close(): void { for (const turn of this.running) turn.abort(); }
 
   private async turn(context: string, input: string, options: RunOptions = {}): Promise<CodexRunResult> {
@@ -46,6 +48,7 @@ export class ClaudeEngine implements CodexEngine {
     if (!key) throw providerNotConnected(provider.id);
     const config = resolve(root, ".data/providers", provider.id, "claude", context), home = resolve(config, "home"), cwd = resolve(root, ".data/workspace", context);
     for (const dir of [home, cwd]) mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const data = realpathSync(resolve(root, ".data")), workspace = realpathSync(cwd), owner = realpathSync(homedir());
     const model = options.model ?? (provider.models.find(m => m.recommended) ?? provider.models[0])!.id;
     const env: Record<string, string> = {};
     for (const name of ["PATH", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TZ", "USER", "LOGNAME", "TERM"]) if (process.env[name]) env[name] = process.env[name]!;
@@ -57,7 +60,7 @@ export class ClaudeEngine implements CodexEngine {
     if (provider.id !== "anthropic") for (const name of aliases) env[name] = model;
 
     const mode = options.approvalMode ?? "ask", group = options.groupContext === true, ask = options.onRequest;
-    const inside = (path: unknown) => typeof path === "string" && (resolve(cwd, path) + sep).startsWith(cwd + sep);
+    const inside = (path: unknown) => typeof path === "string" && (physical(resolve(cwd, path)) + sep).startsWith(workspace + sep);
     const canUseTool: CanUseTool = async (name, input, { mcpServer }) => {
       const allow: PermissionResult = { behavior: "allow", updatedInput: input }, deny = (message: string): PermissionResult => ({ behavior: "deny", message });
       const path = input.file_path ?? input.notebook_path, edit = edits.includes(name);
@@ -71,12 +74,13 @@ export class ClaudeEngine implements CodexEngine {
           return { behavior: "allow", updatedInput: { ...input, answers: Object.fromEntries(questions.map(q => [q.question, answers[q.id]?.answers.join(", ") ?? ""])) } };
         }
         if (group && (name === "Bash" || edit)) return deny("Commands and file changes are not available in a group chat.");
-        // Codex workspace-write: the workspace is writable without asking; anything beyond it needs the owner.
-        if (edit && inside(path)) return allow;
-        if (mode === "approve_all") return edit ? deny("Only files inside the workspace can be changed.") : allow;
+        // Codex's profile: the workspace is readable and writable without asking, and nothing beyond it is readable.
+        // Changes beyond it need the owner. Approve-all runs only sandboxed commands and services by itself.
+        if ((edit || name === "Read") && inside(path)) return allow;
+        if (mode === "approve_all") return name === "Bash" || name.startsWith("mcp__") ? allow : deny(edit ? "Only files inside the workspace can be changed." : "This action is not available.");
         if (!ask) return deny("No user is available to approve this action.");
         if (name === "Bash") return accepted(await ask("item/commandExecution/requestApproval", { command: input.command, cwd, reason: input.description }));
-        if (edit) return accepted(await ask("item/fileChange/requestApproval", { reason: `${name} ${path}`, grantRoot: resolve(cwd, String(path), "..") }));
+        if (edit) { const target = physical(resolve(cwd, String(path))); return accepted(await ask("item/fileChange/requestApproval", { reason: `${name} ${target}`, grantRoot: dirname(target) })); }
         if (name.startsWith("mcp__") && mcpServer) {
           const answer = await ask("mcpServer/elicitation/request", { mode: "form", serverName: mcpServer.name,
             message: `Allow the ${mcpServer.name} MCP server to run tool "${name.slice(`mcp__${mcpServer.name}__`.length)}"?`,
@@ -87,9 +91,13 @@ export class ClaudeEngine implements CodexEngine {
       } catch (error) { return deny(error instanceof Error ? error.message : String(error)); }
     };
 
-    const servers: Record<string, McpServerConfig> = extensionServers(resolve(root, ".data/extensions", context, "config.toml"));
-    const tools = options.tools;
-    if (tools) servers.openstrudel = createSdkMcpServer({ name: "openstrudel", alwaysLoad: true, tools: tools.definitions.map(d =>
+    // The same services as the Codex scope: shared, then installer-provisioned, then Telegram's for the verified sender only.
+    const servers = extensionServers({ ...readToml(resolve(root, ".data/extensions", context, "config.toml")).mcp_servers, ...readToml(resolve(root, ".data/connections", context + ".toml")).mcp_servers });
+    const telegram = resolve(root, ".data/connections", context + ".telegram.json");
+    for (const [key, s] of Object.entries(telegramMcpConfig(existsSync(telegram) ? JSON.parse(readFileSync(telegram, "utf8")) : undefined, options.telegramActor, options.conversationId)) as Array<[string, any]>)
+      if (s.enabled) servers[key.slice("mcp_servers.".length)] = { type: "http", url: s.url, headers: s.http_headers };
+    const sdkServers: Record<string, McpServerConfig> = {}, tools = options.tools;
+    if (tools) sdkServers.openstrudel = createSdkMcpServer({ name: "openstrudel", alwaysLoad: true, tools: tools.definitions.map(d =>
       tool(d.name, d.description, (z.fromJSONSchema(d.inputSchema as any) as z.ZodObject).shape, async args => {
         try { return { content: [{ type: "text", text: JSON.stringify(await tools.call(d.name, args)) }] }; }
         catch (error) { return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], isError: true }; }
@@ -100,19 +108,24 @@ export class ClaudeEngine implements CodexEngine {
     }) : [];
     const message: SDKUserMessage = { type: "user", message: { role: "user", content: [{ type: "text", text: input }, ...images] }, parent_tool_use_id: null };
 
+    // Inline --mcp-config JSON would show the services' tokens in the process list.
+    const mcpConfig = resolve(config, `mcp-${randomUUID()}.json`);
+    writeFileSync(mcpConfig, JSON.stringify({ mcpServers: servers }), { mode: 0o600, flag: "wx" });
     const abort = new AbortController();
     this.running.add(abort);
     let threadId = "", response: string | undefined, rejected = false, stopped = false, failure: string | undefined, stop = () => {};
     try {
       const turn = (this.options.query ?? sdkQuery)({ prompt: (async function* () { yield message; })(), options: {
-        cwd, env, model, abortController: abort, resume: options.threadId ?? undefined, permissionMode: "default", canUseTool, mcpServers: servers,
+        cwd, env, model, abortController: abort, resume: options.threadId ?? undefined, permissionMode: "default", canUseTool, mcpServers: sdkServers, extraArgs: { "mcp-config": mcpConfig },
         // Nothing from ~/.claude, the workspace's .mcp.json or CLAUDE.md. User text never runs CLI slash commands or @file mentions.
         settingSources: [], strictMcpConfig: true, verbatimPrompts: true,
         // Not recorded in the session, so a changed SOUL applies on resume.
         systemPrompt: { type: "preset", preset: "claude_code", append: instructions + (options.profile ? `\n\nCurrent employee SOUL (authoritative):\n${options.profile}` : ""), snapshot: false },
         // Schedules live in OpenStrudel; the CLI's own cron dies with this per-turn process.
         disallowedTools: ["CronCreate", "CronDelete", "CronList", "ScheduleWakeup", ...provider.webSearch ? [] : ["WebSearch"]],
-        sandbox: group ? undefined : { enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: mode !== "approve_all", failIfUnavailable: mode === "approve_all" },
+        // Commands read like Codex's profile: never the owner's files or the Home's private data beyond this workspace.
+        sandbox: group ? undefined : { enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: mode !== "approve_all", failIfUnavailable: mode === "approve_all",
+          filesystem: { denyRead: [data, owner], allowRead: [workspace] } },
       } });
       // An interrupt, unlike an abort, ends the turn only after the CLI has written its transcript and exited,
       // so the next turn never resumes a session another process is still writing. close() still kills.
@@ -130,7 +143,7 @@ export class ClaudeEngine implements CodexEngine {
         }
       }
     } catch (error) { if (!stopped && !abort.signal.aborted) failure = error instanceof Error ? error.message : String(error); }
-    finally { options.signal?.removeEventListener("abort", stop); this.running.delete(abort); }
+    finally { options.signal?.removeEventListener("abort", stop); this.running.delete(abort); rmSync(mcpConfig, { force: true }); }
     if (rejected) throw new ProviderKeyError(provider);
     if (response === undefined && (stopped || abort.signal.aborted)) throw new Error("Ответ остановлен");
     if (failure !== undefined) throw new Error(`${provider.name} не завершил ответ: ${failure.replace(/^API Error:\s*/, "").split("\n")[0]!.slice(0, 300)}`);
@@ -138,11 +151,21 @@ export class ClaudeEngine implements CodexEngine {
   }
 }
 
-/** The context's Codex-style MCP services. Computer Use runs on Codex's own kernel and is left out. */
-function extensionServers(path: string): Record<string, McpServerConfig> {
-  return Object.fromEntries(Object.entries(readToml(path).mcp_servers ?? {}).flatMap(([name, s]: [string, any]): Array<[string, McpServerConfig]> =>
+/** Codex-style MCP services. Computer Use runs on Codex's own kernel and is left out. */
+function extensionServers(table: Record<string, unknown>): Record<string, McpServerConfig> {
+  return Object.fromEntries(Object.entries(table).flatMap(([name, s]: [string, any]): Array<[string, McpServerConfig]> =>
     s.enabled === false || name === "cua_repl" ? [] : s.url ? [[name, { type: "http", url: s.url, headers: s.http_headers }]]
       : s.command ? [[name, { type: "stdio", command: s.command, args: s.args ?? [], env: s.env }]] : []));
+}
+
+/** The path a tool touches once links are followed, also when the file or a link's target does not exist yet. */
+function physical(path: string, hops = 0): string {
+  try { return realpathSync(path); } catch {}
+  if (hops > 40) throw new Error("Too many symbolic links.");
+  let link: string | undefined;
+  try { link = readlinkSync(path); } catch {}
+  const parent = physical(dirname(path), hops + 1);
+  return link === undefined ? resolve(parent, basename(path)) : physical(link.startsWith(sep) ? link : parent + sep + link, hops + 1);
 }
 
 /** The API checks the bytes, not the uploaded name or declared type. */

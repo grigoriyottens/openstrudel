@@ -6,7 +6,8 @@ vi.mock("../src/scopes.js", () => ({ ScopedCodexEngine: class {
   readonly account: string;
   constructor(_root: string, account: string, _tokens?: unknown, readonly contexts?: string, readonly provider?: { info: { id: string }; key: () => string | null }) { this.account = provider ? "provider-" + provider.info.id : account; }
   forContext(context: string) { return { run: (input: string, options: any) => engines.run(this.account, context, input, options), connections: async () => [this.account],
-    models: async () => [{ id: this.provider ? "api-model" : "chat-model", provider: this.provider?.info.id ?? "chatgpt" }], extensions: () => ({ scope: this.account, context }) }; }
+    models: async () => [{ id: this.provider ? "api-model" : "chat-model", provider: this.provider?.info.id ?? "chatgpt" }], extensions: () => ({ scope: this.account, context }),
+    isConnected: async (id: string) => id === "mcp:ready", connect: async (id: string) => ({ url: `https://sign-in.invalid/${this.account}/${id}` }) }; }
   close() { engines.closed.push(this.account); }
 } }));
 vi.mock("../src/claude.js", () => ({ ClaudeEngine: class {
@@ -122,9 +123,35 @@ describe("API key providers", () => {
     store.setSetting("codex.auth.mode", "managed");
     expect((await pool.forAgent("main", "personal").models!()).map(m => m.provider)).toEqual(["chatgpt", "openai", "kimi", "kimi"]);
     expect(await accounts.statusFor(employee.id)).toEqual({ account: { connected: true, email: null, planType: null, provider: "kimi", providerName: "Kimi" }, accountId: "provider-kimi", loginPending: false });
-    // Services and skills are shared by the context; a Claude-engine employee manages them through Codex without ChatGPT.
-    expect(await pool.forAgent(employee.id, "personal").extensions!()).toEqual({ scope: "provider-kimi", context: "personal" });
-    expect(await pool.forAgent(employee.id, "personal").connections!()).toEqual([]);
+    // A Claude route keeps its services in the context's Codex scope: it lists and checks them there,
+    // but never signs in through Codex, whose OAuth tokens the Claude engine cannot use.
+    const claude = pool.forAgent(employee.id, "personal");
+    expect(await claude.extensions!()).toEqual({ scope: "provider-kimi", context: "personal" });
+    expect(await claude.connections!()).toEqual(["provider-kimi"]);
+    expect(await claude.isConnected!("mcp:ready")).toBe(true);
+    await expect(claude.connect!("mcp:notion")).rejects.toMatchObject({ status: 409, message: "С Kimi вход в сервисы через браузер недоступен. Добавьте сервис с ключом доступа в «Сервисы и навыки»." });
+    // A Codex key route still signs in through its own Codex scope.
+    saveModelSelection(store, { provider: "openai", model: "api-model", serviceTier: "default" }, "main");
+    expect(await pool.forAgent("main", "personal").connect!("mcp:notion")).toEqual({ url: "https://sign-in.invalid/provider-openai/mcp:notion" });
+  });
+  it("catches a resumed route up on the turns another provider made meanwhile", async () => {
+    const { store, pool } = fixture(), conversation = store.primaryConversation();
+    store.setSetting("providers.xai.key", "xai-key");
+    engines.run.mockImplementation(async (route: string, _context: string, input: string) => ({ threadId: route + "-thread", response: `${route} answered ${input.split("\n").at(-1)}`, events: [] }));
+    const messages = new MessageService(store, pool);
+    const turn = (provider: string, model: string, text: string) => {
+      saveModelSelection(store, { provider, model, serviceTier: "default" }, "main");
+      return messages.handle({ channel: "api", text, externalChatId: "home" });
+    };
+    await turn("chatgpt", "chat-model", "Plan A");
+    await turn("xai", "grok-4.7", "Settle on Y");
+    await turn("chatgpt", "chat-model", "What did we decide?");
+    const [route, , input, options] = engines.run.mock.calls[2]!;
+    expect(route).toBe("default"); expect(options.threadId).toBe("default-thread");
+    expect(input).toBe("Earlier chat (context only):\nUser: Settle on Y\nAssistant: provider-xai answered Settle on Y\n\nCurrent message:\nWhat did we decide?");
+    await turn("chatgpt", "chat-model", "And now?");
+    expect(engines.run.mock.calls[3]![2]).toBe("And now?");
+    await messages.close();
   });
   it("fails a rejected key with the provider's message and leaves ChatGPT signed in", async () => {
     const { store, accounts, pool } = fixture(), conversation = store.primaryConversation();

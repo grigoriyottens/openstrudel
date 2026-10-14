@@ -82,6 +82,29 @@ it("attributes key route failures to their provider, never to an OpenAI sign-in"
   expect(limited.message).not.toMatch(/usage limit|rate limit|quota/i);
   const other = new Error("model is overloaded");
   expect(providerFailure(xai, other)).toBe(other);
+  expect((providerFailure(xai, new Error("unexpected status 429")) as Error).message).toBe(limited.message);
+  expect((providerFailure(xai, new Error("unexpected status 402 Payment Required")) as Error).message).toBe(limited.message);
+  const conflict = new Error("unexpected status 409 Conflict: conversation busy");
+  expect(providerFailure(xai, conflict)).toBe(conflict);
+});
+
+it("a replaced or removed key ends its route's native threads; the same key keeps them", async () => {
+  const store = memory(), conversation = store.primaryConversation(), other = store.getOrCreateConversation({ channel: "api", externalId: "other" });
+  vi.stubGlobal("fetch", reply(200, { data: [] }));
+  const threads = () => [store.getSetting("codex.thread.provider-xai." + conversation.id), store.getSetting("codex.threadCheckpoint.provider-xai." + conversation.id), store.getSetting("codex.threadOwner." + conversation.id), store.getConversation(conversation.id)!.codexThreadId,
+    store.getSetting("codex.thread.default." + other.id), store.getConversation(other.id)!.codexThreadId];
+  const use = () => {
+    store.setSetting("codex.thread.provider-xai." + conversation.id, "xai-thread"); store.setSetting("codex.threadCheckpoint.provider-xai." + conversation.id, "m1"); store.setSetting("codex.threadOwner." + conversation.id, "provider-xai"); store.setConversationThread(conversation.id, "xai-thread");
+    store.setSetting("codex.thread.default." + other.id, "chat-thread"); store.setSetting("codex.threadOwner." + other.id, "default"); store.setConversationThread(other.id, "chat-thread");
+  };
+  await connectProvider(store, "xai", "xai-org-a"); use();
+  await connectProvider(store, "xai", "xai-org-a");
+  expect(threads()).toEqual(["xai-thread", "m1", "provider-xai", "xai-thread", "chat-thread", "chat-thread"]);
+  // Another organization's key cannot resume threads holding the first one's encrypted reasoning.
+  await connectProvider(store, "xai", "xai-org-b");
+  expect(threads()).toEqual([null, null, null, null, "chat-thread", "chat-thread"]);
+  use(); disconnectProvider(store, "xai");
+  expect(threads()).toEqual([null, null, null, null, "chat-thread", "chat-thread"]);
 });
 
 it("serves providers per device with owner-only writes, a provider-aware catalog and status", async () => {
@@ -145,12 +168,38 @@ it("serves providers per device with owner-only writes, a provider-aware catalog
     expect((await (await call("/v1/settings/models?agentId=main", "POST", { model: "gpt-6-sol", serviceTier: "priority" })).json()).selection).toEqual({ provider: "chatgpt", model: "gpt-6-sol", serviceTier: "priority" });
 
     expect((await (await call("/v1/account?agentId=" + employee.id)).json())).toEqual({ account: { connected: true, email: null, planType: null, provider: "xai", providerName: "xAI" }, accountId: "provider-xai", loginPending: false, canManage: true });
-    const created = await (await call("/v1/profiles", "POST", { name: "Writer", provider: "xai", model: "grok-4.7" })).json();
-    expect(created.profile).toMatchObject({ provider: "xai", model: "grok-4.7" });
+    // Creating an employee with a model makes the same owner-only, connected, offered choice as the model settings.
+    const create = (body: unknown, headers?: Record<string, string>) => call("/v1/profiles", "POST", body, headers);
+    expect((await create({ name: "Writer", provider: "xai", model: "grok-4.7" }, member)).status).toBe(403);
+    expect((await create({ name: "Writer", model: "gpt-6-sol" }, member)).status).toBe(403);
+    expect((await create({ name: "Writer", provider: "bogus", model: "m" })).status).toBe(400);
+    expect((await create({ name: "Writer", provider: "xai" })).status).toBe(400);
+    expect((await create({ name: "Writer", provider: "anthropic", model: "claude-fable-5-1" })).status).toBe(409);
+    expect((await create({ name: "Writer", provider: "xai", model: "grok-9" })).status).toBe(409);
+    expect(runtime.store.listProfiles().map(p => p.name)).toEqual(["Researcher"]);
+    expect((await (await create({ name: "Writer", provider: "xai", model: "grok-4.7" })).json()).profile).toMatchObject({ provider: "xai", model: "grok-4.7" });
+    expect((await (await create({ name: "Chat", model: "gpt-6-sol" })).json()).profile).toMatchObject({ provider: "chatgpt", model: "gpt-6-sol" });
 
     expect(await (await call("/v1/providers/xai", "DELETE")).json()).toEqual({ ok: true, reset: 2 });
     expect(runtime.store.getProfile(employee.id)).toMatchObject({ provider: null, model: null });
     expect((await (await call("/v1/account?agentId=" + employee.id)).json()).accountId).not.toBe("provider-xai");
     expect((await call("/v1/providers/chatgpt", "PUT", { key: "x" })).status).toBe(404);
   } finally { await runtime.stop(); provider.close(); }
+});
+
+it("says on Services and skills that a Claude-engine provider uses only MCP services", async () => {
+  const { OpenStrudelRuntime } = await import("../src/runtime.js");
+  const runtime = new OpenStrudelRuntime({ dbPath: ":memory:", startTelegram: false, apiToken: "owner", engine: {
+    run: async () => ({ threadId: "t", response: "OK", events: [] }),
+    extensions: async () => ({ list: async () => ({ items: [{ id: "skill:1", name: "Notes", description: "", kind: "skill", enabled: true, removable: true }] }) }) as any,
+  } });
+  const address = await runtime.api.listen("127.0.0.1", 0);
+  const list = async () => (await fetch(`http://127.0.0.1:${address.port}/v1/extensions?conversationId=${runtime.store.primaryConversation().id}`, { headers: { authorization: "Bearer owner" } })).json();
+  try {
+    runtime.store.setSetting("providers.kimi.key", "kimi-key");
+    saveModelSelection(runtime.store, { provider: "kimi", model: "kimi-k3", serviceTier: "default" }, "main");
+    expect(await list()).toEqual({ items: [expect.objectContaining({ name: "Notes" })], notice: "С Kimi сотрудник использует только сервисы MCP. Навыки и плагины работают с ChatGPT, OpenAI API и xAI." });
+    saveModelSelection(runtime.store, { provider: "chatgpt", model: "gpt-6-sol", serviceTier: "default" }, "main");
+    expect((await list()).notice).toBeUndefined();
+  } finally { await runtime.stop(); }
 });

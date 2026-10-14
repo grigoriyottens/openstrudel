@@ -137,7 +137,9 @@ export class Home {
     let name = ("Помощник · " + this.state.name).slice(0, 70);
     const base = name;
     for (let n = 2; this.store.getProfile(name); n++) name = `${base} ${n}`;
-    const profile = this.store.createProfile({ name, instructions: soul });
+    // The chat keeps its model and provider, so it keeps running where its threads are.
+    const model = JSON.parse(this.store.getSetting("models.main") ?? "{}");
+    const profile = this.store.createProfile({ name, instructions: soul, provider: model.provider ?? undefined, model: model.model ?? undefined, serviceTier: model.serviceTier ?? undefined });
     // Joining changes control, never the location or identity of existing chats.
     this.store.setSetting("employee.context." + profile.id, "personal");
     const policy = this.store.getSetting("agent.accounts.main");

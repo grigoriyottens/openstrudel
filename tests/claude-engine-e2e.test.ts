@@ -1,6 +1,9 @@
-import { afterEach, beforeEach, expect, it } from "vitest";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { afterEach, beforeEach, expect, it, onTestFinished } from "vitest";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { ClaudeEngine } from "../src/claude.js";
 import { ProviderKeyError, providerInfo } from "../src/providers.js";
@@ -18,6 +21,7 @@ const toolResult = (request: MockRequest) => {
   const content = request.body?.messages?.findLast((m: any) => m.role === "user")?.content;
   return Array.isArray(content) ? content.find((b: any) => b.type === "tool_result") : undefined;
 };
+const results = (request: MockRequest): any[] => request.body?.messages?.flatMap((m: any) => Array.isArray(m.content) ? m.content.filter((b: any) => b.type === "tool_result") : []) ?? [];
 const endpoints = () => [...new Set(mock!.requests.map(r => `${r.method} ${r.path}`))];
 
 it("answers, resumes the same session with a changed SOUL and sends a bearer token", async () => {
@@ -81,4 +85,52 @@ it("keeps the key out of command environments and a private HOME", async () => {
   const output = JSON.stringify(toolResult(mock.requests.at(-1)!));
   expect(output).toContain(`HOME=${join(root, ".data/providers/deepseek/claude/personal/home")}`);
   expect(output).not.toContain("sk-deepseek-secret");
+}, 90_000);
+
+it("keeps an approve-all turn out of the Home's private data", async () => {
+  const data = join(root, ".data"), cwd = join(data, "workspace/personal");
+  mkdirSync(join(data, "codex"), { recursive: true });
+  writeFileSync(join(data, "openstrudel.sqlite"), "providers.anthropic.key=sk-ant-PLANTED\n");
+  writeFileSync(join(data, "codex/auth.json"), '{"access_token":"CHATGPT-PLANTED"}\n');
+  // The owner's own files, like ~/.ssh, stay closed too.
+  const owner = mkdtempSync(join(homedir(), ".openstrudel-sandbox-test-"));
+  writeFileSync(join(owner, "id_ed25519"), "OWNER-PLANTED\n");
+  onTestFinished(() => rmSync(owner, { recursive: true, force: true }));
+  const steps = [
+    { name: "Bash", input: { command: `cat ${join(owner, "id_ed25519")}`, description: "Read the owner's key" } },
+    { name: "Bash", input: { command: "cat ../../openstrudel.sqlite", description: "Read the database" } },
+    { name: "Bash", input: { command: `ln -s ${data} escape && echo inside > note.txt && cat note.txt`, description: "Link" } },
+    { name: "Read", input: { file_path: join(cwd, "escape/codex/auth.json") } },
+    { name: "Write", input: { file_path: join(cwd, "escape/pwned.txt"), content: "pwned" } },
+  ];
+  mock = await mockAnthropic(request => { const step = steps[results(request).length]; return step ? { tool: step } : { text: "Готово" }; });
+  const asked: unknown[] = [];
+  await claude("deepseek", "sk-deepseek-secret").run("Покажи", { approvalMode: "approve_all", onRequest: async (...request) => { asked.push(request); return { decision: "accept" }; } });
+  const outputs = results(mock.requests.at(-1)!).map(r => JSON.stringify(r.content));
+  expect(outputs).toHaveLength(5);
+  expect(outputs[2]).toContain("inside");
+  expect(outputs.join("\n")).not.toContain("PLANTED");
+  expect(existsSync(join(data, "pwned.txt"))).toBe(false);
+  expect(asked).toEqual([]);
+}, 90_000);
+
+it("keeps MCP service tokens out of the CLI's process arguments", async () => {
+  const seen: string[] = [];
+  const service = createServer((req, res) => { seen.push(String(req.headers.authorization)); res.writeHead(500).end(); });
+  await new Promise<void>(resolve => service.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = `http://127.0.0.1:${(service.address() as AddressInfo).port}/mcp`;
+    mkdirSync(join(root, ".data/extensions/personal"), { recursive: true });
+    writeFileSync(join(root, ".data/extensions/personal/config.toml"), `[mcp_servers.svc]\nurl = "${url}"\n[mcp_servers.svc.http_headers]\nAuthorization = "Bearer MCP-SECRET-TOKEN"\n`);
+    let cli: string[] = [];
+    // While the CLI waits for the model, list what every process on this machine can read about it.
+    mock = await mockAnthropic(() => {
+      cli = execFileSync("ps", ["-ww", "-ax", "-o", "args="], { encoding: "utf8" }).split("\n").filter(line => line.includes("--mcp-config") && (line.includes(root) || line.includes(url)));
+      return { text: "Готово" };
+    });
+    await claude("kimi", "sk-kimi-secret").run("Привет");
+    expect(cli).toEqual([expect.stringContaining(`--mcp-config ${join(root, ".data/providers/kimi/claude/personal/mcp-")}`)]);
+    expect(cli.join("\n")).not.toContain("MCP-SECRET-TOKEN");
+    expect(seen).toContain("Bearer MCP-SECRET-TOKEN");
+  } finally { service.closeAllConnections(); await new Promise(resolve => service.close(resolve)); }
 }, 90_000);

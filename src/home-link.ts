@@ -4,8 +4,14 @@ import { homeRequest, requestJSON, resultJSON, wireJSON } from "./home-transport
 import { validateSnapshot } from "./home-snapshot.js";
 import { AgentMoves } from "./agent-move.js";
 
+/** A provider key is relayed only while its device answers. It never waits in the command log, a backup or a transfer. */
+const carriesKey = (request: WireRequest) => request.method === "PUT" && request.path.startsWith("/v1/providers/");
+const keyNotDelivered = "Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз.";
+
 /** An executor only makes outbound requests. Agent work never runs in this control loop. */
 export class HomeLink {
+  /** Relayed key requests by command id, held in memory only while their call waits. */
+  private readonly keys = new Map<string, string>();
   private timer?: ReturnType<typeof setTimeout>;
   private stopped = true;
   private polling?: Promise<void>;
@@ -24,6 +30,8 @@ export class HomeLink {
       home.store.db.prepare("UPDATE home_commands SET canceled=1 WHERE id=?").run(id + ":stage");
       home.store.deleteSetting("home.transfer");
     }
+    // A relayed key was lost with the restart; its command can never be delivered.
+    home.store.db.prepare("UPDATE home_commands SET canceled=1 WHERE response IS NULL AND canceled=0 AND json_extract(request,'$.method')='PUT' AND json_extract(request,'$.path') LIKE '/v1/providers/%'").run();
   }
   start() { if (!this.stopped) return; if (!this.initialized) { this.recoverPreparation(); this.initialized = true; } this.stopped = false; this.schedule(0); }
   async stop() { this.stopped = true; clearTimeout(this.timer); await this.polling; await Promise.allSettled(this.running.values()); }
@@ -119,7 +127,7 @@ export class HomeLink {
     }
     this.agentMoves.tick();
     this.home.updateInventory(nodeId, payload.inventory as Inventory);
-    return { homeId: state.id, epoch: state.epoch, acknowledged, commands: this.home.dispatch(nodeId) };
+    return { homeId: state.id, epoch: state.epoch, acknowledged, commands: this.home.dispatch(nodeId).map(c => this.keys.has(c.id) ? { ...c, request: { ...c.request, body: this.keys.get(c.id) } } : c) };
   }
   async execute(command: Command): Promise<WireResponse> {
     const receipt = this.home.receipt(command);
@@ -143,16 +151,21 @@ export class HomeLink {
     return response;
   }
   async call(nodeId: string, request: WireRequest, id?: string, timeout = 12_000): Promise<WireResponse> {
-    const commandId = this.home.enqueue(nodeId, request, id);
-    const deadline = Date.now() + timeout;
-    while (Date.now() < deadline) {
-      const row = this.home.command(commandId);
-      if (row?.response) return JSON.parse(row.response);
-      if (row?.canceled) throw new HomeError("Поручение отменено.", 409);
-      await new Promise(resolve => setTimeout(resolve, 40));
-    }
-    if (request.method === "GET") { this.home.store.db.prepare("UPDATE home_commands SET canceled=1 WHERE id=? AND response IS NULL").run(commandId); throw new HomeError("Устройство пока не на связи.", 503); }
-    return wireJSON({ operationId: commandId, status: "queued", message: "Ждёт подключения устройства" }, 202);
+    const key = carriesKey(request);
+    if (key && !this.home.nodes().find(n => n.id === nodeId)?.online) throw new HomeError(keyNotDelivered, 503);
+    const commandId = this.home.enqueue(nodeId, key ? { ...request, body: undefined } : request, id);
+    if (key) this.keys.set(commandId, request.body ?? "");
+    try {
+      const deadline = Date.now() + timeout;
+      while (Date.now() < deadline) {
+        const row = this.home.command(commandId);
+        if (row?.response) return JSON.parse(row.response);
+        if (row?.canceled) throw new HomeError("Поручение отменено.", 409);
+        await new Promise(resolve => setTimeout(resolve, 40));
+      }
+      if (request.method === "GET" || key) { this.home.store.db.prepare("UPDATE home_commands SET canceled=1 WHERE id=? AND response IS NULL").run(commandId); throw new HomeError(key ? keyNotDelivered : "Устройство пока не на связи.", 503); }
+      return wireJSON({ operationId: commandId, status: "queued", message: "Ждёт подключения устройства" }, 202);
+    } finally { this.keys.delete(commandId); }
   }
   async transfer(targetId: string, operationId: string, password: string) {
     const previous = this.home.operation(operationId);

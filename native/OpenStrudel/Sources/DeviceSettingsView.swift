@@ -581,7 +581,7 @@ struct DeviceAccountsView: View {
                 removingKey = nil; await keysChanged()
             } }
         } message: { provider in
-            Text(provider.usedBy > 0 ? L("Сотрудников на этом ключе: \(provider.usedBy). Они перейдут на модель по умолчанию.") : L("Ключ будет удалён с «\(deviceName)»."))
+            Text(provider.usedBy > 0 ? provider.removalWarning : L("Ключ будет удалён с «\(deviceName)»."))
         }
     }
 
@@ -694,11 +694,13 @@ struct DeviceAccountsView: View {
         } catch { if !Task.isCancelled && selected == deviceID && requestID == token { self.error = UserFacingError.text(error.localizedDescription) } }
         await loadKeys()
     }
-    /// Older Homes have no API keys; a device that cannot answer keeps the last list.
+    /// Older Homes have no API keys. A device that cannot answer shows no stale keys to add or replace,
+    /// so a key goes only to a device that answers.
     private func loadKeys() async {
         let selected = deviceID
-        guard client.health?.providers == 1, let list = try? await client.providers(deviceID: selected.isEmpty ? nil : selected),
-              selected == deviceID else { return }
+        guard client.health?.providers == 1 else { return }
+        let list = try? await client.providers(deviceID: selected.isEmpty ? nil : selected)
+        guard selected == deviceID, !Task.isCancelled else { return }
         keys = list
     }
     /// A key can change which provider an employee runs on, so the chat's gate is checked again.

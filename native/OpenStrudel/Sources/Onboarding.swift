@@ -342,11 +342,10 @@ struct OpenAIWelcomeView: View {
                 }
             }.padding(.top, 32)
         }
-        // The first key powers the device automatically, so the account check goes straight to the chat.
+        // The key powers the device, so the account check goes straight to the chat.
         .sheet(item: $keyProvider) { provider in
             ProviderKeySheet(provider: provider, deviceName: client.displayName) { key in
-                try await client.connectProvider(provider.id, key: key)
-                await client.refreshOpenAIAccount(force: true)
+                try await client.connectFirstProvider(provider.id, key: key)
             }
         }
         .task(id: client.health?.providers == 1 && client.canManageOpenAI) {

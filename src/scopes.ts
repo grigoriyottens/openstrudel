@@ -10,6 +10,9 @@ import { extensionConfig, readToml, atomicText } from "./extensions.js";
 import { parse, stringify } from "smol-toml";
 import { HomeError } from "./home.js";
 
+/** Context names become path segments under `.data`; every engine accepts only these. */
+export const contextPattern = /^(personal|work|group-[a-f0-9]{64}|(?:import|agent)-[a-f0-9]{32})$/;
+
 /** One lazy Codex runtime per audience, never one always-on process per employee.
  * With a key provider there is no ChatGPT credential and no ChatGPT apps. */
 export class ScopedCodexEngine implements CodexEngine {
@@ -19,7 +22,7 @@ export class ScopedCodexEngine implements CodexEngine {
   setCodexHome(home?: string): void { this.close(); this.sourceHome = home; }
   close(): void { for (const engine of this.contexts.values()) engine.close(); this.contexts.clear(); }
   forContext(context: string): CodexEngine {
-    if (!/^(personal|work|group-[a-f0-9]{64}|(?:import|agent)-[a-f0-9]{32})$/.test(context)) throw new Error("Область не найдена");
+    if (!contextPattern.test(context)) throw new Error("Область не найдена");
     if (!this.sourceHome && !this.provider) throw new Error("Войдите в OpenAI в приложении OpenStrudel.");
     const cwd = resolve(this.root, ".data/workspace",context);
     const home = resolve(this.contextsRoot ?? resolve(this.root, ".data/contexts"), context);

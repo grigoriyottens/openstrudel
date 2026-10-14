@@ -63,16 +63,31 @@ import Testing
         #expect(selected.provider == "openai" && selected.speeds.count == 1)
         #expect(settings.model(ModelRef(provider: "chatgpt", model: "gpt-6.1-sol"))?.speeds.count == 2)
         #expect(settings.model(ModelRef(provider: "kimi", model: "kimi-k3")) == nil)
-        #expect(settings.recommended.map(settings.recommender) == "Anthropic")
-        #expect(settings.model(ModelRef(provider: "chatgpt", model: "gpt-6.1-sol")).map(settings.recommender) == "OpenAI")
+        // A closed picker shows one line, so the provider tells the subscription from the key.
+        #expect(settings.title(selected) == "GPT-6.1 Sol · OpenAI API")
+        #expect(settings.model(ModelRef(provider: "chatgpt", model: "gpt-6.1-sol")).map(settings.title) == "GPT-6.1 Sol · ChatGPT")
+        // Only OpenAI's own catalog marks a default; the registry's pick for another provider is ours.
+        #expect(settings.recommended.map(settings.recommendation) == L("Рекомендуем"))
+        #expect(settings.model(ModelRef(provider: "chatgpt", model: "gpt-6.1-sol")).map(settings.recommendation) == L("Рекомендует OpenAI"))
         #expect(settings.recommended?.defaultReasoningEffort == nil)
+        // The OpenAI account choice applies only to an employee that runs on ChatGPT.
+        #expect(!settings.runsOnChatGPT)
+    }
+    @Test func oneConnectedProviderNeedsNoProviderInTheModelName() throws {
+        let opus = #"{"id":"anthropic/claude-opus-5.5","name":"Claude Opus 5.5","description":"","isDefault":true,"speeds":[{"id":"default","name":"Обычная","description":""}],"provider":"openrouter"}"#
+        let json = #"{"models":[\#(opus)],"providers":[{"id":"openrouter","name":"OpenRouter","auth":"key","connected":true,"keyHint":"••••7Qa","keysUrl":"https://openrouter.ai/settings/keys","usedBy":2}],"recommended":\#(opus),"selection":{"provider":null,"model":null,"serviceTier":"default"},"defaults":{"provider":"openrouter","model":"anthropic/claude-opus-5.5","serviceTier":"default"},"effective":{"provider":"openrouter","model":"anthropic/claude-opus-5.5","serviceTier":"default"},"canManage":true}"#
+        let settings = try JSONDecoder().decode(ModelSettings.self, from: Data(json.utf8))
+        #expect(settings.recommended.map(settings.title) == "Claude Opus 5.5")
+        #expect(settings.recommended.map(settings.recommendation) == L("Рекомендуем"))
     }
     @Test func olderHomeModelSettingsKeepOneUnnamedList() throws {
         let json = #"{"models":[{"id":"gpt-6.1-sol","name":"GPT-6.1 Sol","description":"","isDefault":true,"defaultReasoningEffort":"medium","speeds":[{"id":"default","name":"Обычная","description":""}]}],"recommended":{"id":"gpt-6.1-sol","name":"GPT-6.1 Sol","description":"","isDefault":true,"defaultReasoningEffort":"medium","speeds":[{"id":"default","name":"Обычная","description":""}]},"selection":{"model":null,"serviceTier":"default"},"defaults":{"model":"gpt-6.1-sol","serviceTier":"default"},"effective":{"model":"gpt-6.1-sol","serviceTier":"default"},"canManage":true}"#
         let settings = try JSONDecoder().decode(ModelSettings.self, from: Data(json.utf8))
         #expect(settings.groups.count == 1 && settings.groups[0].provider == nil)
         #expect(settings.model(settings.defaults.ref)?.name == "GPT-6.1 Sol")
-        #expect(settings.recommended.map(settings.recommender) == "OpenAI")
+        #expect(settings.model(settings.defaults.ref).map(settings.title) == "GPT-6.1 Sol")
+        #expect(settings.recommended.map(settings.recommendation) == L("Рекомендует OpenAI"))
+        #expect(settings.runsOnChatGPT)
         // Automatic sends no provider, exactly as an older app did.
         #expect(settings.selection == ModelSelection(model: nil, serviceTier: "default"))
     }
@@ -82,5 +97,7 @@ import Testing
         #expect(list.providers.filter(\.connectedKey).map(\.id) == ["xai"])
         #expect(list.providers.filter(\.canAddKey).map(\.id) == ["kimi"])
         #expect(list.providers[1].keyHint == "••••7Qa" && list.providers[1].usedBy == 3)
+        // usedBy also counts the main chat and the device default, so it is never called a number of employees.
+        #expect(list.providers[1].removalWarning == L("Сотрудников и настроек на этом ключе: \(3). Их модель станет «Как на устройстве» или «Автоматически»."))
     }
 }

@@ -28,7 +28,8 @@ it("defines the key provider on every thread start and resume, without ChatGPT c
   let key = "xai-first";
   const engine = new CodexEngineAdapter({ provider: { info: providerInfo("xai")!, key: () => key } });
   try {
-    expect((await engine.models()).map(m => [m.provider, m.id, m.isDefault, m.defaultReasoningEffort])).toEqual([["xai", "grok-4.7", true, "medium"], ["xai", "grok-4.5", false, "medium"]]);
+    // The registry names no effort; Codex's own default is sent.
+    expect((await engine.models()).map(m => [m.provider, m.id, m.isDefault, m.defaultReasoningEffort])).toEqual([["xai", "grok-4.7", true, undefined], ["xai", "grok-4.5", false, undefined]]);
     const employees: any[] = [{ id: "e", name: "Helper", instructions: "", capabilities: [], tokenLimit: null, createdAt: "", provider: "xai", model: "grok-4.5", serviceTier: "default" }];
     await engine.run("Hello", { model: "grok-4.7", serviceTier: "default", approvalMode: "ask", employees });
     const [start] = calls("thread/start");
