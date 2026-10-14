@@ -977,7 +977,7 @@
     "fr": "Se connecter à ChatGPT",
     "es": "Iniciar sesión en ChatGPT",
     "he": "כניסה ל-ChatGPT",
-    "ru": "Войти в OpenAI"
+    "ru": "Войти в ChatGPT"
   },
   "По умолчанию для новых поручений": {
     "en": "Default for new requests",
@@ -4620,18 +4620,18 @@
     "ru": "Нужен вход владельца"
   },
   "Войдите в OpenAI снова": {
-    "en": "Sign in to OpenAI again",
-    "fr": "Se reconnecter à OpenAI",
-    "es": "Volver a iniciar sesión en OpenAI",
-    "he": "כניסה מחדש ל-OpenAI",
-    "ru": "Войдите в OpenAI снова"
+    "en": "Sign in to ChatGPT again",
+    "fr": "Se reconnecter à ChatGPT",
+    "es": "Volver a iniciar sesión en ChatGPT",
+    "he": "כניסה מחדש ל-ChatGPT",
+    "ru": "Войдите в ChatGPT снова"
   },
   "Подключите OpenAI": {
-    "en": "Connect OpenAI",
-    "fr": "Connecter OpenAI",
-    "es": "Conectar OpenAI",
-    "he": "חיבור OpenAI",
-    "ru": "Подключите OpenAI"
+    "en": "Connect ChatGPT",
+    "fr": "Connecter ChatGPT",
+    "es": "Conectar ChatGPT",
+    "he": "חיבור ChatGPT",
+    "ru": "Подключите ChatGPT"
   },
   "Проверьте подключение к интернету и попробуйте ещё раз. Ваши чаты и сотрудники сохранены.": {
     "en": "Check your internet connection and try again. Your chats and assistants are saved.",
@@ -4648,11 +4648,11 @@
     "ru": "Сохранённый вход больше не действует. Войдите снова для сотрудников этого устройства."
   },
   "Войдите на сайте OpenAI. Этот аккаунт будут использовать сотрудники на «{0}».": {
-    "en": "Sign in on the OpenAI website. Assistants on “{0}” will use this account.",
-    "fr": "Connectez-vous sur le site OpenAI. Les assistants de « {0} » utiliseront ce compte.",
-    "es": "Inicia sesión en la web de OpenAI. Los asistentes de «{0}» usarán esta cuenta.",
-    "he": "יש להיכנס באתר OpenAI. העוזרים ב-״{0}״ ישתמשו בחשבון הזה.",
-    "ru": "Войдите на сайте OpenAI. Этот аккаунт будут использовать сотрудники на «{0}»."
+    "en": "Sign in with your ChatGPT account. Assistants on “{0}” will use it.",
+    "fr": "Connectez-vous avec votre compte ChatGPT. Les assistants de « {0} » l’utiliseront.",
+    "es": "Inicia sesión con tu cuenta de ChatGPT. Los asistentes de «{0}» la usarán.",
+    "he": "יש להיכנס עם חשבון ChatGPT שלך. העוזרים ב-״{0}״ ישתמשו בו.",
+    "ru": "Войдите в свой аккаунт ChatGPT. Его будут использовать сотрудники на «{0}»."
   },
   "Отвечает на @упоминание и ответы боту": {
     "en": "Replies to @mentions and replies to the bot",
