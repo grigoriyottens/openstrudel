@@ -34,4 +34,53 @@ import Testing
         #expect(usage.resetCredits?.availableCount == 2)
         #expect(usage.resetCredits?.nextExpiresAt == 1792000000)
     }
+    @Test func keyProviderAccountNamesItsProviderAndOlderHomesStayChatGPT() throws {
+        let key = try JSONDecoder().decode(OpenAIAccountEnvelope.self, from: Data(#"{"account":{"connected":false,"email":null,"planType":null,"provider":"anthropic","providerName":"Anthropic"},"accountId":"provider-anthropic","loginPending":false,"canManage":true}"#.utf8))
+        #expect(key.account.keyProviderName == "Anthropic")
+        #expect(!key.account.connected && !key.account.isUnavailable)
+        let chatgpt = try JSONDecoder().decode(OpenAIAccount.self, from: Data(#"{"connected":true,"email":"owner@example.com","planType":"plus","managed":true,"provider":"chatgpt","providerName":"ChatGPT"}"#.utf8))
+        #expect(chatgpt.keyProviderName == nil)
+        let older = try JSONDecoder().decode(OpenAIAccount.self, from: Data(#"{"connected":true,"email":null,"planType":"plus","managed":true}"#.utf8))
+        #expect(older.keyProviderName == nil)
+    }
+    @Test func modelPickerGroupsModelsByConnectedProvider() throws {
+        let speed = #"[{"id":"default","name":"Обычная","description":""}]"#
+        let fable = #"{"id":"claude-fable-5-1","name":"Claude Fable 5.1","description":"","isDefault":true,"speeds":\#(speed),"provider":"anthropic"}"#
+        let json = #"""
+        {"models":[{"id":"gpt-6.1-sol","name":"GPT-6.1 Sol","description":"","isDefault":true,"defaultReasoningEffort":"medium","speeds":[{"id":"default","name":"Обычная","description":""},{"id":"priority","name":"Fast","description":""}],"provider":"chatgpt"},
+          {"id":"gpt-6.1-sol","name":"GPT-6.1 Sol","description":"","isDefault":true,"speeds":\#(speed),"provider":"openai"},\#(fable)],
+         "providers":[{"id":"chatgpt","name":"ChatGPT","auth":"signin","connected":true,"keyHint":null,"keysUrl":null,"usedBy":2},
+          {"id":"openai","name":"OpenAI API","auth":"key","connected":true,"keyHint":"••••abc","keysUrl":"https://platform.openai.com/api-keys","usedBy":0},
+          {"id":"anthropic","name":"Anthropic","auth":"key","connected":true,"keyHint":"••••7Qa","keysUrl":"https://platform.claude.com/settings/keys","usedBy":1}],
+         "recommended":\#(fable),"selection":{"provider":"openai","model":"gpt-6.1-sol","serviceTier":"default"},
+         "defaults":{"provider":"anthropic","model":"claude-fable-5-1","serviceTier":"default"},
+         "effective":{"provider":"openai","model":"gpt-6.1-sol","serviceTier":"default"},"canManage":true}
+        """#
+        let settings = try JSONDecoder().decode(ModelSettings.self, from: Data(json.utf8))
+        #expect(settings.groups.map { $0.provider?.name } == ["ChatGPT", "OpenAI API", "Anthropic"])
+        // ChatGPT and an OpenAI key share model ids, yet each stays its own choice.
+        let selected = try #require(settings.model(settings.selection.ref))
+        #expect(selected.provider == "openai" && selected.speeds.count == 1)
+        #expect(settings.model(ModelRef(provider: "chatgpt", model: "gpt-6.1-sol"))?.speeds.count == 2)
+        #expect(settings.model(ModelRef(provider: "kimi", model: "kimi-k3")) == nil)
+        #expect(settings.recommended.map(settings.recommender) == "Anthropic")
+        #expect(settings.model(ModelRef(provider: "chatgpt", model: "gpt-6.1-sol")).map(settings.recommender) == "OpenAI")
+        #expect(settings.recommended?.defaultReasoningEffort == nil)
+    }
+    @Test func olderHomeModelSettingsKeepOneUnnamedList() throws {
+        let json = #"{"models":[{"id":"gpt-6.1-sol","name":"GPT-6.1 Sol","description":"","isDefault":true,"defaultReasoningEffort":"medium","speeds":[{"id":"default","name":"Обычная","description":""}]}],"recommended":{"id":"gpt-6.1-sol","name":"GPT-6.1 Sol","description":"","isDefault":true,"defaultReasoningEffort":"medium","speeds":[{"id":"default","name":"Обычная","description":""}]},"selection":{"model":null,"serviceTier":"default"},"defaults":{"model":"gpt-6.1-sol","serviceTier":"default"},"effective":{"model":"gpt-6.1-sol","serviceTier":"default"},"canManage":true}"#
+        let settings = try JSONDecoder().decode(ModelSettings.self, from: Data(json.utf8))
+        #expect(settings.groups.count == 1 && settings.groups[0].provider == nil)
+        #expect(settings.model(settings.defaults.ref)?.name == "GPT-6.1 Sol")
+        #expect(settings.recommended.map(settings.recommender) == "OpenAI")
+        // Automatic sends no provider, exactly as an older app did.
+        #expect(settings.selection == ModelSelection(model: nil, serviceTier: "default"))
+    }
+    @Test func providerListSeparatesConnectedKeysFromAddableOnes() throws {
+        let json = #"{"providers":[{"id":"chatgpt","name":"ChatGPT","auth":"signin","connected":false,"keyHint":null,"keysUrl":null,"usedBy":0},{"id":"xai","name":"xAI","auth":"key","connected":true,"keyHint":"••••7Qa","keysUrl":"https://console.x.ai","usedBy":3},{"id":"kimi","name":"Kimi","auth":"key","connected":false,"keyHint":null,"keysUrl":"https://platform.moonshot.ai/console/api-keys","usedBy":0}],"canManage":true}"#
+        let list = try JSONDecoder().decode(ProviderList.self, from: Data(json.utf8))
+        #expect(list.providers.filter(\.connectedKey).map(\.id) == ["xai"])
+        #expect(list.providers.filter(\.canAddKey).map(\.id) == ["kimi"])
+        #expect(list.providers[1].keyHint == "••••7Qa" && list.providers[1].usedBy == 3)
+    }
 }

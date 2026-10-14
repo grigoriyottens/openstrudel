@@ -39,7 +39,9 @@ struct ApprovalSettingsView: View {
             Text(L("Действия сотрудников"))
         } footer: {
             if let settings {
-                Text((choice ?? settings.mode).explanation + "\n"
+                let mode = choice ?? settings.mode
+                // Codex's reviewer exists only for ChatGPT, so the Home asks on API-key providers.
+                Text(mode.explanation + (mode == .auto && client.health?.providers == 1 ? " " + L("Для моделей по API-ключу спрашивает вас.") : "") + "\n"
                      + (settings.canManage ? L("Режим меняется со следующего поручения. Доступ к сервисам и правила сотрудника сохраняются.") : L("Режим меняет владелец этого устройства.")))
             }
         }

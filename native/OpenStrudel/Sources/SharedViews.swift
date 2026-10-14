@@ -100,6 +100,74 @@ struct OpenAISettingsCard: View {
     }
 }
 
+/// One provider's API key for one device. The device checks it with the provider before saving it,
+/// and it is never shown again.
+struct ProviderKeySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let provider: ProviderSummary
+    let deviceName: String
+    let connect: @MainActor (String) async throws -> Void
+    @State private var key = ""
+    @State private var busy = false
+    @State private var error: String?
+    private var ready: Bool { !busy && !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    // The Telegram pattern: the label leads, the prompt sits in the field.
+                    SecureField(L("API-ключ"), text: $key, prompt: Text(L("Вставьте ключ")))
+                        .onSubmit(submit)
+                        .accessibilityIdentifier("providerKey")
+                    if let url = provider.keysUrl.flatMap(URL.init(string:)) {
+                        InkLink(L("Получить ключ"), destination: url)
+                    }
+                    if busy { LabeledContent(L("Проверяем ключ в \(provider.name)…")) { ProgressView().controlSize(.small) } }
+                    if let error {
+                        Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("providerKeyError")
+                    }
+                } header: {
+                    #if os(macOS)
+                    // The Mac sheet carries its title in its content, on the rows' text edge.
+                    SheetTitle(title: provider.name)
+                    #endif
+                } footer: {
+                    Text(L("Ключ хранится только на «\(deviceName)». Сообщения сотрудников, которые его используют, отправляются в \(provider.name). Показать ключ снова нельзя."))
+                }
+            }
+            .formStyle(.grouped)
+            .sheetPageTitle(provider.name)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.disabled(busy) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("Подключить"), action: submit).disabled(!ready).accessibilityIdentifier("connectProviderKey")
+                }
+            }
+        }
+        .sheetTint()
+        #if os(macOS)
+        // A single page: as tall as its rows.
+        .frame(width: 480)
+        .presentationSizing(.fitted)
+        #endif
+        .interactiveDismissDisabled(busy)
+        .modifier(InterfaceLanguage())
+    }
+
+    /// Return in the field and the Connect button both land here; the first press wins.
+    private func submit() {
+        guard ready else { return }
+        busy = true; error = nil
+        Task {
+            defer { busy = false }
+            do { try await connect(key); dismiss() }
+            catch { self.error = error.localizedDescription }
+        }
+    }
+}
+
 extension UserFacingError {
     /// An error beside its own Try again button: the generic sentence drops its own "Try again".
     static func besideRetry(_ error: any Error) -> String {

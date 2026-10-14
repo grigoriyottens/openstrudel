@@ -49,6 +49,7 @@ struct HomeHealth: Decodable {
     var deviceLogoutVersion: Int? = nil
     var turnControlVersion: Int? = nil
     var queueControlVersion: Int? = nil
+    var providers: Int? = nil
 }
 
 struct HomeConversation: Decodable {
@@ -357,6 +358,61 @@ struct ManagedCodexAccount: Decodable, Identifiable {
     var identityLabel: String { [title, account.planLabel].joined(separator: " · ") }
 }
 struct ManagedCodexAccounts: Decodable { let accounts: [ManagedCodexAccount]; let canManage: Bool }
+
+/// Who powers employees on a device: ChatGPT sign-in or an API key, which never comes back from the Home.
+struct ProviderSummary: Decodable, Identifiable, Equatable {
+    let id: String; let name: String; let auth: String; let connected: Bool
+    /// `••••7Qa`: the key itself never leaves its device.
+    let keyHint: String?; let keysUrl: String?; let usedBy: Int
+    var canAddKey: Bool { auth == "key" && !connected }
+    var connectedKey: Bool { auth == "key" && connected }
+}
+struct ProviderList: Decodable { let providers: [ProviderSummary]; let canManage: Bool }
+
+struct ModelSelection: Codable, Equatable {
+    /// Nil from older Homes, and with a nil model: as on the device, or automatic for the device itself.
+    var provider: String? = nil
+    let model: String?
+    let serviceTier: String?
+    var ref: ModelRef? { model.map { ModelRef(provider: provider, model: $0) } }
+}
+/// A model is unique only within its provider: ChatGPT and an OpenAI API key share model ids.
+struct ModelRef: Hashable { let provider: String?; let model: String }
+struct ModelChoice: Decodable, Identifiable {
+    struct Speed: Decodable, Identifiable { let id: String; let name: String; let description: String }
+    let id: String
+    let name: String
+    let description: String
+    let isDefault: Bool
+    let defaultReasoningEffort: String?
+    let speeds: [Speed]
+    var provider: String? = nil
+    var ref: ModelRef { ModelRef(provider: provider, model: id) }
+}
+struct ModelSettings: Decodable {
+    let models: [ModelChoice]
+    let selection: ModelSelection
+    let defaults: ModelSelection
+    let effective: ModelSelection
+    let recommended: ModelChoice?
+    let canManage: Bool
+    /// Connected providers, ChatGPT first. Older Homes send none.
+    var providers: [ProviderSummary]? = nil
+
+    struct Group: Identifiable { let provider: ProviderSummary?; let models: [ModelChoice]; var id: String { provider?.id ?? "" } }
+    /// The picker's groups: one per connected provider once there are several, otherwise one unnamed list.
+    var groups: [Group] {
+        guard let providers, providers.count > 1 else { return [Group(provider: nil, models: models)] }
+        return providers.map { provider in Group(provider: provider, models: models.filter { $0.provider == provider.id }) }.filter { !$0.models.isEmpty }
+    }
+    func model(_ ref: ModelRef?) -> ModelChoice? { models.first { $0.ref == ref } }
+    /// ChatGPT and the OpenAI API both recommend OpenAI's choice.
+    func recommender(of model: ModelChoice) -> String {
+        guard let provider = model.provider, !["chatgpt", "openai"].contains(provider),
+              let name = providers?.first(where: { $0.id == provider })?.name else { return "OpenAI" }
+        return name
+    }
+}
 struct HomeActionResult: Decodable { let ok: Bool?; let status: String?; let operationId: String? }
 struct HomeRequestStatus: Decodable {
     let status: String
@@ -394,8 +450,14 @@ struct OpenAIAccount: Decodable, Equatable {
     let connected: Bool
     let email: String?
     let planType: String?
-    let managed: Bool
+    let managed: Bool?
     var issue: String? = nil
+    /// The agent's provider; absent from older Homes, which know only ChatGPT.
+    var provider: String? = nil
+    var providerName: String? = nil
+
+    /// The API-key provider this account stands for, by name; nil for ChatGPT.
+    var keyProviderName: String? { provider.flatMap { $0 == "chatgpt" ? nil : providerName ?? $0 } }
 
     var planLabel: String {
         switch planType?.lowercased() {

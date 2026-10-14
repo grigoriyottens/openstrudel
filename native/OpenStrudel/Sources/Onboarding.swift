@@ -293,6 +293,8 @@ struct HomeUnavailableView: View {
 struct OpenAIWelcomeView: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
+    @State private var keyProviders: [ProviderSummary] = []
+    @State private var keyProvider: ProviderSummary?
     var body: some View {
         WelcomePage {
             WelcomeHeader(title: client.openAIAccount?.isUnavailable == true ? L("Нет связи с OpenAI")
@@ -326,9 +328,30 @@ struct OpenAIWelcomeView: View {
                         }.primaryAction()
                             .disabled(client.isStartingOpenAILogin)
                             .accessibilityIdentifier("signInOpenAI")
+                        if !keyProviders.isEmpty {
+                            Menu {
+                                ForEach(keyProviders) { provider in Button { keyProvider = provider } label: { Text(verbatim: provider.name) } }
+                            } label: {
+                                Text(L("У меня есть API-ключ"))
+                            }
+                            .menuStyle(.button).secondaryAction().menuIndicator(.hidden).fixedSize()
+                            .font(AppTypography.interface).padding(.top, 4)
+                            .accessibilityIdentifier("connectWithAPIKey")
+                        }
                     }
                 }
             }.padding(.top, 32)
+        }
+        // The first key powers the device automatically, so the account check goes straight to the chat.
+        .sheet(item: $keyProvider) { provider in
+            ProviderKeySheet(provider: provider, deviceName: client.displayName) { key in
+                try await client.connectProvider(provider.id, key: key)
+                await client.refreshOpenAIAccount(force: true)
+            }
+        }
+        .task(id: client.health?.providers == 1 && client.canManageOpenAI) {
+            guard client.health?.providers == 1, client.canManageOpenAI, let list = try? await client.providers(), list.canManage else { return }
+            keyProviders = list.providers.filter(\.canAddKey)
         }
         .onChange(of: client.openAILogin) { _, login in if let url = login?.url { openURL(url) } }
         .task(id: client.openAILogin?.loginId) {

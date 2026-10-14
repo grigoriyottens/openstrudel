@@ -419,8 +419,9 @@ struct TelegramChatsView: View {
                 Section {
                     Text(client.openAIAccount?.isUnavailable == true
                          ? L("Не удалось проверить OpenAI. Подключение Telegram сохранено.")
-                         : L("Войдите в OpenAI, чтобы помощник мог отвечать."))
-                    Button(L("Аккаунты OpenAI")) { showAccounts = true }
+                         : client.openAIAccount?.keyProviderName.map { L("Подключите \($0), чтобы помощник мог отвечать.") }
+                         ?? L("Войдите в OpenAI, чтобы помощник мог отвечать."))
+                    Button(L("Аккаунты")) { showAccounts = true }
                         .accessibilityIdentifier("telegramOpenAIAccounts")
                 }
             }
@@ -444,10 +445,10 @@ struct TelegramChatsView: View {
         .sheetPageTitle(title)
         .navigationDestination(isPresented: $showAccounts) {
             Form {
-                SheetTitleSection(title: L("Аккаунты OpenAI"), beforeHeader: true)
+                SheetTitleSection(title: L("Аккаунты"), beforeHeader: true)
                 DeviceAccountsView()
             }
-            .formStyle(.grouped).sheetPageTitle(L("Аккаунты OpenAI"))
+            .formStyle(.grouped).sheetPageTitle(L("Аккаунты"))
         }
     }
 

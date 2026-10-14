@@ -321,6 +321,59 @@ import Testing
         #expect(state.loginStarts == 1)
     }
 
+    @Test func keyProviderEmployeeAsksForItsKeyAndOpensTheChatOnceConnected() async throws {
+        let state = AccountFixtureState()
+        state.accountBody = #"{"account":{"connected":false,"email":null,"planType":null,"provider":"kimi","providerName":"Kimi"},"accountId":"provider-kimi","loginPending":false,"canManage":true}"#
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        await client.load()
+        #expect(client.openAIAccount?.connected == false)
+        #expect(client.openAIRecoveryMessage == L("Добавьте ключ \("Kimi") в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены."))
+        state.accountBody = #"{"account":{"connected":false,"email":null,"planType":null,"provider":"kimi","providerName":"Kimi"},"accountId":"provider-kimi","loginPending":false,"canManage":false}"#
+        await client.refreshOpenAIAccount()
+        #expect(client.openAIRecoveryMessage == L("Ключ \("Kimi") добавляет владелец устройства этого сотрудника. Чаты и черновики сохранены."))
+        state.accountBody = #"{"account":{"connected":true,"email":null,"planType":null,"provider":"kimi","providerName":"Kimi"},"accountId":"provider-kimi","loginPending":false,"canManage":true}"#
+        await client.refreshOpenAIAccount()
+        #expect(client.openAIAccount?.connected == true)
+        #expect(client.hasOpenedConversation)
+    }
+
+    @Test func apiKeysGoToTheChosenDeviceAndARejectedKeyKeepsTheProvidersWords() async throws {
+        let state = AccountFixtureState()
+        var calls: [String] = []
+        var keys: [String] = []
+        state.customResponse = { request in
+            guard request.url!.path.hasPrefix("/v1/providers") else { return nil }
+            calls.append((request.httpMethod ?? "") + " " + request.url!.path + "?" + (request.url!.query ?? ""))
+            var data = request.httpBody ?? Data()
+            if data.isEmpty, let stream = request.httpBodyStream {
+                stream.open(); defer { stream.close() }
+                var buffer = [UInt8](repeating: 0, count: 1024)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    guard count > 0 else { break }; data.append(contentsOf: buffer.prefix(count))
+                }
+            }
+            if let key = (try? JSONSerialization.jsonObject(with: data) as? [String: String])?["key"] { keys.append(key) }
+            switch request.httpMethod {
+            case "PUT": return (400, Data(#"{"error":"Kimi не принял ключ. Проверьте его и вставьте снова."}"#.utf8))
+            case "DELETE": return (200, Data(#"{"ok":true,"reset":2}"#.utf8))
+            default: return (200, Data(#"{"providers":[{"id":"kimi","name":"Kimi","auth":"key","connected":true,"keyHint":"••••7Qa","keysUrl":"https://platform.moonshot.ai/console/api-keys","usedBy":2}],"canManage":true}"#.utf8))
+            }
+        }
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        let list = try await client.providers(deviceID: "mac-mini")
+        #expect(list.providers.first?.keyHint == "••••7Qa")
+        do {
+            try await client.connectProvider("kimi", key: "sk-rejected", deviceID: "mac-mini")
+            Issue.record("A rejected key must not look connected")
+        } catch { #expect(error.localizedDescription == L("\("Kimi") не принял ключ. Проверьте его и вставьте снова.")) }
+        try await client.removeProvider("kimi")
+        #expect(calls == ["GET /v1/providers?deviceId=mac-mini", "PUT /v1/providers/kimi?deviceId=mac-mini", "DELETE /v1/providers/kimi?"])
+        #expect(keys == ["sk-rejected"])
+    }
+
     @Test func revokedHomePairingStillRequiresReconnection() async throws {
         let state = AccountFixtureState()
         state.accountStatus = 401

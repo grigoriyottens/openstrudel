@@ -437,6 +437,9 @@ struct DeviceAccountsView: View {
     @State private var renaming: ManagedCodexAccount?
     @State private var accountName = ""
     @State private var notice: String?
+    @State private var keys: ProviderList?
+    @State private var keyProvider: ProviderSummary?
+    @State private var removingKey: ProviderSummary?
     @State private var requestID = UUID()
     private var query: String { deviceID.isEmpty ? "" : "?deviceId=" + deviceID }
     private var deviceName: String { deviceID == client.health?.nodeId ? client.displayName : client.devices.first(where: { $0.id == deviceID })?.name ?? client.displayName }
@@ -512,6 +515,7 @@ struct DeviceAccountsView: View {
                     Text(L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
                 }
             }
+            if let keys, keys.canManage { keySection(keys.providers) }
         }
         .task(id: deviceID) {
             if deviceID.isEmpty, let localDeviceID = client.health?.nodeId {
@@ -564,6 +568,54 @@ struct DeviceAccountsView: View {
                 }
             }.disabled(accountName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || accountName.count > 80)
         } message: { Text(L("Choose a name you recognise. Your OpenAI account stays the same.")) }
+        .sheet(item: $keyProvider) { provider in
+            ProviderKeySheet(provider: provider, deviceName: deviceName) { key in
+                try await client.connectProvider(provider.id, key: key, deviceID: deviceID.isEmpty ? nil : deviceID)
+                await keysChanged()
+            }
+        }
+        .confirmationDialog(removingKey.map { L("Удалить ключ \($0.name)?") } ?? "", isPresented: Binding(get: { removingKey != nil }, set: { if !$0 { removingKey = nil } }),
+                            titleVisibility: .visible, presenting: removingKey) { provider in
+            Button(L("Удалить ключ"), role: .destructive) { perform {
+                try await client.removeProvider(provider.id, deviceID: deviceID.isEmpty ? nil : deviceID)
+                removingKey = nil; await keysChanged()
+            } }
+        } message: { provider in
+            Text(provider.usedBy > 0 ? L("Сотрудников на этом ключе: \(provider.usedBy). Они перейдут на модель по умолчанию.") : L("Ключ будет удалён с «\(deviceName)»."))
+        }
+    }
+
+    /// API keys under the ChatGPT accounts: connected ones as rows, the others in Add key.
+    @ViewBuilder private func keySection(_ providers: [ProviderSummary]) -> some View {
+        let addable = providers.filter(\.canAddKey)
+        Section {
+            ForEach(providers.filter(\.connectedKey)) { provider in
+                LabeledContent {
+                    Menu {
+                        Button(L("Заменить ключ…")) { keyProvider = provider }
+                        Button(L("Удалить…"), role: .destructive) { removingKey = provider }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                    .disabled(busy)
+                    .accessibilityLabel(L("Действия с аккаунтом"))
+                    .accessibilityIdentifier("providerActions-" + provider.id)
+                } label: {
+                    Text(verbatim: provider.name)
+                    Text(provider.keyHint.map { L("API-ключ \($0)") } ?? L("API-ключ"))
+                }
+            }
+            if !addable.isEmpty {
+                Menu(L("Добавить ключ…")) {
+                    ForEach(addable) { provider in Button { keyProvider = provider } label: { Text(verbatim: provider.name) } }
+                }
+                .disabled(busy)
+                .accessibilityIdentifier("addProviderKey")
+            }
+        } header: {
+            Text(L("API-ключи"))
+        }
     }
 
     @ViewBuilder private func accountRows(_ account: ManagedCodexAccount, index: Int) -> some View {
@@ -632,7 +684,7 @@ struct DeviceAccountsView: View {
     private func refresh(force: Bool = false) async {
         let selected = deviceID, token = UUID()
         requestID = token
-        if loadedDeviceID != selected { accounts = []; canManage = false; loadedDeviceID = selected }
+        if loadedDeviceID != selected { accounts = []; canManage = false; keys = nil; loadedDeviceID = selected }
         loading = true; error = nil
         defer { if selected == deviceID && requestID == token { loading = false } }
         do {
@@ -640,6 +692,19 @@ struct DeviceAccountsView: View {
             guard selected == deviceID, requestID == token, !Task.isCancelled else { return }
             accounts = result.accounts; canManage = result.canManage
         } catch { if !Task.isCancelled && selected == deviceID && requestID == token { self.error = UserFacingError.text(error.localizedDescription) } }
+        await loadKeys()
+    }
+    /// Older Homes have no API keys; a device that cannot answer keeps the last list.
+    private func loadKeys() async {
+        let selected = deviceID
+        guard client.health?.providers == 1, let list = try? await client.providers(deviceID: selected.isEmpty ? nil : selected),
+              selected == deviceID else { return }
+        keys = list
+    }
+    /// A key can change which provider an employee runs on, so the chat's gate is checked again.
+    private func keysChanged() async {
+        await loadKeys()
+        await client.refreshOpenAIAccount(force: true)
     }
     private func signIn(_ id: String) async throws {
         loginAccount = id

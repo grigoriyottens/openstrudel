@@ -267,6 +267,10 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     var openAIRecoveryMessage: String {
+        if let provider = openAIAccount?.keyProviderName {
+            return canManageOpenAI ? L("Добавьте ключ \(provider) в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены.")
+                : L("Ключ \(provider) добавляет владелец устройства этого сотрудника. Чаты и черновики сохранены.")
+        }
         if openAIAccount?.isUnavailable == true {
             return L("Связь с вашим Mac или сервером сохранена. Проверим OpenAI снова автоматически. Чаты и черновики остаются на месте.")
         }
@@ -1311,6 +1315,20 @@ final class HomeClient: ObservableObject, Identifiable {
         // A lost response is safe to retry: the Home remembers this archive.
         await load(quiet: true)
         return result
+    }
+
+    /// API keys live on the device that runs the employees, routed like `/v1/accounts`.
+    func providers(deviceID: String? = nil) async throws -> ProviderList {
+        try await management("/v1/providers" + (deviceID.map { "?deviceId=" + $0 } ?? ""))
+    }
+
+    /// The device checks the key with the provider before saving it; a rejected key fails with the server's message.
+    func connectProvider(_ id: String, key: String, deviceID: String? = nil) async throws {
+        let _: HomeActionResult = try await management("/v1/providers/" + id + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: "PUT", payload: ["key": key])
+    }
+
+    func removeProvider(_ id: String, deviceID: String? = nil) async throws {
+        let _: HomeActionResult = try await management("/v1/providers/" + id + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: "DELETE")
     }
 
     func management<T: Decodable>(_ path: String, method: String = "GET", payload: [String: Any]? = nil) async throws -> T {

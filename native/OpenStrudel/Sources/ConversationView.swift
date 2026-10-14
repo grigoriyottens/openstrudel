@@ -334,11 +334,13 @@ struct OpenAIRecoveryNotice: View {
     @Environment(\.openSettings) private var openSettings
     #endif
     @State private var showAccounts = false
+    /// An employee on an API-key provider needs that key on its device, not an OpenAI sign-in.
+    private var provider: String? { client.openAIAccount?.keyProviderName }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if dynamicTypeSize.isAccessibilitySize {
-                Text(client.openAIAccount?.isUnavailable == true ? L("Связь с OpenAI") : L("Вход в OpenAI"))
+                Text(provider.map { L("Нужен ключ \($0)") } ?? (client.openAIAccount?.isUnavailable == true ? L("Связь с OpenAI") : L("Вход в OpenAI")))
                     .font(titleFont).accessibilityIdentifier("openAIRecoveryNotice")
                 Text(L("Чаты и черновики сохранены.")).font(detailFont).foregroundStyle(AppTheme.secondaryText)
                     .wrapsInFull()
@@ -349,9 +351,9 @@ struct OpenAIRecoveryNotice: View {
                 action(L("Проверить ещё раз")) { Task { await client.refreshOpenAIAccount(force: true) } }
                     .disabled(client.isLoading)
             } else if client.canManageOpenAI {
-                action(L("Войти в OpenAI"), perform: openAccounts)
+                action(provider.map { L("Подключить \($0)") } ?? L("Войти в OpenAI"), perform: openAccounts)
                     .accessibilityIdentifier("recoverOpenAIAccount")
-            } else if dynamicTypeSize.isAccessibilitySize {
+            } else if dynamicTypeSize.isAccessibilitySize && provider == nil {
                 action(L("Как восстановить вход"), perform: openAccounts)
             }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
@@ -400,8 +402,8 @@ struct OpenAIRecoveryNotice: View {
 
     private var explanation: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(client.openAIAccount?.isUnavailable == true ? L("Не удалось проверить соединение с OpenAI.")
-                 : L("Вход в OpenAI нужно восстановить.")).font(titleFont)
+            Text(provider.map { L("Нужен ключ \($0)") } ?? (client.openAIAccount?.isUnavailable == true ? L("Не удалось проверить соединение с OpenAI.")
+                 : L("Вход в OpenAI нужно восстановить."))).font(titleFont)
                 .accessibilityIdentifier("openAIRecoveryNotice")
             Text(client.openAIRecoveryMessage).font(detailFont).foregroundStyle(AppTheme.secondaryText)
                 .wrapsInFull()
