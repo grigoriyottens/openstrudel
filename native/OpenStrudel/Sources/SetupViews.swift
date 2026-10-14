@@ -243,7 +243,8 @@ struct ServerSetupView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle(L("Get a server with DigitalOcean"))
+        // Its header is the page's title in the content, so the bar keeps only Back.
+        .sheetPageTitle(L("Get a server with DigitalOcean"))
         .toolbar {
             if hasPrimaryAction {
                 ToolbarItem(placement: .confirmationAction) { primaryAction }

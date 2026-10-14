@@ -36,6 +36,41 @@ struct SheetStack<Root: View, Bar: ToolbarContent>: View {
     }
 }
 
+/// A sheet page's title, in its content on the Mac: 17 pt on the rows' text edge, where every page of a sheet
+/// shows it, so pushing a page never moves or resizes the title. The bar keeps only Back and the buttons.
+struct SheetTitle: View {
+    let title: String
+    var body: some View {
+        Text(title).font(AppTypography.title).foregroundStyle(Color.primary)
+            .textCase(nil).accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// The title as a page's first section, for a page whose first rows vary. The form puts the next
+/// section's header right under it, so `beforeHeader` keeps 16 between the two, as in Hidden assistants.
+struct SheetTitleSection: View {
+    let title: String
+    var beforeHeader = false
+    var body: some View {
+        #if os(macOS)
+        Section {} header: { SheetTitle(title: title).padding(.bottom, beforeHeader ? 8 : 0) }
+        #endif
+    }
+}
+
+extension View {
+    /// Names a sheet page. On the Mac its title is drawn in the content, so the bar keeps only Back.
+    func sheetPageTitle(_ title: String) -> some View {
+        #if os(macOS)
+        // A pushed page shows its navigation title beside Back even with `toolbar(removing: .title)`,
+        // so the bar's title stays empty; the content's title carries the header trait.
+        navigationTitle("")
+        #else
+        navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+        #endif
+    }
+}
+
 /// Pages a details sheet pushes. The sheet's stack owns them, so a push never resizes the sheet.
 enum DetailsPage: Hashable { case services, telegram }
 
@@ -366,6 +401,7 @@ struct TelegramChatsView: View {
 
     private var content: some View {
         Form {
+            SheetTitleSection(title: title, beforeHeader: true)
             if let group = client.activeTelegramGroup {
                 Section {
                     LabeledContent {
@@ -405,14 +441,17 @@ struct TelegramChatsView: View {
             if let error { Section { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning) } }
         }
         .formStyle(.grouped)
-        .navigationTitle(client.activeTelegramGroup?.title ?? "Telegram")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .sheetPageTitle(title)
         .navigationDestination(isPresented: $showAccounts) {
-            Form { DeviceAccountsView() }.formStyle(.grouped).navigationTitle(L("Аккаунты OpenAI"))
+            Form {
+                SheetTitleSection(title: L("Аккаунты OpenAI"), beforeHeader: true)
+                DeviceAccountsView()
+            }
+            .formStyle(.grouped).sheetPageTitle(L("Аккаунты OpenAI"))
         }
     }
+
+    private var title: String { client.activeTelegramGroup?.title ?? "Telegram" }
 
     private func groupLabel(_ chat: TelegramChat) -> some View {
         Label {
@@ -502,6 +541,7 @@ struct ConnectionsView: View {
 
     private var servicesList: some View {
         ServiceList {
+            SheetTitleSection(title: L("Сервисы и навыки"))
             scopeSection
             if availableConnections.filter({ $0.id != "mcp:cua_repl" && !$0.isAvailableToAdd }).count > 6 {
                 Section {
@@ -515,10 +555,7 @@ struct ConnectionsView: View {
             extensionRows
             connectionRows
         }
-        .navigationTitle(L("Сервисы и навыки"))
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .sheetPageTitle(L("Сервисы и навыки"))
     }
 
     private var content: some View {

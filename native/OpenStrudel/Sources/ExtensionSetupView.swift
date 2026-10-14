@@ -37,6 +37,7 @@ struct ConnectionCatalogView: View {
     }
     var body: some View {
         ServiceList {
+            SheetTitleSection(title: L("Добавить"), beforeHeader: !(loading || error != nil || waiting != nil))
             if loading || error != nil || waiting != nil {
                 Section {
                     if loading {
@@ -93,11 +94,8 @@ struct ConnectionCatalogView: View {
                 if !notes.isEmpty { Text(notes.joined(separator: "\n")) }
             }
         }
-        // A subtitle would grow the title bar and resize the sheet; a group's scope sits in the footer.
-        .navigationTitle(L("Добавить"))
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        // A group's scope sits in the footer, so the title stays one line.
+        .sheetPageTitle(L("Добавить"))
         .task { await refresh() }
         .task(id: waiting?.id) {
             guard waiting != nil else { return }
@@ -163,8 +161,11 @@ struct ExtensionSetupView: View {
 
     private var canAdd: Bool { !busy && !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
+    private var title: String { source == .mcp ? L("Подключить сервис") : L("Установить из файла") }
+
     var body: some View {
         Form {
+            SheetTitleSection(title: title, beforeHeader: true)
             if let preview {
                 Section {
                     LabeledContent {
@@ -228,9 +229,8 @@ struct ExtensionSetupView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle(source == .mcp ? L("Подключить сервис") : L("Установить из файла"))
+        .sheetPageTitle(title)
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
         #endif
         .toolbar {

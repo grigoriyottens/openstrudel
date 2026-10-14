@@ -122,7 +122,8 @@ private struct ConnectionLinkPage: View {
                         .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("invitationError")
                 }
             } header: {
-                Text(L("Ссылка подключения"))
+                // The page's title heads the field, as on the first page; the field keeps its own label.
+                SheetTitle(title: L("Connect with a link"))
             } footer: {
                 if let page = connectionPage {
                     Text(L("Откроется \(page.host ?? L("страница подключения")) в браузере. На странице нажмите «Открыть OpenStrudel»."))
@@ -132,7 +133,7 @@ private struct ConnectionLinkPage: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle(L("Connect with a link"))
+        .sheetPageTitle(L("Connect with a link"))
         .onChange(of: invitation) { _, _ in error = nil }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -228,6 +229,7 @@ private struct OwnServerSetupView: View {
 
     var body: some View {
         Form {
+            SheetTitleSection(title: title)
             if editing { addressForm }
             if flow.phase == .confirmIdentity, let target = flow.target, let identity = flow.hostKey {
                 Section {
@@ -280,7 +282,7 @@ private struct OwnServerSetupView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle(title)
+        .sheetPageTitle(title)
         .toolbar {
             if let step {
                 ToolbarItem(placement: .confirmationAction) {
