@@ -360,7 +360,7 @@ struct TelegramChatsView: View {
                         .accessibilityIdentifier("telegramGroupServices")
                 } header: { Text(L("Группа в Telegram")) }
             } else {
-                Section(L("Telegram на «\(client.executionDeviceName)»")) { TelegramSetupView() }
+                TelegramSetupSection()
             }
             if client.telegram?.configured == true && client.openAIAccount?.connected == false {
                 Section {

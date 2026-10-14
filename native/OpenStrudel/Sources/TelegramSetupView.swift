@@ -1,9 +1,26 @@
 import SwiftUI
 
+/// The Telegram section of Settings › Accounts and the details sheet. Until a bot is connected, the footer
+/// says where its token is kept.
+struct TelegramSetupSection: View {
+    @EnvironmentObject private var client: HomeClient
+
+    var body: some View {
+        Section {
+            TelegramSetupView()
+        } header: {
+            Text(L("Telegram на «\(client.executionDeviceName)»"))
+        } footer: {
+            if client.telegram?.configured != true {
+                Text(L("Ключ хранится на устройстве сотрудника. Используйте отдельного бота для каждого устройства."))
+            }
+        }
+    }
+}
+
 struct TelegramSetupView: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
-    @Environment(\.layoutDirection) private var layoutDirection
     var contextual = false
     @State private var token = ""
     @State private var busy = false
@@ -15,7 +32,7 @@ struct TelegramSetupView: View {
     private var privateChats: [TelegramChat] { (client.telegram?.chats ?? []).filter(\.isPairedOwner) }
     private var linked: Bool { !privateChats.isEmpty }
 
-    /// Rows only: the caller wraps them in a Form section titled “Telegram on …”.
+    /// Rows only: TelegramSetupSection wraps them in a Form section.
     var body: some View {
         Group {
             if client.telegram?.configured == true { configuredRows } else { setupRows }
@@ -118,18 +135,10 @@ struct TelegramSetupView: View {
             Text(L("1. Откройте BotFather и создайте бота командой /newbot."))
         }
         Text(L("2. Скопируйте выданный ключ и вставьте сюда."))
-        SecureField(text: $token, prompt: Text(L("Ключ бота из BotFather"))) { Text(L("Ключ бота из BotFather")) }
-            .labelsHidden()
-            // A Mac field aligns by its own text's direction; keep it on the interface edge like the rows.
-            .multilineTextAlignment(layoutDirection == .rightToLeft ? .trailing : .leading)
-            .environment(\.layoutDirection, .leftToRight)
+        // A labelled field, like the backup password: the label leads, the prompt sits in the field.
+        SecureField(L("Ключ бота"), text: $token, prompt: Text(L("Из BotFather")))
             .accessibilityIdentifier("telegramBotToken")
-        HStack(spacing: 12) {
-            Text(L("Ключ хранится на устройстве сотрудника. Используйте отдельного бота для каждого устройства."))
-                .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            if busy { ProgressView().controlSize(.small) }
+        HStack(spacing: 8) {
             Button(busy ? L("Проверяем бота…") : L("Подключить бота")) {
                 busy = true; error = nil
                 Task {
@@ -140,6 +149,8 @@ struct TelegramSetupView: View {
             }
             .disabled(busy || token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityIdentifier("connectTelegramBot")
+            Spacer(minLength: 0)
+            if busy { ProgressView().controlSize(.small) }
         }
     }
 

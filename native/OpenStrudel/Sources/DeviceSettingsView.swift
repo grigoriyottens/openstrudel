@@ -111,9 +111,7 @@ struct SettingsView: View {
         case .accounts:
             DevicePickerSection(title: L("Устройство"), selection: $selectedID)
             DeviceAccountsView().environmentObject(selected).id(selected.id)
-            SwiftUI.Section(L("Telegram на «\(selected.executionDeviceName)»")) {
-                TelegramSetupView().environmentObject(selected)
-            }.id("telegram-" + selected.id)
+            TelegramSetupSection().environmentObject(selected).id("telegram-" + selected.id)
         case .backups:
             DevicePickerSection(title: L("Устройство"), selection: $selectedID)
             SwiftUI.Section(L("Резервная копия сотрудников")) {

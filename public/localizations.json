@@ -7719,5 +7719,19 @@
     "es": "Mostrar asistentes ocultos…",
     "he": "הצגת עוזרים מוסתרים…",
     "ru": "Показать скрытых сотрудников…"
+  },
+  "Ключ бота": {
+    "en": "Bot token",
+    "fr": "Clé du bot",
+    "es": "Clave del bot",
+    "he": "מפתח הבוט",
+    "ru": "Ключ бота"
+  },
+  "Из BotFather": {
+    "en": "From BotFather",
+    "fr": "Fournie par BotFather",
+    "es": "De BotFather",
+    "he": "מ-BotFather",
+    "ru": "Из BotFather"
   }
 }
