@@ -188,6 +188,7 @@ async function openHomeSettings() {
   row(group(page.content),t("Выйти на этом устройстве"),via(t("Выйти на этом устройстве"),openDeviceSignOut),{className:'destructive-row'});
 }
 async function openDevices() {
+  const here={label:t("Устройства"),open:openDevices,back:state.back}, sub=fn=>(...args)=>{state.back=here;return fn(...args);};
   const page=modalPage(t("Устройства"),t("Сотрудники остаются на устройстве, где созданы. Для работы с несколькими устройствами откройте приложение OpenStrudel."));
   try {
     const data=await api('/v1/devices'); state.devices=data.devices;
@@ -195,11 +196,11 @@ async function openDevices() {
     const control=await api('/v1/home');
     const list=group(page.content);
     for(const device of data.devices) row(list,device.name,null,{detail:t("{0} · Сотрудников: {1}",device.online?t("На связи"):t("Не на связи"),device.agents)});
-    if(control.operations?.length) { const moves=group(page.content); for(const operation of control.operations) row(moves,t("Проверить перенос сотрудника"),()=>watchAgentMove(operation.id)); }
+    if(control.operations?.length) { const moves=group(page.content); for(const operation of control.operations) row(moves,t("Проверить перенос сотрудника"),sub(()=>watchAgentMove(operation.id))); }
     if(state.owner) {
       action(page,t("Открыть на другом устройстве"),async()=>{
         const invite=await api('/v1/mobile/pairing',{method:'POST',body:JSON.stringify({owner:true})});
-        const next=modalPage(t("Подключение устройства"),t("На другом Mac откройте Настройки → Устройства → Подключить устройство и вставьте эту ссылку. Она действует пять минут."));
+        state.back=here; const next=modalPage(t("Подключение устройства"),t("На другом Mac откройте Настройки → Устройства → Подключить устройство и вставьте эту ссылку. Она действует пять минут."));
         const text=field(next.content,t("Личная ссылка подключения"),'password'); text.value=invite.url; text.readOnly=true;
         action(next,t("Скопировать ссылку"),async()=>{await navigator.clipboard.writeText(invite.url);next.error.textContent=t("Ссылка скопирована. Продолжите на другом устройстве.");},true);
       },true);
@@ -309,6 +310,7 @@ async function watchTransfer(value) {
   catch(e) { page.report(e); }
 }
 async function openAccounts(deviceId, force=false) {
+  const here={label:t("Аккаунты и лимиты"),open:()=>openAccounts(deviceId),back:state.back};
   const page=modalPage(t("Аккаунты и лимиты"),t("Подписка OpenAI и отдельный баланс кредитов."));
   const list=element('div','','accounts');
   const loading=element('p',t("Загружаем аккаунты и лимиты…"));loading.setAttribute('role','status');page.content.append(loading);
@@ -348,24 +350,25 @@ async function openAccounts(deviceId, force=false) {
         const more=element('details'), summary=summaryLine(t('Действия с аккаунтом'));more.append(summary);
         const rename=element('button',t('Rename account…'),'secondary');
         rename.onclick=()=>{
-          const edit=modalPage(t('Rename account'),t('Choose a name you recognise. Your OpenAI account stays the same.'),{close:'cancel'});
+          state.back=here; const edit=modalPage(t('Rename account'),t('Choose a name you recognise. Your OpenAI account stays the same.'),{close:'cancel'});
           const input=field(edit.content,t('Название аккаунта'));input.value=title;input.maxLength=80;
-          const save=action(edit,t('Сохранить'),async()=>{await api(`/v1/accounts/${entry.id}`+suffix,{method:'POST',body:JSON.stringify({name:input.value.trim()})});await openAccounts(deviceId);},true);
+          const save=action(edit,t('Сохранить'),async()=>{await api(`/v1/accounts/${entry.id}`+suffix,{method:'POST',body:JSON.stringify({name:input.value.trim()})});await goBack(here);},true);
           input.oninput=()=>{save.disabled=!input.value.trim();};input.focus();input.select();
         };more.append(rename);
         const login=element('button',entry.account.connected?t("Войти заново"):t("Войти в OpenAI"),'secondary');
-        login.onclick=()=>void startAccountLogin(entry.id,deviceId);(entry.account.connected?more:card).append(login);
+        login.onclick=()=>{state.back=here;void startAccountLogin(entry.id,deviceId);};(entry.account.connected?more:card).append(login);
         if(i>0&&entry.account.connected) { const use=element('button',t("Использовать первым"),'secondary'); use.onclick=async()=>{try{await api(`/v1/accounts/${entry.id}/priority`+suffix,{method:'POST',body:'{}'}); await openAccounts(deviceId);}catch(e){page.report(e);}}; more.append(use); }
         card.append(more);
       }
       list.append(card);
     }
     action(page,t("Обновить остатки"),()=>openAccounts(deviceId,true));
-    if(data.canManage) action(page,t("Добавить аккаунт"),async()=>{ const entry=await api('/v1/accounts'+suffix,{method:'POST',body:JSON.stringify({name:t("Аккаунт")})}); await startAccountLogin(entry.id,deviceId); });
+    if(data.canManage) action(page,t("Добавить аккаунт"),async()=>{ const entry=await api('/v1/accounts'+suffix,{method:'POST',body:JSON.stringify({name:t("Аккаунт")})}); state.back=here; await startAccountLogin(entry.id,deviceId); });
   } catch(e) { page.report(e); action(page,t("Повторить"),()=>openAccounts(deviceId)); }
   finally { loading.remove(); }
 }
 async function startAccountLogin(accountId,deviceId) {
+  const back=state.back, done=()=>back?goBack(back):openAccounts(deviceId);
   const page=modalPage(t("Вход в OpenAI"),t("Войдите в свой аккаунт на сайте OpenAI и подтвердите подключение этого устройства."));
   const base=`/v1/accounts/${encodeURIComponent(accountId)}/login`, suffix='?deviceId='+encodeURIComponent(deviceId);
   try {
@@ -373,8 +376,8 @@ async function startAccountLogin(accountId,deviceId) {
     const code=element('p',login.userCode,'code-display'); code.dir='ltr'; page.content.append(code);
     const link=element('a',t("Открыть OpenAI")); const url=new URL(login.verificationUrl); if(url.protocol!=='https:' || url.hostname!=='auth.openai.com') throw new Error(t("OpenAI вернул неизвестный адрес входа."));
     link.href=url.href; link.target='_blank'; link.rel='noopener noreferrer'; page.content.append(link);
-    action(page,t("Проверить вход"),async()=>{ const result=await api(base+'/'+encodeURIComponent(login.loginId)+suffix); if(result.status==='completed') await openAccounts(deviceId); else if(result.status==='failed'||result.status==='canceled') throw new Error(result.error || t("Вход отменён. Начните снова.")); else page.error.textContent=t("Завершите вход на сайте OpenAI."); },true);
-    action(page,t("Отменить вход"),async()=>{await api(base+'/'+encodeURIComponent(login.loginId)+suffix,{method:'DELETE'}); await openAccounts(deviceId);},'danger');
+    action(page,t("Проверить вход"),async()=>{ const result=await api(base+'/'+encodeURIComponent(login.loginId)+suffix); if(result.status==='completed') await done(); else if(result.status==='failed'||result.status==='canceled') throw new Error(result.error || t("Вход отменён. Начните снова.")); else page.error.textContent=t("Завершите вход на сайте OpenAI."); },true);
+    action(page,t("Отменить вход"),async()=>{await api(base+'/'+encodeURIComponent(login.loginId)+suffix,{method:'DELETE'}); await done();},'danger');
   } catch(e) { page.report(e); }
 }
 async function openCreateAgent() {
