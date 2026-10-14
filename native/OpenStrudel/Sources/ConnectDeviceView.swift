@@ -188,8 +188,8 @@ private struct OwnServerSetupView: View {
         case .installing: L("Preparing your server")
         case .connected: L("OpenStrudel is installed")
         case .paused: L("Continue server setup")
-        case .failed: flow.installation == nil ? L("Set up a server") : L("Setup needs attention")
-        default: L("Set up a server")
+        case .failed: flow.installation == nil ? L("Set up my server") : L("Setup needs attention")
+        default: L("Set up my server")
         }
     }
     private var stageTitle: String {
