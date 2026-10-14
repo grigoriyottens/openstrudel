@@ -83,7 +83,7 @@ struct LocalDataResetTests {
         let remote = try #require(UserDefaults(suiteName: remoteName))
         defaults.set(true, forKey: "openstrudel.aiConsent")
         remote.set("https://remote.invalid", forKey: "openstrudel.homeURL")
-        let queries: [[String: Any]] = [".credentials", ".digitalocean", ".server-setup", ".unrelated"].map {
+        let queries: [[String: Any]] = [".credentials", ".digitalocean", ".server-setup", ".agentmetal", ".unrelated"].map {
             [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: reset.bundleID + $0, kSecAttrAccount as String: "test"]
         }
         for query in queries {
@@ -92,8 +92,8 @@ struct LocalDataResetTests {
         defer { for query in queries { SecItemDelete(query as CFDictionary) }; defaults.removePersistentDomain(forName: reset.bundleID); remote.removePersistentDomain(forName: remoteName) }
         try reset.eraseCredentials()
         try reset.erasePreferences(connectionIDs: ["remote"])
-        for query in queries.prefix(3) { #expect(SecItemCopyMatching(query as CFDictionary, nil) == errSecItemNotFound) }
-        #expect(SecItemCopyMatching(queries[3] as CFDictionary, nil) == errSecSuccess)
+        for query in queries.prefix(4) { #expect(SecItemCopyMatching(query as CFDictionary, nil) == errSecItemNotFound) }
+        #expect(SecItemCopyMatching(queries[4] as CFDictionary, nil) == errSecSuccess)
         #expect(defaults.object(forKey: "openstrudel.aiConsent") == nil)
         #expect(remote.object(forKey: "openstrudel.homeURL") == nil)
         let fresh = HomeClient(defaults: defaults, pendingDirectory: reset.home.appending(path: "Pending"), connectionID: reset.bundleID)

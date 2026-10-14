@@ -17,7 +17,7 @@ enum ServerSetupFailure: Error, LocalizedError, Equatable {
         case .connection: L("The server did not respond. Check its address, SSH port and internet connection, then try again.")
         case .localNetwork: L("Allow OpenStrudel to access the local network in System Settings → Privacy & Security → Local Network, then try again.")
         case .authentication: L("Sign-in was refused. Check the sign-in name, password or SSH key.")
-        case .unsupportedSystem: L("Automatic setup supports Ubuntu 24.04 on a 64-bit Intel or ARM server.")
+        case .unsupportedSystem: L("Automatic setup supports Ubuntu 24.04 LTS or newer on a 64-bit Intel or ARM server.")
         case .resources: L("This server needs at least 4 GB of memory, 30 GB of storage and 8 GB free.")
         case .administrator: L("Use root or an account with password-free administrator access to install OpenStrudel.")
         case .existingInstallation: L("OpenStrudel is already installed. Connect to it using a link from its device settings; its data will stay unchanged.")
@@ -133,7 +133,11 @@ struct ServerPreflight: Codable, Equatable, Sendable {
     var installationProblem: ServerSetupFailure? {
         if existing { return .existingInstallation }
         if sharedRuntime == true { return .sharedServer }
-        if os != "ubuntu" || version != "24.04" || !["x86_64", "aarch64"].contains(architecture) || !python { return .unsupportedSystem }
+        // Ubuntu LTS releases use an even year and April version. Keep the
+        // minimum version in step with the bundled cloud installer.
+        let year = Int(version.prefix(2)) ?? 0
+        let supportedUbuntu = version.range(of: "^[0-9]{2}\\.04$", options: .regularExpression) != nil && year >= 24 && year.isMultiple(of: 2)
+        if os != "ubuntu" || !supportedUbuntu || !["x86_64", "aarch64"].contains(architecture) || !python { return .unsupportedSystem }
         if !administrator { return .administrator }
         if memoryMiB < 3800 || diskGiB < 28 || freeGiB < 8 { return .resources }
         if portBusy { return .portBusy }

@@ -12,7 +12,7 @@ struct ConnectDeviceView: View {
     @State private var path: [Route] = []
     @State private var connectedClient: HomeClient?
     @State private var cloudWorking = false
-    private enum Route: Hashable { case link, server, cloud }
+    private enum Route: Hashable { case link, server, cloud, agentMetal }
 
     var body: some View {
         Group {
@@ -26,6 +26,7 @@ struct ConnectDeviceView: View {
                             case .link: ConnectionLinkPage(onConfirm: onConfirm, close: { dismiss() })
                             case .server: OwnServerSetupView(onConnected: completeInstallation)
                             case .cloud: ServerSetupView(working: $cloudWorking, onConnected: completeInstallation)
+                            case .agentMetal: AgentMetalSetupView(working: $cloudWorking, onConnected: completeInstallation)
                             }
                         }
                 }
@@ -45,7 +46,7 @@ struct ConnectDeviceView: View {
         .modifier(InterfaceLanguage())
     }
 
-    /// Three routes as one list: the same symbol column, title edge and chevron on every row.
+    /// Device and provider routes share the same compact list.
     private var choices: some View {
         Form {
             Section {
@@ -59,6 +60,9 @@ struct ConnectDeviceView: View {
                 NavigationLink(value: Route.cloud) {
                     choice(L("Get a server with DigitalOcean"), detail: L("Размещение оплачивается, пока вы не удалите его в DigitalOcean."), symbol: "cloud")
                 }.accessibilityIdentifier("getCloudServer")
+                NavigationLink(value: Route.agentMetal) {
+                    choice(L("Get a server with AgentMetal"), detail: L("Pay by card. Setup is automatic."), symbol: "creditcard")
+                }.accessibilityIdentifier("getAgentMetalServer")
             } header: {
                 // The first page carries its title in its content, on the rows' text edge.
                 Text(L("Connect a device")).font(AppTypography.title).foregroundStyle(Color.primary)
@@ -319,7 +323,7 @@ private struct OwnServerSetupView: View {
                     .accessibilityIdentifier("serverUser")
                 TextField(L("SSH port"), text: $port, prompt: Text(verbatim: "22")).monospacedDigit()
             } footer: {
-                Text(L("Use an Ubuntu 24.04 server with 4 GB of memory and 30 GB of storage."))
+                Text(L("Use Ubuntu 24.04 LTS or newer, with at least 4 GB of memory and 30 GB of storage."))
             }
         } else {
             Section {

@@ -75,6 +75,24 @@ struct ServerSetupTests {
         #expect(check.installationProblem == .portBusy)
     }
 
+    @Test func ubuntuLTSFrom2404IsAcceptedWithoutWeakeningOtherChecks() {
+        var check = ServerPreflight(os: "ubuntu", version: "24.04", architecture: "x86_64", memoryMiB: 3900, diskGiB: 35, freeGiB: 20, administrator: true, python: true, installationID: nil, existing: false, portBusy: false)
+        for version in ["24.04", "26.04"] {
+            for architecture in ["x86_64", "aarch64"] {
+                check.version = version; check.architecture = architecture
+                #expect(check.installationProblem == nil)
+            }
+        }
+        for version in ["22.04", "24.10", "25.04", "26.10", "", "26", "26.04-beta", "invalid"] {
+            check.version = version
+            #expect(check.installationProblem == .unsupportedSystem)
+        }
+        check.version = "26.04"; check.existing = true
+        #expect(check.installationProblem == .existingInstallation)
+        check.existing = false; check.runtimeCompatible = false
+        #expect(check.installationProblem == .runtime)
+    }
+
     @Test func bootstrapIsReplayedWithTheSameIdentityAndSecretsStayInStdin() throws {
         let target = try ServerTarget(host: "server.example.com", user: "root", port: 22)
         let key = try SSHHostKey(line: "server.example.com ssh-ed25519 " + Data(repeating: 1, count: 51).base64EncodedString(), target: target)

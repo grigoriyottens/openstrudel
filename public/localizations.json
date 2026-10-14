@@ -6894,12 +6894,12 @@
     "es": "Introduce su dirección. OpenStrudel se encarga de la instalación.",
     "he": "מזינים את הכתובת. OpenStrudel מטפל בהתקנה."
   },
-  "Automatic setup supports Ubuntu 24.04 on a 64-bit Intel or ARM server.": {
-    "en": "Automatic setup supports Ubuntu 24.04 on a 64-bit Intel or ARM server.",
-    "ru": "Автоматическая установка работает на Ubuntu 24.04 с 64-битным процессором Intel или ARM.",
-    "fr": "L’installation automatique nécessite Ubuntu 24.04 sur un serveur Intel ou ARM 64 bits.",
-    "es": "La instalación automática requiere Ubuntu 24.04 en un servidor Intel o ARM de 64 bits.",
-    "he": "ההתקנה האוטומטית תומכת ב־Ubuntu 24.04 בשרת Intel או ARM עם מעבד 64 סיביות."
+  "Automatic setup supports Ubuntu 24.04 LTS or newer on a 64-bit Intel or ARM server.": {
+    "en": "Automatic setup supports Ubuntu 24.04 LTS or newer on a 64-bit Intel or ARM server.",
+    "ru": "Автоматическая установка работает на Ubuntu 24.04 LTS и новее с 64-битным процессором Intel или ARM.",
+    "fr": "L’installation automatique prend en charge Ubuntu 24.04 LTS ou une version LTS plus récente sur un serveur Intel ou ARM 64 bits.",
+    "es": "La instalación automática admite Ubuntu 24.04 LTS o una versión LTS posterior en un servidor Intel o ARM de 64 bits.",
+    "he": "ההתקנה האוטומטית תומכת ב־Ubuntu 24.04 LTS ובגרסאות LTS חדשות יותר, בשרת Intel או ARM עם מעבד 64 סיביות."
   },
   "Checking the connection": {
     "en": "Checking the connection",
@@ -7223,12 +7223,12 @@
     "es": "El servidor necesita al menos 4 GB de memoria, 30 GB de almacenamiento y 8 GB libres.",
     "he": "לשרת דרושים לפחות 4 GB זיכרון, 30 GB אחסון ו־8 GB פנויים."
   },
-  "Use an Ubuntu 24.04 server with 4 GB of memory and 30 GB of storage.": {
-    "en": "Use an Ubuntu 24.04 server with 4 GB of memory and 30 GB of storage.",
-    "ru": "Подойдёт сервер Ubuntu 24.04 с 4 ГБ памяти и 30 ГБ хранилища.",
-    "fr": "Utilisez un serveur Ubuntu 24.04 avec 4 Go de mémoire et 30 Go de stockage.",
-    "es": "Usa un servidor Ubuntu 24.04 con 4 GB de memoria y 30 GB de almacenamiento.",
-    "he": "נדרש שרת Ubuntu 24.04 עם 4 GB זיכרון ו־30 GB אחסון."
+  "Use Ubuntu 24.04 LTS or newer, with at least 4 GB of memory and 30 GB of storage.": {
+    "en": "Use Ubuntu 24.04 LTS or newer, with at least 4 GB of memory and 30 GB of storage.",
+    "ru": "Подойдёт Ubuntu 24.04 LTS и новее, минимум 4 ГБ памяти и 30 ГБ хранилища.",
+    "fr": "Utilisez Ubuntu 24.04 LTS ou une version LTS plus récente, avec au moins 4 Go de mémoire et 30 Go de stockage.",
+    "es": "Usa Ubuntu 24.04 LTS o una versión LTS posterior, con al menos 4 GB de memoria y 30 GB de almacenamiento.",
+    "he": "נדרש Ubuntu 24.04 LTS או גרסת LTS חדשה יותר, עם לפחות 4 GB זיכרון ו־30 GB אחסון."
   },
   "Use assistants from your other devices here.": {
     "en": "Use assistants from your other devices here.",
@@ -8048,5 +8048,222 @@
     "fr": "Créer des images, des vidéos et du son",
     "es": "Crear imágenes, vídeos y audio",
     "he": "יצירת תמונות, וידאו ושמע"
+  },
+  "No suitable servers are available. Try again later.": {
+    "en": "No suitable servers are available. Try again later.",
+    "ru": "Подходящих серверов сейчас нет. Попробуйте позже.",
+    "fr": "Aucun serveur adapté n’est disponible. Réessayez plus tard.",
+    "es": "No hay servidores adecuados disponibles. Inténtalo más tarde.",
+    "he": "אין כרגע שרתים מתאימים. אפשר לנסות שוב מאוחר יותר."
+  },
+  "The provider returned an incomplete response. Your order has been kept.": {
+    "en": "The provider returned an incomplete response. Your order has been kept.",
+    "ru": "Провайдер прислал неполный ответ. Ваш заказ сохранён.",
+    "fr": "La réponse du fournisseur est incomplète. Votre commande est conservée.",
+    "es": "La respuesta del proveedor está incompleta. Tu pedido se ha guardado.",
+    "he": "התקבלה תשובה חלקית מהספק. ההזמנה נשמרה."
+  },
+  "Could not save this order securely. Unlock your Mac and try again.": {
+    "en": "Could not save this order securely. Unlock your Mac and try again.",
+    "ru": "Не удалось безопасно сохранить заказ. Разблокируйте Mac и попробуйте снова.",
+    "fr": "Impossible d’enregistrer cette commande en toute sécurité. Déverrouillez votre Mac et réessayez.",
+    "es": "No se pudo guardar el pedido de forma segura. Desbloquea tu Mac e inténtalo de nuevo.",
+    "he": "לא ניתן לשמור את ההזמנה באופן מאובטח. יש לפתוח את נעילת ה‑Mac ולנסות שוב."
+  },
+  "An operation is already in progress.": {
+    "en": "An operation is already in progress.",
+    "ru": "Операция уже выполняется.",
+    "fr": "Une opération est déjà en cours.",
+    "es": "Ya hay una operación en curso.",
+    "he": "כבר מתבצעת פעולה."
+  },
+  "Finish your saved order before starting another.": {
+    "en": "Finish your saved order before starting another.",
+    "ru": "Завершите сохранённый заказ, прежде чем создавать новый.",
+    "fr": "Terminez la commande enregistrée avant d’en créer une autre.",
+    "es": "Completa el pedido guardado antes de crear otro.",
+    "he": "יש להשלים את ההזמנה השמורה לפני יצירת הזמנה חדשה."
+  },
+  "The server is paid for, but its access key is missing. Contact AgentMetal with your payment receipt; do not pay again.": {
+    "en": "The server is paid for, but its access key is missing. Contact AgentMetal with your payment receipt; do not pay again.",
+    "ru": "Сервер оплачен, но ключ доступа не получен. Обратитесь в AgentMetal с квитанцией об оплате. Повторно платить не нужно.",
+    "fr": "Le serveur est payé, mais sa clé d’accès est manquante. Contactez AgentMetal avec votre reçu, sans payer à nouveau.",
+    "es": "El servidor está pagado, pero falta la clave de acceso. Contacta con AgentMetal y adjunta el recibo; no vuelvas a pagar.",
+    "he": "התשלום על השרת בוצע, אך מפתח הגישה חסר. יש לפנות ל‑AgentMetal עם הקבלה. אין לשלם שוב."
+  },
+  "Could not reach AgentMetal. Your order is saved; try again.": {
+    "en": "Could not reach AgentMetal. Your order is saved; try again.",
+    "ru": "Не удалось связаться с AgentMetal. Заказ сохранён — попробуйте снова.",
+    "fr": "Impossible de joindre AgentMetal. Votre commande est enregistrée ; réessayez.",
+    "es": "No se pudo conectar con AgentMetal. Tu pedido está guardado; inténtalo de nuevo.",
+    "he": "לא ניתן להתחבר ל‑AgentMetal. ההזמנה נשמרה; אפשר לנסות שוב."
+  },
+  "This server has expired. Check its status with AgentMetal before continuing.": {
+    "en": "This server has expired. Check its status with AgentMetal before continuing.",
+    "ru": "Срок аренды сервера истёк. Проверьте его состояние в AgentMetal, прежде чем продолжить.",
+    "fr": "La location de ce serveur a expiré. Vérifiez son état auprès d’AgentMetal avant de continuer.",
+    "es": "El alquiler de este servidor ha caducado. Comprueba su estado con AgentMetal antes de continuar.",
+    "he": "תקופת השכירות של השרת הסתיימה. יש לבדוק את מצבו ב‑AgentMetal לפני שממשיכים."
+  },
+  "Paid until": {
+    "en": "Paid until",
+    "ru": "Оплачен до",
+    "fr": "Payé jusqu’au",
+    "es": "Pagado hasta",
+    "he": "שולם עד"
+  },
+  "{0} GB memory · {1} GB storage": {
+    "en": "{0} GB memory · {1} GB storage",
+    "ru": "Память {0} ГБ · диск {1} ГБ",
+    "fr": "{0} Go de mémoire · {1} Go de stockage",
+    "es": "{0} GB de memoria · {1} GB de almacenamiento",
+    "he": "{0} GB זיכרון · {1} GB אחסון"
+  },
+  "Rental period": {
+    "en": "Rental period",
+    "ru": "Срок аренды",
+    "fr": "Durée de location",
+    "es": "Duración del alquiler",
+    "he": "תקופת השכירות"
+  },
+  "1 day": {
+    "en": "1 day",
+    "ru": "1 день",
+    "fr": "1 jour",
+    "es": "1 día",
+    "he": "יום אחד"
+  },
+  "7 days": {
+    "en": "7 days",
+    "ru": "7 дней",
+    "fr": "7 jours",
+    "es": "7 días",
+    "he": "7 ימים"
+  },
+  "30 days": {
+    "en": "30 days",
+    "ru": "30 дней",
+    "fr": "30 jours",
+    "es": "30 días",
+    "he": "30 ימים"
+  },
+  "{0} days": {
+    "en": "{0} days",
+    "ru": "{0} дней",
+    "fr": "{0} jours",
+    "es": "{0} días",
+    "he": "{0} ימים"
+  },
+  "Total": {
+    "en": "Total",
+    "ru": "Итого",
+    "fr": "Total",
+    "es": "Total",
+    "he": "סך הכול"
+  },
+  "Get a server with AgentMetal": {
+    "en": "Get a server with AgentMetal",
+    "ru": "Арендовать сервер в AgentMetal",
+    "fr": "Louer un serveur chez AgentMetal",
+    "es": "Alquilar un servidor con AgentMetal",
+    "he": "שכירת שרת ב‑AgentMetal"
+  },
+  "Pay AgentMetal directly by card. No provider account is needed. OpenStrudel installs and connects your server after payment.": {
+    "en": "Pay AgentMetal directly by card. No provider account is needed. OpenStrudel installs and connects your server after payment.",
+    "ru": "Оплата картой напрямую в AgentMetal, без регистрации. После оплаты OpenStrudel установит всё необходимое и подключит сервер.",
+    "fr": "Payez directement AgentMetal par carte, sans créer de compte. Après le paiement, OpenStrudel installe et connecte votre serveur.",
+    "es": "Paga con tarjeta directamente a AgentMetal, sin crear una cuenta. Tras el pago, OpenStrudel instala y conecta tu servidor.",
+    "he": "התשלום בכרטיס מתבצע ישירות ל‑AgentMetal, ללא צורך בחשבון. לאחר התשלום, OpenStrudel מתקין ומחבר את השרת."
+  },
+  "Loading the offer…": {
+    "en": "Loading the offer…",
+    "ru": "Загружаем предложение…",
+    "fr": "Chargement de l’offre…",
+    "es": "Cargando la oferta…",
+    "he": "ההצעה נטענת…"
+  },
+  "Waiting for payment and your server…": {
+    "en": "Waiting for payment and your server…",
+    "ru": "Ждём оплату и создание сервера…",
+    "fr": "En attente du paiement et du serveur…",
+    "es": "Esperando el pago y la creación del servidor…",
+    "he": "ממתינים לתשלום וליצירת השרת…"
+  },
+  "Your order is saved. Complete payment in the browser, then check again here.": {
+    "en": "Your order is saved. Complete payment in the browser, then check again here.",
+    "ru": "Заказ сохранён. Завершите оплату в браузере, затем проверьте статус здесь.",
+    "fr": "Votre commande est enregistrée. Terminez le paiement dans le navigateur, puis vérifiez son état ici.",
+    "es": "Tu pedido está guardado. Completa el pago en el navegador y vuelve aquí para comprobarlo.",
+    "he": "ההזמנה נשמרה. יש להשלים את התשלום בדפדפן ואז לבדוק כאן שוב."
+  },
+  "Open payment page": {
+    "en": "Open payment page",
+    "ru": "Открыть страницу оплаты",
+    "fr": "Ouvrir la page de paiement",
+    "es": "Abrir la página de pago",
+    "he": "פתיחת דף התשלום"
+  },
+  "Get another server": {
+    "en": "Get another server",
+    "ru": "Арендовать ещё один сервер",
+    "fr": "Louer un autre serveur",
+    "es": "Alquilar otro servidor",
+    "he": "שכירת שרת נוסף"
+  },
+  "Prepaid, with no automatic renewal. AgentMetal deletes the server two hours after the paid period ends. Save a backup or extend the rental before it expires.": {
+    "en": "Prepaid, with no automatic renewal. AgentMetal deletes the server two hours after the paid period ends. Save a backup or extend the rental before it expires.",
+    "ru": "Аренда по предоплате, без автопродления. AgentMetal удалит сервер через два часа после окончания оплаченного срока. Заранее сохраните резервную копию или продлите аренду.",
+    "fr": "Location prépayée, sans renouvellement automatique. AgentMetal supprime le serveur deux heures après la fin de la période payée. Faites une sauvegarde ou prolongez la location avant son expiration.",
+    "es": "Alquiler de prepago, sin renovación automática. AgentMetal elimina el servidor dos horas después de que termine el periodo pagado. Guarda una copia de seguridad o amplía el alquiler antes de que caduque.",
+    "he": "השכירות משולמת מראש, ללא חידוש אוטומטי. AgentMetal מוחק את השרת שעתיים לאחר תום התקופה ששולמה. יש לשמור גיבוי או להאריך את השכירות לפני סיומה."
+  },
+  "AgentMetal rental and renewal details": {
+    "en": "AgentMetal rental and renewal details",
+    "ru": "Аренда и продление в AgentMetal",
+    "fr": "Location et renouvellement chez AgentMetal",
+    "es": "Alquiler y renovación en AgentMetal",
+    "he": "פרטי השכירות והחידוש ב‑AgentMetal"
+  },
+  "Check payment": {
+    "en": "Check payment",
+    "ru": "Проверить оплату",
+    "fr": "Vérifier le paiement",
+    "es": "Comprobar el pago",
+    "he": "בדיקת התשלום"
+  },
+  "Pay {0} to AgentMetal": {
+    "en": "Pay {0} to AgentMetal",
+    "ru": "Оплатить {0} в AgentMetal",
+    "fr": "Payer {0} à AgentMetal",
+    "es": "Pagar {0} a AgentMetal",
+    "he": "תשלום {0} ל‑AgentMetal"
+  },
+  "You can close this window. Your order and setup progress are saved.": {
+    "en": "You can close this window. Your order and setup progress are saved.",
+    "ru": "Это окно можно закрыть. Заказ и ход установки сохранены.",
+    "fr": "Vous pouvez fermer cette fenêtre. Votre commande et l’avancement de l’installation sont enregistrés.",
+    "es": "Puedes cerrar esta ventana. Tu pedido y el progreso de la instalación están guardados.",
+    "he": "אפשר לסגור את החלון. ההזמנה והתקדמות ההתקנה נשמרו."
+  },
+  "Pay by card. Setup is automatic.": {
+    "en": "Pay by card. Setup is automatic.",
+    "ru": "Оплата картой. Автоматическая настройка.",
+    "fr": "Paiement par carte. Installation automatique.",
+    "es": "Pago con tarjeta. Configuración automática.",
+    "he": "תשלום בכרטיס. הגדרה אוטומטית."
+  },
+  "Your server is saved. Continue setup when you are ready.": {
+    "en": "Your server is saved. Continue setup when you are ready.",
+    "ru": "Сервер сохранён. Продолжите настройку, когда будет удобно.",
+    "fr": "Votre serveur est enregistré. Reprenez la configuration quand vous le souhaitez.",
+    "es": "Tu servidor está guardado. Continúa la configuración cuando quieras.",
+    "he": "פרטי השרת נשמרו. אפשר להמשיך בהגדרה כשנוח לך."
+  },
+  "The price has changed. Review the new total before paying.": {
+    "en": "The price has changed. Review the new total before paying.",
+    "ru": "Цена изменилась. Проверьте новую сумму перед оплатой.",
+    "fr": "Le prix a changé. Vérifiez le nouveau montant avant de payer.",
+    "es": "El precio ha cambiado. Revisa el nuevo importe antes de pagar.",
+    "he": "המחיר השתנה. יש לבדוק את הסכום החדש לפני התשלום."
   }
 }

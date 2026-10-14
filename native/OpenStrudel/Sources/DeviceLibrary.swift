@@ -287,6 +287,7 @@ final class DeviceLibrary: ObservableObject {
         await LocalHome.prepareForErase()
         await DigitalOceanCloud.shared.prepareForLocalErase()
         ServerSetupFlow.shared.prepareForLocalErase()
+        AgentMetalSetupFlow.shared.prepareForLocalErase()
         do {
             try await Task.detached { try reset.stopManagedService() }.value
             erasePhase = L("Удаляем сотрудников, чаты и файлы…")
@@ -310,6 +311,7 @@ final class DeviceLibrary: ObservableObject {
         LocalHome.finishErase()
         DigitalOceanCloud.shared.finishLocalErase()
         ServerSetupFlow.shared.finishLocalErase()
+        AgentMetalSetupFlow.shared.finishLocalErase()
         viewGeneration += 1
         erased = false; isErasing = false
     }
