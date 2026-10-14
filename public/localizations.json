@@ -7733,5 +7733,12 @@
     "es": "De BotFather",
     "he": "מ-BotFather",
     "ru": "Из BotFather"
+  },
+  "Не удалось скачать файл": {
+    "en": "Couldn’t download the file",
+    "fr": "Impossible de télécharger le fichier",
+    "es": "No se ha podido descargar el archivo",
+    "he": "לא ניתן להוריד את הקובץ",
+    "ru": "Не удалось скачать файл"
   }
 }

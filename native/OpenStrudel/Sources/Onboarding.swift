@@ -3,6 +3,8 @@ import SwiftUI
 /// First-run screens share one composition: the character, a display title, a short body and the
 /// actions, in a 480-pt column whose centre sits at 40 % of the height (docs/design-system.md).
 struct WelcomePage<Content: View>: View {
+    /// Off where the same layout serves another window, such as Servers.
+    var languageMenu = true
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -20,7 +22,7 @@ struct WelcomePage<Content: View>: View {
             .scrollBounceBehavior(.basedOnSize)
         }
         // The language menu belongs to the welcome screens only, never to the workspace.
-        .overlay(alignment: .topTrailing) { LanguagePicker().padding(OnboardingLayout.margin) }
+        .overlay(alignment: .topTrailing) { if languageMenu { LanguagePicker().padding(OnboardingLayout.margin) } }
         // Actions choose their own ink; glass inside shared cards stays clear.
         .tint(nil)
     }

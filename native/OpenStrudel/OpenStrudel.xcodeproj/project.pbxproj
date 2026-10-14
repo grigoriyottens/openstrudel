@@ -25,6 +25,7 @@
 		0D663EC115C80AA3801980C3 /* Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F08494AA1827CE3D4AE3BAD3 /* Sidebar.swift */; };
 		0E0F3C4329E1EA2E6C689738 /* AgentTransferViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31C9D3DF0BCBDC8DE546D88B /* AgentTransferViews.swift */; };
 		11F8A029839B77F1D31842CE /* ConnectDeviceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD7DB4FB17EFAAD759697818 /* ConnectDeviceView.swift */; };
+		12DD11251AE78C340E6B9E47 /* HostingStoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCBC21712E63C28B07D8B114 /* HostingStoreView.swift */; };
 		12FB0E62BB8B19C0EF76D769 /* DictationAssets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66CDD484876EBAD4367D26A0 /* DictationAssets.swift */; };
 		1309268D09526B8EE74E3EF8 /* Dictation-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 4EF87FDADAA5AF4E3E9730EE /* Dictation-LICENSE.txt */; };
 		13E79262163563B14EBCB369 /* Onboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = D876C3A741AA6365F9AD6CA9 /* Onboarding.swift */; };
@@ -173,6 +174,7 @@
 		C8E9F77A1A8A5D66D4211EF5 /* DeviceSignOut.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8709EBB6593952ABF30E9889 /* DeviceSignOut.swift */; };
 		CA15005B9F3CCEBE68A50047 /* Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25AA5210AFF239878F982285 /* Composer.swift */; };
 		CBD1A671A4CE5FD36D786CEB /* ParakeetModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A2D047BCE017BA5B3AE3827 /* ParakeetModel.swift */; };
+		CD75994175CD842296C958F9 /* HostingStoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCBC21712E63C28B07D8B114 /* HostingStoreView.swift */; };
 		CE79DDA542A7D7F7132EF1C2 /* cloud-init.sh in Resources */ = {isa = PBXBuildFile; fileRef = 874FE0564AF95500498D60FE /* cloud-init.sh */; };
 		D24C4F8AD7FB5F62D4495C35 /* ChatClockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DA7A5FC9D1A46B7D5486153 /* ChatClockTests.swift */; };
 		D2B1B0617ED09760DD5C2BA4 /* DictationAssetsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08E6A923D429082A0E616493 /* DictationAssetsTests.swift */; };
@@ -332,6 +334,7 @@
 		F9234E96C15CA694F0A31099 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		F96054101E4801A6BCC170C1 /* LocalHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalHome.swift; sourceTree = "<group>"; };
 		FC5BA14427968F91FEFE9F2F /* DigitalOceanWebLoginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalOceanWebLoginTests.swift; sourceTree = "<group>"; };
+		FCBC21712E63C28B07D8B114 /* HostingStoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostingStoreView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -423,6 +426,7 @@
 				D671F62812BA20E0AF9CB2FA /* HomeClient.swift */,
 				B49A5A4FE8FCDBCA5997D859 /* HomeMenu.swift */,
 				2B99FD977A6DF945EF17152E /* HostingStore.swift */,
+				FCBC21712E63C28B07D8B114 /* HostingStoreView.swift */,
 				3B1CA4A01722F775952B9530 /* LocalDataReset.swift */,
 				6B5A8A2A8A51E792A7C05A7F /* LocalDataResetView.swift */,
 				F96054101E4801A6BCC170C1 /* LocalHome.swift */,
@@ -839,6 +843,7 @@
 				8264AD8368237A515B1B219D /* HomeClient.swift in Sources */,
 				A29435710511A8C352C77D66 /* HomeMenu.swift in Sources */,
 				7CB4918D49632B6169D77921 /* HostingStore.swift in Sources */,
+				CD75994175CD842296C958F9 /* HostingStoreView.swift in Sources */,
 				1EB1AE21EA4C3C7C5DF63CD6 /* LocalDataReset.swift in Sources */,
 				EFDF18977D160A503A48D5BE /* LocalDataResetView.swift in Sources */,
 				99F3C8183EE6FE6B2B2A9746 /* LocalHome.swift in Sources */,
@@ -902,6 +907,7 @@
 				714657174DCE32C3AD9148AE /* HomeClient.swift in Sources */,
 				4069A7E903D63727808053A3 /* HomeMenu.swift in Sources */,
 				141A8FF96B26F636B9AFAFD3 /* HostingStore.swift in Sources */,
+				12DD11251AE78C340E6B9E47 /* HostingStoreView.swift in Sources */,
 				DB980F43982F1C793D004B7F /* LocalDataReset.swift in Sources */,
 				C44ADEF9A93155D3D5D5B1B5 /* LocalDataResetView.swift in Sources */,
 				6233DE5478EEF12B4815FD6E /* LocalHome.swift in Sources */,
