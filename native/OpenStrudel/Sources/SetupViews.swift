@@ -160,11 +160,11 @@ struct ServerSetupView: View {
     private var title: String {
         switch cloud.phase {
         case .idle: L("Сотрудники в облаке")
-        case .signingIn: L("Войдите в DigitalOcean.")
-        case .billingRequired: L("Подключите оплату.")
-        case .readyToCreate: L("Всё готово к запуску.")
-        case .creating, .waitingForServer: L("Готовим вашу команду.")
-        case .connected: L("Всё готово.")
+        case .signingIn: L("Войдите в DigitalOcean")
+        case .billingRequired: L("Подключите оплату")
+        case .readyToCreate: L("Всё готово к запуску")
+        case .creating, .waitingForServer: L("Готовим вашу команду")
+        case .connected: L("Всё готово")
         case .failed: L("Настройка не завершена")
         }
     }

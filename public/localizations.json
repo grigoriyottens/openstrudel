@@ -3191,40 +3191,40 @@
     "he": "עוזרים בענן",
     "ru": "Сотрудники в облаке"
   },
-  "Войдите в DigitalOcean.": {
-    "en": "Sign in to DigitalOcean.",
-    "fr": "Connectez-vous à DigitalOcean.",
-    "es": "Inicia sesión en DigitalOcean.",
-    "he": "יש להיכנס ל-DigitalOcean.",
-    "ru": "Войдите в DigitalOcean."
+  "Войдите в DigitalOcean": {
+    "en": "Sign in to DigitalOcean",
+    "fr": "Connectez-vous à DigitalOcean",
+    "es": "Inicia sesión en DigitalOcean",
+    "he": "יש להיכנס ל-DigitalOcean",
+    "ru": "Войдите в DigitalOcean"
   },
-  "Подключите оплату.": {
-    "en": "Add a payment method.",
-    "fr": "Ajoutez un moyen de paiement.",
-    "es": "Añade un método de pago.",
-    "he": "יש להוסיף אמצעי תשלום.",
-    "ru": "Подключите оплату."
+  "Подключите оплату": {
+    "en": "Add a payment method",
+    "fr": "Ajoutez un moyen de paiement",
+    "es": "Añade un método de pago",
+    "he": "יש להוסיף אמצעי תשלום",
+    "ru": "Подключите оплату"
   },
-  "Всё готово к запуску.": {
-    "en": "Ready to start.",
-    "fr": "Prêt à démarrer.",
-    "es": "Listo para empezar.",
-    "he": "מוכנים להפעלה.",
-    "ru": "Всё готово к запуску."
+  "Всё готово к запуску": {
+    "en": "Ready to start",
+    "fr": "Prêt à démarrer",
+    "es": "Listo para empezar",
+    "he": "מוכנים להפעלה",
+    "ru": "Всё готово к запуску"
   },
-  "Готовим вашу команду.": {
-    "en": "Setting up your assistants.",
-    "fr": "Préparation de vos assistants.",
-    "es": "Preparando tus asistentes.",
-    "he": "מכינים את העוזרים שלך.",
-    "ru": "Готовим ваших сотрудников."
+  "Готовим вашу команду": {
+    "en": "Setting up your assistants",
+    "fr": "Préparation de vos assistants",
+    "es": "Preparando tus asistentes",
+    "he": "מכינים את העוזרים שלך",
+    "ru": "Готовим ваших сотрудников"
   },
-  "Всё готово.": {
-    "en": "All set.",
-    "fr": "Tout est prêt.",
-    "es": "Todo listo.",
-    "he": "הכול מוכן.",
-    "ru": "Всё готово."
+  "Всё готово": {
+    "en": "All set",
+    "fr": "Tout est prêt",
+    "es": "Todo listo",
+    "he": "הכול מוכן",
+    "ru": "Всё готово"
   },
   "Настройка не завершена": {
     "en": "Setup incomplete",
