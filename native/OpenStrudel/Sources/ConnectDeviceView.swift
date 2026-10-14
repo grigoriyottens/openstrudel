@@ -10,16 +10,14 @@ struct ConnectDeviceView: View {
     @EnvironmentObject private var library: DeviceLibrary
     let onConfirm: (MacPairing) -> Void
     @State private var path: [Route] = []
-    @State private var cloud = false
     @State private var connectedClient: HomeClient?
-    private enum Route: Hashable { case link, server }
+    @State private var cloudWorking = false
+    private enum Route: Hashable { case link, server, cloud }
 
     var body: some View {
         Group {
             if let connectedClient {
                 ServerAccountSetupView(onDone: { dismiss() }).environmentObject(connectedClient)
-            } else if cloud {
-                ServerSetupView(onBack: { cloud = false }, onConnected: completeInstallation)
             } else {
                 NavigationStack(path: $path) {
                     choices
@@ -27,14 +25,21 @@ struct ConnectDeviceView: View {
                             switch route {
                             case .link: ConnectionLinkPage(onConfirm: onConfirm, close: { dismiss() })
                             case .server: OwnServerSetupView(onConnected: completeInstallation)
+                            case .cloud: ServerSetupView(working: $cloudWorking, onConnected: completeInstallation)
                             }
                         }
                 }
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } } }
+                .toolbar {
+                    // Cloud setup keeps going on the provider's side, so leaving it mid-way is not a cancel.
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(cloudWorking ? L("Продолжить позже") : L("Отмена")) { dismiss() }
+                    }
+                }
                 .frame(width: Sheet.width, height: Sheet.height)
             }
         }
         .presentationSizing(.form)
+        .tint(nil)
         .environmentObject(library)
         .modifier(InterfaceLanguage())
     }
@@ -50,18 +55,9 @@ struct ConnectDeviceView: View {
                     choice(ServerSetupFlow.shared.installation == nil ? L("Set up my server") : L("Continue server setup"),
                            detail: L("Already have a server? Enter its address and sign-in details."), symbol: "server.rack")
                 }.accessibilityIdentifier("setUpOwnServer")
-                // Cloud setup runs in its own stack, so this row opens it in place of the list.
-                Button { cloud = true } label: {
-                    HStack(spacing: 8) {
-                        choice(L("Get a server with DigitalOcean"), detail: L("Размещение оплачивается, пока вы не удалите его в DigitalOcean."), symbol: "cloud")
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.forward").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("getCloudServer")
+                NavigationLink(value: Route.cloud) {
+                    choice(L("Get a server with DigitalOcean"), detail: L("Размещение оплачивается, пока вы не удалите его в DigitalOcean."), symbol: "cloud")
+                }.accessibilityIdentifier("getCloudServer")
             } footer: {
                 Text(L("Use assistants from your other devices here."))
             }

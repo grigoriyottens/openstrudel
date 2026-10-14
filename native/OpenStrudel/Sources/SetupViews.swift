@@ -145,17 +145,17 @@ enum SetupSheet {
 }
 
 #if os(macOS)
-/// Cloud setup keeps the provider's account and billing in the user's name.
+/// Cloud setup keeps the provider's account and billing in the user's name. It is a page of the
+/// Connect a device sheet, which owns Back and Cancel; `working` tells the sheet while setup runs.
 struct ServerSetupView: View {
-    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var library: DeviceLibrary
     @StateObject private var cloud = DigitalOceanCloud.shared
     @State private var connecting = false
     @State private var connectionError: String?
-    var onBack: (() -> Void)? = nil
-    var onConnected: ((HomeClient) -> Void)? = nil
+    @Binding var working: Bool
+    let onConnected: (HomeClient) -> Void
 
-    private var working: Bool {
+    private var isWorking: Bool {
         [.signingIn, .creating, .waitingForServer].contains(cloud.phase)
     }
 
@@ -206,56 +206,49 @@ struct ServerSetupView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    if cloud.phase == .readyToCreate, let quote = cloud.quote {
-                        LabeledContent {
-                            Text(quote.monthlyPrice.formatted(.currency(code: "USD")) + L(" / месяц")).monospacedDigit()
-                        } label: { Text(verbatim: "DigitalOcean") }
-                    }
-                    if working {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text(cloud.phase == .signingIn ? L("Ожидаем входа") : L("Настраиваем OpenStrudel"))
-                                .foregroundStyle(AppTheme.secondaryText)
-                        }.accessibilityElement(children: .combine)
-                    }
-                    if let message = connectionError ?? cloud.message {
-                        Text(message).foregroundStyle(AppTheme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("cloudSetupMessage")
-                    }
-                    if cloud.phase == .signingIn, let url = cloud.authorizationURL {
-                        SetupLinkRow(title: L("Открыть вход в браузере"), url: url)
-                    }
-                    if cloud.phase == .billingRequired {
-                        SetupLinkRow(title: L("Добавить способ оплаты"), url: URL(string: "https://cloud.digitalocean.com/account/billing")!)
-                    }
-                    if let url = cloud.managementURL, cloud.phase != .connected {
-                        SetupLinkRow(title: L("Открыть в DigitalOcean"), url: url)
-                    }
-                } header: {
-                    SetupHeader(title: title, explanation)
-                } footer: {
-                    if !notes.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(notes, id: \.self) { Text($0.withoutWidow).fixedSize(horizontal: false, vertical: true) }
-                        }
+        Form {
+            Section {
+                if cloud.phase == .readyToCreate, let quote = cloud.quote {
+                    LabeledContent {
+                        Text(quote.monthlyPrice.formatted(.currency(code: "USD")) + L(" / месяц")).monospacedDigit()
+                    } label: { Text(verbatim: "DigitalOcean") }
+                }
+                if isWorking {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(cloud.phase == .signingIn ? L("Ожидаем входа") : L("Настраиваем OpenStrudel"))
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }.accessibilityElement(children: .combine)
+                }
+                if let message = connectionError ?? cloud.message {
+                    Text(message).foregroundStyle(AppTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("cloudSetupMessage")
+                }
+                if cloud.phase == .signingIn, let url = cloud.authorizationURL {
+                    SetupLinkRow(title: L("Открыть вход в браузере"), url: url)
+                }
+                if cloud.phase == .billingRequired {
+                    SetupLinkRow(title: L("Добавить способ оплаты"), url: URL(string: "https://cloud.digitalocean.com/account/billing")!)
+                }
+                if let url = cloud.managementURL, cloud.phase != .connected {
+                    SetupLinkRow(title: L("Открыть в DigitalOcean"), url: url)
+                }
+            } header: {
+                SetupHeader(title: title, explanation)
+            } footer: {
+                if !notes.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(notes, id: \.self) { Text($0.withoutWidow).fixedSize(horizontal: false, vertical: true) }
                     }
                 }
             }
-            .formStyle(.grouped)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(working ? L("Продолжить позже") : L("Закрыть")) {
-                        cloud.cancel()
-                        if let onBack { onBack() } else { dismiss() }
-                    }
-                }
-                if hasPrimaryAction {
-                    ToolbarItem(placement: .confirmationAction) { primaryAction }
-                }
+        }
+        .formStyle(.grouped)
+        .navigationTitle(L("Get a server with DigitalOcean"))
+        .toolbar {
+            if hasPrimaryAction {
+                ToolbarItem(placement: .confirmationAction) { primaryAction }
             }
         }
         .task {
@@ -265,8 +258,9 @@ struct ServerSetupView: View {
         .onChange(of: cloud.connection?.url) { _, _ in
             Task { await finishConnection() }
         }
-        .tint(nil)
-        .frame(width: SetupSheet.size.width, height: SetupSheet.size.height)
+        .onChange(of: isWorking, initial: true) { _, value in working = value }
+        // Back and Cancel both leave the page; setup that is under way continues and resumes here.
+        .onDisappear { cloud.cancel(); working = false }
     }
 
     private var hasPrimaryAction: Bool {
@@ -305,8 +299,8 @@ struct ServerSetupView: View {
         defer { connecting = false }
         let client = library.clients.first { $0.savedBaseURL == connection.url } ?? library.newConnection()
         if await client.connectToCloud(connection) {
-            library.add(client, select: onConnected == nil)
-            if let onConnected { onConnected(client) } else { dismiss() }
+            library.add(client, select: false)
+            onConnected(client)
         } else {
             connectionError = client.pairingError ?? L("Не удалось сохранить подключение. Разблокируйте устройство и попробуйте ещё раз.")
         }
