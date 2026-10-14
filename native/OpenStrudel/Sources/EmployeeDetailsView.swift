@@ -13,6 +13,8 @@ enum Sheet {
 
 /// A multi-page sheet. On Mac its bar belongs to the sheet, so every page keeps the bar and pushing a page
 /// never resizes the sheet. On iOS the bar items sit on the first page, where the navigation bar shows them.
+/// The bar holds only the sheet's way out, in the cancellation place: a sheet-wide confirmation would hide
+/// a page's own, such as Add, and a page with no bar items would shrink the sheet.
 struct SheetStack<Root: View, Bar: ToolbarContent>: View {
     @ViewBuilder let root: () -> Root
     @ToolbarContentBuilder let bar: () -> Bar
@@ -189,13 +191,7 @@ struct BotDetailsView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? L("Сохраняем…") : hasChanges ? L("Сохранить") : L("Готово"), action: save)
-                        .disabled(isSaving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .keyboardShortcut(.defaultAction).accessibilityIdentifier("saveEmployeeChanges")
-                }
-            }
+            .toolbar { saveItem }
             .interactiveDismissDisabled(hasChanges || isSaving)
             .alert(L("Не сохранять изменения?"), isPresented: $confirmDiscard) {
                 Button(L("Не сохранять"), role: .destructive) { dismiss() }
@@ -208,10 +204,16 @@ struct BotDetailsView: View {
                 Text(L("Сотрудник, переписка и расписания будут удалены с устройства «\(deviceName)». Отменить удаление нельзя."))
             }
             .navigationDestination(for: DetailsPage.self) { page in
-                switch page {
-                case .services: ConnectionsView(embedded: true)
-                case .telegram: TelegramChatsView(profile: profile, embedded: true)
+                Group {
+                    switch page {
+                    case .services: ConnectionsView(embedded: true)
+                    case .telegram: TelegramChatsView(profile: profile, embedded: true)
+                    }
                 }
+                #if os(macOS)
+                // These pages apply their changes at once, so the sheet still closes from them.
+                .toolbar { saveItem }
+                #endif
             }
             .task { await client.loadChatSettings() }
         } bar: {
@@ -221,6 +223,14 @@ struct BotDetailsView: View {
                     .disabled(isSaving).keyboardShortcut(.cancelAction)
                     .accessibilityIdentifier("cancelEmployeeChanges")
             }
+        }
+    }
+
+    private var saveItem: some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button(isSaving ? L("Сохраняем…") : hasChanges ? L("Сохранить") : L("Готово"), action: save)
+                .disabled(isSaving || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .keyboardShortcut(.defaultAction).accessibilityIdentifier("saveEmployeeChanges")
         }
     }
 
@@ -291,7 +301,12 @@ struct MainAssistantDetailsView: View {
             #endif
             .navigationDestination(for: DetailsPage.self) { _ in ConnectionsView(embedded: true) }
         } bar: {
-            ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() }.keyboardShortcut(.defaultAction) }
+            #if os(macOS)
+            // Nothing here waits to be saved, so the way out is Done, and pages keep the confirmation place.
+            ToolbarItem(placement: .cancellationAction) { Button(L("Готово")) { dismiss() }.keyboardShortcut(.cancelAction) }
+            #else
+            ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } }
+            #endif
         }
     }
 }
