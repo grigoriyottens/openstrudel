@@ -328,6 +328,7 @@ struct ServerAccountSetupView: View {
     @EnvironmentObject private var client: HomeClient
     @EnvironmentObject private var library: DeviceLibrary
     @Environment(\.openURL) private var openURL
+    @Environment(\.openWindow) private var openWindow
     let onDone: () -> Void
     private var connected: Bool { client.openAIAccount?.connected == true && !client.homeUnreachable }
     /// Signing in is the next step: it takes the sheet's confirmation place. Once a sign-in is under
@@ -373,13 +374,12 @@ struct ServerAccountSetupView: View {
             .formStyle(.grouped)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(connected ? L("Open server") : L("Продолжить позже")) { onDone(); library.select(client) }
+                    Button(connected ? L("Open server") : L("Продолжить позже")) { finish(createAssistant: false) }
                 }
                 if connected {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(L("Create an assistant here")) {
-                            onDone()
-                            library.beginEmployee(on: client)
+                            finish(createAssistant: true)
                         }.accessibilityIdentifier("createFirstServerAssistant")
                     }
                 } else if client.homeUnreachable {
@@ -407,6 +407,18 @@ struct ServerAccountSetupView: View {
                 do { try await Task.sleep(for: .seconds(2)) } catch { break }
             }
         }
+    }
+
+    private func finish(createAssistant: Bool) {
+        onDone()
+        if createAssistant { library.beginEmployee(on: client) }
+        else { library.select(client) }
+        #if os(macOS)
+        Task { @MainActor in
+            await Task.yield()
+            openWindow(id: "home")
+        }
+        #endif
     }
 }
 

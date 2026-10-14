@@ -112,6 +112,7 @@ export class Store {
     this.db.exec("CREATE INDEX IF NOT EXISTS messages_page_idx ON messages(conversation_id, hidden, created_at)");
     const conversationColumns = new Set((this.db.prepare("PRAGMA table_info(conversations)").all() as Row[]).map(r => String(r.name)));
     if (!conversationColumns.has("profile_id")) this.db.exec("ALTER TABLE conversations ADD COLUMN profile_id TEXT REFERENCES employee_profiles(id)");
+    this.db.exec("CREATE INDEX IF NOT EXISTS conversations_profile_idx ON conversations(profile_id)");
     this.db.exec(`CREATE TABLE IF NOT EXISTS telegram_chats (
       chat_id TEXT PRIMARY KEY, title TEXT NOT NULL, conversation_id TEXT REFERENCES conversations(id),
       profile_id TEXT REFERENCES employee_profiles(id), allowed_senders_json TEXT NOT NULL
@@ -222,6 +223,14 @@ export class Store {
     this.db.prepare("INSERT INTO telegram_chats(chat_id,title,allowed_senders_json) VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET title=excluded.title, allowed_senders_json=excluded.allowed_senders_json")
       .run(input.chatId, input.title, JSON.stringify([...new Set(input.allowedSenders)]));
     return this.getTelegramChat(input.chatId)!;
+  }
+
+  /** Telegram reports a group's current title on each message; captions follow renames. */
+  renameTelegramGroup(chatId: string, title: string): void {
+    const chat = this.getTelegramChat(chatId);
+    if (!chat || Number(chatId) >= 0 || !title.trim() || chat.title === title) return;
+    this.db.prepare("UPDATE telegram_chats SET title=? WHERE chat_id=?").run(title, chatId);
+    this.db.prepare("UPDATE conversations SET title=? WHERE channel='telegram' AND (external_id=? OR external_id LIKE ?)").run(title, chatId, chatId + "::employee::%");
   }
 
   bindTelegramChat(chatId: string, profileId: string | null): TelegramChat {
@@ -424,6 +433,74 @@ export class Store {
       newerCursor: page.length ? String(page.at(-1)!.id) : after ?? null,
       hasMore: after ? hasMore : false,
     } };
+  }
+
+  /** One display timeline; each request keeps its original conversation, tools and audience. */
+  employeeMessagePage(profileId: string | null, query: URLSearchParams) {
+    const limit = Math.min(100, Math.max(1, Math.trunc(Number(query.get("limit")) || 50)));
+    const before = query.get("before"), after = query.get("after");
+    if (before && after) throw new Error("Выберите одно направление истории");
+    const scope = "FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.profile_id IS ?";
+    const visible = `m.hidden=0 AND m.context_only=0 AND NOT EXISTS (
+      SELECT 1 FROM messages reply WHERE reply.reply_to_id=m.id AND reply.hidden=1 AND TRIM(reply.text, char(32,9,10,13))='NO_REPLY'
+    )`;
+    // A pending request may disappear after NO_REPLY. Its cursor must still advance.
+    const cursor = before || after;
+    const edge = cursor ? this.db.prepare(`SELECT m.rowid,m.created_at ${scope} AND m.id=?`).get(profileId, cursor) as Row | undefined : undefined;
+    if (cursor && !edge) throw new Error("История изменилась. Откройте чат заново.");
+    const direction = after ? "ASC" : "DESC";
+    const rows = this.db.prepare(`SELECT m.* ${scope} AND ${visible}
+      ${edge ? `AND (m.created_at,m.rowid) ${after ? ">" : "<"} (?,?)` : ""}
+      ORDER BY m.created_at ${direction},m.rowid ${direction} LIMIT ?`)
+      .all(profileId, ...(edge ? [String(edge.created_at), Number(edge.rowid)] : []), limit + 1) as Row[];
+    const hasMore = rows.length > limit, page = rows.slice(0, limit);
+    if (!after) page.reverse();
+    const watch = [...new Set((query.get("watch") ?? "").split(",").filter(Boolean))].slice(0, 200);
+    const updates = watch.length ? this.db.prepare(`SELECT m.* ${scope} AND ${visible} AND m.id IN (${watch.map(() => "?").join(",")})`).all(profileId, ...watch) as Row[] : [];
+    const present = new Set(updates.map(r => String(r.id)));
+    return {
+      messages: page.map(row => this.timelineMessage(row)), updates: updates.map(row => this.timelineMessage(row)),
+      removedIds: watch.filter(id => !present.has(id)),
+      pagination: {
+        olderCursor: !after && hasMore ? String(page[0]!.id) : null,
+        newerCursor: page.length ? String(page.at(-1)!.id) : after ?? null,
+        hasMore: after ? hasMore : false,
+      },
+    };
+  }
+
+  private timelineMessage(row: Row): Message {
+    const message = this.mapMessage(row), conversation = this.getConversation(message.conversationId)!;
+    if (message.imported || conversation.externalId?.startsWith("import::")) {
+      return { ...message, origin: { channel: "archive", title: conversation.title ?? "" } };
+    }
+    if (message.channel !== "telegram") return { ...message, origin: { channel: "api", title: "" } };
+    const inbound = message.replyToId ? this.db.prepare("SELECT external_id FROM messages WHERE id=? AND conversation_id=?").get(message.replyToId, message.conversationId) : undefined;
+    const external = message.direction === "inbound" ? message.externalId : inbound?.external_id;
+    const chatId = String(external ?? conversation.externalId ?? "").split(/:|::/)[0]!;
+    const chat = this.getTelegramChat(chatId);
+    const current = chat?.conversationId === conversation.id && chat.profileId === (conversation.profileId ?? null);
+    const origin: NonNullable<Message["origin"]> = {
+      channel: "telegram", title: current ? chat.title : conversation.title ?? "Telegram", chatId,
+      canReply: Boolean(current && chat.enabled !== false && this.getSetting("telegram.paused." + chatId) !== "true" && message.direction === "inbound"),
+    };
+    let telegramMessageId = message.direction === "inbound" ? String(external ?? "").split(":")[1] : undefined;
+    const prefix = `${chatId}:reply:${message.id}:`;
+    const deliveries = message.direction === "outbound" && this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='telegram_outbox'").get()
+      ? this.db.prepare("SELECT key,status,message_id,error FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix, prefix + "\uffff") as Row[] : [];
+    // Replies from before delivery tracking, or saved just before a crash, have no
+    // record. Nothing is known about them, so no state is shown.
+    if (deliveries.length) {
+      const uncertain = deliveries.find(r => r.status === "unknown"), rejected = deliveries.find(r => r.status === "not_sent");
+      const pending = deliveries.some(r => r.status === "pending" || r.status === "sending") || message.status === "running"
+        || (message.attachments ?? []).some(file => !deliveries.some(r => r.key === prefix + "file:" + file.id));
+      message.delivery = uncertain ? { state: "unknown", error: String(uncertain.error ?? "") }
+        : message.status === "failed" || rejected ? { state: deliveries.some(r => r.status === "delivered") ? "unknown" : "not_sent", error: String(rejected?.error ?? message.error ?? "") }
+        : pending ? { state: "pending" } : { state: "delivered" };
+      telegramMessageId = deliveries.find(r => r.message_id)?.message_id as string | undefined;
+    }
+    if (/^-100\d+$/.test(chatId) && /^\d+$/.test(telegramMessageId ?? "")) origin.url = `https://t.me/c/${chatId.slice(4)}/${telegramMessageId}`;
+    return { ...message, origin };
   }
 
   createProfile(input: { name?: string; defaultName?: string; instructions?: string; capabilities?: string[]; provider?: string; model?: string; serviceTier?: string; tokenLimit?: number; domain?: EmployeeProfile["domain"]; purpose?: string; appearance?: AgentAppearance }): EmployeeProfile {

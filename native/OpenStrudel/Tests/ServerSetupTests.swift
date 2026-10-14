@@ -68,11 +68,27 @@ struct ServerSetupTests {
         check.os = "debian"
         #expect(check.installationProblem == .unsupportedSystem)
         check.os = "ubuntu"; check.memoryMiB = 2048
-        #expect(check.installationProblem == .resources)
+        #expect(check.installationProblem == nil)
         check.memoryMiB = 3900; check.existing = true
         #expect(check.installationProblem == .existingInstallation)
         check.existing = false; check.portBusy = true
         #expect(check.installationProblem == .portBusy)
+    }
+
+    @Test func memoryAndTotalDiskAreRecommendationsButInstallationNeedsFreeSpace() {
+        var check = ServerPreflight(os: "ubuntu", version: "26.04", architecture: "x86_64", memoryMiB: 3796, diskGiB: 37, freeGiB: 34, administrator: true, python: true, installationID: nil, existing: false, portBusy: false)
+        #expect(check.installationProblem == nil)
+        #expect(!check.recommendsMoreMemory)
+        check.diskGiB = 16; check.freeGiB = 8
+        for memory in [1024, 2048, 3072, 3584, 3796] {
+            check.memoryMiB = memory
+            #expect(check.installationProblem == nil)
+            #expect(check.recommendsMoreMemory == (memory < 3584))
+        }
+        check.memoryMiB = 3796; check.freeGiB = 7
+        #expect(check.installationProblem == .resources)
+        check.freeGiB = 0
+        #expect(check.installationProblem == .resources)
     }
 
     @Test func ubuntuLTSFrom2404IsAcceptedWithoutWeakeningOtherChecks() {
@@ -169,7 +185,7 @@ struct ServerSetupTests {
         let store = ServerSetupMemoryStore(installation: saved)
         var releaseRequests = 0
         let connection = HomeConnection(url: "https://server.example.com:7789", token: "fixture", pin: String(repeating: "b", count: 64), name: "Server")
-        let flow = ServerSetupFlow(store: store, probe: { _ in connection }, transport: transport, releaseHash: {
+        let flow = ServerSetupFlow(store: store, probe: { _ in await transport.installInputs.isEmpty ? nil : connection }, transport: transport, releaseHash: {
             releaseRequests += 1
             return String(repeating: "c", count: 64)
         })
@@ -217,7 +233,7 @@ struct ServerSetupTests {
         let store = ServerSetupMemoryStore(installation: saved)
         let connection = HomeConnection(url: "https://server.example.com:7789", token: "fixture", pin: String(repeating: "b", count: 64), name: "Server")
         let updatedHash = String(repeating: "c", count: 64)
-        let flow = ServerSetupFlow(store: store, probe: { _ in connection }, transport: transport, releaseHash: { updatedHash })
+        let flow = ServerSetupFlow(store: store, probe: { _ in await transport.installInputs.isEmpty ? nil : connection }, transport: transport, releaseHash: { updatedHash })
         flow.confirm(access: ServerAccess(password: "fixture"))
         for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
         flow.install(access: ServerAccess(password: "fixture"))
@@ -233,6 +249,135 @@ struct ServerSetupTests {
         #expect(inputs.first?.contains("\"previousReleaseHash\":\"\(saved.releaseHash)\"") == true)
     }
 
+    @Test @MainActor func runningInstallationSurvivesALostStatusCheckWithoutReinstalling() async throws {
+        let saved = try pendingInstallation()
+        let status = try JSONSerialization.data(withJSONObject: ["installationID": saved.id, "state": "activating", "stage": "build"])
+        let transport = ServerSetupTestTransport(status: status, statusFailure: .connection)
+        let store = ServerSetupMemoryStore(installation: saved)
+        let connection = HomeConnection(url: "https://server.example.com:7789", token: saved.ownerToken, pin: String(repeating: "b", count: 64), name: "Server")
+        let flow = ServerSetupFlow(store: store, probe: { _ in
+            await transport.statusRequests >= 2 ? connection : nil
+        }, transport: transport)
+        flow.confirm(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+        flow.install(access: ServerAccess(password: "fixture"))
+        for _ in 0..<1600 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .connected)
+        #expect(flow.error == nil)
+        #expect(await transport.installInputs.isEmpty)
+        #expect(store.installation?.id == saved.id)
+        #expect(flow.connection?.token == saved.ownerToken)
+        flow.pause()
+    }
+
+    @Test @MainActor func lostInstallerAcknowledgementStillConnectsWhenTheServerIsReady() async throws {
+        let saved = try pendingInstallation()
+        let transport = ServerSetupTestTransport(status: Data(#"{"installationID":null,"state":"inactive","stage":"dependencies"}"#.utf8), installFailure: .connection)
+        let connection = HomeConnection(url: "https://server.example.com:7789", token: saved.ownerToken, pin: String(repeating: "b", count: 64), name: "Server")
+        let flow = ServerSetupFlow(store: ServerSetupMemoryStore(installation: saved), probe: { _ in
+            await transport.installInputs.isEmpty ? nil : connection
+        }, transport: transport)
+        flow.confirm(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+        flow.install(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .connected)
+        #expect(flow.error == nil)
+        #expect(await transport.installInputs.count == 1)
+    }
+
+    @Test @MainActor func retryChecksTheReadyServerBeforeRequestingSSHCredentials() async throws {
+        let saved = try pendingInstallation()
+        let transport = ServerSetupTestTransport(status: Data())
+        let connection = HomeConnection(url: "https://server.example.com:7789", token: saved.ownerToken, pin: String(repeating: "b", count: 64), name: "Server")
+        let flow = ServerSetupFlow(store: ServerSetupMemoryStore(installation: saved), probe: { _ in connection }, transport: transport)
+        flow.confirm(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+        flow.install(access: ServerAccess())
+        for _ in 0..<200 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .connected)
+        #expect(await transport.statusRequests == 0)
+        #expect(await transport.installInputs.isEmpty)
+    }
+
+    @Test @MainActor func authenticationAndIdentityFailuresDoNotBecomeConnectionRetries() async throws {
+        for failure in [ServerSetupFailure.authentication, .hostKey, .identity] {
+            let saved = try pendingInstallation()
+            let status = try JSONSerialization.data(withJSONObject: ["installationID": saved.id, "state": "activating", "stage": "build"])
+            let transport = ServerSetupTestTransport(status: status, statusFailure: failure)
+            let flow = ServerSetupFlow(store: ServerSetupMemoryStore(installation: saved), probe: { _ in nil }, transport: transport)
+            flow.confirm(access: ServerAccess(password: "fixture"))
+            for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+            flow.install(access: ServerAccess(password: "fixture"))
+            for _ in 0..<200 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
+            #expect(flow.phase == .failed)
+            #expect(flow.error == failure)
+            #expect(await transport.statusRequests == 2)
+            flow.pause()
+        }
+    }
+
+    @Test @MainActor func anInstallationThatNeverStartedPausesWithContinueInsteadOfWaiting() async throws {
+        let saved = try pendingInstallation()
+        let transport = ServerSetupTestTransport(status: Data(#"{"installationID":null,"state":"inactive","stage":"dependencies"}"#.utf8), installFailure: .connection)
+        let store = ServerSetupMemoryStore(installation: saved)
+        let flow = ServerSetupFlow(store: store, probe: { _ in nil }, transport: transport)
+        flow.confirm(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+        flow.install(access: ServerAccess(password: "fixture"))
+        for _ in 0..<1600 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .paused)
+        #expect(flow.error == .notStarted)
+        #expect(await transport.installInputs.count == 1, "Pausing never starts a second job")
+        #expect(store.installation?.id == saved.id)
+        flow.pause()
+    }
+
+    @Test @MainActor func aFinishedServerJoinsTheListWithoutOpeningSetup() async throws {
+        let saved = try pendingInstallation()
+        let store = ServerSetupMemoryStore(installation: saved)
+        let key = String(repeating: "c", count: 64)
+        let connection = HomeConnection(url: "https://127.0.0.1:9", token: key, pin: key, name: "Server")
+        let busy = ServerSetupFlow(store: store, probe: { _ in try await Task.sleep(for: .milliseconds(50)); return nil })
+        busy.resume()
+        #expect(await busy.finishedConnection() == nil, "An open setup page owns its own check")
+        busy.pause()
+
+        let flow = ServerSetupFlow(store: store, probe: { _ in connection })
+        #expect(flow.phase == .paused)
+        let finished = try #require(await flow.finishedConnection())
+        let suite = "OpenStrudel.finished-server." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(connection.url, forKey: "openstrudel.homeURL")
+        let client = HomeClient(defaults: defaults, connectionID: suite, credentialReader: { _, _ in nil }, credentialWriter: { _, _ in })
+        let library = DeviceLibrary(defaults: defaults, clients: [client])
+        #expect(try await library.adoptServer(finished, from: flow) === client)
+        #expect(client.hasToken && client.normalizedBaseURL == connection.url)
+        #expect(store.installation == nil)
+        #expect(flow.installation == nil)
+        #expect(await flow.finishedConnection() == nil)
+    }
+
+    @Test @MainActor func theWatcherAndAnOpenSetupPageAdoptAFinishedServerOnce() async throws {
+        let store = ServerSetupMemoryStore(installation: try pendingInstallation())
+        let key = String(repeating: "c", count: 64)
+        let connection = HomeConnection(url: "https://127.0.0.1:9", token: key, pin: key, name: "Server")
+        let flow = ServerSetupFlow(store: store, probe: { _ in connection })
+        let suite = "OpenStrudel.adopted-once." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(connection.url, forKey: "openstrudel.homeURL")
+        let client = HomeClient(defaults: defaults, connectionID: suite, credentialReader: { _, _ in nil }, credentialWriter: { _, _ in })
+        let library = DeviceLibrary(defaults: defaults, clients: [client])
+        async let watcher = library.adoptServer(connection, from: flow)
+        async let page = library.adoptServer(connection, from: flow)
+        let (first, second) = try await (watcher, page)
+        #expect(first === client && second === client, "Both get the one connection; no second client or credential")
+        #expect(library.clients.count == 1)
+        #expect(store.installation == nil)
+    }
+
     private func pendingInstallation() throws -> ServerInstallation {
         let target = try ServerTarget(host: "server.example.com", user: "root", port: 22)
         let key = try SSHHostKey(line: "host ssh-ed25519 " + Data(repeating: 1, count: 51).base64EncodedString(), target: target)
@@ -242,17 +387,27 @@ struct ServerSetupTests {
 
 private actor ServerSetupTestTransport: ServerSSHTransport {
     let status: Data
+    let statusFailure: ServerSetupFailure?
+    let installFailure: ServerSetupFailure?
+    private(set) var statusRequests = 0
     private(set) var installInputs: [String] = []
-    init(status: Data) { self.status = status }
+    init(status: Data, statusFailure: ServerSetupFailure? = nil, installFailure: ServerSetupFailure? = nil) {
+        self.status = status; self.statusFailure = statusFailure; self.installFailure = installFailure
+    }
     func scan(_ target: ServerTarget) async throws -> SSHHostKey { throw ServerSetupFailure.hostKey }
     func run(target: ServerTarget, key: SSHHostKey, access: ServerAccess, input: Data, elevated: Bool) async throws -> Data {
         let script = String(decoding: input, as: UTF8.self)
         if script.hasSuffix("\ncheck_server\n") {
             return try JSONEncoder().encode(ServerPreflight(os: "ubuntu", version: "24.04", architecture: "x86_64", memoryMiB: 3900, diskGiB: 35, freeGiB: 20, administrator: true, python: true, installationID: nil, existing: false, portBusy: false))
         }
-        if script.hasSuffix("\nserver_status\n") { return status }
+        if script.hasSuffix("\nserver_status\n") {
+            statusRequests += 1
+            if statusRequests == 2, let statusFailure { throw statusFailure }
+            return status
+        }
         if script.contains("\ninstall_server <<'OPENSTRUDEL_SETUP_INPUT'\n") {
             installInputs.append(script)
+            if let installFailure { throw installFailure }
             return Data()
         }
         throw ServerSetupFailure.installer

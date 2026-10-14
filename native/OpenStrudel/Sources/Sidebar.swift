@@ -27,6 +27,17 @@ struct Sidebar: View {
     @State private var deletion: EmployeeDeletion?
     @State private var confirmDeletion = false
     @State private var deleting = false
+    @State private var draggingEmployee = false
+    @State private var renamingID: String?
+    @State private var editedName = ""
+    @State private var savingName = false
+    @State private var renameError: String?
+    @State private var dropTarget: String?
+    @State private var addingDevice = false
+    @State private var invitation: MacPairing?
+    @State private var confirmingInvitation: MacPairing?
+    @State private var renamingEmployee: RenameTarget?
+    @FocusState private var renameFocused: String?
     @State private var movingEmployee: EmployeeMoveRequest?
     private var searchTerm: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var showsMain: Bool { searchTerm.isEmpty || "OpenStrudel".localizedCaseInsensitiveContains(searchTerm) }
@@ -43,8 +54,11 @@ struct Sidebar: View {
             ForEach(library.visibleClients) { source in
                 let people = people(on: source)
                 if showsMain || !people.isEmpty {
-                    if library.hasOtherDevices {
-                        Section { rows(source, people) } header: { deviceHeader(source) }
+                    if library.hasOtherDevices || !source.isLocalConnection {
+                        Section(isExpanded: Binding(
+                            get: { !searchTerm.isEmpty || !library.collapsedDeviceIDs.contains(source.id) },
+                            set: { library.setCollapsed(!$0, client: source) }
+                        )) { rows(source, people) } header: { deviceHeader(source) }
                     } else {
                         rows(source, people)
                     }
@@ -61,12 +75,13 @@ struct Sidebar: View {
                                 .accessibilityIdentifier("telegramConversation-" + group.chatId)
                         }
                     } header: {
-                        SidebarHeader { Text(library.hasOtherDevices ? L("Conversations · \(source.displayName)") : L("Переписки")) }
+                        SidebarHeader { Text(library.hasOtherDevices ? L("Группы в Telegram · \(source.displayName)") : L("Группы в Telegram")) }
                     }
                 }
             }
         }
         .listStyle(.sidebar)
+        .background(SidebarDragScroll(active: $draggingEmployee, targeted: dropTarget != nil))
         // Over the list, so the system centres it in the empty sidebar.
         .overlay {
             if !showsMain && library.visibleClients.allSatisfy({ people(on: $0).isEmpty && groups(on: $0).isEmpty }) {
@@ -78,6 +93,8 @@ struct Sidebar: View {
         .safeAreaPadding(.top, 6.5)
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if items.count == 1, let target = employee(items.first) {
+                Button(L("Переименовать…"), systemImage: "pencil") { renamingEmployee = RenameTarget(client: target.source, profile: target.profile) }
+                    .disabled(target.source.isOffline(target.profile))
                 Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: target.profile, on: target.source) } }
                 Button(L("Перенести на другое устройство…"), systemImage: "arrow.right.square") {
                     movingEmployee = EmployeeMoveRequest(source: target.source, profile: target.profile)
@@ -92,19 +109,41 @@ struct Sidebar: View {
             guard let target = employee(selection.wrappedValue), canDelete(on: target.source) else { return }
             requestDeletion(target.profile, from: target.source)
         }
+        .onChange(of: renameFocused) { _, focused in
+            if focused == nil { finishRenaming() }
+        }
         .onChange(of: currentItem) { _, item in
             if item == pendingSelection { pendingSelection = nil }
         }
         .safeAreaBar(edge: .bottom, spacing: 0) { footer }
         .toolbar {
             ToolbarItem {
-                NewEmployeeControl(beforeCreate: { query = "" }) {
-                    Label(L("Новый сотрудник"), systemImage: "plus")
+                Menu {
+                    NewEmployeeControl(beforeCreate: { query = "" }) {
+                        Label(L("Новый сотрудник"), systemImage: "plus")
+                    }
+                    Button(L("Подключить устройство…"), systemImage: "laptopcomputer.and.iphone") { addingDevice = true }
+                        .accessibilityIdentifier("connectDevice")
+                } label: {
+                    Label(L("Добавить"), systemImage: "plus")
                 }
-                .help(L("Новый сотрудник (⌘N)"))
+                .help(L("Добавить"))
+                .accessibilityIdentifier("addMenu")
             }
         }
         .sheet(item: $movingEmployee) { EmployeeMoveView(request: $0) }
+        .sheet(item: $renamingEmployee) { NameEditor(target: $0) }
+        .sheet(isPresented: $addingDevice, onDismiss: {
+            if let invitation { confirmingInvitation = invitation; self.invitation = nil }
+        }) {
+            ConnectDeviceView { invitation = $0 }
+        }
+        .sheet(item: $confirmingInvitation) { AddDeviceConfirmation(pairing: $0).environmentObject(library) }
+        .alert("OpenStrudel", isPresented: Binding(get: { renameError != nil }, set: { if !$0 { renameError = nil } })) {
+            Button(L("Понятно"), role: .cancel) {}
+        } message: {
+            Text(UserFacingError.text(renameError ?? ""))
+        }
         .alert(L("Удалить «\(deletion?.name ?? L("сотрудника"))»?"), isPresented: $confirmDeletion) {
             Button(L("Отмена"), role: .cancel) {}
             Button(L("Удалить"), role: .destructive) {
@@ -128,14 +167,14 @@ struct Sidebar: View {
                        preview: library.hasOtherDevices ? source.displayName : L("Помощник для ваших задач"),
                        appearance: nil, offline: source.isOffline(nil), selected: isSelected(item))
                 .tag(item)
-                .modifier(EmployeeDrop(source: source, start: startMove))
+                .modifier(EmployeeDrop(source: source, id: "main-" + source.id, target: $dropTarget, start: startMove))
         }
         if source.isEmployeeDraft && searchTerm.isEmpty {
             let item = SidebarItem.draft(client: source.id)
             SidebarRow(name: L("Новый сотрудник"), preview: L("Опишите его задачу"), appearance: source.draftAppearance,
                        selected: isSelected(item))
                 .tag(item)
-                .modifier(EmployeeDrop(source: source, start: startMove))
+                .modifier(EmployeeDrop(source: source, id: "draft-" + source.id, target: $dropTarget, start: startMove))
         }
         ForEach(people) { profile in
             let item = SidebarItem.employee(client: source.id, profile: profile.id)
@@ -146,18 +185,63 @@ struct Sidebar: View {
                 .tag(item)
                 .accessibilityIdentifier("employee-" + profile.id)
                 // Dragging an employee onto another device's rows moves it there.
-                .draggable(EmployeeDrop.payload(source: source, profile: profile))
-                .modifier(EmployeeDrop(source: source, start: startMove))
+                .onDrag {
+                    draggingEmployee = true
+                    return NSItemProvider(object: EmployeeDrop.payload(source: source, profile: profile) as NSString)
+                }
+                .modifier(EmployeeDrop(source: source, id: "employee-" + source.id + "-" + profile.id, target: $dropTarget, start: startMove))
         }
     }
 
     private func deviceHeader(_ source: HomeClient) -> some View {
         SidebarHeader {
-            HStack(spacing: 4) {
-                Text(source.displayName)
+            HStack(spacing: 6) {
+                if renamingID == source.id {
+                    TextField(L("Название устройства"), text: $editedName)
+                        .textFieldStyle(.plain)
+                        .disabled(savingName)
+                        .focused($renameFocused, equals: source.id)
+                        .onSubmit { finishRenaming() }
+                        .onExitCommand { renamingID = nil; renameFocused = nil }
+                        .onChange(of: editedName) { _, value in if value.count > 120 { editedName = String(value.prefix(120)) } }
+                        .accessibilityIdentifier("renameDevice-" + source.id)
+                } else {
+                    Text(source.displayName).lineLimit(1).truncationMode(.middle)
+                        .onTapGesture(count: 2) { beginRenaming(source) }
+                }
                 if source.connectionNeedsUnlock { Image(systemName: "lock").accessibilityLabel(L("Unlock connection")) }
                 else if source.homeUnreachable { Image(systemName: "wifi.slash").accessibilityLabel(L("Нет связи")) }
             }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .contextMenu {
+                Button(L("Переименовать…"), systemImage: "pencil") { beginRenaming(source) }
+                    .disabled(!source.canRenameDevice)
+            }
+            .accessibilityIdentifier("deviceHeader-" + source.id)
+            .modifier(EmployeeDrop(source: source, id: "header-" + source.id, target: $dropTarget, start: startMove))
+        }
+    }
+
+    private func beginRenaming(_ source: HomeClient) {
+        guard source.canRenameDevice, !savingName else { return }
+        editedName = source.displayName
+        renamingID = source.id
+        renameFocused = source.id
+    }
+
+    private func finishRenaming() {
+        guard !savingName, let id = renamingID, let source = library.clients.first(where: { $0.id == id }) else { return }
+        let name = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != source.displayName else { renamingID = nil; renameFocused = nil; return }
+        savingName = true
+        Task {
+            // Editing ends either way, so focus moving to the alert cannot send the name again.
+            // The sidebar shows the failure for any device, not only the open one.
+            do { try await source.renameDevice(name) } catch { renameError = error.localizedDescription }
+            savingName = false; renamingID = nil; renameFocused = nil
         }
     }
 
@@ -251,6 +335,7 @@ struct Sidebar: View {
 
     /// Opens the move sheet for an employee dropped on another device's rows.
     private func startMove(_ value: String, to target: HomeClient) -> Bool {
+        draggingEmployee = false
         let parts = value.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
         guard parts.count == 3, parts[0] == EmployeeDrop.prefix,
               let origin = library.visibleClients.first(where: { $0.id == parts[1] }),
@@ -278,11 +363,103 @@ private struct EmployeeDrop: ViewModifier {
     static let prefix = "openstrudel-employee"
     static func payload(source: HomeClient, profile: EmployeeProfile) -> String { [prefix, source.id, profile.id].joined(separator: "|") }
     let source: HomeClient
+    /// Which row holds a drag; autoscroll runs only while one does.
+    let id: String
+    @Binding var target: String?
     let start: (String, HomeClient) -> Bool
 
     func body(content: Content) -> some View {
         content.dropDestination(for: String.self) { values, _ in
             values.count == 1 && start(values[0], source)
+        } isTargeted: { targeted in
+            if targeted { target = id } else if target == id { target = nil }
+        }
+    }
+}
+
+/// SwiftUI row drop targets do not scroll a List while a drag rests at its edge.
+/// Keep the system drag and drop handling; move only the list's own clip view,
+/// and only while a row holds the drag: Escape or a system cancel ends that.
+private struct SidebarDragScroll: NSViewRepresentable {
+    @Binding var active: Bool
+    let targeted: Bool
+
+    final class Marker: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+    func makeNSView(context: Context) -> Marker { Marker() }
+    func updateNSView(_ view: Marker, context: Context) {
+        context.coordinator.view = view
+        context.coordinator.active = $active
+        context.coordinator.targeted = targeted
+        if active { context.coordinator.start() } else { context.coordinator.stop() }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    static func dismantleNSView(_ view: Marker, coordinator: Coordinator) { coordinator.stop() }
+
+    @MainActor final class Coordinator {
+        weak var view: NSView?
+        var active: Binding<Bool>?
+        var targeted = false
+        private weak var scroll: NSScrollView?
+        private var timer: Timer?
+        private var escapeMonitor: Any?
+
+        func start() {
+            guard timer == nil else { return }
+            let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.tick() }
+            }
+            self.timer = timer
+            RunLoop.main.add(timer, forMode: .common)
+            escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                if event.keyCode == 53 { self?.finish() }
+                return event
+            }
+        }
+        func stop() {
+            timer?.invalidate(); timer = nil
+            if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
+            escapeMonitor = nil
+        }
+        private func finish() { stop(); active?.wrappedValue = false }
+        private func tick() {
+            guard NSEvent.pressedMouseButtons & 1 != 0 else { finish(); return }
+            guard targeted, let view, let window = view.window else { return }
+            if scroll == nil { scroll = scrollView(of: view) }
+            guard let scroll, let document = scroll.documentView else { return }
+            let clip = scroll.contentView
+            let point = clip.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            let bounds = clip.bounds
+            guard point.x >= bounds.minX, point.x <= bounds.maxX,
+                  point.y >= bounds.minY - 20, point.y <= bounds.maxY + 20 else { return }
+            let edge: CGFloat = 48
+            let before = max(0, edge - (point.y - bounds.minY))
+            let after = max(0, edge - (bounds.maxY - point.y))
+            let distance = (after - before) / edge * 8
+            guard distance != 0 else { return }
+            let maximum = max(0, document.bounds.height - bounds.height)
+            clip.scroll(to: NSPoint(x: bounds.minX, y: min(maximum, max(0, bounds.minY + distance))))
+            scroll.reflectScrolledClipView(clip)
+        }
+        /// The marker is the list's background, so the list's own scroll view covers the same
+        /// rectangle; another pane's scroll view, or one inside a row, does not.
+        private func scrollView(of marker: NSView) -> NSScrollView? {
+            guard let root = marker.window?.contentView else { return nil }
+            let frame = marker.convert(marker.bounds, to: nil)
+            func mismatch(_ scroll: NSScrollView) -> CGFloat {
+                let other = scroll.convert(scroll.bounds, to: nil)
+                return abs(other.minX - frame.minX) + abs(other.maxX - frame.maxX) + abs(other.minY - frame.minY) + abs(other.maxY - frame.maxY)
+            }
+            var best: NSScrollView?
+            func visit(_ candidate: NSView) {
+                if let scroll = candidate as? NSScrollView, scroll.documentView != nil,
+                   scroll.convert(scroll.bounds, to: nil).contains(CGPoint(x: frame.midX, y: frame.midY)),
+                   mismatch(scroll) < best.map(mismatch) ?? .infinity { best = scroll }
+                candidate.subviews.forEach(visit)
+            }
+            visit(root)
+            return best
         }
     }
 }

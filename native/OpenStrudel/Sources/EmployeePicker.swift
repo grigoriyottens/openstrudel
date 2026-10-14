@@ -10,13 +10,17 @@ struct EmployeePicker: View {
     @State private var showingSettings = false
     @State private var showingHistory = false
     @State private var movingEmployee: EmployeeMoveRequest?
+    @State private var renaming: RenameTarget?
+    @State private var addingDevice = false
+    @State private var invitation: MacPairing?
+    @State private var confirmingInvitation: MacPairing?
     private var searchTerm: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var showsMain: Bool { searchTerm.isEmpty || "OpenStrudel".localizedCaseInsensitiveContains(searchTerm) }
 
     var body: some View {
         NavigationStack {
             List {
-                if searchTerm.isEmpty {
+                if searchTerm.isEmpty && library.visibleClients.contains(where: { !$0.usesEmployeeTimeline }) {
                     Button { showingHistory = true } label: {
                         Label(L("Переписки"), systemImage: "clock.arrow.circlepath")
                     }.accessibilityIdentifier("openConversations")
@@ -28,6 +32,7 @@ struct EmployeePicker: View {
                     let people = library.visibleProfiles(on: source).filter { searchTerm.isEmpty || $0.name.localizedCaseInsensitiveContains(searchTerm) || $0.roleText.localizedCaseInsensitiveContains(searchTerm) }
                     if showsMain || !people.isEmpty {
                     Section {
+                        if !searchTerm.isEmpty || !library.collapsedDeviceIDs.contains(source.id) {
                         if showsMain {
                             EmployeePickerRow(name: "OpenStrudel", subtitle: source.displayName, selected: source === client && source.selectedProfileID == nil,
                                               appearance: nil, offline: source.isOffline(nil)) {
@@ -41,6 +46,8 @@ struct EmployeePicker: View {
                             }
                             .accessibilityIdentifier("employee-" + profile.id)
                             .contextMenu {
+                                Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: source, profile: profile) }
+                                    .disabled(source.isOffline(profile))
                                 Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
                                 Button(L("Перенести на другое устройство…"), systemImage: "arrow.right.square") { movingEmployee = EmployeeMoveRequest(source: source, profile: profile) }
                                     .disabled(!source.canManageOpenAI)
@@ -49,13 +56,45 @@ struct EmployeePicker: View {
                                 Button(L("Скрыть"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }.tint(.gray)
                             }
                         }
-                    } header: { if library.hasOtherDevices { Text(source.displayName) } }
+                        }
+                    } header: {
+                        HStack(spacing: 0) {
+                        Button {
+                            library.setCollapsed(!library.collapsedDeviceIDs.contains(source.id), client: source)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(source.displayName)
+                                if source.connectionNeedsUnlock { Image(systemName: "lock") }
+                                else if source.homeUnreachable { Image(systemName: "wifi.slash") }
+                                Spacer(minLength: 0)
+                                Image(systemName: !searchTerm.isEmpty || !library.collapsedDeviceIDs.contains(source.id) ? "chevron.down" : "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, minHeight: controlTarget, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(headerLabel(source))
+                            .accessibilityValue(library.collapsedDeviceIDs.contains(source.id) && searchTerm.isEmpty ? L("Свёрнуто") : L("Развёрнуто"))
+                            .accessibilityIdentifier("deviceHeader-" + source.id)
+                        Menu {
+                                Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: source) }
+                                    .disabled(!source.canRenameDevice)
+                        } label: {
+                            Image(systemName: "ellipsis").frame(minWidth: controlTarget, minHeight: controlTarget)
+                        }
+                            .accessibilityLabel(L("Действия: \(source.displayName)"))
+                            .accessibilityIdentifier("deviceMenu-" + source.id)
+                            }
                     }
+                    }
+                    // A group found by name opens the feed of the employee who works there.
                     let groups = source.telegramGroups.filter { !searchTerm.isEmpty && $0.title.localizedCaseInsensitiveContains(searchTerm) }
                     if !groups.isEmpty {
-                        Section(library.hasOtherDevices ? L("Conversations · \(source.displayName)") : L("Переписки")) {
+                        Section(library.hasOtherDevices ? L("Группы в Telegram · \(source.displayName)") : L("Группы в Telegram")) {
                             ForEach(groups) { group in
-                                EmployeePickerRow(name: group.title, subtitle: group.enabled == false ? L("Бот на паузе") : L("Группа в Telegram"),
+                                EmployeePickerRow(name: group.title, subtitle: group.enabled == false ? L("Бот на паузе") : source.profiles.first { $0.id == group.profileId }?.name ?? "OpenStrudel",
                                                   selected: source === client && source.selectedChatID == group.conversationId,
                                                   appearance: nil, symbol: "person.2") {
                                     Task { await library.select(source, group: group); dismiss() }
@@ -69,6 +108,7 @@ struct EmployeePicker: View {
             .navigationTitle(L("Чаты"))
             .navigationDestination(isPresented: $showingHistory) { ConversationBrowser(isPresented: $isPresented, embedded: true) }
             .sheet(item: $movingEmployee) { EmployeeMoveView(request: $0) }
+            .sheet(item: $renaming) { NameEditor(target: $0) }
             #if os(iOS)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: L("Найти чат"))
             #else
@@ -79,16 +119,40 @@ struct EmployeePicker: View {
                     HStack(spacing: 16) {
                         Button { showingSettings = true } label: { Image(systemName: "gearshape") }
                             .accessibilityLabel(L("Настройки")).accessibilityIdentifier("teamSettings")
-                        NewEmployeeControl(beforeCreate: { dismiss() }) {
+                        Menu {
+                            NewEmployeeControl(beforeCreate: { dismiss() }) {
+                                Label(L("Новый сотрудник"), systemImage: "plus")
+                            }
+                            Button(L("Подключить устройство"), systemImage: "laptopcomputer.and.iphone") { addingDevice = true }
+                                .accessibilityIdentifier("connectDevice")
+                        } label: {
                             Image(systemName: "plus").frame(minWidth: controlTarget, minHeight: controlTarget)
                         }
+                        .accessibilityLabel(L("Добавить"))
+                        .accessibilityIdentifier("addMenu")
                     }
                 }
                 ToolbarItem(placement: .cancellationAction) { Button(L("Готово")) { dismiss() } }
             }
         }
         .sheet(isPresented: $showingSettings) { SettingsView().environmentObject(client) }
+        .sheet(isPresented: $addingDevice, onDismiss: {
+            if let invitation { confirmingInvitation = invitation; self.invitation = nil }
+        }) {
+            #if os(iOS)
+            ConnectionInvitationView { invitation = $0 }
+            #else
+            ConnectDeviceView { invitation = $0 }
+            #endif
+        }
+        .sheet(item: $confirmingInvitation) { AddDeviceConfirmation(pairing: $0).environmentObject(library) }
         .modifier(InterfaceLanguage())
+    }
+
+    /// The device's name and, as the Mac sidebar shows with a symbol, why it cannot be reached.
+    private func headerLabel(_ source: HomeClient) -> String {
+        if source.connectionNeedsUnlock { return source.displayName + ", " + L("Unlock connection") }
+        return source.homeUnreachable ? source.displayName + ", " + L("Нет связи") : source.displayName
     }
 }
 

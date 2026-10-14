@@ -53,6 +53,10 @@ struct OpenStrudelRootView: View {
                 await client.refreshOpenAIAccount()
             }
         }
+        #if os(macOS)
+        // A server that finishes installing after its setup window closed joins the list by itself.
+        .task { await library.watchPendingServer() }
+        #endif
         #if os(iOS)
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(client)

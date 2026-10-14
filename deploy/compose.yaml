@@ -23,6 +23,6 @@ services:
       - data:/data
     mem_limit: 2g
     cpus: 2
-    pids_limit: 256
+    pids_limit: 512
 volumes:
   data:

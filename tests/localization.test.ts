@@ -35,5 +35,10 @@ describe('interface languages', () => {
     const l = localizer();
     expect(l.error('Удалить «Работа {1}»?')).toBe('Delete “Работа {1}”?');
     expect(l.error('Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.')).toBe('Update OpenStrudel on this assistant’s device to choose a model.');
+    // Renaming a device or an employee can return these.
+    for (const error of ['Введите название до 120 символов.', 'Сотрудник не найден.', 'Сотрудник не найден', 'Сотрудник удалён.', 'Сотрудник с таким именем уже есть',
+      'Проверьте имя и длину характера', 'Сотрудник переносится. Новое поручение можно отправить после завершения.']) {
+      expect(l.error(error), error).not.toBe(l.text('Не удалось получить ответ. Попробуйте ещё раз.'));
+    }
   });
 });

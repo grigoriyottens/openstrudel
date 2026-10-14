@@ -36,7 +36,7 @@ struct ConversationView: View {
             #else
             VStack(spacing: 0) {
                 EmployeeMoveStatusButton()
-                if !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
+                if showsSourcePicker {
                     ConversationSources()
                         .padding(.horizontal, Layout.edge).padding(.vertical, 8)
                 }
@@ -84,7 +84,7 @@ struct ConversationView: View {
             ToolbarItem(placement: .navigation) {
                 ConversationTitle { openDetails() }
             }
-            if !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
+            if showsSourcePicker {
                 ToolbarItem(placement: .primaryAction) { ConversationSourceMenu() }
             }
         }
@@ -96,15 +96,14 @@ struct ConversationView: View {
                 Button { focused = false; showEmployees = true } label: { Image(systemName: "line.3.horizontal") }
                     .foregroundStyle(.primary)
                     .accessibilityLabel(L("Чаты"))
+                    .accessibilityIdentifier("openChats")
             }
             ToolbarItem(placement: .principal) {
                 ConversationTitle { focused = false; openDetails() }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                if client.activeProfile == nil {
-                    Button { focused = false; showSettings = true } label: { Image(systemName: "gearshape") }
-                        .foregroundStyle(.primary).accessibilityLabel(L("Настройки"))
-                }
+                Button { focused = false; showSettings = true } label: { Image(systemName: "gearshape") }
+                    .foregroundStyle(.primary).accessibilityLabel(L("Настройки"))
             }
         }
         .sheet(isPresented: $showEmployees) {
@@ -126,7 +125,7 @@ struct ConversationView: View {
 
     private func transcript(_ proxy: ScrollViewProxy) -> some View {
         ScrollView {
-            if client.messages.isEmpty && client.visiblePendingMessages.isEmpty {
+            if client.feedMessages.isEmpty && client.visiblePendingMessages.isEmpty {
                 // While a chosen conversation loads, the canvas stays empty rather than flash the empty state.
                 if showsEmptyChat {
                     EmptyChat()
@@ -171,7 +170,7 @@ struct ConversationView: View {
                 if followsLatest { hasNewMessages = false }
             }
         }
-        .onChange(of: client.messages.last?.id) { _, _ in
+        .onChange(of: client.feedMessages.last?.id) { _, _ in
             if followsLatest { scrollToBottom(proxy, animated: true) }
             else { hasNewMessages = true }
         }
@@ -203,6 +202,12 @@ struct ConversationView: View {
         client.isEmployeeDraft || client.conversationID != nil || client.health == nil || client.homeUnreachable || client.syncError != nil
     }
 
+    /// Separate Telegram transcripts exist only on a Home known to lack the employee feed,
+    /// so an app opened before its Home answers never flashes the old screen.
+    private var showsSourcePicker: Bool {
+        client.health != nil && !client.usesEmployeeTimeline && !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty
+    }
+
     private var showsConnectionBanner: Bool { client.connectionNeedsPairing || client.homeUnreachable || client.health == nil }
     private var showsRecoveryNotice: Bool { client.openAIAccount?.connected == false && !client.homeUnreachable && client.health != nil }
 
@@ -213,6 +218,21 @@ struct ConversationView: View {
                 newMessagesButton(proxy).frame(maxWidth: .infinity)
             }
             telegramHint
+            if client.usesEmployeeTimeline, !previousDrafts.isEmpty {
+                Menu(L("Черновики прежних переписок")) {
+                    ForEach(previousDrafts, id: \.key) { saved in
+                        Button(L("Вставить в сообщение: \(saved.title)")) {
+                            let oldFiles = library.fileDrafts[saved.key] ?? []
+                            guard pickedFiles.count + oldFiles.count <= AttachmentImport.countLimit else {
+                                client.errorMessage = AttachmentImport.Failure.tooMany.localizedDescription; return
+                            }
+                            draft = [draft, library.draft(for: saved.key)].filter { !$0.isEmpty }.joined(separator: "\n\n")
+                            pickedFiles += oldFiles
+                            library.saveDraft("", for: saved.key); library.fileDrafts[saved.key] = nil
+                        }
+                    }
+                }.font(AppTypography.meta)
+            }
             composer
         }
         .frame(maxWidth: Layout.column)
@@ -223,6 +243,15 @@ struct ConversationView: View {
         // A size-change scroll anchor would loop the lazy rows (see TranscriptStack).
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in
             if followsLatest { scrollToBottom(proxy, animated: false) }
+        }
+    }
+
+    private var previousDrafts: [(key: String, title: String)] {
+        let chats = client.employeeTelegramChats.compactMap { chat in chat.conversationId.map { ($0, chat.title) } }
+            + client.importedConversations.filter { $0.profileId == client.selectedProfileID }.map { ($0.id, $0.title) }
+        return chats.compactMap { id, title in
+            let key = HomeDrafts.key(home: client.baseURLString, profile: client.selectedProfileID, chat: id)
+            return !library.draft(for: key).isEmpty || !(library.fileDrafts[key] ?? []).isEmpty ? (key, title) : nil
         }
     }
 
@@ -273,7 +302,7 @@ struct ConversationView: View {
     }
 
     @ViewBuilder private var telegramHint: some View {
-        if client.activeTelegramChat != nil {
+        if client.health != nil, client.activeTelegramChat != nil {
             // No fixed size here: the window measures its minimum with a zero width,
             // and a fixed-height wrapped line would then grow taller than the window.
             Text(L("Здесь можно обсудить переписку с помощником. Ответ останется в OpenStrudel."))

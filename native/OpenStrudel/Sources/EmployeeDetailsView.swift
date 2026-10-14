@@ -222,7 +222,7 @@ struct BotDetailsView: View {
                 }
                 Section(L("Модель и скорость")) { ModelSettingsView(agentID: profile.id) { runsOnChatGPT = $0.runsOnChatGPT } }
                 if client.health?.homeProtocol == 1 && (client.health?.providers != 1 || runsOnChatGPT == true) { AgentAccountPreference(profile: profile) }
-                if !client.schedules.isEmpty || client.scheduleRuns.first?.error != nil {
+                if !client.schedules.isEmpty || client.scheduleRuns.contains(where: { $0.error != nil }) {
                     Section(L("Расписание")) { schedules }
                 }
                 Section {
@@ -294,20 +294,25 @@ struct BotDetailsView: View {
             Toggle(isOn: Binding(get: { schedule.enabled }, set: { value in Task { await client.setSchedule(schedule, enabled: value) } })) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(schedule.name)
-                    Text(schedule.timing).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                    Text(schedule.timing + source(schedule)).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
                 }
             }
         }
         if client.schedules.contains(where: { !$0.enabled }) {
             DisclosureGroup(L("Приостановленные")) {
                 ForEach(client.schedules.filter { !$0.enabled }) { schedule in
-                    Toggle(schedule.name, isOn: Binding(get: { schedule.enabled }, set: { value in Task { await client.setSchedule(schedule, enabled: value) } }))
+                    Toggle(schedule.name + source(schedule), isOn: Binding(get: { schedule.enabled }, set: { value in Task { await client.setSchedule(schedule, enabled: value) } }))
                 }
             }
         }
-        if let failed = client.scheduleRuns.first, let error = failed.error {
+        if let error = client.scheduleRuns.lazy.compactMap(\.error).first {
             Text(UserFacingError.text(error)).font(AppTypography.meta).foregroundStyle(AppTheme.warning)
         }
+    }
+
+    /// A schedule made in a Telegram chat names that chat.
+    private func source(_ schedule: ChatSchedule) -> String {
+        client.employeeTelegramChats.first { $0.conversationId == schedule.conversationId }.map { " · Telegram · " + $0.title } ?? ""
     }
 
     private func save() {

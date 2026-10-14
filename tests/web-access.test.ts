@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,6 +37,14 @@ it("requires a Home invitation, protects cookie mutations with CSRF, and revokes
     for (const [path, method, body] of [["", "POST", {token:"synthetic"}], ["/link", "POST", {}], ["/chats/-100", "PATCH", {profileId:null}], ["", "DELETE", {}]] as const) {
       expect((await call("/v1/integrations/telegram" + path, method, body, { cookie: secondCookie, "x-openstrudel-csrf": access.csrf })).status).toBe(403);
     }
+    const reply = vi.spyOn(runtime.telegram, "replyFromApp").mockResolvedValue({ messageId: "receipt" });
+    const replyPath = "/v1/conversations/synthetic/telegram-reply";
+    const replyBody = { replyToId: "request", text: "Confirmed", externalId: "11111111-1111-4111-8111-111111111111" };
+    expect((await call(replyPath, "POST", replyBody, { cookie: secondCookie, "x-openstrudel-csrf": access.csrf })).status).toBe(403);
+    expect(reply).not.toHaveBeenCalled();
+    expect((await call(replyPath, "POST", replyBody, { cookie, "x-openstrudel-csrf": csrf })).status).toBe(200);
+    expect(reply).toHaveBeenCalledExactlyOnceWith({ conversationId: "synthetic", ...replyBody, attachments: undefined });
+    reply.mockRestore();
     const sessions = runtime.api.web.list(); expect(sessions).toHaveLength(2);
     runtime.api.web.revoke(sessions.find(s => !s.owner)!.id);
     expect((await call("/v1/profiles", "GET", undefined, { cookie: secondCookie })).status).toBe(401);
