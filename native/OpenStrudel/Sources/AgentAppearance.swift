@@ -17,6 +17,17 @@ struct AgentAppearance: Codable, Hashable, Sendable {
         let hash = id.utf8.reduce(UInt32(2166136261)) { ($0 ^ UInt32($1)) &* 16777619 }
         return Self(kind: kinds[Int(hash) % kinds.count], tone: Int(hash) / kinds.count % tones.count)
     }
+    /// The seeded character, or the next one nobody wears yet; the seed's own when all 48 are taken.
+    static func seeded(_ id: String, avoiding used: [AgentAppearance]) -> Self {
+        let seed = seeded(id)
+        let start = (kinds.firstIndex(of: seed.kind) ?? 0) * 8 + seed.tone
+        for step in 0..<48 {
+            let index = (start + step) % 48
+            let candidate = Self(kind: kinds[index / 8], tone: index % 8)
+            if !used.contains(candidate) { return candidate }
+        }
+        return seed
+    }
     func shuffled() -> Self {
         let current = (Self.kinds.firstIndex(of: kind) ?? 0) * 8 + tone
         let next = (current + Int.random(in: 1..<48)) % 48

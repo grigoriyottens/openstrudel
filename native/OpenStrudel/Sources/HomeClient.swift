@@ -211,7 +211,6 @@ final class HomeClient: ObservableObject, Identifiable {
         self.selectedChatID = defaults.string(forKey: "openstrudel.selectedChatID")
         if let selectedProfileID, selectedProfileID.hasPrefix("draft:") {
             self.selectedChatID = nil
-            draftAppearance = .seeded(selectedProfileID)
             draftDeviceID = defaults.string(forKey: "openstrudel.draftDeviceID") ?? ""
         }
         if let url = URL(string: baseURLString), url.scheme == "https", session === URLSession.shared {
@@ -232,6 +231,9 @@ final class HomeClient: ObservableObject, Identifiable {
         } else if let cached = defaults.data(forKey: "openstrudel.employeeCatalog"),
                   let employees = try? decoder.decode([EmployeeProfile].self, from: cached) {
             profiles = employees
+        }
+        if isEmployeeDraft, let selectedProfileID {
+            draftAppearance = .seeded(selectedProfileID, avoiding: profiles.map(\.resolvedAppearance))
         }
         HomeDrafts.migrate(defaults, currentHome: baseURLString)
         do {
@@ -1099,7 +1101,7 @@ final class HomeClient: ObservableObject, Identifiable {
         selectedChatID = nil; conversationID = nil
         messages = []; interactions = []; schedules = []
         draftEmployeeDomain = "personal"
-        draftAppearance = .seeded(selectedProfileID!)
+        draftAppearance = .seeded(selectedProfileID!, avoiding: profiles.map(\.resolvedAppearance))
         draftDeviceID = health?.nodeId ?? devices.first?.id ?? ""
         defaults.set(selectedProfileID, forKey: "openstrudel.profileID")
         defaults.set(draftDeviceID, forKey: "openstrudel.draftDeviceID")
