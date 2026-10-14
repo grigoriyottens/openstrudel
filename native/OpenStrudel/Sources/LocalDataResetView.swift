@@ -43,7 +43,7 @@ struct LocalDataResetConfirmation: View {
                 }
                 .padding(.top, 4)
                 if let message = backupError ?? library.eraseError {
-                    Text(message).foregroundStyle(AppTheme.destructive)
+                    Text(message).foregroundStyle(AppTheme.warning)
                 }
                 Toggle(L("Я понимаю, что удаление нельзя отменить"), isOn: $acknowledged)
                     .toggleStyle(.checkbox)

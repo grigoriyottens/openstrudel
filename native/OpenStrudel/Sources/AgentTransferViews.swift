@@ -108,7 +108,7 @@ struct AgentTransferSettings: View {
                     Button(L("Отменить")) { operation?.cancel() }
                 }
             }
-            if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("agentTransferError") }
+            if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning).accessibilityIdentifier("agentTransferError") }
             if let notice {
                 HStack(spacing: 12) {
                     Text(L10n.serviceText(notice)).textSelection(.enabled).accessibilityIdentifier("agentTransferNotice")
@@ -156,7 +156,7 @@ struct AgentTransferSettings: View {
                         Text(L("Введите пароль, заданный при сохранении копии."))
                     }
                     if let error {
-                        Section { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
+                        Section { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning) }
                     }
                 }
                 .formStyle(.grouped)
@@ -257,7 +257,7 @@ private struct AgentImportReview: View {
                         Text(L("Расписания будут на паузе, отправка в Telegram отключена. Проверьте их перед включением. Подключённые сервисы нужно будет авторизовать заново."))
                     }
                     if let error {
-                        Section { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive).accessibilityFocused($errorFocused) }
+                        Section { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning).accessibilityFocused($errorFocused) }
                     }
                 }
             }

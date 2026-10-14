@@ -60,7 +60,7 @@ Warm low-chroma neutrals, ink and graphite. Values are light / dark / light incr
 | `AccentColor` | `#55504C` / `#7B7570` / `#2B2826` / `#7B7570` | the system accent: selection, focus, switches, checkboxes, default buttons. White on it: 8.0 / 4.5 / 14.6 / 4.5; against the sidebar 6.6 / 3.4 and grouped cards ≥ 3.0 in dark |
 | `AccentText` (new) | `#262422` / `#EDEAE6` / `#14120F` / `#FFFFFF` | ink: links (underlined), the primary action's fill (label in `CanvasColor`: 14.0 / 14.3 / 20.7 / 18.9), the send button |
 | `SecondaryText` | `#615B57` / `#ADA8A3` / `#45403C` / `#D2CEC9` | supporting text and meta |
-| `WarningText` | `#865021` / `#DFB681` / `#6D3B12` / `#F6D3A3` | warnings |
+| `WarningText` | `#865021` / `#DFB681` / `#6D3B12` / `#F6D3A3` | warnings and every error message: a failure to load, save or act |
 | `DestructiveText` | `#A82029` / `#FF8A91` / `#850A12` / `#FFC7CB` | destructive text; destructive buttons use `role: .destructive` |
 
 - `MetadataText` is removed; meta uses `SecondaryText` at the meta size.

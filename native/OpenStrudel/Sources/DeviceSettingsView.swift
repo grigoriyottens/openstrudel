@@ -318,7 +318,7 @@ private struct DictationSection: View {
                 Button(L("Cancel download")) { assets.cancel() }
                     .accessibilityIdentifier("cancelDictationDownload")
             case .available, .failed:
-                if let error = assets.error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
+                if let error = assets.error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning) }
                 LabeledContent {
                     Button(L("Download model")) { assets.download() }
                         .accessibilityIdentifier("downloadDictationModel")
@@ -385,7 +385,7 @@ struct AddDeviceConfirmation: View {
                     .foregroundStyle(AppTheme.secondaryText)
                 if busy { ProgressView(L("Проверяем подключение…")).controlSize(.small) }
                 if let error {
-                    Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive).accessibilityIdentifier("pairingError")
+                    Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning).accessibilityIdentifier("pairingError")
                 }
             }
             .multilineTextAlignment(.center)
@@ -456,7 +456,7 @@ struct DeviceAccountsView: View {
                 if loading && accounts.isEmpty {
                     LabeledContent(L("Загружаем аккаунты и лимиты…")) { ProgressView().controlSize(.small) }
                 }
-                if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
+                if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning) }
                 if let first = accounts.first { accountRows(first, index: 0) }
             } header: {
                 Text(L("ChatGPT on \(deviceName)"))

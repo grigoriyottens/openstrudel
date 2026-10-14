@@ -19,7 +19,7 @@ struct TelegramSetupView: View {
     var body: some View {
         Group {
             if client.telegram?.configured == true { configuredRows } else { setupRows }
-            if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
+            if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning) }
             if client.telegram?.configured == true && !contextual {
                 Button(L("Отключить бота…"), role: .destructive) { confirmDisconnect = true }
                     .foregroundStyle(AppTheme.destructive)
@@ -68,7 +68,7 @@ struct TelegramSetupView: View {
                 .foregroundStyle(AppTheme.secondaryText)
         }
         if let problem = client.telegram?.lastError {
-            Text(UserFacingError.text(problem)).foregroundStyle(AppTheme.destructive)
+            Text(UserFacingError.text(problem)).foregroundStyle(AppTheme.warning)
         } else if client.telegram?.running != true {
             Text(L("Бот остановлен. Проверьте, что OpenStrudel работает на этом устройстве.")).foregroundStyle(AppTheme.secondaryText)
         }
