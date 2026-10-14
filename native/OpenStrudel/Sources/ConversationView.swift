@@ -194,6 +194,11 @@ struct ConversationView: View {
         .padding(.horizontal, Layout.edge)
         .padding(.bottom, Layout.belowComposer)
         .frame(maxWidth: .infinity)
+        // A growing composer keeps the latest message and its 24 of room above the glass.
+        // A size-change scroll anchor would loop the lazy rows (see TranscriptStack).
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in
+            if followsLatest { scrollToBottom(proxy, animated: false) }
+        }
     }
 
     #if os(macOS)
