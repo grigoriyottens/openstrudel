@@ -79,7 +79,8 @@ struct SettingsView: View {
         TabView(selection: $tab) {
             ForEach(Section.allCases, id: \.self) { section in
                 Tab(section.tabTitle, systemImage: section.symbol, value: section) {
-                    SettingsPane { pane(section) }
+                    // Devices presents Connect a device, a 560 × 480 sheet with its bars.
+                    SettingsPane(minHeight: section == .devices ? 560 : 360) { pane(section) }
                 }
             }
         }
@@ -126,9 +127,11 @@ struct SettingsView: View {
 }
 
 #if os(macOS)
-/// A Settings window pane: a grouped Form 600 wide whose height follows its rows between 360 and 720,
+/// A Settings window pane: a grouped Form 600 wide whose height follows its rows up to 720,
 /// so the window fits each tab and scrolls only when a pane is long.
 private struct SettingsPane<Content: View>: View {
+    /// 360, or 560 for a pane whose sheets need the room: the window must hold its tallest sheet.
+    var minHeight: CGFloat = 360
     @ViewBuilder let content: Content
     @State private var height: CGFloat = 360
 
@@ -136,10 +139,12 @@ private struct SettingsPane<Content: View>: View {
         Form { content }
             .formStyle(.grouped)
             .tint(nil)
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height + $0.contentInsets.top + $0.contentInsets.bottom } action: { _, value in
+            // The content already holds the Form's top and bottom margins. The top inset is the
+            // toolbar, which the window adds above the pane by itself.
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, value in
                 height = value
             }
-            .frame(width: 600, height: min(max(height, 360), 720))
+            .frame(width: 600, height: min(max(height, minHeight), 720))
     }
 }
 #endif
