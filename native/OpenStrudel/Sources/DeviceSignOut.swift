@@ -43,7 +43,8 @@ struct DeviceSignOutView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L("Отмена")) { dismiss() }.disabled(client.isSigningOut)
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                // Not the default button: Return must not remove a device.
+                ToolbarItem(placement: .destructiveAction) {
                     Button(L("Убрать подключение"), role: .destructive) {
                         let source = client
                         Task { await library.removeConnection(source); completed() }

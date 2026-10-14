@@ -55,7 +55,8 @@ struct LocalDataResetConfirmation: View {
             .frame(width: 440, alignment: .leading)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
+                // Not the default button: Return must not erase this Mac.
+                ToolbarItem(placement: .destructiveAction) {
                     Button(L("Стереть данные"), role: .destructive) { Task { await library.eraseThisMac() } }
                         .disabled(!acknowledged || preparingBackup)
                         .accessibilityIdentifier("confirmLocalErase")

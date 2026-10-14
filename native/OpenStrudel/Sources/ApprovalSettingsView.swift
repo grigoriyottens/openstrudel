@@ -77,7 +77,7 @@ struct ApprovalSettingsView: View {
         }
         .task { await load() }
         .alert(L("Выполнять без подтверждений?"), isPresented: $confirmAll) {
-            Button(L("Включить для этого устройства")) { Task { await save(.approveAll) } }
+            Button(L("Включить для этого устройства"), role: .destructive) { Task { await save(.approveAll) } }
             Button(L("Отмена"), role: .cancel) { }
         } message: {
             Text(L("Все сотрудники на «\(client.displayName)» смогут выполнять порученные действия в доступных сервисах, включая изменение и удаление данных. В Telegram это относится к запросам допущенных участников."))
