@@ -581,7 +581,7 @@
     function fileSize(bytes) {
       const units = [['byte', 1], ['kilobyte', 1e3], ['megabyte', 1e6], ['gigabyte', 1e9]];
       const [unit, base] = units.findLast(([, base]) => bytes >= base) || units[0];
-      return new Intl.NumberFormat(i18n.language, { style: 'unit', unit, unitDisplay: 'short', maximumFractionDigits: bytes >= 1e6 ? 1 : 0 }).format(bytes / base);
+      return new Intl.NumberFormat(i18n.language, { style: 'unit', unit, unitDisplay: unit === 'byte' ? 'long' : 'short', maximumFractionDigits: bytes >= 1e6 ? 1 : 0 }).format(bytes / base);
     }
     function attachmentChip(attachment) {
       const button = element('button', '', 'file'); button.type = 'button';
