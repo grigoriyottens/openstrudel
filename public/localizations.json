@@ -1012,7 +1012,7 @@
     "fr": "Ajouter un compte ChatGPT",
     "es": "Añadir cuenta de ChatGPT",
     "he": "הוספת חשבון ChatGPT",
-    "ru": "Добавить аккаунт OpenAI"
+    "ru": "Добавить аккаунт ChatGPT"
   },
   "Обновить остатки": {
     "en": "Refresh balances",
@@ -5376,11 +5376,11 @@
     "ru": "Ожидаем оплату. Заказ сохранён."
   },
   "ChatGPT on {0}": {
-    "en": "ChatGPT on {0}",
+    "en": "ChatGPT on “{0}”",
     "ru": "ChatGPT на «{0}»",
-    "fr": "ChatGPT sur {0}",
-    "es": "ChatGPT en {0}",
-    "he": "ChatGPT ב-{0}"
+    "fr": "ChatGPT sur « {0} »",
+    "es": "ChatGPT en «{0}»",
+    "he": "ChatGPT ב-״{0}״"
   },
   "Connection {0}": {
     "en": "Connection {0}",
