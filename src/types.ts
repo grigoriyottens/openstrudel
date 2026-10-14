@@ -39,6 +39,8 @@ export interface EmployeeProfile {
   name: string;
   instructions: string;
   capabilities: string[];
+  /** Null with a model means ChatGPT, as stored before providers existed. */
+  provider?: string | null;
   model: string | null;
   serviceTier?: string | null;
   tokenLimit: number | null;
@@ -72,6 +74,8 @@ export interface CodexEngine {
       signal?: AbortSignal;
       onEvent?: (event: EngineEvent) => void;
       profile?: string | null;
+      /** The resolved provider; a turn stays on its route. */
+      provider?: string | null;
       model?: string | null;
     serviceTier?: string | null;
       /** Permanent employees offered as native Codex roles on this device. */

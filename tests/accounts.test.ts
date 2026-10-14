@@ -3,11 +3,20 @@ import { Store } from "../src/store.js";
 import { CodexAccountService } from "../src/account.js";
 const engines = vi.hoisted(() => ({ run: vi.fn(), closed: [] as string[] }));
 vi.mock("../src/scopes.js", () => ({ ScopedCodexEngine: class {
-  constructor(_root: string, readonly account: string) {}
-  forContext(context: string) { return { run: (input: string, options: any) => engines.run(this.account, context, input, options), connections: async () => [this.account] }; }
+  readonly account: string;
+  constructor(_root: string, account: string, _tokens?: unknown, readonly contexts?: string, readonly provider?: { info: { id: string }; key: () => string | null }) { this.account = provider ? "provider-" + provider.info.id : account; }
+  forContext(context: string) { return { run: (input: string, options: any) => engines.run(this.account, context, input, options), connections: async () => [this.account],
+    models: async () => [{ id: this.provider ? "api-model" : "chat-model", provider: this.provider?.info.id ?? "chatgpt" }], extensions: () => ({ scope: this.account, context }) }; }
   close() { engines.closed.push(this.account); }
 } }));
+vi.mock("../src/claude.js", () => ({ ClaudeEngine: class {
+  constructor(readonly options: { provider: { id: string }; key: () => string | null }) {}
+  forContext(context: string) { return { run: (input: string, options: any) => engines.run("claude-" + this.options.provider.id, context, input, options) }; }
+} }));
 import { Accounts, AccountEngines } from "../src/accounts.js";
+import { MessageService } from "../src/messages.js";
+import { ProviderKeyError } from "../src/providers.js";
+import { saveModelSelection } from "../src/model-settings.js";
 const stores: Store[] = [];
 afterEach(() => { for (const store of stores.splice(0)) store.close(); vi.restoreAllMocks(); engines.run.mockReset(); engines.closed.length = 0; });
 function fixture() {
@@ -74,5 +83,80 @@ describe("per-device Codex subscriptions", () => {
     const { accounts, second } = fixture();
     for (const id of ["default", second]) vi.mocked(accounts.get(id).read).mockResolvedValue({ connected: false, email: null, planType: null, managed: false });
     await expect(accounts.choose("main")).rejects.toMatchObject({ reason: "sign_in_required" });
+  });
+});
+
+describe("API key providers", () => {
+  it("gives each key provider its own route, threads and transcript bootstrap", async () => {
+    const { store, pool } = fixture(), conversation = store.primaryConversation();
+    store.setSetting("providers.xai.key", "xai-key"); store.setSetting("providers.anthropic.key", "ant-key");
+    store.addMessage({ channel: "api", conversationId: conversation.id, direction: "outbound", text: "Remember this context" });
+    engines.run.mockImplementation(async (route: string) => ({ threadId: route + "-thread", response: "ok", events: [] }));
+    await pool.run("one", { conversationId: conversation.id, provider: "chatgpt" });
+    await pool.run("two", { conversationId: conversation.id, provider: "xai", threadId: "default-thread" });
+    expect(engines.run.mock.calls[1]?.[0]).toBe("provider-xai");
+    expect(engines.run.mock.calls[1]?.[3].threadId).toBeUndefined(); expect(engines.run.mock.calls[1]?.[2]).toContain("Remember this context");
+    expect(store.getSetting("codex.thread.provider-xai." + conversation.id)).toBe("provider-xai-thread");
+    expect(store.getSetting("codex.threadOwner." + conversation.id)).toBe("provider-xai");
+    await pool.run("three", { conversationId: conversation.id, provider: "chatgpt", threadId: "provider-xai-thread" });
+    expect(engines.run.mock.calls[2]?.[3].threadId).toBe("default-thread");
+    await pool.run("four", { conversationId: conversation.id, provider: "xai", model: "grok-4.5" });
+    expect(engines.run.mock.calls[3]?.[3]).toMatchObject({ threadId: "provider-xai-thread", model: "grok-4.5" });
+    await pool.run("five", { conversationId: conversation.id, provider: "anthropic" });
+    expect(engines.run.mock.calls[4]?.[0]).toBe("claude-anthropic"); expect(engines.run.mock.calls[4]?.[2]).toContain("Remember this context");
+    expect(store.getSetting("codex.thread.provider-anthropic." + conversation.id)).toBe("claude-anthropic-thread");
+  });
+  it("routes by the agent's own selection and lists models without requiring ChatGPT", async () => {
+    const { store, accounts, pool } = fixture();
+    store.setSetting("providers.openai.key", "sk-api"); store.setSetting("providers.kimi.key", "kimi-key");
+    const employee = store.createProfile({ name: "Researcher" });
+    saveModelSelection(store, { provider: "kimi", model: "kimi-k3", serviceTier: "default" }, employee.id);
+    engines.run.mockResolvedValue({ threadId: "t", response: "ok", events: [] });
+    await pool.forAgent(employee.id, "personal").run("hello");
+    expect(engines.run.mock.calls[0]?.[0]).toBe("claude-kimi");
+    await pool.forAgent("main", "personal").run("hello");
+    expect(engines.run.mock.calls[1]?.[0]).toBe("provider-openai");
+    expect((await pool.forAgent("main", "personal").models!()).map(m => [m.provider, m.id])).toEqual([["openai", "api-model"], ["kimi", "kimi-k3"], ["kimi", "kimi-k2.7-code"]]);
+    expect(await pool.forAgent("main", "personal").connections!()).toEqual(["provider-openai"]);
+    expect(accounts.get("default").read).not.toHaveBeenCalled();
+    store.setSetting("codex.auth.mode", "managed");
+    expect((await pool.forAgent("main", "personal").models!()).map(m => m.provider)).toEqual(["chatgpt", "openai", "kimi", "kimi"]);
+    expect(await accounts.statusFor(employee.id)).toEqual({ account: { connected: true, email: null, planType: null, provider: "kimi", providerName: "Kimi" }, accountId: "provider-kimi", loginPending: false });
+    // Services and skills are shared by the context; a Claude-engine employee manages them through Codex without ChatGPT.
+    expect(await pool.forAgent(employee.id, "personal").extensions!()).toEqual({ scope: "provider-kimi", context: "personal" });
+    expect(await pool.forAgent(employee.id, "personal").connections!()).toEqual([]);
+  });
+  it("fails a rejected key with the provider's message and leaves ChatGPT signed in", async () => {
+    const { store, accounts, pool } = fixture(), conversation = store.primaryConversation();
+    store.setSetting("providers.xai.key", "xai-key");
+    const invalidate = vi.spyOn(accounts.get("default"), "invalidate");
+    engines.run.mockRejectedValue(new Error("unexpected status 401 Unauthorized: Incorrect API key provided, url: https://api.x.ai/v1/responses"));
+    await expect(pool.run("hi", { conversationId: conversation.id, provider: "xai" })).rejects.toBeInstanceOf(ProviderKeyError);
+    const messages = new MessageService(store, pool);
+    await expect(messages.handle({ channel: "api", text: "Hi", externalChatId: "home" })).rejects.toThrow("xAI не принял ключ. Замените его в настройках аккаунтов.");
+    expect(store.listMessages(conversation.id).find(m => m.text === "Hi")?.error).toBe("xAI не принял ключ. Замените его в настройках аккаунтов.");
+    engines.run.mockRejectedValue(new Error("unexpected status 429 Too Many Requests: You exceeded your current quota"));
+    await expect(messages.handle({ channel: "api", text: "Again", externalChatId: "home" })).rejects.toThrow("У ключа xAI закончился лимит или баланс.");
+    expect(invalidate).not.toHaveBeenCalled();
+    await messages.close();
+  });
+  it("names a provider that is not connected on this device and starts nothing", async () => {
+    const { store, pool } = fixture();
+    const moved = store.createProfile({ name: "Moved" });
+    saveModelSelection(store, { provider: "anthropic", model: "claude-opus-5-5", serviceTier: "default" }, moved.id);
+    await expect(pool.forAgent(moved.id, "personal").run("hi")).rejects.toMatchObject({ status: 409, message: "Подключите Anthropic на этом устройстве или выберите другую модель." });
+    expect(engines.run).not.toHaveBeenCalled();
+  });
+  it("asks instead of automatic review on key providers and delegates only within the route", async () => {
+    const { store, pool } = fixture();
+    store.setSetting("providers.xai.key", "xai-key");
+    engines.run.mockResolvedValue({ threadId: "t", response: "ok", events: [] });
+    const employees: any[] = [{ id: "grok", provider: "xai", model: "grok-4.5" }, { id: "chat", provider: "chatgpt", model: "gpt-6-sol" }];
+    await pool.run("hi", { provider: "xai", approvalMode: "auto", employees });
+    expect(engines.run.mock.calls[0]?.[3]).toMatchObject({ approvalMode: "ask" });
+    expect(engines.run.mock.calls[0]?.[3].employees.map((e: any) => e.id)).toEqual(["grok"]);
+    await pool.run("hi", { provider: "chatgpt", approvalMode: "auto", employees });
+    expect(engines.run.mock.calls[1]?.[3]).toMatchObject({ approvalMode: "auto" });
+    expect(engines.run.mock.calls[1]?.[3].employees.map((e: any) => e.id)).toEqual(["chat"]);
   });
 });

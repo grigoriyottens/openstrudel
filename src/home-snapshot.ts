@@ -37,7 +37,7 @@ export function validateSnapshot(input: unknown): any {
   for (const row of list(value.commands, 100_000)) {
     identifier(row.id); if (commandIds.has(row.id) || !nodeIds.has(row.node_id)) bad(); commandIds.add(row.id);
     const request = object(json(row.request, 280 * 1024 * 1024));
-    if (!["GET", "POST", "PATCH", "DELETE"].includes(request.method) || typeof request.owner !== "boolean" || !text(request.path, 4096).startsWith("/v1/")) bad();
+    if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(request.method) || typeof request.owner !== "boolean" || !text(request.path, 4096).startsWith("/v1/")) bad();
     // A control backup cannot carry an activation command from a different transfer.
     if (request.path.startsWith("/v1/home/") && row.response === null && row.canceled === 0) bad();
     if (request.body !== undefined) text(request.body, 280 * 1024 * 1024);

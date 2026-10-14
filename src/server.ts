@@ -1,4 +1,5 @@
-import { parseModelSelection, readModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, validateModelSelection } from "./model-settings.js";
+import { automaticProvider, parseModelSelection, readModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, validateModelSelection } from "./model-settings.js";
+import { connectProvider, disconnectProvider, providerKey, providerNotConnected, providerSummaries } from "./providers.js";
 import { deleteEmployee } from "./employee-delete.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -122,7 +123,7 @@ export class HttpApi {
     }
     if (origin) response.setHeader("access-control-allow-origin", origin);
     response.setHeader("access-control-allow-headers", "authorization, content-type");
-    response.setHeader("access-control-allow-methods", "GET, POST, PATCH, DELETE, OPTIONS");
+    response.setHeader("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
     if (request.method === "OPTIONS") {
       response.writeHead(204).end();
       return;
@@ -216,13 +217,27 @@ export class HttpApi {
         const engine = this.engine?.forAgent?.(agent ?? "main",context) ?? this.engine?.forContext?.(context) ?? this.engine;
         if (!engine?.models) throw new HomeError("Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.",501);
         const models = await engine.models(url.searchParams.get("refresh") === "true");
+        const automatic = automaticProvider(this.store);
         if (request.method === "POST") {
           const selection = parseModelSelection(await this.body(request),Boolean(agent));
           if (agent) assertAgentWritable(this.store,agent);
-          validateModelSelection(agent && !selection.model ? readModelSelection(this.store) : selection,models);
+          const checked = agent && !selection.model ? readModelSelection(this.store) : selection;
+          const provider = checked.model ? checked.provider! : automatic;
+          if (provider !== "chatgpt" && !providerKey(this.store,provider)) throw providerNotConnected(provider);
+          validateModelSelection(checked,models.filter(m=>m.provider === provider));
           saveModelSelection(this.store,selection,agent);
         }
-        this.send(response,200,{models,recommended:recommendedModel(models),selection:readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,undefined,models),effective:resolveModelSelection(this.store,agent,models),canManage:canManageAccount}); return;
+        this.send(response,200,{models,providers:providerSummaries(this.store).filter(p=>p.connected),recommended:{...recommendedModel(models.filter(m=>m.provider === automatic)),provider:automatic},
+          selection:readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,undefined,models),effective:resolveModelSelection(this.store,agent,models),canManage:canManageAccount}); return;
+      }
+      if (path === "/v1/providers" && request.method === "GET") { this.send(response, 200, { providers: providerSummaries(this.store), canManage: canManageAccount }); return; }
+      const providerAction = path.match(/^\/v1\/providers\/([^/]+)$/);
+      if (providerAction && ["PUT", "DELETE"].includes(request.method ?? "")) {
+        if (!canManageAccount) throw new HomeError("Подключать аккаунты может владелец устройства.", 403);
+        const id = decodeURIComponent(providerAction[1]!);
+        if (request.method === "PUT") this.send(response, 200, { provider: await connectProvider(this.store, id, (await this.body(request)).key) });
+        else this.send(response, 200, { ok: true, reset: disconnectProvider(this.store, id) });
+        return;
       }
       if (path === "/v1/accounts" && request.method === "GET") {
         this.send(response, 200, { accounts: await this.accounts?.list(url.searchParams.get("refresh") === "true") ?? [], canManage: canManageAccount }); return;
@@ -304,7 +319,7 @@ export class HttpApi {
         }
       }
       if (request.method === "GET" && path === "/health") {
-        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
+        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
         return;
       }
       if (request.method === "GET" && path === "/v1/integrations") {
@@ -408,6 +423,7 @@ export class HttpApi {
             defaultName: typeof body.defaultName === "string" ? body.defaultName : undefined,
             instructions,
             capabilities: Array.isArray(body.capabilities) ? body.capabilities.filter((item): item is string => typeof item === "string") : [],
+            provider: body.provider == null ? undefined : String(body.provider),
             model: body.model == null ? undefined : String(body.model),
             tokenLimit,
             domain: body.domain == null ? undefined : body.domain as import("./types.js").EmployeeProfile["domain"],

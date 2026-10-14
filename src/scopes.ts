@@ -10,16 +10,17 @@ import { extensionConfig, readToml, atomicText } from "./extensions.js";
 import { parse, stringify } from "smol-toml";
 import { HomeError } from "./home.js";
 
-/** One lazy Codex runtime per audience, never one always-on process per employee. */
+/** One lazy Codex runtime per audience, never one always-on process per employee.
+ * With a key provider there is no ChatGPT credential and no ChatGPT apps. */
 export class ScopedCodexEngine implements CodexEngine {
   private readonly contexts = new Map<string, CodexEngineAdapter>();
   constructor(private readonly root: string, private sourceHome?: string,
-    private readonly authTokens?: (refresh?: boolean) => Promise<CodexAuthTokens>, private readonly contextsRoot?: string) {}
+    private readonly authTokens?: (refresh?: boolean) => Promise<CodexAuthTokens>, private readonly contextsRoot?: string, private readonly provider?: CodexEngineOptions["provider"]) {}
   setCodexHome(home?: string): void { this.close(); this.sourceHome = home; }
   close(): void { for (const engine of this.contexts.values()) engine.close(); this.contexts.clear(); }
   forContext(context: string): CodexEngine {
     if (!/^(personal|work|group-[a-f0-9]{64}|(?:import|agent)-[a-f0-9]{32})$/.test(context)) throw new Error("Область не найдена");
-    if (!this.sourceHome) throw new Error("Войдите в OpenAI в приложении OpenStrudel.");
+    if (!this.sourceHome && !this.provider) throw new Error("Войдите в OpenAI в приложении OpenStrudel.");
     const cwd = resolve(this.root, ".data/workspace",context);
     const home = resolve(this.contextsRoot ?? resolve(this.root, ".data/contexts"), context);
     const sharedExtensionsPath=resolve(this.root,".data/extensions",context,"config.toml");
@@ -31,8 +32,8 @@ export class ScopedCodexEngine implements CodexEngine {
       current.close(); this.contexts.delete(context);
     }
     mkdirSync(cwd,{recursive:true,mode:0o700}); mkdirSync(home,{recursive:true,mode:0o700});
-    const source = resolve(this.sourceHome,"auth.json");
-    if (!this.authTokens && existsSync(source)) { copyFileSync(source,resolve(home,"auth.json")); chmodSync(resolve(home,"auth.json"),0o600); }
+    const source = this.sourceHome && resolve(this.sourceHome,"auth.json");
+    if (!this.authTokens && source && existsSync(source)) { copyFileSync(source,resolve(home,"auth.json")); chmodSync(resolve(home,"auth.json"),0o600); }
     const connections = resolve(this.root,".data/connections",context + ".toml");
     const configPath=resolve(home,"config.toml");
     const granted = Object.entries(readToml(configPath).apps ?? {}).filter(([id,value])=>id!=="_default" && /^[a-zA-Z0-9_-]+$/.test(id) && (value as any)?.enabled === true).map(([id])=>id);
@@ -52,11 +53,11 @@ export class ScopedCodexEngine implements CodexEngine {
     atomicText(resolve(home,"openstrudel-extensions.toml"),stringify(extensions));
     // Local plugins are explicit per audience. Never auto-import the owner's
     // account-wide remote plugin collection into a Telegram group.
-    atomicText(configPath, stringify({ ...extensions, ...base, features:{apps:true,plugins:true,remote_plugin:false},
+    atomicText(configPath, stringify({ ...extensions, ...base, features:{apps:!this.provider,plugins:true,remote_plugin:false},
       mcp_servers:{...extensions.mcp_servers,...legacy.mcp_servers} }));
     const telegramPath = resolve(this.root,".data/connections",context + ".telegram.json");
     const telegramServers:TelegramMcpServers | undefined = existsSync(telegramPath) ? JSON.parse(readFileSync(telegramPath,"utf8")) : undefined;
-    const options: CodexEngineOptions = { workingDirectory:cwd,codexHome:home,sharedExtensionsPath,scoped:true,authTokens:this.authTokens,telegramServers,reservedServers:Object.keys(legacy.mcp_servers ?? {}) };
+    const options: CodexEngineOptions = { workingDirectory:cwd,codexHome:home,sharedExtensionsPath,scoped:true,authTokens:this.authTokens,telegramServers,reservedServers:Object.keys(legacy.mcp_servers ?? {}),provider:this.provider };
     const engine = new CodexEngineAdapter(options);
     this.contexts.set(context,engine);
     return engine;

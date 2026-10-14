@@ -160,8 +160,8 @@ export class AgentArchives {
         this.store.setSetting("archive.source." + contexts.get(w.id)!, w.sourcePath);
       }
       for (const [index, p] of archive.profiles.entries()) {
-        db.prepare("INSERT INTO employee_profiles(id,name,instructions,capabilities_json,model,token_limit,created_at,domain,purpose,appearance_json,service_tier) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
-          .run(profiles.get(p.id)!, preview.employees[index]!.importedName, p.instructions, JSON.stringify(p.capabilities), p.model, p.tokenLimit, p.createdAt, p.domain ?? "personal", p.purpose ?? "", JSON.stringify(p.appearance ?? defaultAppearance(p.id)),p.serviceTier ?? null);
+        db.prepare("INSERT INTO employee_profiles(id,name,instructions,capabilities_json,model,token_limit,created_at,domain,purpose,appearance_json,service_tier,provider) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
+          .run(profiles.get(p.id)!, preview.employees[index]!.importedName, p.instructions, JSON.stringify(p.capabilities), p.model, p.tokenLimit, p.createdAt, p.domain ?? "personal", p.purpose ?? "", JSON.stringify(p.appearance ?? defaultAppearance(p.id)),p.serviceTier ?? null,p.provider ?? null);
         this.store.setSetting("employee.context." + profiles.get(p.id)!, contexts.get(p.context)!);
       }
       for (const c of archive.conversations) {
@@ -259,7 +259,7 @@ export function validateArchive(input: unknown): AgentArchive {
   const profiles: Profile[] = array(a.profiles, 1000).map(v => {
     const p = object(v), name = string(p.name, 80);
     if (!name.trim() || name !== name.trim()) fail();
-    return { appearance: p.appearance === undefined ? defaultAppearance(identifier(p.id)) : parseAppearance(p.appearance), id: identifier(p.id), context: identifier(p.context), name, instructions: string(p.instructions, 12000), capabilities: array(p.capabilities, 100).map(c => string(c, 200)), model: optional(p.model, 200), serviceTier: p.serviceTier == null ? null : optional(p.serviceTier,80), tokenLimit: p.tokenLimit === null ? null : number(p.tokenLimit), createdAt: date(p.createdAt), domain: choice(p.domain ?? "personal", ["personal", "work"]) as "personal" | "work", purpose: string(p.purpose ?? "", 240) };
+    return { appearance: p.appearance === undefined ? defaultAppearance(identifier(p.id)) : parseAppearance(p.appearance), id: identifier(p.id), context: identifier(p.context), name, instructions: string(p.instructions, 12000), capabilities: array(p.capabilities, 100).map(c => string(c, 200)), provider: p.provider == null ? null : optional(p.provider, 80), model: optional(p.model, 200), serviceTier: p.serviceTier == null ? null : optional(p.serviceTier,80), tokenLimit: p.tokenLimit === null ? null : number(p.tokenLimit), createdAt: date(p.createdAt), domain: choice(p.domain ?? "personal", ["personal", "work"]) as "personal" | "work", purpose: string(p.purpose ?? "", 240) };
   });
   if (!profiles.length) fail();
   const people = unique(profiles);

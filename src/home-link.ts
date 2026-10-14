@@ -135,7 +135,7 @@ export class HomeLink {
       }
       else if (request.path.startsWith("/v1/home") || request.path.startsWith("/v1/devices") || request.path.startsWith("/v1/mobile")) throw new HomeError("Эта операция выполняется на главном устройстве.", 403);
       else if (/^\/v1\/agent-transfer\/(prepare|stage|release|activate|cancel|finish)$/.test(request.path) && request.method === "POST" && request.owner) response = await this.dispatch(request);
-      else if (!request.owner && /^\/v1\/(account|accounts|agents\/archive|integrations)/.test(request.path) && request.method !== "GET") throw new HomeError("Нужно разрешение владельца.", 403);
+      else if (!request.owner && /^\/v1\/(account|accounts|providers|agents\/archive|integrations)/.test(request.path) && request.method !== "GET") throw new HomeError("Нужно разрешение владельца.", 403);
       else if (receipt === "started" && request.method !== "GET" && !request.path.startsWith("/v1/messages")) response = wireJSON({ error: "Устройство перезапустилось во время операции. Проверьте результат перед повтором.", uncertain: true }, 409);
       else response = await this.dispatch(request);
     } catch (e) { response = wireJSON({ error: e instanceof Error ? e.message : "Не удалось выполнить поручение." }, e instanceof HomeError ? e.status : 400); }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -79,7 +80,7 @@ describe("user-owned primary Home", () => {
   });
   it("routes employee models to their device and keeps device defaults independent",async()=>{
     const laptop=await node("Laptop"),mini=await node("Mini");
-    const models=[{id:"model",name:"Model",description:"",isDefault:true,speeds:[{id:"default",name:"Обычная",description:""},{id:"priority",name:"Fast",description:""}]}];
+    const models=[{id:"model",name:"Model",description:"",isDefault:true,speeds:[{id:"default",name:"Обычная",description:""},{id:"priority",name:"Fast",description:""}],provider:"chatgpt"}];
     laptop.runtime.engine.models=async()=>models; mini.runtime.engine.models=async()=>models;
     const profile=mini.runtime.store.createProfile({name:"Remote editor"});
     await connect(laptop,mini);
@@ -91,7 +92,26 @@ describe("user-owned primary Home", () => {
     expect((await laptop.api("/v1/settings/models?deviceId="+mini.home.state.nodeId,"POST",{model:"model",serviceTier:"default"})).status).toBe(200);
     expect(mini.runtime.store.getSetting("models.defaults")).toContain("model");
     expect(laptop.runtime.store.getSetting("models.defaults")).toBeNull();
-    expect((await laptop.api(remote)).value.effective).toEqual({model:"model",serviceTier:"priority"});
+    expect((await laptop.api(remote)).value.effective).toEqual({provider:"chatgpt",model:"model",serviceTier:"priority"});
+  });
+  it("keeps an API key on the device it is added to, with owner-only writes", async () => {
+    const provider = createServer((request, response) => response.writeHead(request.headers.authorization === "Bearer xai-remote" ? 200 : 401).end("{}"));
+    await new Promise<void>(done => provider.listen(0, "127.0.0.1", done));
+    process.env.OPENSTRUDEL_PROVIDER_XAI_BASE_URL = `http://127.0.0.1:${(provider.address() as any).port}/v1`;
+    try {
+      const laptop = await node("Laptop"), mini = await node("Mini");
+      await connect(laptop, mini);
+      const remote = "/v1/providers/xai?deviceId=" + mini.home.state.nodeId;
+      expect((await laptop.api(remote, "PUT", { key: "xai-remote" })).value.provider).toMatchObject({ id: "xai", connected: true, keyHint: "••••ote" });
+      expect(mini.runtime.store.getSetting("providers.xai.key")).toBe("xai-remote");
+      expect(laptop.runtime.store.getSetting("providers.xai.key")).toBeNull();
+      expect((await laptop.api("/v1/providers?deviceId=" + mini.home.state.nodeId)).value.providers.find((p: any) => p.id === "xai").connected).toBe(true);
+      expect((await laptop.api("/v1/providers")).value.providers.find((p: any) => p.id === "xai").connected).toBe(false);
+      expect(JSON.stringify(laptop.home.snapshot())).not.toContain("xai-remote");
+      const member = await mini.runtime.api.homeLink.execute({ id: randomUUID(), request: { method: "DELETE", path: "/v1/providers/xai", owner: false } });
+      expect(member.status).toBe(403);
+      expect(mini.runtime.store.getSetting("providers.xai.key")).toBe("xai-remote");
+    } finally { delete process.env.OPENSTRUDEL_PROVIDER_XAI_BASE_URL; provider.close(); }
   });
   it("routes extension reads and writes to the employee's device and reports legacy shared workspaces", async () => {
     const primary = await node("Laptop"), worker = await node("Mac mini");
