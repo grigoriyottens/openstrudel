@@ -3,6 +3,68 @@ import SwiftUI
 import AppKit
 #endif
 
+@MainActor struct RenameTarget: Identifiable {
+    nonisolated let id = UUID()
+    let client: HomeClient
+    var profile: EmployeeProfile? = nil
+    var name: String { profile?.name ?? client.displayName }
+    func save(_ name: String) async throws {
+        if let profile { try await client.renameProfile(id: profile.id, name: name) }
+        else { try await client.renameDevice(name) }
+    }
+}
+
+struct NameEditor: View {
+    let target: RenameTarget
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var saving = false
+    @State private var error: String?
+    @FocusState private var focused: Bool
+    init(target: RenameTarget) { self.target = target; _name = State(initialValue: target.name) }
+    private var cleanName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var nameLimit: Int { target.profile == nil ? 120 : 80 }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField(L("Имя"), text: $name)
+                    .focused($focused).disabled(saving)
+                    .accessibilityIdentifier("renameName")
+                    .onSubmit { save() }
+                if let error { Text(error).foregroundStyle(AppTheme.destructive) }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(target.profile == nil ? L("Название устройства") : L("Переименовать сотрудника"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.disabled(saving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("Сохранить")) { save() }
+                        .disabled(saving || cleanName.isEmpty || cleanName.count > nameLimit)
+                        .accessibilityIdentifier("saveName")
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(width: 420, height: 220)
+        #else
+        .presentationDetents([.medium])
+        #endif
+        .interactiveDismissDisabled(saving)
+        .task { focused = true }
+    }
+
+    private func save() {
+        guard !saving, !cleanName.isEmpty, cleanName.count <= nameLimit else { return }
+        saving = true; error = nil
+        Task {
+            defer { saving = false }
+            do { try await target.save(cleanName); dismiss() }
+            catch { self.error = UserFacingError.text(error.localizedDescription) }
+        }
+    }
+}
+
 struct SavedConnectionUnlockButton: View {
     @ObservedObject var client: HomeClient
     var body: some View {
@@ -165,21 +227,49 @@ private struct DevicePickerSection: View {
 
 private struct DevicesPane: View {
     @EnvironmentObject private var library: DeviceLibrary
-    @State private var adding = false
+    #if os(macOS)
+    @ObservedObject private var serverSetup = ServerSetupFlow.shared
+    #endif
+    private enum ConnectionRoute: String, Identifiable {
+        case device, server
+        var id: String { rawValue }
+    }
+    @State private var adding: ConnectionRoute?
     @State private var pairing: MacPairing?
     @State private var confirmingPairing: MacPairing?
     @State private var localStarting = false
     @State private var expandedDeviceID: String?
     @State private var removing: HomeClient?
+    @State private var renaming: RenameTarget?
 
     var body: some View {
         Group {
+            #if os(macOS)
+            if let pending = serverSetup.installation {
+                Section {
+                    Button {
+                        adding = .server
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(pending.target.host)
+                                Text(L("Continue server setup")).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                            }
+                        } icon: { Image(systemName: "server.rack") }
+                    }
+                    .accessibilityIdentifier("continuePendingServer")
+                }
+            }
+            #endif
             ForEach(library.visibleClients) { device in
                 Section {
                     DisclosureGroup(isExpanded: Binding(
                         get: { expandedDeviceID == device.id },
                         set: { expandedDeviceID = $0 ? device.id : nil }
                     )) {
+                        Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
+                            .disabled(!device.canRenameDevice)
+                            .accessibilityIdentifier("renameDevice")
                         if device.connectionNeedsUnlock {
                             LabeledContent {
                                 SavedConnectionUnlockButton(client: device)
@@ -200,6 +290,10 @@ private struct DevicesPane: View {
                         }
                     }
                     .accessibilityIdentifier("deviceDetails")
+                    .contextMenu {
+                        Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
+                            .disabled(!device.canRenameDevice)
+                    }
                     Button(L("Убрать подключение…"), role: .destructive) { removing = device }
                         .foregroundStyle(AppTheme.destructive)
                         .accessibilityIdentifier("signOutThisDevice")
@@ -207,7 +301,7 @@ private struct DevicesPane: View {
                 }
             }
             Section {
-                Button(L("Подключить устройство…")) { adding = true }
+                Button(L("Подключить устройство…")) { adding = .device }
                     .accessibilityIdentifier("addDevice")
                 HiddenEmployeesButton(prominent: true)
                 #if os(macOS)
@@ -222,16 +316,17 @@ private struct DevicesPane: View {
                 Text(L("Сотрудники работают там, где вы их создали. Здесь можно подключить ещё один Mac или сервер."))
             }
         }
-        .sheet(isPresented: $adding, onDismiss: {
+        .sheet(item: $adding, onDismiss: {
             if let pairing { confirmingPairing = pairing; self.pairing = nil }
-        }) {
+        }) { route in
             #if os(macOS)
-            ConnectDeviceView { pairing = $0 }
+            ConnectDeviceView(continueServerSetup: route == .server) { pairing = $0 }
             #else
             ConnectionInvitationView { pairing = $0 }
             #endif
         }
         .sheet(item: $confirmingPairing) { AddDeviceConfirmation(pairing: $0).environmentObject(library) }
+        .sheet(item: $renaming) { NameEditor(target: $0) }
         .sheet(item: $removing) { device in
             DeviceSignOutView { removing = nil }.environmentObject(device).environmentObject(library)
         }
@@ -363,6 +458,9 @@ private struct UpdatesSection: View {
 struct AddDeviceConfirmation: View {
     @EnvironmentObject private var library: DeviceLibrary
     @Environment(\.dismiss) private var dismiss
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
     let pairing: MacPairing
     @State private var candidate: HomeClient?
     @State private var busy = false
@@ -399,7 +497,14 @@ struct AddDeviceConfirmation: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(connected ? L("Открыть сотрудников") : L("Подключить")) {
-                        if connected { if let candidate { library.select(candidate) }; dismiss(); return }
+                        if connected {
+                            if let candidate { library.select(candidate) }
+                            dismiss()
+                            #if os(macOS)
+                            openWindow(id: "home")
+                            #endif
+                            return
+                        }
                         busy = true; error = nil
                         let target = candidate ?? library.connection(for: pairing); candidate = target
                         Task {

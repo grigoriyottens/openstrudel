@@ -3,6 +3,21 @@ import Testing
 
 @Suite(.serialized)
 @MainActor struct DeviceLibraryTests {
+    @Test func collapsedDevicesPersistAndCreatingAnEmployeeRevealsItsDevice() throws {
+        let suite = "OpenStrudel.collapsed-devices." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("http://127.0.0.1:57107", forKey: "openstrudel.homeURL")
+        let client = HomeClient(defaults: defaults, connectionID: suite, credentialReader: { _, _ in nil })
+        let library = DeviceLibrary(defaults: defaults, clients: [client])
+        library.setCollapsed(true, client: client)
+        let reopened = DeviceLibrary(defaults: defaults, clients: [client])
+        #expect(reopened.collapsedDeviceIDs == [client.id])
+        reopened.beginEmployee(on: client)
+        #expect(reopened.collapsedDeviceIDs.isEmpty)
+        #expect(client.isEmployeeDraft)
+    }
+
     @Test func restoringLocalRuntimeDoesNotDependOnTheSelectedRemoteEmployee() throws {
         let name = "OpenStrudel.local-runtime-restore." + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: name))

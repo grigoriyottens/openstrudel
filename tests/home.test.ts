@@ -37,6 +37,58 @@ async function eventually(f: () => Promise<void> | void) {
 }
 
 describe("user-owned primary Home", () => {
+  it("serves a bounded employee timeline through the primary Home while keeping ordinary message routes separate", async () => {
+    const primary = await node("Primary"), worker = await node("Worker");
+    const store = worker.runtime.store;
+    const employee = store.createProfile({ name: "Timeline editor" });
+    const app = store.profileConversation(employee.id);
+    store.linkTelegramChat({ chatId: "-1001234567890", title: "Core team", allowedSenders: ["42"] });
+    const group = store.bindTelegramChat("-1001234567890", employee.id);
+    store.addMessage({ conversationId: app.id, channel: "api", direction: "inbound", text: "Private request" });
+    store.addMessage({ conversationId: group.conversationId!, channel: "telegram", direction: "inbound", text: "Team request", externalId: "-1001234567890:1", author: "Dasha" });
+    await connect(primary, worker);
+    await eventually(async () => expect((await primary.api("/v1/profiles")).value.profiles.find((p: any) => p.id === employee.id)?.deviceId).toBe(worker.home.state.nodeId));
+    const response = await primary.api("/v1/agents/" + employee.id + "/conversation?timeline=true&page=true");
+    expect(response.status).toBe(200);
+    expect(response.value.timeline).toBe(true);
+    expect(response.value.conversation.id).toBe(app.id);
+    expect(response.value.messages.map((m: any) => m.text)).toEqual(["Private request", "Team request"]);
+    expect((await primary.api("/v1/agents/" + employee.id + "/conversation?page=true")).value.messages).toHaveLength(1);
+    expect((await fetch(primary.url + "/v1/agents/" + employee.id + "/conversation?timeline=true")).status).toBe(401);
+  });
+
+  it("renames an employee without replacing instructions saved by another client", async () => {
+    const host = await node("Team");
+    const employee = host.runtime.store.createProfile({ name: "Editor", instructions: "Original instructions" });
+    host.runtime.store.updateProfile(employee.id, { name: employee.name, instructions: "New instructions from iPhone" });
+    const renamed = await host.api("/v1/profiles/" + employee.id, "PATCH", { name: "Редактор" });
+    expect(renamed.status).toBe(200);
+    expect(renamed.value.profile).toMatchObject({ name: "Редактор", instructions: "New instructions from iPhone" });
+  });
+
+  it("renames the device for every client immediately without changing its identity or address", async () => {
+    const host = await node("Old server");
+    const before = host.home.state;
+    const renamed = await host.api("/v1/home", "PATCH", { name: "  Рабочий сервер  " });
+    expect(renamed.status).toBe(200);
+    expect(renamed.value.home.name).toBe("Рабочий сервер");
+    for (let client = 0; client < 2; client++) {
+      expect((await host.api("/v1/devices")).value.devices).toContainEqual(expect.objectContaining({ id: before.nodeId, name: "Рабочий сервер" }));
+    }
+    expect(host.home.state).toMatchObject({ ...before, name: "Рабочий сервер" });
+    expect(host.home.self().endpoint?.url).toBe(host.url);
+    expect(new Home(host.runtime.store).state.name).toBe("Рабочий сервер");
+    for (const name of [" ", "a".repeat(121), 42]) expect((await host.api("/v1/home", "PATCH", { name })).status).toBe(400);
+    expect(host.home.state.name).toBe("Рабочий сервер");
+  });
+
+  it("replaces a container hostname once but preserves a name explicitly chosen by the owner", async () => {
+    const host = await node("020bc40355c2");
+    expect(new Home(host.runtime.store).state.name).toBe("Server");
+    await host.api("/v1/home", "PATCH", { name: "020bc40355c2" });
+    expect(new Home(host.runtime.store).state.name).toBe("020bc40355c2");
+  });
+
   it("discovers Telegram conversations in the conditional catalogue without combining their histories", async () => {
     const host = await node("Telegram host");
     const read = (etag?: string) => fetch(host.url + "/v1/profiles", { headers: { authorization: "Bearer test-owner", ...(etag ? { "if-none-match": etag } : {}) } });

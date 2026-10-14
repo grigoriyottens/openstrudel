@@ -50,6 +50,9 @@ with tempfile.TemporaryDirectory(prefix="openstrudel-sign-") as temporary:
     sign(version / "Updater.app")
     for embedded in sorted((app / "Contents/Frameworks").glob("*.framework")):
         sign(embedded)
+    # Xcode's Debug layout loads these before entering the application.
+    for library in sorted((app / "Contents/MacOS").glob("*.dylib")):
+        sign(library)
     sign(app, "--entitlements", str(app_entitlements))
 
 subprocess.run(["codesign", "--verify", "--deep", "--strict", "--verbose=2", str(app)], check=True)

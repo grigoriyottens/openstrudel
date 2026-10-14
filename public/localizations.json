@@ -6964,6 +6964,13 @@
     "es": "Conectando al servidor",
     "he": "מתחברים לשרת"
   },
+  "Reconnecting to the server": {
+    "en": "Reconnecting to the server",
+    "ru": "Восстанавливаем связь с сервером",
+    "fr": "Rétablissement de la connexion au serveur",
+    "es": "Restableciendo la conexión con el servidor",
+    "he": "מחדשים את החיבור לשרת"
+  },
   "Continue server setup": {
     "en": "Continue server setup",
     "ru": "Продолжить настройку сервера",
@@ -8265,5 +8272,215 @@
     "fr": "Le prix a changé. Vérifiez le nouveau montant avant de payer.",
     "es": "El precio ha cambiado. Revisa el nuevo importe antes de pagar.",
     "he": "המחיר השתנה. יש לבדוק את הסכום החדש לפני התשלום."
+  },
+  "Название устройства": {
+    "en": "Device name",
+    "ru": "Название устройства",
+    "fr": "Nom de l’appareil",
+    "es": "Nombre del dispositivo",
+    "he": "שם המכשיר"
+  },
+  "Переименовать…": {
+    "en": "Rename…",
+    "ru": "Переименовать…",
+    "fr": "Renommer…",
+    "es": "Renombrar…",
+    "he": "שינוי שם…"
+  },
+  "Переименовать сотрудника": {
+    "en": "Rename assistant",
+    "ru": "Переименовать сотрудника",
+    "es": "Renombrar asistente",
+    "he": "שינוי שם העוזר",
+    "fr": "Renommer l’assistant"
+  },
+  "Свёрнуто": {
+    "en": "Collapsed",
+    "fr": "Réduit",
+    "es": "Contraído",
+    "he": "מכווץ",
+    "ru": "Свёрнуто"
+  },
+  "Развёрнуто": {
+    "en": "Expanded",
+    "fr": "Développé",
+    "es": "Expandido",
+    "he": "מורחב",
+    "ru": "Развёрнуто"
+  },
+  "На другом Mac или сервере откройте OpenStrudel → Настройки → Устройства → Получить ссылку подключения. Отсканируйте QR-код или вставьте ссылку сюда.": {
+    "en": "On your other Mac or server, open OpenStrudel → Settings → Devices → Get connection link. Scan the QR code or paste the link here.",
+    "fr": "Sur votre autre Mac ou serveur, ouvrez OpenStrudel → Réglages → Appareils → Obtenir un lien de connexion. Scannez le QR code ou collez le lien ici.",
+    "es": "En el otro Mac o servidor, abre OpenStrudel → Ajustes → Dispositivos → Obtener enlace de conexión. Escanea el código QR o pega el enlace aquí.",
+    "he": "ב-Mac האחר או בשרת, פתחו את OpenStrudel ← הגדרות ← מכשירים ← קבלת קישור חיבור. סרקו את קוד ה-QR או הדביקו את הקישור כאן.",
+    "ru": "На другом Mac или сервере откройте OpenStrudel → Настройки → Устройства → Получить ссылку подключения. Отсканируйте QR-код или вставьте ссылку сюда."
+  },
+  "Free at least 8 GB on this server, then try again. Installation needs space for OpenStrudel and its build files.": {
+    "en": "Free at least 8 GB on this server, then try again. Installation needs space for OpenStrudel and its build files.",
+    "ru": "Освободите на сервере хотя бы 8 ГБ и повторите попытку. Место нужно для OpenStrudel и файлов сборки.",
+    "fr": "Libérez au moins 8 Go sur ce serveur, puis réessayez. L’installation a besoin de place pour OpenStrudel et ses fichiers de compilation.",
+    "es": "Libera al menos 8 GB en este servidor e inténtalo de nuevo. La instalación necesita espacio para OpenStrudel y sus archivos de compilación.",
+    "he": "פנו לפחות 8 GB בשרת ונסו שוב. ההתקנה צריכה מקום ל־OpenStrudel ולקובצי הבנייה שלו."
+  },
+  "You can install on this server. With less than 4 GB of memory, large files or several assistants working at once may run out of memory.": {
+    "en": "You can install on this server. With less than 4 GB of memory, large files or several assistants working at once may run out of memory.",
+    "ru": "На этот сервер можно установить OpenStrudel. При объёме памяти меньше 4 ГБ её может не хватить для больших файлов или одновременной работы нескольких сотрудников.",
+    "fr": "Vous pouvez installer OpenStrudel sur ce serveur. Avec moins de 4 Go de mémoire, les gros fichiers ou plusieurs assistants actifs à la fois peuvent épuiser la mémoire.",
+    "es": "Puedes instalar OpenStrudel en este servidor. Con menos de 4 GB de memoria, los archivos grandes o varios asistentes trabajando a la vez pueden agotar la memoria.",
+    "he": "אפשר להתקין בשרת הזה. עם פחות מ־4 GB זיכרון, קבצים גדולים או כמה עוזרים שפועלים במקביל עלולים למצות את הזיכרון."
+  },
+  "Use Ubuntu 24.04 LTS or newer with at least 8 GB free. We recommend 4 GB of memory; smaller servers can also be used.": {
+    "en": "Use Ubuntu 24.04 LTS or newer with at least 8 GB free. We recommend 4 GB of memory; smaller servers can also be used.",
+    "ru": "Нужна Ubuntu 24.04 LTS или новее и хотя бы 8 ГБ свободного места. Рекомендуем 4 ГБ памяти; можно использовать и сервер с меньшим объёмом.",
+    "fr": "Utilisez Ubuntu 24.04 LTS ou une version plus récente avec au moins 8 Go libres. Nous recommandons 4 Go de mémoire ; les serveurs plus modestes conviennent aussi.",
+    "es": "Usa Ubuntu 24.04 LTS o posterior con al menos 8 GB libres. Recomendamos 4 GB de memoria; también se pueden usar servidores más pequeños.",
+    "he": "נדרשים Ubuntu 24.04 LTS או חדש יותר ולפחות 8 GB פנויים. מומלץ זיכרון של 4 GB; אפשר להשתמש גם בשרת קטן יותר."
+  },
+  "{0} GB free of {1} GB": {
+    "en": "{0} GB free of {1} GB",
+    "ru": "Свободно {0} ГБ из {1} ГБ",
+    "fr": "{0} Go libres sur {1} Go",
+    "es": "{0} GB libres de {1} GB",
+    "he": "{0} GB פנויים מתוך {1} GB"
+  },
+  "{0} GB": {
+    "en": "{0} GB",
+    "ru": "{0} ГБ",
+    "fr": "{0} Go",
+    "es": "{0} GB",
+    "he": "{0} GB"
+  },
+  "System": {
+    "en": "System",
+    "ru": "Система",
+    "fr": "Système",
+    "es": "Sistema",
+    "he": "מערכת"
+  },
+  "Memory": {
+    "en": "Memory",
+    "ru": "Память",
+    "fr": "Mémoire",
+    "es": "Memoria",
+    "he": "זיכרון"
+  },
+  "Storage": {
+    "en": "Storage",
+    "ru": "Диск",
+    "fr": "Stockage",
+    "es": "Almacenamiento",
+    "he": "אחסון"
+  },
+  "В ответ на: {0}": {
+    "en": "In reply to: {0}",
+    "fr": "En réponse à : {0}",
+    "es": "En respuesta a: {0}",
+    "he": "בתשובה ל־{0}",
+    "ru": "В ответ на: {0}"
+  },
+  "Ответить в Telegram": {
+    "en": "Reply in Telegram",
+    "fr": "Répondre dans Telegram",
+    "es": "Responder en Telegram",
+    "he": "השבה ב־Telegram",
+    "ru": "Ответить в Telegram"
+  },
+  "Открыть в Telegram: {0}": {
+    "en": "Open in Telegram: {0}",
+    "fr": "Ouvrir dans Telegram : {0}",
+    "es": "Abrir en Telegram: {0}",
+    "he": "פתיחה ב־Telegram: {0}",
+    "ru": "Открыть в Telegram: {0}"
+  },
+  "Доставлено в Telegram": {
+    "en": "Delivered to Telegram",
+    "fr": "Livré dans Telegram",
+    "es": "Entregado en Telegram",
+    "he": "נמסר ב־Telegram",
+    "ru": "Доставлено в Telegram"
+  },
+  "Доставка не подтверждена. Проверьте Telegram перед новой отправкой.": {
+    "en": "Delivery unconfirmed. Check Telegram before sending again.",
+    "fr": "Livraison non confirmée. Vérifiez Telegram avant de renvoyer.",
+    "es": "Entrega sin confirmar. Revisa Telegram antes de volver a enviar.",
+    "he": "המסירה לא אושרה. בדקו ב־Telegram לפני שליחה נוספת.",
+    "ru": "Доставка не подтверждена. Проверьте Telegram перед новой отправкой."
+  },
+  "Не отправлено в Telegram": {
+    "en": "Not sent to Telegram",
+    "fr": "Non envoyé dans Telegram",
+    "es": "No enviado a Telegram",
+    "he": "לא נשלח ל־Telegram",
+    "ru": "Не отправлено в Telegram"
+  },
+  "Отправляем в Telegram…": {
+    "en": "Sending to Telegram…",
+    "fr": "Envoi vers Telegram…",
+    "es": "Enviando a Telegram…",
+    "he": "שולחים ל־Telegram…",
+    "ru": "Отправляем в Telegram…"
+  },
+  "Ответ будет опубликован в этой группе от имени бота.": {
+    "en": "This reply will be posted to this group as the bot.",
+    "fr": "Cette réponse sera publiée dans ce groupe au nom du bot.",
+    "es": "Esta respuesta se publicará en este grupo como el bot.",
+    "he": "התשובה תפורסם בקבוצה הזו בשם הבוט.",
+    "ru": "Ответ будет опубликован в этой группе от имени бота."
+  },
+  "Отправить в {0}": {
+    "en": "Send to {0}",
+    "fr": "Envoyer à {0}",
+    "es": "Enviar a {0}",
+    "he": "שליחה אל {0}",
+    "ru": "Отправить в {0}"
+  },
+  "Подключение этой группы изменилось. Откройте её в Telegram.": {
+    "en": "This group’s connection changed. Open it in Telegram.",
+    "fr": "La connexion de ce groupe a changé. Ouvrez-le dans Telegram.",
+    "es": "La conexión de este grupo cambió. Ábrelo en Telegram.",
+    "he": "החיבור של הקבוצה השתנה. פתחו אותה ב־Telegram.",
+    "ru": "Подключение этой группы изменилось. Откройте её в Telegram."
+  },
+  "Архив": {
+    "en": "Archive",
+    "fr": "Archive",
+    "es": "Archivo",
+    "he": "ארכיון",
+    "ru": "Архив"
+  },
+  "Черновики прежних переписок": {
+    "ru": "Черновики прежних переписок",
+    "en": "Drafts from earlier chats",
+    "fr": "Brouillons des anciennes discussions",
+    "es": "Borradores de chats anteriores",
+    "he": "טיוטות משיחות קודמות"
+  },
+  "Вставить в сообщение: {0}": {
+    "ru": "Вставить в сообщение: {0}",
+    "en": "Insert into message: {0}",
+    "fr": "Insérer dans le message : {0}",
+    "es": "Insertar en el mensaje: {0}",
+    "he": "הוספה להודעה: {0}"
+  },
+  "Пригласить коллегу…": {
+    "ru": "Пригласить коллегу…",
+    "en": "Invite a colleague…",
+    "fr": "Inviter un collègue…",
+    "es": "Invitar a un colega…",
+    "he": "הזמנת עמית…"
+  },
+  "Пригласите коллегу": {
+    "ru": "Пригласите коллегу",
+    "en": "Invite a colleague",
+    "fr": "Invitez un collègue",
+    "es": "Invita a un colega",
+    "he": "הזמינו עמית"
+  },
+  "Коллега получит доступ ко всем чатам, файлам и настройкам сотрудников этого устройства. Управление аккаунтами и доступом останется у вас. Приглашайте каждого по отдельной ссылке.": {
+    "ru": "Коллега получит доступ ко всем чатам, файлам и настройкам сотрудников этого устройства. Управление аккаунтами и доступом останется у вас. Приглашайте каждого по отдельной ссылке.",
+    "en": "Your colleague can access all assistant chats, files and settings on this device. You keep control of accounts and access. Create a separate link for each person.",
+    "fr": "Votre collègue aura accès à tous les chats, fichiers et réglages des assistants sur cet appareil. Vous gardez le contrôle des comptes et des accès. Créez un lien distinct pour chaque personne.",
+    "es": "Tu colega podrá acceder a todos los chats, archivos y ajustes de los asistentes de este dispositivo. Tú mantienes el control de las cuentas y del acceso. Crea un enlace distinto para cada persona.",
+    "he": "לעמית תהיה גישה לכל השיחות, הקבצים וההגדרות של העוזרים במכשיר הזה. ניהול החשבונות והגישה יישאר בידיכם. צרו קישור נפרד לכל אדם."
   }
 }

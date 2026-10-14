@@ -49,6 +49,7 @@ struct HomeHealth: Decodable {
     var deviceLogoutVersion: Int? = nil
     var turnControlVersion: Int? = nil
     var queueControlVersion: Int? = nil
+    var employeeTimelineVersion: Int? = nil
 }
 
 struct HomeConversation: Decodable {
@@ -74,6 +75,8 @@ struct ConversationEnvelope: Decodable {
     var pagination: MessagePagination? = nil
     var updates: [HomeMessage]? = nil
     var queuedMessages: [HomeMessage]? = nil
+    var timeline: Bool? = nil
+    var removedIds: [String]? = nil
 }
 
 struct MessageQueueEnvelope: Decodable { let queuedMessages: [HomeMessage] }
@@ -153,6 +156,19 @@ struct TelegramLinkState: Decodable {
     let error: String?
 }
 
+struct MessageOrigin: Codable, Hashable {
+    let channel: String
+    let title: String
+    var chatId: String? = nil
+    var url: String? = nil
+    var canReply: Bool? = nil
+}
+
+struct MessageDelivery: Codable, Hashable {
+    let state: String
+    var error: String? = nil
+}
+
 struct HomeMessage: Codable, Identifiable, Hashable {
     let id: String
     let conversationId: String
@@ -168,6 +184,8 @@ struct HomeMessage: Codable, Identifiable, Hashable {
     var author: String? = nil
     var imported: Bool? = nil
     var attachments: [ChatAttachment]? = nil
+    var origin: MessageOrigin? = nil
+    var delivery: MessageDelivery? = nil
 
     var scheduleTitle: String? {
         guard direction == "inbound", externalId?.hasPrefix("schedule:") == true else { return nil }
@@ -243,6 +261,8 @@ struct PendingHomeMessage: Codable, Identifiable, Equatable {
     var operationID: String? = nil
     var appearance: AgentAppearance? = nil
     var mode: ComposerSendMode? = nil
+    var telegramReplyToID: String? = nil
+    var telegramChatTitle: String? = nil
 }
 
 enum ComposerSendMode: String, Codable, CaseIterable {
@@ -323,7 +343,7 @@ struct HomeMessageResponse: Decodable {
 }
 
 struct HomeEndpoint: Codable, Equatable { let url: String; let pin: String? }
-struct HomeDevice: Decodable, Identifiable {
+struct HomeDevice: Decodable, Identifiable, Equatable {
     let id: String; let name: String; let platform: String; let primary: Bool; let online: Bool; let agents: Int
     let endpoint: HomeEndpoint?
 }
@@ -534,6 +554,7 @@ struct ChatInteraction: Decodable, Identifiable, Equatable {
     let detail: String?
     let url: String?
     let questions: [ChatQuestion]
+    var sourceTitle: String? = nil
 }
 struct ChatQuestion: Decodable, Identifiable, Equatable {
     let id: String

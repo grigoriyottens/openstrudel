@@ -1,5 +1,6 @@
 import SwiftUI
 import QuickLook
+import UniformTypeIdentifiers
 
 /// An empty conversation: the character, its name and its role, optically centred at 40 %.
 /// The focused composer is the action.
@@ -89,6 +90,7 @@ struct ClusterHeader: View {
 struct MessageBubble: View {
     @EnvironmentObject private var client: HomeClient
     @State private var previewURL: URL?
+    @State private var replyingInTelegram = false
     let message: HomeMessage
     /// Other people write here too (a Telegram group or history from several people),
     /// so inbound messages sit on the surface under their author.
@@ -102,9 +104,23 @@ struct MessageBubble: View {
 
     private var isInbound: Bool { message.direction == "inbound" }
     private var fromSomeoneElse: Bool { isInbound && shared }
+    private var previousMessage: HomeMessage? {
+        guard let index = client.messages.firstIndex(where: { $0.id == message.id }), index > 0 else { return nil }
+        return client.messages[index - 1]
+    }
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 6) {
+            if let origin = message.origin, origin.channel != "api", isInbound || previousMessage?.conversationId != message.conversationId {
+                sourceCaption(origin)
+            } else if message.direction == "inbound", client.messages.contains(where: { $0.origin?.channel == "telegram" }) {
+                Text(L("В приложении")).modifier(MetaLine()).frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            if let parentID = message.replyToId, message.channel == "telegram", previousMessage?.id != parentID,
+               let parent = client.messages.first(where: { $0.id == parentID }) {
+                Text(L("В ответ на: \(String(parent.text.prefix(140)))"))
+                    .modifier(MetaLine()).lineLimit(2)
+            }
             if let scheduleTitle = message.scheduleTitle {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(withTime(scheduleTitle), systemImage: "clock").modifier(MetaLine())
@@ -121,8 +137,35 @@ struct MessageBubble: View {
             } else {
                 employee
             }
+            if message.direction == "inbound", message.channel == "telegram", message.status == "queued" || message.status == "running" {
+                Label(L("Готовим ответ…"), systemImage: "ellipsis").modifier(MetaLine())
+            }
+            if let delivery = message.delivery { deliveryCaption(delivery) }
+            if message.origin?.canReply == true && client.canManageOpenAI {
+                Button(L("Ответить в Telegram")) { replyingInTelegram = true }
+                    .modifier(StatusAction()).accessibilityIdentifier("telegramReply-" + message.id)
+            }
         }
         .quickLookPreview($previewURL)
+        .sheet(isPresented: $replyingInTelegram) { TelegramReplySheet(message: message).environmentObject(client).modifier(InterfaceLanguage()) }
+    }
+
+    @ViewBuilder private func sourceCaption(_ origin: MessageOrigin) -> some View {
+        let title = (origin.channel == "telegram" ? "Telegram" : L("Архив")) + " · " + origin.title
+        if let raw = origin.url, let url = URL(string: raw), url.scheme == "https", url.host == "t.me" {
+            Link(title, destination: url).modifier(MetaLine()).accessibilityLabel(L("Открыть в Telegram: \(origin.title)"))
+        } else { Text(title).modifier(MetaLine()) }
+    }
+
+    private func deliveryCaption(_ delivery: MessageDelivery) -> some View {
+        let text: String = switch delivery.state {
+        case "delivered": L("Доставлено в Telegram")
+        case "unknown": L("Доставка не подтверждена. Проверьте Telegram перед новой отправкой.")
+        case "not_sent": L("Не отправлено в Telegram")
+        default: L("Отправляем в Telegram…")
+        }
+        return Text(text).modifier(MetaLine())
+            .foregroundStyle(delivery.state == "unknown" || delivery.state == "not_sent" ? AppTheme.warning : AppTheme.secondaryText)
     }
 
     private var person: some View {
@@ -197,6 +240,84 @@ struct MessageBubble: View {
     }
 }
 
+/// An explicit destination, separate from the private app composer. Drafts are
+/// scoped to the original request; sending uses the client's durable queue.
+private struct TelegramReplySheet: View {
+    @EnvironmentObject private var client: HomeClient
+    @EnvironmentObject private var library: DeviceLibrary
+    @Environment(\.dismiss) private var dismiss
+    let message: HomeMessage
+    @State private var text = ""
+    @State private var files: [PickedFile] = []
+    @State private var choosingFiles = false
+    @State private var importing = false
+    @State private var error: String?
+    private var title: String { message.origin?.title ?? "Telegram" }
+    private var key: String { HomeDrafts.key(home: client.baseURLString, profile: client.selectedProfileID, chat: "telegram-reply:" + message.id) }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Label(title, systemImage: "paperplane")
+                    Text(message.text).lineLimit(4).foregroundStyle(AppTheme.secondaryText)
+                }
+                Section {
+                    TextField(L("Ваш ответ"), text: $text, axis: .vertical).lineLimit(4...10)
+                        .accessibilityIdentifier("telegramReplyText")
+                    ForEach(files) { file in
+                        HStack {
+                            Text(file.name).lineLimit(1)
+                            Spacer()
+                            Button { files.removeAll { $0.id == file.id } } label: { Image(systemName: "xmark.circle") }
+                                .accessibilityLabel(L("Remove \(file.name)"))
+                        }
+                    }
+                    Button(L("Прикрепить файл…"), systemImage: "paperclip") { choosingFiles = true }
+                        .disabled(importing || files.count >= AttachmentImport.countLimit)
+                } footer: { Text(L("Ответ будет опубликован в этой группе от имени бота.")) }
+                if let error { Text(error).foregroundStyle(AppTheme.warning) }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(L("Ответить в Telegram"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("Отправить в \(title)")) { send() }
+                        .disabled(importing || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 32_000)
+                        .accessibilityIdentifier("sendTelegramReply")
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(width: 560, height: 460)
+        #endif
+        .task { text = library.draft(for: key); files = library.fileDrafts[key] ?? [] }
+        .onChange(of: text) { _, value in library.saveDraft(value, for: key) }
+        .onChange(of: files) { _, value in library.fileDrafts[key] = value }
+        .fileImporter(isPresented: $choosingFiles, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            Task {
+                importing = true; defer { importing = false }
+                do {
+                    let urls = try result.get()
+                    guard urls.count + files.count <= AttachmentImport.countLimit else { throw AttachmentImport.Failure.tooMany }
+                    files += try await AttachmentImport.files(at: urls)
+                    error = nil
+                } catch { if !AttachmentImport.isCancellation(error) { self.error = error.localizedDescription } }
+            }
+        }
+    }
+
+    private func send() {
+        do {
+            try client.sendTelegramReply(to: message, text: text, files: files)
+            text = ""; files = []
+            library.saveDraft("", for: key); library.fileDrafts[key] = nil
+            dismiss()
+        } catch { self.error = error.localizedDescription }
+    }
+}
+
 /// Status, captions and times: the meta size in the secondary colour with tabular figures.
 private struct MetaLine: ViewModifier {
     func body(content: Content) -> some View {
@@ -243,7 +364,7 @@ struct ConversationHelper: View {
     @State private var awaitingReply = false
     @State private var landings = 0
 
-    private var working: Bool { client.isSending && client.interactions.isEmpty }
+    private var working: Bool { client.isWorking && client.interactions.isEmpty }
     private var windowIsActive: Bool {
         #if os(macOS)
         appearsActive
@@ -330,6 +451,7 @@ struct InteractionCard: View {
         // Groups 16 apart; a question sits 8 above its answer; the card's padding is 16.
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
+                if let source = interaction.sourceTitle { Text("Telegram · " + source).modifier(MetaLine()) }
                 Text(L10n.text(interaction.title)).font(AppTypography.interface.weight(.semibold))
                 if let detail = interaction.detail, !detail.isEmpty {
                     Text(detail).font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled)
@@ -422,7 +544,7 @@ struct TranscriptRows: View {
     var body: some View {
         let rows = MessagePages.rows(client.messages)
         let pending = client.visiblePendingMessages
-        let shared = client.activeTelegramGroup != nil || MessagePages.isMultiAuthor(client.messages)
+        let shared = !client.usesEmployeeTimeline && (client.activeTelegramGroup != nil || MessagePages.isMultiAuthor(client.messages))
         let bubbleWidth = (columnWidth * 0.75).rounded()
         let start: CGFloat = client.hasEarlierMessages ? Self.sameSide : 0
         // The side of the last item so far: person (inbound) or employee.
@@ -434,7 +556,7 @@ struct TranscriptRows: View {
                 // Keep one stable layout node per message, including its optional time heading.
                 VStack(alignment: .leading, spacing: 16) {
                     if let header = row.header { ClusterHeader(date: header, hasTime: row.message.hasTime) }
-                    MessageBubble(message: row.message, shared: shared, bubbleWidth: bubbleWidth, headed: row.header != nil, replySide: replySide)
+                    MessageBubble(message: row.message, shared: shared || row.message.origin?.channel == "telegram" || row.message.origin?.channel == "archive", bubbleWidth: bubbleWidth, headed: row.header != nil, replySide: replySide)
                         #if os(macOS)
                         .help(exactTime(row.message))
                         #endif
@@ -443,7 +565,7 @@ struct TranscriptRows: View {
                 .id(row.id)
                 .accessibilityElement(children: .contain)
                 // No avatars or author labels, so VoiceOver names the speaker here.
-                .accessibilityLabel(speaker(row.message, shared: shared))
+                .accessibilityLabel(speaker(row.message, shared: shared || row.message.origin?.channel == "telegram" || row.message.origin?.channel == "archive"))
                 .accessibilityValue(exactTime(row.message))
             }
             ForEach(Array(pending.enumerated()), id: \.element.id) { index, message in
@@ -451,6 +573,7 @@ struct TranscriptRows: View {
                 let opens = index == 0 && MessagePages.opensCluster(.now, after: rows.last?.message.sentAt)
                 VStack(alignment: .trailing, spacing: 4) {
                     if opens { ClusterHeader(date: .now, hasTime: true).padding(.bottom, 12) }
+                    if let title = message.telegramChatTitle { Text("Telegram · " + title).modifier(MetaLine()) }
                     PendingMessageBubble(text: message.text, files: message.files, bubbleWidth: bubbleWidth)
                     if let error = message.error {
                         Text(UserFacingError.text(error)).modifier(MetaLine()).foregroundStyle(AppTheme.warning)

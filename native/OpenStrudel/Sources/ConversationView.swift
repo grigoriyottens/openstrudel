@@ -36,7 +36,7 @@ struct ConversationView: View {
             #else
             VStack(spacing: 0) {
                 EmployeeMoveStatusButton()
-                if !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
+                if !client.usesEmployeeTimeline && !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
                     ConversationSources()
                         .padding(.horizontal, Layout.edge).padding(.vertical, 8)
                 }
@@ -84,7 +84,7 @@ struct ConversationView: View {
             ToolbarItem(placement: .navigation) {
                 ConversationTitle { openDetails() }
             }
-            if !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
+            if !client.usesEmployeeTimeline && !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
                 ToolbarItem(placement: .primaryAction) { ConversationSourceMenu() }
             }
         }
@@ -96,6 +96,7 @@ struct ConversationView: View {
                 Button { focused = false; showEmployees = true } label: { Image(systemName: "line.3.horizontal") }
                     .foregroundStyle(.primary)
                     .accessibilityLabel(L("Чаты"))
+                    .accessibilityIdentifier("openChats")
             }
             ToolbarItem(placement: .principal) {
                 ConversationTitle { focused = false; openDetails() }
@@ -213,6 +214,21 @@ struct ConversationView: View {
                 newMessagesButton(proxy).frame(maxWidth: .infinity)
             }
             telegramHint
+            if client.usesEmployeeTimeline, !previousDrafts.isEmpty {
+                Menu(L("Черновики прежних переписок")) {
+                    ForEach(previousDrafts, id: \.key) { saved in
+                        Button(L("Вставить в сообщение: \(saved.title)")) {
+                            let oldFiles = library.fileDrafts[saved.key] ?? []
+                            guard pickedFiles.count + oldFiles.count <= AttachmentImport.countLimit else {
+                                client.errorMessage = AttachmentImport.Failure.tooMany.localizedDescription; return
+                            }
+                            draft = [draft, library.draft(for: saved.key)].filter { !$0.isEmpty }.joined(separator: "\n\n")
+                            pickedFiles += oldFiles
+                            library.saveDraft("", for: saved.key); library.fileDrafts[saved.key] = nil
+                        }
+                    }
+                }.font(AppTypography.meta)
+            }
             composer
         }
         .frame(maxWidth: Layout.column)
@@ -223,6 +239,15 @@ struct ConversationView: View {
         // A size-change scroll anchor would loop the lazy rows (see TranscriptStack).
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in
             if followsLatest { scrollToBottom(proxy, animated: false) }
+        }
+    }
+
+    private var previousDrafts: [(key: String, title: String)] {
+        let chats = client.employeeTelegramChats.compactMap { chat in chat.conversationId.map { ($0, chat.title) } }
+            + client.importedConversations.filter { $0.profileId == client.selectedProfileID }.map { ($0.id, $0.title) }
+        return chats.compactMap { id, title in
+            let key = HomeDrafts.key(home: client.baseURLString, profile: client.selectedProfileID, chat: id)
+            return !library.draft(for: key).isEmpty || !(library.fileDrafts[key] ?? []).isEmpty ? (key, title) : nil
         }
     }
 

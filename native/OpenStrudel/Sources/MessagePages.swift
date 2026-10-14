@@ -25,7 +25,7 @@ enum MessagePages {
         return messages.map { message in
             let sentAt = message.sentAt
             let opens = sentAt.map { opensCluster($0, after: previous?.sentAt, calendar: calendar) } ?? false
-            let startsTurn = previous.map { $0.direction != message.direction } ?? false
+            let startsTurn = previous.map { $0.direction != message.direction || $0.conversationId != message.conversationId } ?? false
             previous = message
             return Row(message: message, header: opens ? sentAt : nil, startsTurn: startsTurn)
         }
@@ -43,11 +43,12 @@ enum MessagePages {
     }
 
     /// Pages are ordered by the server, including messages with identical dates.
-    static func merge(existing: [HomeMessage], page: [HomeMessage], updates: [HomeMessage] = [], prepend: Bool = false) -> [HomeMessage] {
+    static func merge(existing: [HomeMessage], page: [HomeMessage], updates: [HomeMessage] = [], prepend: Bool = false, removedIDs: [String] = []) -> [HomeMessage] {
+        let removed = Set(removedIDs)
         let existingIDs = Set(existing.map(\.id))
         let changes = Dictionary((page + updates).map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
-        let current = existing.map { changes[$0.id] ?? $0 }
-        let new = page.filter { !existingIDs.contains($0.id) }
+        let current = existing.filter { !removed.contains($0.id) }.map { changes[$0.id] ?? $0 }
+        let new = page.filter { !existingIDs.contains($0.id) && !removed.contains($0.id) }
         return prepend ? new + current : current + new
     }
 }

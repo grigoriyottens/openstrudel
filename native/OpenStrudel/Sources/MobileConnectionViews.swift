@@ -13,6 +13,7 @@ struct MobilePairingSettings: View {
     @State private var showingCode = false
     @State private var creating = false
     @State private var revokeConfirmation = false
+    @State private var invitationOwner = true
 
     var body: some View {
         #if os(macOS)
@@ -25,6 +26,9 @@ struct MobilePairingSettings: View {
         #else
         linkButton
         #endif
+        Button(L("Пригласить коллегу…")) { createInvitation(owner: false) }
+            .disabled(creating || !(client.isLocalConnection || client.canManageConnections))
+            .accessibilityIdentifier("inviteColleague")
         if client.isLocalConnection && client.mobileConnections > 0 {
             LabeledContent {
                 Button(L("Отключить"), role: .destructive) { revokeConfirmation = true }
@@ -40,17 +44,21 @@ struct MobilePairingSettings: View {
     // Always present: this row also learns whether the device lets this app create links.
     private var linkButton: some View {
         Button(creating ? L("Готовим ссылку…") : L("Получить ссылку подключения")) {
-            creating = true
-            Task {
-                await client.inviteMobile()
-                showingCode = client.mobileInvitation != nil
-                creating = false
-            }
+            createInvitation(owner: true)
         }
         .disabled(creating || !(client.isLocalConnection || client.canManageConnections))
         .task { await client.refreshMobileStatus() }
         .sheet(isPresented: $showingCode, onDismiss: { Task { await client.cancelMobileInvitation() } }) {
-            MobileQRCodeView().environmentObject(client).modifier(InterfaceLanguage())
+            MobileQRCodeView(owner: invitationOwner).environmentObject(client).modifier(InterfaceLanguage())
+        }
+    }
+
+    private func createInvitation(owner: Bool) {
+        creating = true; invitationOwner = owner
+        Task {
+            await client.inviteMobile(owner: owner)
+            showingCode = client.mobileInvitation != nil
+            creating = false
         }
     }
 }
@@ -58,6 +66,7 @@ struct MobilePairingSettings: View {
 /// A one-use link as a code and a share action. On the Mac the code sits beside its words so the
 /// sheet fits inside the Settings window; on iOS they stack.
 private struct MobileQRCodeView: View {
+    let owner: Bool
     @EnvironmentObject private var client: HomeClient
     @Environment(\.dismiss) private var dismiss
     @State private var initialCount = 0
@@ -81,7 +90,7 @@ private struct MobileQRCodeView: View {
                         }
                         .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text(L("Ссылка открывает чаты и настройки сотрудников.\nИспользуйте её только на своих устройствах.").replacingOccurrences(of: "\n", with: " ").withoutWidow)
+                    Text(accessDescription.replacingOccurrences(of: "\n", with: " ").withoutWidow)
                         .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -96,7 +105,7 @@ private struct MobileQRCodeView: View {
                         codeView(remaining > 0 ? code : nil).padding(.vertical, 8)
                         status(remaining)
                         actions(remaining > 0 ? invitation : nil)
-                        Text(L("Ссылка открывает чаты и настройки сотрудников.\nИспользуйте её только на своих устройствах."))
+                        Text(accessDescription)
                             .font(AppTypography.meta).padding(.top, 16)
                     }
                     .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
@@ -128,8 +137,13 @@ private struct MobileQRCodeView: View {
     }
 
     private var title: some View {
-        Text(L("Продолжите на другом устройстве")).font(AppTypography.title).foregroundStyle(Color.primary)
+        Text(owner ? L("Продолжите на другом устройстве") : L("Пригласите коллегу")).font(AppTypography.title).foregroundStyle(Color.primary)
             .accessibilityAddTraits(.isHeader)
+    }
+
+    private var accessDescription: String {
+        owner ? L("Ссылка открывает чаты и настройки сотрудников.\nИспользуйте её только на своих устройствах.")
+            : L("Коллега получит доступ ко всем чатам, файлам и настройкам сотрудников этого устройства. Управление аккаунтами и доступом останется у вас. Приглашайте каждого по отдельной ссылке.")
     }
 
     /// The code on white so any camera reads it; once the link expires, an empty tile of the same size.
@@ -188,7 +202,7 @@ private struct MobileQRCodeView: View {
         }
         Button {
             refreshing = true
-            Task { await client.inviteMobile(); refreshing = false }
+            Task { await client.inviteMobile(owner: owner); refreshing = false }
         } label: {
             Text(refreshing ? L("Обновляем…") : L("Новая ссылка"))
         }
@@ -206,8 +220,6 @@ private struct MobileQRCodeView: View {
 #if os(iOS)
 struct MobileWelcomeView: View {
     @EnvironmentObject private var client: HomeClient
-    @Environment(\.dynamicTypeSize) private var textSize
-    @State private var scanning = false
     @State private var enteringInvitation = false
     @State private var invitation: MacPairing?
     @State private var cameraError: String?
@@ -266,14 +278,44 @@ struct MobileWelcomeView: View {
         .sheet(isPresented: $showingHelp) {
             MobileConnectionHelpView()
         }
-        .fullScreenCover(isPresented: $scanning, onDismiss: confirmInvitation) {
+    }
+
+    private var scanButton: some View {
+        ScanInvitationButton(error: $cameraError) { invitation = $0; confirmInvitation() }
+    }
+
+    private func confirmInvitation() {
+        guard let invitation else { return }
+        client.pendingPairing = invitation
+        client.pairingError = nil
+        self.invitation = nil
+    }
+
+}
+
+/// The same scanner is available during first setup and when adding another device.
+private struct ScanInvitationButton: View {
+    @Environment(\.dynamicTypeSize) private var textSize
+    @Binding var error: String?
+    let onScan: (MacPairing) -> Void
+    @State private var scanning = false
+    @State private var scanned: MacPairing?
+
+    var body: some View {
+        Button { Task { await openScanner() } } label: {
+            SetupActionLabel(title: textSize.isAccessibilitySize ? L("QR-код") : L("Сканировать QR"), icon: "qrcode.viewfinder")
+        }
+        .accessibilityLabel(L("Сканировать QR")).accessibilityIdentifier("scanInvitation")
+        .fullScreenCover(isPresented: $scanning, onDismiss: {
+            if let scanned { self.scanned = nil; onScan(scanned) }
+        }) {
             NavigationStack {
                 QRScanner { value in
                     if let url = URL(string: value), let pairing = try? MacPairing(url: url) {
-                        invitation = pairing; scanning = false
+                        scanned = pairing; scanning = false
                     }
                 } failed: {
-                    cameraError = L("Камера недоступна. Вставьте ссылку подключения.")
+                    error = L("Камера недоступна. Вставьте ссылку подключения.")
                     scanning = false
                 }
                 .ignoresSafeArea(edges: .bottom)
@@ -284,29 +326,15 @@ struct MobileWelcomeView: View {
         }
     }
 
-    private var scanButton: some View {
-        Button { Task { await openScanner() } } label: {
-            SetupActionLabel(title: textSize.isAccessibilitySize ? L("QR-код") : L("Сканировать QR"), icon: "qrcode.viewfinder")
-        }
-        .accessibilityLabel(L("Сканировать QR")).accessibilityIdentifier("scanInvitation")
-    }
-
-    private func confirmInvitation() {
-        guard let invitation else { return }
-        client.pendingPairing = invitation
-        client.pairingError = nil
-        self.invitation = nil
-    }
-
     private func openScanner() async {
-        cameraError = nil
+        error = nil
         guard DataScannerViewController.isSupported else {
-            cameraError = L("На этом устройстве вставьте ссылку подключения.")
+            error = L("На этом устройстве вставьте ссылку подключения.")
             return
         }
         let granted = await AVCaptureDevice.requestAccess(for: .video)
         guard granted, DataScannerViewController.isAvailable else {
-            cameraError = L("Разрешите доступ к камере в настройках устройства или вставьте ссылку.")
+            error = L("Разрешите доступ к камере в настройках устройства или вставьте ссылку.")
             return
         }
         scanning = true
@@ -393,7 +421,7 @@ private struct QRScanner: UIViewControllerRepresentable {
     }
 }
 
-/// Paste a connection link on iPhone and iPad. The Mac pastes it on a page of Connect a device.
+/// The same scanner and link entry for the first and every additional device.
 struct ConnectionInvitationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -422,6 +450,8 @@ struct ConnectionInvitationView: View {
         NavigationStack {
             Form {
                 Section {
+                    ScanInvitationButton(error: $error) { onConfirm($0); dismiss() }
+                        .accessibilityIdentifier("scanAdditionalInvitation")
                     HStack(spacing: 8) {
                         SecureField(L("Ссылка подключения"), text: $invitation, prompt: Text(L("Ссылка подключения")))
                             .labelsHidden()
@@ -434,7 +464,7 @@ struct ConnectionInvitationView: View {
                         }.labelStyle(.titleOnly)
                     }
                 } header: {
-                    SetupHeader(title: L("Подключить устройство"), paragraphs: L("1. На другом Mac откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения».\n\n2. Вставьте ссылку сюда. Для сервера получите её в его веб-интерфейсе: Настройки → Устройства.").components(separatedBy: "\n\n"))
+                    SetupHeader(title: L("Подключить устройство"), paragraphs: [L("На другом Mac или сервере откройте OpenStrudel → Настройки → Устройства → Получить ссылку подключения. Отсканируйте QR-код или вставьте ссылку сюда.")])
                 } footer: {
                     if let error {
                         Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)

@@ -7,6 +7,7 @@ import { transcribeVoice } from "./voice.js";
 import { AccountUnavailableError } from "./account-errors.js";
 import type { MessageService } from "./messages.js";
 import type { Store } from "./store.js";
+import { assertAgentWritable } from "./agent-move.js";
 
 export interface TelegramUpdate {
   update_id: number;
@@ -199,12 +200,53 @@ export class TelegramAdapter {
 
   stop(): void { this.running = false; this.controller?.abort(); this.controller = null; }
 
-  async sendMessage(chatId: string | number, text: string, deliveryKey: string = randomUUID()): Promise<void> {
+  /** An explicit app reply never runs the assistant or changes its audience. */
+  async replyFromApp(input: { conversationId: string; replyToId: string; text: string; externalId: string; attachments?: string[] }) {
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(input.externalId)) throw new Error("Не удалось определить отправку. Откройте ответ заново.");
+    const text = input.text.trim();
+    if (!text || text.length > 32_000) throw new Error("Введите ответ до 32 000 символов.");
+    const files = this.messages.files.forMessage(input.conversationId, input.attachments ?? []).map(file => this.messages.files.public(file));
+    const previous = this.store.findMessageByExternal("telegram", input.externalId);
+    if (previous) {
+      if (previous.direction !== "outbound" || previous.conversationId !== input.conversationId || previous.replyToId !== input.replyToId || previous.text !== text
+          || JSON.stringify(previous.attachments ?? []) !== JSON.stringify(files)) throw new Error("Этот ответ уже отправлялся с другим содержимым.");
+      return { messageId: previous.id };
+    }
+    if (!this.token) throw new Error("Telegram не подключён");
+    const conversation = this.store.getConversation(input.conversationId);
+    const reference = this.store.getMessage(input.conversationId, input.replyToId);
+    if (!conversation || !reference || reference.channel !== "telegram" || reference.direction !== "inbound") throw new Error("Обращение Telegram не найдено.");
+    const origin = reference.externalId?.match(/^(-?\d+):(\d+)$/);
+    const chat = origin && this.store.getTelegramChat(origin[1]!);
+    if (!chat || chat.conversationId !== conversation.id || chat.profileId !== (conversation.profileId ?? null)
+        || chat.enabled === false || this.store.getSetting("telegram.paused." + chat.chatId) === "true") throw new Error("Подключение этой группы изменилось. Откройте её в Telegram.");
+    assertAgentWritable(this.store, conversation.profileId ?? "main");
+    const reply = this.store.addMessage({ conversationId: conversation.id, channel: "telegram", direction: "outbound", replyToId: reference.id,
+      text, externalId: input.externalId, author: "OpenStrudel", attachments: files });
+    this.store.setMessageStatus(reply.id, "running");
+    this.activeChats.set(chat.chatId, (this.activeChats.get(chat.chatId) ?? 0) + 1);
+    try {
+      await this.sendMessage(chat.chatId, text, "reply:" + reply.id, Number(origin![2]));
+      await this.sendFiles(chat.chatId, files, "reply:" + reply.id);
+      this.store.setMessageStatus(reply.id, "completed");
+    } catch {
+      // The durable receipt survives a lost HTTP acknowledgement. Repeating
+      // the same app request reads it; it never sends an uncertain reply again.
+      this.store.setMessageStatus(reply.id, "failed", "Доставка не завершена. Проверьте сообщение в Telegram перед новой отправкой.");
+    } finally {
+      const remaining = (this.activeChats.get(chat.chatId) ?? 1) - 1;
+      if (remaining) this.activeChats.set(chat.chatId, remaining); else this.activeChats.delete(chat.chatId);
+    }
+    return { messageId: reply.id };
+  }
+
+  async sendMessage(chatId: string | number, text: string, deliveryKey: string = randomUUID(), replyToMessageId?: number): Promise<void> {
     if (!this.token) throw new Error("Telegram не подключён");
     const chunks=telegramText(text);
     for (const [index,chunk] of chunks.entries()) {
       const key=`${chatId}:${deliveryKey}:${index}`;
-      const payload=JSON.stringify({chat_id:chatId,...chunk,link_preview_options:{is_disabled:true}});
+      const payload=JSON.stringify({chat_id:chatId,...chunk,link_preview_options:{is_disabled:true},
+        ...(index === 0 && replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : {})});
       this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status) VALUES(?,?,?,'pending')").run(key,String(chatId),payload);
       const row=this.store.db.prepare("SELECT * FROM telegram_outbox WHERE key=?").get(key)!;
       if(row.payload!==payload) throw new Error("Содержимое доставки изменилось");

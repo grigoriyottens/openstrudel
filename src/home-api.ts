@@ -51,13 +51,9 @@ export class HomeApi {
     if (path === "/v1/home" && method === "PATCH") {
       if (!owner) throw new HomeError("Управление устройствами доступно владельцу.", 403);
       const input = await jsonBody(request);
-      if (input.name !== undefined) {
-        const name = String(input.name).trim();
-        if (!name || name.length > 120) throw new HomeError("Введите название до 120 символов.");
-        this.home.save({ ...this.home.state, name });
-      }
+      if (input.name !== undefined) this.home.rename(input.name);
       if (input.endpoint) this.home.setEndpoint(endpoint(input.endpoint));
-      return wireJSON({ home: this.link.status() });
+      return wireJSON({ home: this.link.status(), devices: this.home.nodes() });
     }
     if (path === "/v1/home/join" && method === "POST") {
       if (!this.home.self().endpoint) this.home.setEndpoint(await this.address());

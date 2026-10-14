@@ -18,7 +18,7 @@ enum ServerSetupFailure: Error, LocalizedError, Equatable {
         case .localNetwork: L("Allow OpenStrudel to access the local network in System Settings → Privacy & Security → Local Network, then try again.")
         case .authentication: L("Sign-in was refused. Check the sign-in name, password or SSH key.")
         case .unsupportedSystem: L("Automatic setup supports Ubuntu 24.04 LTS or newer on a 64-bit Intel or ARM server.")
-        case .resources: L("This server needs at least 4 GB of memory, 30 GB of storage and 8 GB free.")
+        case .resources: L("Free at least 8 GB on this server, then try again. Installation needs space for OpenStrudel and its build files.")
         case .administrator: L("Use root or an account with password-free administrator access to install OpenStrudel.")
         case .existingInstallation: L("OpenStrudel is already installed. Connect to it using a link from its device settings; its data will stay unchanged.")
         case .portBusy: L("Port 7789 is already in use. Choose another server or free that port before setup.")
@@ -130,6 +130,9 @@ struct ServerPreflight: Codable, Equatable, Sendable {
     var portBusy: Bool
     var runtimeCompatible: Bool? = nil
     var sharedRuntime: Bool? = nil
+    // Memory depends on the assistants' work. Recommend headroom, without
+    // rejecting smaller machines or relying on a VM provider's advertised RAM.
+    var recommendsMoreMemory: Bool { memoryMiB > 0 && memoryMiB < 3584 }
     var installationProblem: ServerSetupFailure? {
         if existing { return .existingInstallation }
         if sharedRuntime == true { return .sharedServer }
@@ -139,7 +142,9 @@ struct ServerPreflight: Codable, Equatable, Sendable {
         let supportedUbuntu = version.range(of: "^[0-9]{2}\\.04$", options: .regularExpression) != nil && year >= 24 && year.isMultiple(of: 2)
         if os != "ubuntu" || !supportedUbuntu || !["x86_64", "aarch64"].contains(architecture) || !python { return .unsupportedSystem }
         if !administrator { return .administrator }
-        if memoryMiB < 3800 || diskGiB < 28 || freeGiB < 8 { return .resources }
+        // The installer builds a ~2.8 GB image and temporary build layers. Free
+        // space matters; an arbitrary total disk size does not.
+        if freeGiB < 8 { return .resources }
         if portBusy { return .portBusy }
         if runtimeCompatible == false { return .runtime }
         return nil
@@ -438,7 +443,7 @@ extension ServerSetupStore {
     func inspect(_ target: ServerTarget) {
         guard recoveryLoaded, installation == nil else { return }
         start {
-            self.target = target; self.phase = .checkingIdentity
+            self.target = target; self.preflight = nil; self.phase = .checkingIdentity
             let key = try await self.transport.scan(target)
             try Task.checkCancellation()
             self.hostKey = key
@@ -468,12 +473,28 @@ extension ServerSetupStore {
             var saved: ServerInstallation
             if let pending = self.installation {
                 saved = pending
-                let data = try await self.transport.run(target: target, key: key, access: access, input: ServerSetupScripts.command("server_status"), elevated: true)
-                let status = try JSONDecoder().decode(ServerInstallationStatus.self, from: data)
+                // The remote job can finish after a lost SSH reply. Check the
+                // pinned Home first, before asking for SSH or replaying setup.
+                if let connection = try await self.probe(saved) {
+                    try Task.checkCancellation()
+                    self.connection = connection; self.phase = .connected; return
+                }
+                let status: ServerInstallationStatus
+                do {
+                    let data = try await self.transport.run(target: target, key: key, access: access, input: ServerSetupScripts.command("server_status"), elevated: true)
+                    status = try JSONDecoder().decode(ServerInstallationStatus.self, from: data)
+                } catch ServerSetupFailure.connection {
+                    try await self.waitForServer(saved, access: access)
+                    return
+                }
                 // The connection can drop before staging writes its identity.
                 // Replay the saved recipe; the remote script still refuses
                 // unrelated data, ownership or an existing installation.
                 guard status.installationID == nil || status.installationID == saved.id else { throw ServerSetupFailure.identity }
+                if status.installationID == saved.id && ["activating", "active", "complete"].contains(status.state) {
+                    try await self.waitForServer(saved, access: access)
+                    return
+                }
                 if status.installationID == saved.id && status.canUpdateRelease == true {
                     let latest = try await self.currentReleaseHash()
                     if latest != saved.releaseHash {
@@ -490,7 +511,13 @@ extension ServerSetupStore {
             saved.attempted = true
             try self.store.save(saved); self.installation = saved
             let input = try ServerSetupScripts.install(saved, installer: ServerSetupScripts.resource("cloud-init"), script: String(decoding: ServerSetupScripts.resource("server-setup"), as: UTF8.self))
-            _ = try await self.transport.run(target: target, key: key, access: access, input: Data(input.utf8), elevated: true)
+            do {
+                _ = try await self.transport.run(target: target, key: key, access: access, input: Data(input.utf8), elevated: true)
+            } catch ServerSetupFailure.connection {
+                // A missing acknowledgement does not mean the remote job
+                // failed. Observe the saved identity; never start a second job.
+                try Task.checkCancellation()
+            }
             try await self.waitForServer(saved, access: access)
         }
     }
@@ -528,15 +555,26 @@ extension ServerSetupStore {
         var readyChecks = 0
         for _ in 0..<60 {
             try Task.checkCancellation()
-            if let connection = try await probe(saved) { self.connection = connection; phase = .connected; return }
-            let data = try await transport.run(target: saved.target, key: saved.hostKey, access: access, input: ServerSetupScripts.command("server_status"), elevated: true)
-            try Task.checkCancellation()
-            let status = try JSONDecoder().decode(ServerInstallationStatus.self, from: data)
-            guard status.installationID == saved.id else { throw ServerSetupFailure.identity }
-            if status.problemWhenUnreachable == .installation { throw ServerSetupFailure.installation }
-            readyChecks = status.problemWhenUnreachable == .serviceUnreachable ? readyChecks + 1 : 0
-            if readyChecks >= 3 { throw ServerSetupFailure.serviceUnreachable }
-            stage = ["connecting", "dependencies", "download", "build", "verify", "ready"].contains(status.stage) ? status.stage : "dependencies"
+            if let connection = try await probe(saved) {
+                try Task.checkCancellation()
+                self.connection = connection; phase = .connected; return
+            }
+            do {
+                let data = try await transport.run(target: saved.target, key: saved.hostKey, access: access, input: ServerSetupScripts.command("server_status"), elevated: true)
+                try Task.checkCancellation()
+                let status = try JSONDecoder().decode(ServerInstallationStatus.self, from: data)
+                guard status.installationID == nil || status.installationID == saved.id else { throw ServerSetupFailure.identity }
+                if status.problemWhenUnreachable == .installation { throw ServerSetupFailure.installation }
+                readyChecks = status.problemWhenUnreachable == .serviceUnreachable ? readyChecks + 1 : 0
+                if readyChecks >= 3 { throw ServerSetupFailure.serviceUnreachable }
+                stage = ["connecting", "dependencies", "download", "build", "verify", "ready"].contains(status.stage) ? status.stage : "dependencies"
+            } catch ServerSetupFailure.connection {
+                // SSH may briefly disappear while packages/networking change.
+                // Keep the same bounded polling loop and pinned HTTPS probe.
+                try Task.checkCancellation()
+                readyChecks = 0
+                stage = "reconnecting"
+            }
             try await Task.sleep(for: .seconds(5))
         }
         phase = .paused; error = .waiting

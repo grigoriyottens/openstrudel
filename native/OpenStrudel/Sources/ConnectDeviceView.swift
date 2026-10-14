@@ -14,6 +14,11 @@ struct ConnectDeviceView: View {
     @State private var cloudWorking = false
     private enum Route: Hashable { case link, server, cloud, agentMetal }
 
+    init(continueServerSetup: Bool = false, onConfirm: @escaping (MacPairing) -> Void) {
+        self.onConfirm = onConfirm
+        _path = State(initialValue: continueServerSetup ? [.server] : [])
+    }
+
     var body: some View {
         Group {
             if let connectedClient {
@@ -195,7 +200,7 @@ private struct OwnServerSetupView: View {
         case .installing: L("Preparing your server")
         case .connected: L("OpenStrudel is installed")
         case .paused: L("Continue server setup")
-        case .failed: flow.installation == nil ? L("Set up my server") : L("Setup needs attention")
+        case .failed: L("Setup needs attention")
         default: L("Set up my server")
         }
     }
@@ -206,6 +211,7 @@ private struct OwnServerSetupView: View {
         case "build": L("Installing OpenStrudel")
         case "verify": L("Checking the connection")
         case "ready": L("Opening your server")
+        case "reconnecting": L("Reconnecting to the server")
         default: L("Connecting to the server")
         }
     }
@@ -225,7 +231,7 @@ private struct OwnServerSetupView: View {
         switch flow.phase {
         case .confirmIdentity: return Step(title: L("Confirm and connect"), id: "confirmSSHIdentity") { flow.confirm(access: access) }
         case .ready: return Step(title: flow.installation == nil ? L("Install OpenStrudel") : L("Continue setup"), id: "installOnServer") { flow.install(access: access) }
-        case .failed where flow.installation != nil: return Step(title: L("Retry installation"), id: "retryInstallation") { validate { flow.install(access: access) } }
+        case .failed where flow.installation != nil: return Step(title: L("Continue setup"), id: "retryInstallation") { localError = nil; flow.install(access: access) }
         case .connected: return Step(title: L("Продолжить"), id: "openNewServer", enabled: !saving) { Task { await finish() } }
         default: return nil
         }
@@ -234,6 +240,17 @@ private struct OwnServerSetupView: View {
     var body: some View {
         Form {
             SheetTitleSection(title: title)
+            if let error = localError ?? flow.error?.localizedDescription {
+                Section {
+                    Label { Text(error).fixedSize(horizontal: false, vertical: true) } icon: {
+                        Image(systemName: "exclamationmark.triangle")
+                    }
+                    .foregroundStyle(AppTheme.warning).accessibilityIdentifier("serverSetupError")
+                    if flow.phase == .failed, flow.installation == nil, let check = flow.preflight {
+                        serverResources(check)
+                    }
+                }
+            }
             if editing { addressForm }
             if flow.phase == .confirmIdentity, let target = flow.target, let identity = flow.hostKey {
                 Section {
@@ -249,9 +266,11 @@ private struct OwnServerSetupView: View {
                 Section {
                     LabeledContent(L("Server address")) { Text(flow.target?.host ?? "") }
                     if flow.installation == nil, let check = flow.preflight {
-                        Text("Ubuntu \(check.version) · \(Int((Double(check.memoryMiB) / 1024).rounded())) GB · \(check.diskGiB) GB")
-                            .foregroundStyle(AppTheme.secondaryText).monospacedDigit()
-                            .environment(\.layoutDirection, .leftToRight)
+                        serverResources(check)
+                        if check.recommendsMoreMemory {
+                            Text(L("You can install on this server. With less than 4 GB of memory, large files or several assistants working at once may run out of memory."))
+                                .foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 } footer: {
                     if flow.installation == nil {
@@ -265,7 +284,7 @@ private struct OwnServerSetupView: View {
                     Label { Text(flow.target?.host ?? "") } icon: { Image(systemName: "checkmark.circle.fill") }
                 } footer: { Text(L("Next, connect your ChatGPT account.")) }
             }
-            if busy || localError != nil || flow.error != nil {
+            if busy {
                 Section {
                     if busy {
                         Label {
@@ -273,10 +292,6 @@ private struct OwnServerSetupView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         } icon: { ProgressView().controlSize(.small).frame(width: 20) }
                             .accessibilityElement(children: .combine).accessibilityIdentifier("serverSetupProgress")
-                    }
-                    if let error = localError ?? flow.error?.localizedDescription {
-                        Text(error).foregroundStyle(AppTheme.warning)
-                            .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("serverSetupError")
                     }
                 } footer: {
                     if busy && flow.phase == .installing && flow.stage != "connecting" {
@@ -314,6 +329,15 @@ private struct OwnServerSetupView: View {
         }
     }
 
+    @ViewBuilder private func serverResources(_ check: ServerPreflight) -> some View {
+        LabeledContent(L("System")) { Text("\(check.os.capitalized) \(check.version)") }
+        LabeledContent(L("Memory")) {
+            Text(L("\((Double(check.memoryMiB) / 1024).formatted(.number.precision(.fractionLength(1)))) GB"))
+                .monospacedDigit()
+        }
+        LabeledContent(L("Storage")) { Text(L("\(check.freeGiB) GB free of \(check.diskGiB) GB")).monospacedDigit() }
+    }
+
     @ViewBuilder private var addressForm: some View {
         if flow.installation == nil {
             Section {
@@ -323,7 +347,7 @@ private struct OwnServerSetupView: View {
                     .accessibilityIdentifier("serverUser")
                 TextField(L("SSH port"), text: $port, prompt: Text(verbatim: "22")).monospacedDigit()
             } footer: {
-                Text(L("Use Ubuntu 24.04 LTS or newer, with at least 4 GB of memory and 30 GB of storage."))
+                Text(L("Use Ubuntu 24.04 LTS or newer with at least 8 GB free. We recommend 4 GB of memory; smaller servers can also be used."))
             }
         } else {
             Section {

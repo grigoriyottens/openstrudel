@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 import { Store } from "../src/store.js";
 import { MobileAccess } from "../src/mobile.js";
+import { Home } from "../src/home.js";
 
 function call(port: number, path: string, token?: string, origin?: string, nonce?: string, method?: string) {
   return new Promise<{ status: number; body: any }>((resolve, reject) => {
@@ -22,6 +23,18 @@ function call(port: number, path: string, token?: string, origin?: string, nonce
 }
 
 describe("iPhone pairing", () => {
+  it("uses the shared device name in invitations without changing the network address", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "strudel-device-name-")), store = new Store(":memory:");
+    const home = new Home(store);
+    const mobile = new MobileAccess(store, (_req, res) => res.end('{}'), { directory, port: 0, host: "127.0.0.1", hostname: "server.example" });
+    try {
+      home.save({ ...home.state, name: "Рабочий сервер" });
+      const invitation = new URL((await mobile.invite()).url);
+      expect(invitation.searchParams.get("name")).toBe("Рабочий сервер");
+      expect(invitation.searchParams.get("host")).toBe("server.example");
+    } finally { await mobile.close(); store.close(); await rm(directory, { recursive: true, force: true }); }
+  });
+
   it("serves sign-in language assets over TLS before pairing without exposing private API data", async () => {
     const directory = await mkdtemp(join(tmpdir(), "strudel-public-languages-")), store = new Store(":memory:");
     const mobile = new MobileAccess(store, (req, res) => res.end(JSON.stringify({ path: req.url })), { directory, port: 0, host: "127.0.0.1" });

@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { mkdir, readFile, access, chmod } from "node:fs/promises";
 import { resolve } from "node:path";
 import { hostname } from "node:os";
+import { defaultDeviceName, type HomeState } from "./home.js";
 import { createServer, type Server } from "node:https";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -41,8 +42,8 @@ export class MobileAccess {
   async restore() { if (this.tokens().length || this.invitation || this.store.getSetting("home.endpoint") || this.store.getSetting("web.sessions")) await this.start(); }
   async endpoint() {
     await this.start();
-    const name = hostname();
-    const host = this.options.hostname ?? (name.endsWith(".local") ? name : name + ".local");
+    const machine = hostname();
+    const host = this.options.hostname ?? (machine.endsWith(".local") ? machine : machine + ".local");
     return { url: `https://${host.includes(":") ? `[${host}]` : host}:${this.options.advertisedPort ?? this.port}`, pin: this.keyFingerprint };
   }
 
@@ -53,8 +54,9 @@ export class MobileAccess {
     this.invitation = { hash: hash(key), expires, owner };
     this.store.setSetting("mobile.invitation", JSON.stringify(this.invitation));
     this.store.deleteSetting("mobile.pair_receipt");
-    const name = hostname();
-    const host = this.options.hostname ?? (name.endsWith(".local") ? name : name + ".local");
+    const machine = hostname();
+    const name = (JSON.parse(this.store.getSetting("home.state") ?? "null") as HomeState | null)?.name ?? defaultDeviceName();
+    const host = this.options.hostname ?? (machine.endsWith(".local") ? machine : machine + ".local");
     const query = new URLSearchParams({ host, port: String(this.options.advertisedPort ?? this.port), name, key, pin: this.fingerprint, keyPin: this.keyFingerprint });
     return { url: "openstrudel://connect?" + query, expiresAt: new Date(expires).toISOString() };
   }

@@ -17,6 +17,7 @@ final class DeviceLibrary: ObservableObject {
     @Published private(set) var erased = false
     @Published private(set) var viewGeneration = 0
     @Published private(set) var hiddenEmployees: [String: [String]]
+    @Published private(set) var collapsedDeviceIDs: Set<String>
     var fileDrafts: [String: [PickedFile]] = [:]
     private let defaults: UserDefaults
     let employeeMoves: EmployeeMoves
@@ -25,7 +26,7 @@ final class DeviceLibrary: ObservableObject {
     var active: HomeClient { clients.first { $0.id == selectedID } ?? clients[0] }
     var visibleClients: [HomeClient] { clients.filter { !$0.isSignedOut && ($0.isConfigured || $0.connectionNeedsPairing || $0 === active) } }
     var hasOtherDevices: Bool { visibleClients.count > 1 }
-    var connectionListKey: String { visibleClients.map { $0.id + ":" + $0.normalizedBaseURL }.joined(separator: "|") }
+    var connectionListKey: String { visibleClients.map { $0.id + ":" + $0.normalizedBaseURL + ":" + String($0.shouldRestoreConnection && !$0.isPairing) }.joined(separator: "|") }
 
     var localClientToRestore: HomeClient? {
         guard !isErasing else { return nil }
@@ -63,6 +64,7 @@ final class DeviceLibrary: ObservableObject {
 
     init(defaults: UserDefaults = .standard, clients supplied: [HomeClient]? = nil) {
         self.defaults = defaults
+        collapsedDeviceIDs = Set(defaults.stringArray(forKey: "openstrudel.collapsedDevices") ?? [])
         employeeMoves = EmployeeMoves(defaults: defaults)
         hiddenEmployees = defaults.dictionary(forKey: "openstrudel.hiddenEmployees") as? [String: [String]] ?? [:]
         if let supplied, !supplied.isEmpty {
@@ -126,11 +128,18 @@ final class DeviceLibrary: ObservableObject {
         await client.refreshOpenAIAccount()
     }
 
+    func setCollapsed(_ collapsed: Bool, client: HomeClient) {
+        if collapsed { collapsedDeviceIDs.insert(client.id) }
+        else { collapsedDeviceIDs.remove(client.id) }
+        defaults.set(collapsedDeviceIDs.sorted(), forKey: "openstrudel.collapsedDevices")
+    }
+
     func beginEmployee(on client: HomeClient? = nil, deviceID: String? = nil) {
         guard !isErasing else { return }
         let target = client ?? active
         guard clients.contains(where: { $0 === target }), !target.isSignedOut, !target.connectionNeedsPairing else { return }
         select(target)
+        setCollapsed(false, client: target)
         target.beginEmployee()
         if let deviceID { target.draftDeviceID = deviceID }
     }

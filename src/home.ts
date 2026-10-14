@@ -7,6 +7,7 @@ export type Endpoint = { url: string; pin?: string };
 export type NodeInfo = { id: string; name: string; platform: string; protocol: number; endpoint?: Endpoint; seenAt: number };
 export type HomeState = {
   id: string; nodeId: string; name: string; role: "primary" | "executor" | "retired";
+  nameSetByUser?: boolean;
   epoch: number; primaryId: string; mainNodeId: string; mainAgentId?: string;
   upstream?: Endpoint & { token: string; homeId: string; primaryId: string; epoch: number };
   moved?: Endpoint & { homeId: string; primaryId: string; epoch: number };
@@ -37,6 +38,7 @@ export function identifier(value: unknown): string {
   return value;
 }
 const now = () => Date.now();
+export const defaultDeviceName = () => process.platform === "linux" ? "Server" : hostname().replace(/\.local$/i, "");
 
 /** Only the primary owns these tables. Executors own their existing agent DB and receipts. */
 export class Home {
@@ -58,12 +60,19 @@ export class Home {
     }
     if (!store.getSetting("home.state")) {
       const nodeId = randomUUID();
-      this.save({ id: randomUUID(), nodeId, name: hostname(), role: "primary", epoch: 1, primaryId: nodeId, mainNodeId: nodeId });
+      this.save({ id: randomUUID(), nodeId, name: defaultDeviceName(), role: "primary", epoch: 1, primaryId: nodeId, mainNodeId: nodeId });
     }
+    // Older container installs exposed Docker's generated hostname to clients.
+    if (!this.state.nameSetByUser && /^[a-f0-9]{12}(?:[a-f0-9]{52})?$/i.test(this.state.name)) this.save({ ...this.state, name: "Server" });
     if (this.state.role === "primary") this.register(this.self());
   }
   get state(): HomeState { return JSON.parse(this.store.getSetting("home.state")!); }
   save(state: HomeState) { this.store.setSetting("home.state", JSON.stringify(state)); }
+  rename(name: unknown) {
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 120) throw new HomeError("Введите название до 120 символов.");
+    this.save({ ...this.state, name: name.trim(), nameSetByUser: true });
+    if (this.state.role === "primary") this.register(this.self());
+  }
   self(): NodeInfo {
     const state = this.state;
     const saved = this.store.getSetting("home.endpoint");

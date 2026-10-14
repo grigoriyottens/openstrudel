@@ -2,6 +2,162 @@ import XCTest
 
 final class MobilePairingUITests: XCTestCase {
     @MainActor
+    func testEmployeeTimelineWithIsolatedHome() throws {
+        continueAfterFailure = false
+        let env = ProcessInfo.processInfo.environment
+        guard let invitation = env["OPENSTRUDEL_DEVICE_INVITATION"], let profileID = env["OPENSTRUDEL_DEVICE_PROFILE"] else {
+            throw XCTSkip("Requires the isolated Telegram timeline fixture.")
+        }
+        let app = XCUIApplication(); app.launch(); app.open(try XCTUnwrap(URL(string: invitation)))
+        XCTAssertTrue(app.buttons["confirmMacPairing"].waitForExistence(timeout: 15)); app.buttons["confirmMacPairing"].tap(); app.finishDevicePairing()
+        let consent = app.buttons["acceptAIDataSharing"]
+        if consent.waitForExistence(timeout: 3) { consent.tap() }
+        let chats = app.buttons["openChats"]
+        XCTAssertTrue(chats.waitForExistence(timeout: 20), app.debugDescription); chats.tap()
+        let employee = app.buttons["employee-" + profileID]
+        for _ in 0..<10 where !employee.isHittable { app.swipeUp() }
+        XCTAssertTrue(employee.isHittable, app.debugDescription); employee.tap()
+        let reply = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "telegramReply-")).firstMatch
+        for _ in 0..<8 where !reply.isHittable { app.swipeDown() }
+        XCTAssertTrue(reply.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Посторонняя беседа")).firstMatch.exists)
+        capture("phone-unified-telegram-feed", app)
+        reply.tap()
+        let input = app.textFields["telegramReplyText"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5), app.debugDescription)
+        input.tap(); input.typeText("Reply from the iPhone fixture")
+        let send = app.buttons["sendTelegramReply"]
+        XCTAssertTrue(send.label.contains("WAI Core Team"), app.debugDescription)
+        capture("phone-explicit-telegram-destination", app)
+        send.tap()
+        XCTAssertTrue(send.waitForNonExistence(timeout: 10))
+        let composer = app.textFields["messageComposer"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 10)); composer.tap(); composer.typeText("Private app request from iPhone")
+        app.buttons["sendMessage"].tap()
+        capture("phone-telegram-and-private-app-message", app)
+        app.terminate(); app.launch()
+        XCTAssertTrue(chats.waitForExistence(timeout: 20), app.debugDescription)
+        capture("phone-timeline-after-relaunch", app)
+    }
+
+    @MainActor
+    func testSharedGrantEmployeeFromLiveInvitation() throws {
+        continueAfterFailure = false
+        let env = ProcessInfo.processInfo.environment
+        guard let profileID = env["OPENSTRUDEL_GRANT_PROFILE"] else {
+            throw XCTSkip("Requires the owner-requested grant server invitation.")
+        }
+        let app = XCUIApplication(); app.launch()
+        if let invitation = env["OPENSTRUDEL_GRANT_INVITATION"] {
+            app.open(try XCTUnwrap(URL(string: invitation)))
+            XCTAssertTrue(app.buttons["confirmMacPairing"].waitForExistence(timeout: 15)); app.buttons["confirmMacPairing"].tap(); app.finishDevicePairing()
+        }
+        let consent = app.buttons["acceptAIDataSharing"]
+        if consent.waitForExistence(timeout: 3) { consent.tap() }
+        let chats = app.buttons["openChats"]
+        XCTAssertTrue(chats.waitForExistence(timeout: 20), app.debugDescription)
+        if app.buttons["openEmployeeDetails"].value as? String != "Грант WaiWai" {
+            chats.tap()
+            let employee = app.buttons["employee-" + profileID]
+            for _ in 0..<12 where !employee.isHittable { app.swipeUp() }
+            XCTAssertTrue(employee.isHittable, app.debugDescription)
+            XCTAssertTrue(employee.label.contains("Грант WaiWai")); employee.tap()
+        }
+        XCTAssertTrue(app.textFields["messageComposer"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Все 853 записи")).firstMatch.waitForExistence(timeout: 20), app.debugDescription)
+        capture("phone-grant-shared-history", app)
+        app.terminate(); app.launch()
+        XCTAssertTrue(chats.waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertEqual(app.buttons["openEmployeeDetails"].value as? String, "Грант WaiWai", app.debugDescription)
+        capture("phone-grant-after-relaunch", app)
+    }
+
+    @MainActor
+    func testDeviceManagementWithIsolatedHome() throws {
+        continueAfterFailure = false
+        let env = ProcessInfo.processInfo.environment
+        guard let invitation = env["OPENSTRUDEL_DEVICE_INVITATION"],
+              let profileID = env["OPENSTRUDEL_DEVICE_PROFILE"],
+              let deviceName = env["OPENSTRUDEL_DEVICE_NAME"] else {
+            throw XCTSkip("Requires the isolated primary-home fixture; never rename a real device.")
+        }
+        let app = XCUIApplication()
+        app.launch()
+        app.open(try XCTUnwrap(URL(string: invitation)))
+        let confirm = app.buttons["confirmMacPairing"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 15), app.debugDescription)
+        confirm.tap()
+        app.finishDevicePairing()
+        let consent = app.buttons["acceptAIDataSharing"]
+        if consent.waitForExistence(timeout: 3) { consent.tap() }
+        let chats = app.buttons.matching(NSPredicate(format: "label IN %@", ["Чаты", "Chats"])).firstMatch
+        XCTAssertTrue(chats.waitForExistence(timeout: 20), app.debugDescription)
+        chats.tap()
+        let header = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "deviceHeader-", deviceName)).firstMatch
+        if ["Свёрнуто", "Collapsed"].contains(header.value as? String ?? "") { header.tap() }
+        let employee = app.buttons["employee-" + profileID]
+        for _ in 0..<8 where !employee.isHittable { app.swipeUp() }
+        XCTAssertTrue(employee.isHittable, app.debugDescription)
+        capture("phone-connected-fixture", app)
+        employee.press(forDuration: 1)
+        let rename = app.buttons.matching(NSPredicate(format: "label IN %@", ["Переименовать…", "Rename…"])).firstMatch
+        XCTAssertTrue(rename.waitForExistence(timeout: 5), app.debugDescription)
+        rename.tap()
+        let input = app.textFields["renameName"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap()
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (input.value as? String ?? "").count) + "Редактор · iPhone")
+        app.buttons["saveName"].tap()
+        XCTAssertTrue(input.waitForNonExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(employee.label, "Редактор · iPhone")
+        XCTAssertTrue(header.isHittable, app.debugDescription)
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "deviceMenu-", deviceName)).firstMatch.tap()
+        XCTAssertTrue(rename.waitForExistence(timeout: 5)); rename.tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap()
+        input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (input.value as? String ?? "").count) + "Команда · iPhone")
+        app.buttons["saveName"].tap()
+        XCTAssertTrue(input.waitForNonExistence(timeout: 10), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Команда · iPhone"].firstMatch.waitForExistence(timeout: 5))
+        capture("phone-shared-names", app)
+        let renamedHeader = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "deviceHeader-", "Команда · iPhone")).firstMatch
+        renamedHeader.tap()
+        XCTAssertTrue(employee.waitForNonExistence(timeout: 5))
+        renamedHeader.tap()
+        XCTAssertTrue(employee.waitForExistence(timeout: 5))
+        let add = app.buttons["addMenu"]
+        XCTAssertTrue(add.exists, "Chats must offer both a new employee and another device")
+        add.tap()
+        app.buttons["connectDevice"].tap()
+        XCTAssertTrue(app.buttons["scanAdditionalInvitation"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.secureTextFields["connectionInvitation"].exists)
+        capture("phone-add-another-device", app)
+    }
+
+    @MainActor
+    func testConnectionFormAlsoOffersQRScanning() throws {
+        let app = XCUIApplication()
+        #if targetEnvironment(simulator)
+        // Launch-domain overrides leave existing test connections on disk intact.
+        app.launchArguments = ["-openstrudel.signedOut", "YES", "-openstrudel.deviceConnections", "()", "-openstrudel.selectedDevice", "current"]
+        #endif
+        app.launch()
+        let paste = app.buttons["pasteInvitation"]
+        guard paste.waitForExistence(timeout: 10) else { throw XCTSkip("Run on an isolated, unpaired simulator.") }
+        paste.tap()
+        let scan = app.buttons["scanAdditionalInvitation"]
+        XCTAssertTrue(scan.waitForExistence(timeout: 5))
+        XCTAssertTrue(scan.isHittable)
+        XCTAssertTrue(app.secureTextFields["connectionInvitation"].exists)
+        #if targetEnvironment(simulator)
+        scan.tap()
+        XCTAssertTrue(app.staticTexts["invitationError"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.secureTextFields["connectionInvitation"].exists)
+        #endif
+        capture("connection-qr-and-link", app)
+    }
+
+    @MainActor
     func testInvalidLinkFeedbackIsVisibleAfterKeyboardContinue() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
