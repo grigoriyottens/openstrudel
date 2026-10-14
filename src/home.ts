@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, createCipheriv, createDecipheriv, scryptSync } from "node:crypto";
 import { hostname } from "node:os";
+import { execFileSync } from "node:child_process";
 import type { Store } from "./store.js";
 
 export const HOME_PROTOCOL = 1;
@@ -38,7 +39,14 @@ export function identifier(value: unknown): string {
   return value;
 }
 const now = () => Date.now();
-export const defaultDeviceName = () => process.platform === "linux" ? "Server" : hostname().replace(/\.local$/i, "");
+/** The name people see in macOS Sharing settings, not the Bonjour network name. */
+export function defaultDeviceName(): string {
+  if (process.platform === "linux") return "Server";
+  if (process.platform === "darwin") {
+    try { const name = execFileSync("/usr/sbin/scutil", ["--get", "ComputerName"], { encoding: "utf8", timeout: 2000 }).trim(); if (name) return name.slice(0, 120); } catch {}
+  }
+  return hostname().replace(/\.local$/i, "");
+}
 
 /** Only the primary owns these tables. Executors own their existing agent DB and receipts. */
 export class Home {
@@ -62,8 +70,10 @@ export class Home {
       const nodeId = randomUUID();
       this.save({ id: randomUUID(), nodeId, name: defaultDeviceName(), role: "primary", epoch: 1, primaryId: nodeId, mainNodeId: nodeId });
     }
-    // Older container installs exposed Docker's generated hostname to clients.
+    // Older container installs exposed Docker's generated hostname to clients,
+    // and older Mac installs exposed the raw network name such as "waiMini.local".
     if (!this.state.nameSetByUser && /^[a-f0-9]{12}(?:[a-f0-9]{52})?$/i.test(this.state.name)) this.save({ ...this.state, name: "Server" });
+    if (!this.state.nameSetByUser && /\.local$/i.test(this.state.name)) this.save({ ...this.state, name: defaultDeviceName() });
     if (this.state.role === "primary") this.register(this.self());
   }
   get state(): HomeState { return JSON.parse(this.store.getSetting("home.state")!); }

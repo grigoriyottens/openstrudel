@@ -399,12 +399,8 @@ private struct OwnServerSetupView: View {
     private func finish() async {
         guard let connection = flow.connection, !saving else { return }
         saving = true; defer { saving = false }
-        let client = library.clients.first { $0.savedBaseURL == connection.url } ?? library.newConnection()
-        guard await client.connectToCloud(connection) else { localError = client.pairingError; return }
-        // Retain the sheet until account setup is complete. Selecting this
-        // client now would replace its presenting root and dismiss the flow.
-        library.add(client, select: false)
-        do { try flow.finish(); onConnected(client) }
+        // The new device is not selected: that would replace this sheet's root before account setup.
+        do { onConnected(try await library.adoptServer(connection, from: flow)) }
         catch { localError = error.localizedDescription }
     }
 }

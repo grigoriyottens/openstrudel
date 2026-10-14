@@ -8482,5 +8482,173 @@
     "fr": "Votre collègue aura accès à tous les chats, fichiers et réglages des assistants sur cet appareil. Vous gardez le contrôle des comptes et des accès. Créez un lien distinct pour chaque personne.",
     "es": "Tu colega podrá acceder a todos los chats, archivos y ajustes de los asistentes de este dispositivo. Tú mantienes el control de las cuentas y del acceso. Crea un enlace distinto para cada persona.",
     "he": "לעמית תהיה גישה לכל השיחות, הקבצים וההגדרות של העוזרים במכשיר הזה. ניהול החשבונות והגישה יישאר בידיכם. צרו קישור נפרד לכל אדם."
+  },
+  "Открыть в Telegram": {
+    "en": "Open in Telegram",
+    "ru": "Открыть в Telegram",
+    "fr": "Ouvrir dans Telegram",
+    "es": "Abrir en Telegram",
+    "he": "פתיחה ב־Telegram"
+  },
+  "Отправить ещё раз…": {
+    "en": "Send again…",
+    "ru": "Отправить ещё раз…",
+    "fr": "Renvoyer…",
+    "es": "Enviar de nuevo…",
+    "he": "שליחה חוזרת…"
+  },
+  "Группы в Telegram": {
+    "en": "Telegram groups",
+    "ru": "Группы в Telegram",
+    "fr": "Groupes Telegram",
+    "es": "Grupos de Telegram",
+    "he": "קבוצות Telegram"
+  },
+  "Группы в Telegram · {0}": {
+    "en": "Telegram groups · {0}",
+    "ru": "Группы в Telegram · {0}",
+    "fr": "Groupes Telegram · {0}",
+    "es": "Grupos de Telegram · {0}",
+    "he": "קבוצות Telegram · {0}"
+  },
+  "Действия: {0}": {
+    "en": "Actions: {0}",
+    "ru": "Действия: {0}",
+    "fr": "Actions : {0}",
+    "es": "Acciones: {0}",
+    "he": "פעולות: {0}"
+  },
+  "Telegram отклонил сообщение, оно не отправлено. Проверьте, что бот остался в чате.": {
+    "en": "Telegram rejected the message, so it was not sent. Check that the bot is still in the chat.",
+    "ru": "Telegram отклонил сообщение, оно не отправлено. Проверьте, что бот остался в чате.",
+    "fr": "Telegram a refusé le message, il n’a pas été envoyé. Vérifiez que le bot est toujours dans la discussion.",
+    "es": "Telegram rechazó el mensaje y no se envió. Comprueba que el bot sigue en el chat.",
+    "he": "Telegram דחה את ההודעה, והיא לא נשלחה. ודאו שהבוט עדיין נמצא בצ׳אט."
+  },
+  "Подключение этого чата изменилось. Ответ не отправлен в Telegram.": {
+    "en": "This chat’s connection changed. The reply was not sent to Telegram.",
+    "ru": "Подключение этого чата изменилось. Ответ не отправлен в Telegram.",
+    "fr": "La connexion de cette discussion a changé. La réponse n’a pas été envoyée dans Telegram.",
+    "es": "La conexión de este chat cambió. La respuesta no se envió a Telegram.",
+    "he": "החיבור של הצ׳אט הזה השתנה. התשובה לא נשלחה ל-Telegram."
+  },
+  "Отправьте файл до 20 МБ.": {
+    "en": "Send a file up to 20 MB.",
+    "ru": "Отправьте файл до 20 МБ.",
+    "fr": "Envoyez un fichier de 20 Mo maximum.",
+    "es": "Envía un archivo de hasta 20 MB.",
+    "he": "שלחו קובץ של עד 20 MB."
+  },
+  "Не удалось получить файл до 20 МБ": {
+    "en": "Could not get the file (up to 20 MB)",
+    "ru": "Не удалось получить файл до 20 МБ",
+    "fr": "Impossible de récupérer le fichier (20 Mo maximum)",
+    "es": "No se pudo obtener el archivo (hasta 20 MB)",
+    "he": "לא ניתן לקבל את הקובץ (עד 20 MB)"
+  },
+  "Не удалось скачать вложение": {
+    "en": "Could not download the attachment",
+    "ru": "Не удалось скачать вложение",
+    "fr": "Impossible de télécharger la pièce jointe",
+    "es": "No se pudo descargar el adjunto",
+    "he": "לא ניתן להוריד את הקובץ המצורף"
+  },
+  "Это подключение используется сейчас. Отключите его на самом устройстве.": {
+    "en": "You are using this connection right now. Disconnect it on that device.",
+    "ru": "Это подключение используется сейчас. Отключите его на самом устройстве.",
+    "fr": "Vous utilisez cette connexion en ce moment. Déconnectez-la sur l’appareil lui-même.",
+    "es": "Estás usando esta conexión ahora. Desconéctala en el propio dispositivo.",
+    "he": "החיבור הזה בשימוש כרגע. נתקו אותו במכשיר עצמו."
+  },
+  "Подключение не найдено.": {
+    "en": "Connection not found.",
+    "ru": "Подключение не найдено.",
+    "fr": "Connexion introuvable.",
+    "es": "No se encontró la conexión.",
+    "he": "החיבור לא נמצא."
+  },
+  "Отключайте подключения по одному, чтобы не потерять доступ к этому устройству.": {
+    "en": "Disconnect devices one at a time so you keep access to this device.",
+    "ru": "Отключайте подключения по одному, чтобы не потерять доступ к этому устройству.",
+    "fr": "Déconnectez les appareils un par un pour garder l’accès à cet appareil.",
+    "es": "Desconecta los dispositivos de uno en uno para no perder el acceso a este dispositivo.",
+    "he": "נתקו חיבורים אחד אחד כדי לא לאבד גישה למכשיר הזה."
+  },
+  "Установка на сервере не началась. Нажмите «Продолжить», чтобы запустить её; уже сохранённая настройка не потеряется.": {
+    "en": "Installation has not started on the server. Select Continue to start it; your saved setup stays as it is.",
+    "fr": "L’installation n’a pas démarré sur le serveur. Sélectionnez Continuer pour la lancer ; la configuration enregistrée est conservée.",
+    "es": "La instalación no se ha iniciado en el servidor. Selecciona Continuar para iniciarla; la configuración guardada se conserva.",
+    "he": "ההתקנה לא התחילה בשרת. יש לבחור ב״המשך״ כדי להתחיל אותה; ההגדרה השמורה תישאר כפי שהיא.",
+    "ru": "Установка на сервере не началась. Нажмите «Продолжить», чтобы запустить её; уже сохранённая настройка не потеряется."
+  },
+  "Обновите OpenStrudel на этом устройстве, чтобы переименовать его.": {
+    "en": "Update OpenStrudel on this device to rename it.",
+    "fr": "Mettez à jour OpenStrudel sur cet appareil pour le renommer.",
+    "es": "Actualiza OpenStrudel en este dispositivo para cambiarle el nombre.",
+    "he": "יש לעדכן את OpenStrudel במכשיר הזה כדי לשנות את שמו.",
+    "ru": "Обновите OpenStrudel на этом устройстве, чтобы переименовать его."
+  },
+  "Ссылка действует 24 часа и подходит для одного подключения.": {
+    "en": "The link works for 24 hours and connects one device.",
+    "fr": "Le lien fonctionne pendant 24 heures et connecte un seul appareil.",
+    "es": "El enlace funciona durante 24 horas y conecta un solo dispositivo.",
+    "he": "הקישור פעיל 24 שעות ומחבר מכשיר אחד.",
+    "ru": "Ссылка действует 24 часа и подходит для одного подключения."
+  },
+  "Ссылка работает только в той же сети Wi-Fi, что и это устройство.": {
+    "en": "The link works only on the same Wi-Fi network as this device.",
+    "fr": "Le lien ne fonctionne que sur le même réseau Wi-Fi que cet appareil.",
+    "es": "El enlace solo funciona en la misma red Wi-Fi que este dispositivo.",
+    "he": "הקישור פועל רק באותה רשת Wi-Fi של המכשיר הזה.",
+    "ru": "Ссылка работает только в той же сети Wi-Fi, что и это устройство."
+  },
+  "Коллега": {
+    "en": "Colleague",
+    "fr": "Collègue",
+    "es": "Colega",
+    "he": "עמית",
+    "ru": "Коллега"
+  },
+  "Владелец": {
+    "en": "Owner",
+    "fr": "Propriétaire",
+    "es": "Propietario",
+    "he": "בעלים",
+    "ru": "Владелец"
+  },
+  "подключено {0}": {
+    "en": "connected {0}",
+    "fr": "connecté le {0}",
+    "es": "conectado el {0}",
+    "he": "חובר ב-{0}",
+    "ru": "подключено {0}"
+  },
+  "это устройство": {
+    "en": "this device",
+    "fr": "cet appareil",
+    "es": "este dispositivo",
+    "he": "המכשיר הזה",
+    "ru": "это устройство"
+  },
+  "Отключить «{0}»?": {
+    "en": "Disconnect “{0}”?",
+    "fr": "Déconnecter « {0} » ?",
+    "es": "¿Desconectar «{0}»?",
+    "he": "לנתק את ״{0}״?",
+    "ru": "Отключить «{0}»?"
+  },
+  "Коллега больше не сможет открыть сотрудников этого устройства. Чаты и сотрудники сохранятся.": {
+    "en": "Your colleague will no longer be able to open the assistants on this device. Chats and assistants stay as they are.",
+    "fr": "Votre collègue ne pourra plus ouvrir les assistants de cet appareil. Les conversations et les assistants sont conservés.",
+    "es": "Tu colega ya no podrá abrir los asistentes de este dispositivo. Los chats y los asistentes se conservan.",
+    "he": "העמית לא יוכל עוד לפתוח את העוזרים במכשיר הזה. הצ׳אטים והעוזרים יישמרו.",
+    "ru": "Коллега больше не сможет открыть сотрудников этого устройства. Чаты и сотрудники сохранятся."
+  },
+  "Это не QR-код подключения OpenStrudel.": {
+    "en": "This isn’t an OpenStrudel connection QR code.",
+    "fr": "Ce n’est pas un code QR de connexion OpenStrudel.",
+    "es": "Este no es un código QR de conexión de OpenStrudel.",
+    "he": "זה לא קוד QR לחיבור OpenStrudel.",
+    "ru": "Это не QR-код подключения OpenStrudel."
   }
 }

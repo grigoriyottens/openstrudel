@@ -90,7 +90,7 @@ struct ClusterHeader: View {
 struct MessageBubble: View {
     @EnvironmentObject private var client: HomeClient
     @State private var previewURL: URL?
-    @State private var replyingInTelegram = false
+    @State private var telegramReply: TelegramReplyTarget?
     let message: HomeMessage
     /// Other people write here too (a Telegram group or history from several people),
     /// so inbound messages sit on the surface under their author.
@@ -104,6 +104,8 @@ struct MessageBubble: View {
 
     private var isInbound: Bool { message.direction == "inbound" }
     private var fromSomeoneElse: Bool { isInbound && shared }
+    /// The owner wrote it through the explicit Telegram reply, so it sits on the person's side.
+    private var ownerReply: Bool { MessagePages.isOwnerReply(message) }
     private var previousMessage: HomeMessage? {
         guard let index = client.messages.firstIndex(where: { $0.id == message.id }), index > 0 else { return nil }
         return client.messages[index - 1]
@@ -111,8 +113,8 @@ struct MessageBubble: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let origin = message.origin, origin.channel != "api", isInbound || previousMessage?.conversationId != message.conversationId {
-                sourceCaption(origin)
+            if let origin = message.origin, origin.channel != "api", isInbound || ownerReply || previousMessage?.conversationId != message.conversationId {
+                sourceCaption(origin).frame(maxWidth: .infinity, alignment: ownerReply ? .trailing : .leading)
             } else if message.direction == "inbound", client.messages.contains(where: { $0.origin?.channel == "telegram" }) {
                 Text(L("В приложении")).modifier(MetaLine()).frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -132,7 +134,7 @@ struct MessageBubble: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else if fromSomeoneElse {
                 someoneElse
-            } else if isInbound {
+            } else if isInbound || ownerReply {
                 person
             } else {
                 employee
@@ -140,14 +142,35 @@ struct MessageBubble: View {
             if message.direction == "inbound", message.channel == "telegram", message.status == "queued" || message.status == "running" {
                 Label(L("Готовим ответ…"), systemImage: "ellipsis").modifier(MetaLine())
             }
-            if let delivery = message.delivery { deliveryCaption(delivery) }
+            if let delivery = message.delivery {
+                VStack(alignment: ownerReply ? .trailing : .leading, spacing: 0) {
+                    deliveryCaption(delivery).padding(.trailing, ownerReply ? 16 : 0)
+                    deliveryRecovery
+                }
+                .frame(maxWidth: .infinity, alignment: ownerReply ? .trailing : .leading)
+            }
             if message.origin?.canReply == true && client.canManageOpenAI {
-                Button(L("Ответить в Telegram")) { replyingInTelegram = true }
+                Button(L("Ответить в Telegram")) { telegramReply = TelegramReplyTarget(request: message) }
                     .modifier(StatusAction()).accessibilityIdentifier("telegramReply-" + message.id)
             }
         }
         .quickLookPreview($previewURL)
-        .sheet(isPresented: $replyingInTelegram) { TelegramReplySheet(message: message).environmentObject(client).modifier(InterfaceLanguage()) }
+        .sheet(item: $telegramReply) { target in
+            TelegramReplySheet(message: target.request, prepared: target.prepared).environmentObject(client).modifier(InterfaceLanguage())
+        }
+    }
+
+    /// The one action next to a reply Telegram did not take or did not confirm. Never a silent resend.
+    @ViewBuilder private var deliveryRecovery: some View {
+        switch MessagePages.deliveryAction(for: message, in: client.messages, canReply: client.canManageOpenAI) {
+        case .open(let url)?:
+            Link(L("Открыть в Telegram"), destination: url).modifier(StatusAction())
+        case .resend(let request)?:
+            Button(L("Отправить ещё раз…")) { telegramReply = TelegramReplyTarget(request: request, prepared: message.text) }
+                .modifier(StatusAction()).accessibilityIdentifier("resendTelegramReply-" + message.id)
+        case nil:
+            EmptyView()
+        }
     }
 
     @ViewBuilder private func sourceCaption(_ origin: MessageOrigin) -> some View {
@@ -177,7 +200,8 @@ struct MessageBubble: View {
                 attachments
             }
             if message.status == "queued" { Text(L("В очереди")).modifier(MetaLine()).padding(.trailing, 16) }
-            if let error = message.error { warning(error).multilineTextAlignment(.trailing).padding(.trailing, 16) }
+            // A reply's Telegram delivery speaks for itself below.
+            if let error = message.error, message.delivery == nil { warning(error).multilineTextAlignment(.trailing).padding(.trailing, 16) }
         }
         .frame(maxWidth: bubbleWidth, alignment: .trailing)
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -240,6 +264,13 @@ struct MessageBubble: View {
     }
 }
 
+/// The Telegram request a reply answers, and the text prepared for it, if any.
+private struct TelegramReplyTarget: Identifiable {
+    let request: HomeMessage
+    var prepared = ""
+    var id: String { request.id }
+}
+
 /// An explicit destination, separate from the private app composer. Drafts are
 /// scoped to the original request; sending uses the client's durable queue.
 private struct TelegramReplySheet: View {
@@ -247,6 +278,8 @@ private struct TelegramReplySheet: View {
     @EnvironmentObject private var library: DeviceLibrary
     @Environment(\.dismiss) private var dismiss
     let message: HomeMessage
+    /// A reply Telegram did not take: its text, offered again until the owner sends or edits it.
+    var prepared = ""
     @State private var text = ""
     @State private var files: [PickedFile] = []
     @State private var choosingFiles = false
@@ -292,7 +325,7 @@ private struct TelegramReplySheet: View {
         #if os(macOS)
         .frame(width: 560, height: 460)
         #endif
-        .task { text = library.draft(for: key); files = library.fileDrafts[key] ?? [] }
+        .task { text = library.draft(for: key); if text.isEmpty { text = prepared }; files = library.fileDrafts[key] ?? [] }
         .onChange(of: text) { _, value in library.saveDraft(value, for: key) }
         .onChange(of: files) { _, value in library.fileDrafts[key] = value }
         .fileImporter(isPresented: $choosingFiles, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
@@ -374,7 +407,7 @@ struct ConversationHelper: View {
     }
     private var reply: ReplyMark {
         ReplyMark(conversation: HomeDrafts.key(home: client.baseURLString, profile: client.selectedProfileID, chat: client.selectedChatID),
-                  id: client.messages.last { $0.direction == "outbound" }?.id)
+                  id: client.messages.last { $0.direction == "outbound" && !MessagePages.isOwnerReply($0) }?.id)
     }
 
     var body: some View {
@@ -542,7 +575,7 @@ struct TranscriptRows: View {
     private static let cluster: CGFloat = 48
 
     var body: some View {
-        let rows = MessagePages.rows(client.messages)
+        let rows = MessagePages.rows(client.feedMessages)
         let pending = client.visiblePendingMessages
         let shared = !client.usesEmployeeTimeline && (client.activeTelegramGroup != nil || MessagePages.isMultiAuthor(client.messages))
         let bubbleWidth = (columnWidth * 0.75).rounded()
@@ -647,14 +680,21 @@ struct TranscriptRows: View {
     }
 
     private func speaker(_ message: HomeMessage, shared: Bool) -> String {
+        if MessagePages.isOwnerReply(message) { return L("Вы") }
         guard message.direction == "inbound" else { return client.activeAgentName }
         return shared ? message.author ?? "" : L("Вы")
     }
 }
 
 extension HomeClient {
+    /// The messages the feed shows. In a group where the employee decides by its rules, a message waits
+    /// for that decision; a mention group sends the employee only real requests.
+    var feedMessages: [HomeMessage] {
+        MessagePages.feed(messages, decidingChats: Set((telegram?.chats ?? []).filter { $0.isGroup && $0.replies != "mentions" }.map(\.chatId)))
+    }
+
     /// The employee's latest words, without service notices. Their direction is the conversation's text edge.
-    var latestReplyText: String { messages.last { $0.direction == "outbound" && $0.kind != "notice" }?.text ?? "" }
+    var latestReplyText: String { messages.last { $0.direction == "outbound" && $0.kind != "notice" && !MessagePages.isOwnerReply($0) }?.text ?? "" }
 }
 
 /// Card actions at one height and radius. The one prominent action is ink with a canvas-coloured

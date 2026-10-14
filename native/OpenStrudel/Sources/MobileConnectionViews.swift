@@ -5,8 +5,8 @@ import VisionKit
 import AVFoundation
 #endif
 
-/// Rows for a device in Settings → Devices: a one-use connection link and, on this Mac,
-/// disconnecting the other devices. On the Mac each row explains itself with its action trailing;
+/// Rows for a device in Settings → Devices: a one-use connection link, a colleague's invitation
+/// and the devices paired with it. On the Mac each row explains itself with its action trailing;
 /// on iOS the action is the row.
 struct MobilePairingSettings: View {
     @EnvironmentObject private var client: HomeClient
@@ -29,7 +29,9 @@ struct MobilePairingSettings: View {
         Button(L("Пригласить коллегу…")) { createInvitation(owner: false) }
             .disabled(creating || !(client.isLocalConnection || client.canManageConnections))
             .accessibilityIdentifier("inviteColleague")
-        if client.isLocalConnection && client.mobileConnections > 0 {
+        if client.supportsColleagueInvites {
+            ForEach(client.mobileClients) { MobileClientRow(item: $0) }
+        } else if client.isLocalConnection && client.mobileConnections > 0 {
             LabeledContent {
                 Button(L("Отключить"), role: .destructive) { revokeConfirmation = true }
                     .confirmationDialog(L("Отключить другие устройства? Чаты и сотрудники сохранятся."), isPresented: $revokeConfirmation) {
@@ -48,7 +50,7 @@ struct MobilePairingSettings: View {
         }
         .disabled(creating || !(client.isLocalConnection || client.canManageConnections))
         .task { await client.refreshMobileStatus() }
-        .sheet(isPresented: $showingCode, onDismiss: { Task { await client.cancelMobileInvitation() } }) {
+        .sheet(isPresented: $showingCode, onDismiss: { Task { await client.cancelMobileInvitation(colleague: !invitationOwner) } }) {
             MobileQRCodeView(owner: invitationOwner).environmentObject(client).modifier(InterfaceLanguage())
         }
     }
@@ -60,6 +62,45 @@ struct MobilePairingSettings: View {
             showingCode = client.mobileInvitation != nil
             creating = false
         }
+    }
+}
+
+/// One device paired with this Home. Only a colleague's device is disconnected here, on its own:
+/// an app-installed server also counts the owner's Mac among its devices.
+private struct MobileClientRow: View {
+    @EnvironmentObject private var client: HomeClient
+    let item: MobileClient
+    @State private var confirming = false
+    @State private var error: String?
+    private var name: String { item.label ?? L("Устройство") }
+
+    var body: some View {
+        LabeledContent {
+            if item.isColleague && item.current != true {
+                Button(L("Отключить"), role: .destructive) { confirming = true }
+                    .accessibilityIdentifier("disconnectClient-" + item.id)
+                    .confirmationDialog(L("Отключить «\(name)»?"), isPresented: $confirming) {
+                        Button(L("Отключить"), role: .destructive) {
+                            Task {
+                                do { try await client.revokeMobileClient(item.id); error = nil }
+                                catch { self.error = error.localizedDescription }
+                            }
+                        }
+                    } message: {
+                        Text(L("Коллега больше не сможет открыть сотрудников этого устройства. Чаты и сотрудники сохранятся."))
+                    }
+            }
+        } label: {
+            Text(name)
+            Text(detail).monospacedDigit()
+            if let error { Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning) }
+        }
+    }
+
+    private var detail: String {
+        [item.isColleague ? L("Коллега") : L("Владелец"),
+         item.pairedDate.map { L("подключено \($0.formatted(.dateTime.day().month(.abbreviated).year().locale(L10n.locale)))") },
+         item.current == true ? L("это устройство") : nil].compactMap { $0 }.joined(separator: " · ")
     }
 }
 
@@ -142,8 +183,9 @@ private struct MobileQRCodeView: View {
     }
 
     private var accessDescription: String {
-        owner ? L("Ссылка открывает чаты и настройки сотрудников.\nИспользуйте её только на своих устройствах.")
-            : L("Коллега получит доступ ко всем чатам, файлам и настройкам сотрудников этого устройства. Управление аккаунтами и доступом останется у вас. Приглашайте каждого по отдельной ссылке.")
+        if owner { return L("Ссылка открывает чаты и настройки сотрудников.\nИспользуйте её только на своих устройствах.") }
+        let access = L("Коллега получит доступ ко всем чатам, файлам и настройкам сотрудников этого устройства. Управление аккаунтами и доступом останется у вас. Приглашайте каждого по отдельной ссылке.")
+        return client.mobileInvitation?.isLocalNetworkOnly == true ? access + "\n" + L("Ссылка работает только в той же сети Wi-Fi, что и это устройство.") : access
     }
 
     /// The code on white so any camera reads it; once the link expires, an empty tile of the same size.
@@ -181,7 +223,10 @@ private struct MobileQRCodeView: View {
     }
 
     @ViewBuilder private func status(_ remaining: Int) -> some View {
-        if remaining > 0 {
+        if remaining > 0 && !owner && client.supportsColleagueInvites {
+            // The link outlives this sheet, so a countdown would only distract.
+            Text(L("Ссылка действует 24 часа и подходит для одного подключения.")).font(AppTypography.meta)
+        } else if remaining > 0 {
             // One argument, so in Hebrew the minutes and seconds stay in reading order.
             let time = "\(remaining / 60):\(String(format: "%02d", remaining % 60))"
             Text(L("Link expires in \(time)"))
@@ -300,6 +345,7 @@ private struct ScanInvitationButton: View {
     let onScan: (MacPairing) -> Void
     @State private var scanning = false
     @State private var scanned: MacPairing?
+    @State private var rejected = false
 
     var body: some View {
         Button { Task { await openScanner() } } label: {
@@ -314,11 +360,24 @@ private struct ScanInvitationButton: View {
                     if let url = URL(string: value), let pairing = try? MacPairing(url: url) {
                         scanned = pairing; scanning = false
                     }
+                } rejected: {
+                    rejected = true
                 } failed: {
                     error = L("Камера недоступна. Вставьте ссылку подключения.")
                     scanning = false
                 }
                 .ignoresSafeArea(edges: .bottom)
+                .overlay(alignment: .bottom) {
+                    // Another code keeps the scanner open; say why nothing happens.
+                    if rejected {
+                        Text(L("Это не QR-код подключения OpenStrudel."))
+                            .font(AppTypography.interface).multilineTextAlignment(.center)
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                            .background(.regularMaterial, in: Capsule())
+                            .padding(.horizontal, 24).padding(.bottom, 32)
+                            .accessibilityIdentifier("invalidInvitationCode")
+                    }
+                }
                 .navigationTitle(L("Сканируйте QR подключения"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { scanning = false } } }
@@ -327,7 +386,7 @@ private struct ScanInvitationButton: View {
     }
 
     private func openScanner() async {
-        error = nil
+        error = nil; rejected = false
         guard DataScannerViewController.isSupported else {
             error = L("На этом устройстве вставьте ссылку подключения.")
             return
@@ -391,8 +450,9 @@ struct MobileConnectionHelpView: View {
 
 private struct QRScanner: UIViewControllerRepresentable {
     let found: (String) -> Void
+    let rejected: () -> Void
     let failed: () -> Void
-    func makeCoordinator() -> Coordinator { Coordinator(found: found, failed: failed) }
+    func makeCoordinator() -> Coordinator { Coordinator(found: found, rejected: rejected, failed: failed) }
     func makeUIViewController(context: Context) -> DataScannerViewController {
         let scanner = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.qr])], qualityLevel: .balanced,
             recognizesMultipleItems: false, isHighFrameRateTrackingEnabled: false, isPinchToZoomEnabled: true, isGuidanceEnabled: true, isHighlightingEnabled: true)
@@ -405,17 +465,21 @@ private struct QRScanner: UIViewControllerRepresentable {
     static func dismantleUIViewController(_ controller: DataScannerViewController, coordinator: Coordinator) { controller.stopScanning() }
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
         let found: (String) -> Void
+        let rejected: () -> Void
         let failed: () -> Void
         private var used = false
-        init(found: @escaping (String) -> Void, failed: @escaping () -> Void) { self.found = found; self.failed = failed }
+        init(found: @escaping (String) -> Void, rejected: @escaping () -> Void, failed: @escaping () -> Void) {
+            self.found = found; self.rejected = rejected; self.failed = failed
+        }
         func dataScanner(_ dataScanner: DataScannerViewController, becameUnavailableWithError error: DataScannerViewController.ScanningUnavailable) { failed() }
         func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
             guard !used else { return }
             for item in addedItems {
-                if case .barcode(let barcode) = item, let value = barcode.payloadStringValue,
-                   let url = URL(string: value), (try? MacPairing(url: url)) != nil {
+                guard case .barcode(let barcode) = item, let value = barcode.payloadStringValue else { continue }
+                if let url = URL(string: value), (try? MacPairing(url: url)) != nil {
                     used = true; dataScanner.stopScanning(); found(value); break
                 }
+                rejected()
             }
         }
     }

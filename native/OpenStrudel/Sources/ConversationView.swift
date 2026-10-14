@@ -36,7 +36,7 @@ struct ConversationView: View {
             #else
             VStack(spacing: 0) {
                 EmployeeMoveStatusButton()
-                if !client.usesEmployeeTimeline && !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
+                if showsSourcePicker {
                     ConversationSources()
                         .padding(.horizontal, Layout.edge).padding(.vertical, 8)
                 }
@@ -84,7 +84,7 @@ struct ConversationView: View {
             ToolbarItem(placement: .navigation) {
                 ConversationTitle { openDetails() }
             }
-            if !client.usesEmployeeTimeline && !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
+            if showsSourcePicker {
                 ToolbarItem(placement: .primaryAction) { ConversationSourceMenu() }
             }
         }
@@ -102,10 +102,8 @@ struct ConversationView: View {
                 ConversationTitle { focused = false; openDetails() }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                if client.activeProfile == nil {
-                    Button { focused = false; showSettings = true } label: { Image(systemName: "gearshape") }
-                        .foregroundStyle(.primary).accessibilityLabel(L("Настройки"))
-                }
+                Button { focused = false; showSettings = true } label: { Image(systemName: "gearshape") }
+                    .foregroundStyle(.primary).accessibilityLabel(L("Настройки"))
             }
         }
         .sheet(isPresented: $showEmployees) {
@@ -172,7 +170,7 @@ struct ConversationView: View {
                 if followsLatest { hasNewMessages = false }
             }
         }
-        .onChange(of: client.messages.last?.id) { _, _ in
+        .onChange(of: client.feedMessages.last?.id) { _, _ in
             if followsLatest { scrollToBottom(proxy, animated: true) }
             else { hasNewMessages = true }
         }
@@ -202,6 +200,12 @@ struct ConversationView: View {
     /// A draft, a loaded conversation, or one that cannot load right now.
     private var showsEmptyChat: Bool {
         client.isEmployeeDraft || client.conversationID != nil || client.health == nil || client.homeUnreachable || client.syncError != nil
+    }
+
+    /// Separate Telegram transcripts exist only on a Home known to lack the employee feed,
+    /// so an app opened before its Home answers never flashes the old screen.
+    private var showsSourcePicker: Bool {
+        client.health != nil && !client.usesEmployeeTimeline && !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty
     }
 
     private var showsConnectionBanner: Bool { client.connectionNeedsPairing || client.homeUnreachable || client.health == nil }
@@ -298,7 +302,7 @@ struct ConversationView: View {
     }
 
     @ViewBuilder private var telegramHint: some View {
-        if client.activeTelegramChat != nil {
+        if client.health != nil, client.activeTelegramChat != nil {
             // No fixed size here: the window measures its minimum with a zero width,
             // and a fixed-height wrapped line would then grow taller than the window.
             Text(L("Здесь можно обсудить переписку с помощником. Ответ останется в OpenStrudel."))

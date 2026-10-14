@@ -7,7 +7,7 @@ import Darwin
 
 enum ServerSetupFailure: Error, LocalizedError, Equatable {
     case address, credentials, privateKey, hostKey, connection, localNetwork, authentication, unsupportedSystem, resources, administrator
-    case existingInstallation, portBusy, storage, installer, installation, identity, waiting, runtime, serviceUnreachable, sharedServer
+    case existingInstallation, portBusy, storage, installer, installation, identity, waiting, runtime, serviceUnreachable, sharedServer, notStarted
     var errorDescription: String? {
         switch self {
         case .address: L("Enter a server address, sign-in name and a port between 1 and 65535.")
@@ -30,6 +30,7 @@ enum ServerSetupFailure: Error, LocalizedError, Equatable {
         case .runtime: L("This server has an older or unavailable Docker installation. Update it to Docker 29 with Compose, or use a new Ubuntu server.")
         case .serviceUnreachable: L("OpenStrudel is installed, but this Mac cannot reach it. Allow incoming TCP connections on port 7789 in your server's firewall, then try again.")
         case .sharedServer: L("This server already hosts other apps. Use a new Ubuntu server so their settings and data stay unchanged.")
+        case .notStarted: L("Установка на сервере не началась. Нажмите «Продолжить», чтобы запустить её; уже сохранённая настройка не потеряется.")
         }
     }
 }
@@ -340,16 +341,12 @@ extension ServerSetupStore {
     func load() throws -> ServerInstallation? {
         // A locked or newly signed application's legacy Keychain item must not
         // block SwiftUI waiting for an authentication dialog at initialization.
-        var allowed = DarwinBoolean(true)
-        SecKeychainGetUserInteractionAllowed(&allowed)
-        SecKeychainSetUserInteractionAllowed(false)
-        defer { SecKeychainSetUserInteractionAllowed(allowed.boolValue) }
-        return try read()
+        try KeychainInteraction.run { try read() }
     }
     func unlock() async throws -> ServerInstallation? {
         // Explicit recovery may request macOS authorization. Keep its wait off
         // the main thread so Back and the rest of the app remain responsive.
-        try await Task.detached(priority: .userInitiated) { try self.read() }.value
+        try await Task.detached(priority: .userInitiated) { try KeychainInteraction.run(allowing: true) { try self.read() } }.value
     }
     nonisolated private func read() throws -> ServerInstallation? {
         var query = query; query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -359,10 +356,9 @@ extension ServerSetupStore {
         return try JSONDecoder().decode(ServerInstallation.self, from: data)
     }
     func save(_ installation: ServerInstallation?) throws {
-        var allowed = DarwinBoolean(true)
-        SecKeychainGetUserInteractionAllowed(&allowed)
-        SecKeychainSetUserInteractionAllowed(false)
-        defer { SecKeychainSetUserInteractionAllowed(allowed.boolValue) }
+        try KeychainInteraction.run { try write(installation) }
+    }
+    private func write(_ installation: ServerInstallation?) throws {
         guard let installation else {
             let status = SecItemDelete(query as CFDictionary)
             guard status == errSecSuccess || status == errSecItemNotFound else { throw ServerSetupFailure.storage }; return
@@ -439,6 +435,14 @@ extension ServerSetupStore {
                 self.phase = .paused
             }
         }
+    }
+    /// The pinned Home of a saved installation, checked without SSH while no
+    /// setup page is working on it (an open page owns its operation).
+    func finishedConnection() async -> HomeConnection? {
+        guard phase == .paused, operation == nil, let saved = installation,
+              let connection = try? await probe(saved),
+              phase == .paused, operation == nil, installation?.id == saved.id else { return nil }
+        return connection
     }
     func inspect(_ target: ServerTarget) {
         guard recoveryLoaded, installation == nil else { return }
@@ -552,7 +556,7 @@ extension ServerSetupStore {
     }
     private func waitForServer(_ saved: ServerInstallation, access: ServerAccess) async throws {
         phase = .installing
-        var readyChecks = 0
+        var readyChecks = 0, idleChecks = 0
         for _ in 0..<60 {
             try Task.checkCancellation()
             if let connection = try await probe(saved) {
@@ -567,12 +571,16 @@ extension ServerSetupStore {
                 if status.problemWhenUnreachable == .installation { throw ServerSetupFailure.installation }
                 readyChecks = status.problemWhenUnreachable == .serviceUnreachable ? readyChecks + 1 : 0
                 if readyChecks >= 3 { throw ServerSetupFailure.serviceUnreachable }
+                // Nothing staged and nothing running: the install command never
+                // arrived. Pause with Continue instead of waiting out every poll.
+                idleChecks = status.installationID == nil && status.state == "inactive" ? idleChecks + 1 : 0
+                if idleChecks >= 2 { phase = .paused; error = .notStarted; return }
                 stage = ["connecting", "dependencies", "download", "build", "verify", "ready"].contains(status.stage) ? status.stage : "dependencies"
             } catch ServerSetupFailure.connection {
                 // SSH may briefly disappear while packages/networking change.
                 // Keep the same bounded polling loop and pinned HTTPS probe.
                 try Task.checkCancellation()
-                readyChecks = 0
+                readyChecks = 0; idleChecks = 0
                 stage = "reconnecting"
             }
             try await Task.sleep(for: .seconds(5))

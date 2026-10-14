@@ -85,7 +85,7 @@ it("allows colleagues to address the employee but not change the binding", async
 
 it("preserves existing groups and requires explicit replacement in the app", async () => {
   const { store, adapter, profile } = setup(); const original = store.createProfile({ name: "Wolf" });
-  store.linkTelegramChat({ chatId: "-100", title: "Core", allowedSenders: ["42", "77"] });
+  store.linkTelegramChat({ chatId: "-100", title: "Test group", allowedSenders: ["42", "77"] });
   const before = store.bindTelegramChat("-100", original.id);
   const a = adapter.createLink(profile.id, "group");
   await adapter.processUpdate(message(1, `/start@strudel_bot ${a.code}`));

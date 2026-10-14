@@ -6,7 +6,8 @@ import { randomUUID } from "node:crypto";
 import { OpenStrudelRuntime } from "../src/runtime.js";
 import { MockCodexEngine } from "../src/codex.js";
 import { Store } from "../src/store.js";
-import { Home, decryptBackup, encryptBackup, type WireRequest } from "../src/home.js";
+import { execFileSync } from "node:child_process";
+import { Home, decryptBackup, defaultDeviceName, encryptBackup, type WireRequest } from "../src/home.js";
 import { HomeLink } from "../src/home-link.js";
 import { requestJSON, resultJSON, wireJSON } from "../src/home-transport.js";
 
@@ -64,6 +65,23 @@ describe("user-owned primary Home", () => {
     const renamed = await host.api("/v1/profiles/" + employee.id, "PATCH", { name: "Редактор" });
     expect(renamed.status).toBe(200);
     expect(renamed.value.profile).toMatchObject({ name: "Редактор", instructions: "New instructions from iPhone" });
+    expect((await host.api("/health")).value.employeeRenameKeepsInstructions).toBe(1);
+  });
+
+  it("protects an older worker's instructions when the primary forwards a name-only rename", async () => {
+    const primary = await node("Primary"), worker = await node("Worker");
+    const employee = worker.runtime.store.createProfile({ name: "Editor", instructions: "Catalogue instructions" });
+    await connect(primary, worker);
+    await eventually(() => expect(primary.home.nodeFor("profile", employee.id)).toBe(worker.home.state.nodeId));
+    await worker.runtime.api.homeLink.stop();
+    worker.runtime.store.updateProfile(employee.id, { name: "Editor", instructions: "Saved on the worker" });
+    const rename = primary.api("/v1/profiles/" + employee.id, "PATCH", { name: "Редактор" });
+    const pending = await new Promise<WireRequest>(resolve => { const check = () => { const command = primary.home.pending(worker.home.state.nodeId)[0]; if (command) resolve(command.request); else setTimeout(check, 20); }; check(); });
+    // An older worker requires the field and would otherwise save empty instructions.
+    expect(JSON.parse(Buffer.from(pending.body!, "base64").toString())).toEqual({ name: "Редактор", instructions: "Catalogue instructions", keepInstructions: true });
+    worker.runtime.api.homeLink.start();
+    expect((await rename).status).toBe(200);
+    expect(worker.runtime.store.getProfile(employee.id)).toMatchObject({ name: "Редактор", instructions: "Saved on the worker" });
   });
 
   it("renames the device for every client immediately without changing its identity or address", async () => {
@@ -80,6 +98,7 @@ describe("user-owned primary Home", () => {
     expect(new Home(host.runtime.store).state.name).toBe("Рабочий сервер");
     for (const name of [" ", "a".repeat(121), 42]) expect((await host.api("/v1/home", "PATCH", { name })).status).toBe(400);
     expect(host.home.state.name).toBe("Рабочий сервер");
+    expect((await host.api("/health")).value.deviceRenameVersion).toBe(1);
   });
 
   it("replaces a container hostname once but preserves a name explicitly chosen by the owner", async () => {
@@ -87,6 +106,18 @@ describe("user-owned primary Home", () => {
     expect(new Home(host.runtime.store).state.name).toBe("Server");
     await host.api("/v1/home", "PATCH", { name: "020bc40355c2" });
     expect(new Home(host.runtime.store).state.name).toBe("020bc40355c2");
+  });
+
+  it("replaces a raw macOS network name once but preserves the same name chosen by the owner", async () => {
+    const host = await node("waiMini.local");
+    expect(new Home(host.runtime.store).state.name).toBe(defaultDeviceName());
+    expect(defaultDeviceName()).not.toMatch(/\.local$/i);
+    await host.api("/v1/home", "PATCH", { name: "waiMini.local" });
+    expect(new Home(host.runtime.store).state.name).toBe("waiMini.local");
+  });
+
+  it.skipIf(process.platform !== "darwin")("names a new Mac Home after the computer name shown in macOS", () => {
+    expect(defaultDeviceName()).toBe(execFileSync("/usr/sbin/scutil", ["--get", "ComputerName"], { encoding: "utf8" }).trim());
   });
 
   it("discovers Telegram conversations in the conditional catalogue without combining their histories", async () => {

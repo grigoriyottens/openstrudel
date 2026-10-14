@@ -270,6 +270,10 @@ private struct DevicesPane: View {
                         Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
                             .disabled(!device.canRenameDevice)
                             .accessibilityIdentifier("renameDevice")
+                        if device.health != nil, device.health?.deviceRenameVersion != 1, device.canManageOpenAI || device.canManageConnections {
+                            Text(L("Обновите OpenStrudel на этом устройстве, чтобы переименовать его."))
+                                .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                        }
                         if device.connectionNeedsUnlock {
                             LabeledContent {
                                 SavedConnectionUnlockButton(client: device)
@@ -333,9 +337,10 @@ private struct DevicesPane: View {
     }
 
     private func status(_ device: HomeClient) -> String {
-        if device.connectionNeedsUnlock { return L("Unlock connection") }
-        if device.homeUnreachable || device.health == nil { return L("Нет связи · попробуем снова") }
-        return L("На связи · сотрудников: \(device.profiles.count)")
+        let state = device.connectionNeedsUnlock ? L("Unlock connection")
+            : device.homeUnreachable || device.health == nil ? L("Нет связи · попробуем снова")
+            : L("На связи · сотрудников: \(device.profiles.count)")
+        return library.addressDetail(for: device).map { state + " · " + $0 } ?? state
     }
 }
 

@@ -265,7 +265,31 @@ final class DeviceLibrary: ObservableObject {
         }
     }
 
+    /// Devices with the same name are told apart by their address, never by a renamed copy.
+    func addressDetail(for client: HomeClient) -> String? {
+        guard visibleClients.contains(where: { $0 !== client && $0.displayName == client.displayName }) else { return nil }
+        return URL(string: client.savedBaseURL)?.host
+    }
+
     #if os(macOS)
+    /// Adds a server whose installation answered over its pinned HTTPS and forgets the saved setup.
+    func adoptServer(_ connection: HomeConnection, from flow: ServerSetupFlow) async throws -> HomeClient {
+        let client = clients.first { $0.savedBaseURL == connection.url } ?? newConnection()
+        guard await client.connectToCloud(connection) else { throw HomeClientError.server(client.pairingError ?? L("Не удалось получить ответ. Попробуйте ещё раз.")) }
+        // Not selected: an open setup sheet stays on its account step.
+        add(client, select: false)
+        try flow.finish()
+        return client
+    }
+
+    /// A server that finishes after its setup window closed joins the list by itself.
+    func watchPendingServer(_ flow: ServerSetupFlow = .shared) async {
+        while !Task.isCancelled {
+            if !isErasing, let connection = await flow.finishedConnection() { _ = try? await adoptServer(connection, from: flow) }
+            do { try await Task.sleep(for: .seconds(30)) } catch { break }
+        }
+    }
+
     func openLocal() async {
         guard !isErasing else { return }
         if let local = clients.first(where: { $0.isLocalConnection && !$0.isSignedOut }) {

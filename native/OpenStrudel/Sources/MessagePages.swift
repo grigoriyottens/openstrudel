@@ -42,6 +42,34 @@ enum MessagePages {
         return false
     }
 
+    /// The owner's explicit reply in Telegram: the bot publishes it, a person wrote it.
+    /// The employee's own replies carry no author.
+    static func isOwnerReply(_ message: HomeMessage) -> Bool {
+        message.direction == "outbound" && message.channel == "telegram" && message.author != nil && message.imported != true
+    }
+
+    /// In a group where the employee decides by its own rules, a message still being decided is not
+    /// a request yet: it joins the feed with its reply, and never if the employee stays silent.
+    static func feed(_ messages: [HomeMessage], decidingChats: Set<String>) -> [HomeMessage] {
+        guard !decidingChats.isEmpty else { return messages }
+        return messages.filter { message in
+            !(message.direction == "inbound" && message.origin?.channel == "telegram" && (message.status == "queued" || message.status == "running")
+              && decidingChats.contains(message.origin?.chatId ?? ""))
+        }
+    }
+
+    enum DeliveryAction: Equatable { case open(URL), resend(HomeMessage) }
+
+    /// One clear way on from a reply Telegram did not take or did not confirm: open the request in
+    /// Telegram, or let the owner send the prepared text again. Nothing is resent by itself.
+    static func deliveryAction(for reply: HomeMessage, in messages: [HomeMessage], canReply: Bool) -> DeliveryAction? {
+        guard reply.direction == "outbound", ["not_sent", "unknown"].contains(reply.delivery?.state) else { return nil }
+        let request = messages.first { $0.id == reply.replyToId }
+        if let raw = reply.origin?.url ?? request?.origin?.url, let url = URL(string: raw), url.scheme == "https", url.host == "t.me" { return .open(url) }
+        if canReply, let request, request.origin?.canReply == true { return .resend(request) }
+        return nil
+    }
+
     /// Pages are ordered by the server, including messages with identical dates.
     static func merge(existing: [HomeMessage], page: [HomeMessage], updates: [HomeMessage] = [], prepend: Bool = false, removedIDs: [String] = []) -> [HomeMessage] {
         let removed = Set(removedIDs)

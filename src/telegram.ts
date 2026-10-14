@@ -7,7 +7,7 @@ import { transcribeVoice } from "./voice.js";
 import { AccountUnavailableError } from "./account-errors.js";
 import type { MessageService } from "./messages.js";
 import type { Store } from "./store.js";
-import { assertAgentWritable } from "./agent-move.js";
+import { agentTransfer, assertAgentWritable } from "./agent-move.js";
 
 export interface TelegramUpdate {
   update_id: number;
@@ -23,6 +23,9 @@ interface TelegramBot { id: number; is_bot: boolean; first_name: string; usernam
 class TelegramRequestError extends Error {
   constructor(message: string, readonly code?: number) { super(message); }
 }
+/** Telegram answered with a client error: it refused the request and sent nothing. */
+const refused = (error: unknown) => error instanceof TelegramRequestError && error.code !== undefined && error.code >= 400 && error.code < 500;
+const REFUSED = "Telegram отклонил сообщение, оно не отправлено. Проверьте, что бот остался в чате.";
 
 function telegramConnectionError(error: unknown): string {
   if (error instanceof TelegramRequestError) {
@@ -229,10 +232,10 @@ export class TelegramAdapter {
       await this.sendMessage(chat.chatId, text, "reply:" + reply.id, Number(origin![2]));
       await this.sendFiles(chat.chatId, files, "reply:" + reply.id);
       this.store.setMessageStatus(reply.id, "completed");
-    } catch {
+    } catch (error) {
       // The durable receipt survives a lost HTTP acknowledgement. Repeating
       // the same app request reads it; it never sends an uncertain reply again.
-      this.store.setMessageStatus(reply.id, "failed", "Доставка не завершена. Проверьте сообщение в Telegram перед новой отправкой.");
+      this.store.setMessageStatus(reply.id, "failed", refused(error) ? REFUSED : "Доставка не завершена. Проверьте сообщение в Telegram перед новой отправкой.");
     } finally {
       const remaining = (this.activeChats.get(chat.chatId) ?? 1) - 1;
       if (remaining) this.activeChats.set(chat.chatId, remaining); else this.activeChats.delete(chat.chatId);
@@ -246,7 +249,8 @@ export class TelegramAdapter {
     for (const [index,chunk] of chunks.entries()) {
       const key=`${chatId}:${deliveryKey}:${index}`;
       const payload=JSON.stringify({chat_id:chatId,...chunk,link_preview_options:{is_disabled:true},
-        ...(index === 0 && replyToMessageId ? { reply_parameters: { message_id: replyToMessageId } } : {})});
+        // The owner's words still reach the group if the original was deleted.
+        ...(index === 0 && replyToMessageId ? { reply_parameters: { message_id: replyToMessageId, allow_sending_without_reply: true } } : {})});
       this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status) VALUES(?,?,?,'pending')").run(key,String(chatId),payload);
       const row=this.store.db.prepare("SELECT * FROM telegram_outbox WHERE key=?").get(key)!;
       if(row.payload!==payload) throw new Error("Содержимое доставки изменилось");
@@ -257,7 +261,7 @@ export class TelegramAdapter {
         const sent=await this.call<{message_id:number}>("sendMessage",JSON.parse(payload));
         this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=? WHERE key=?").run(String(sent.message_id),key);
       } catch (error) {
-        this.store.db.prepare("UPDATE telegram_outbox SET status='unknown',error=? WHERE key=?").run("Ответ Telegram не подтверждён; автоматический повтор остановлен",key);
+        this.store.db.prepare("UPDATE telegram_outbox SET status=?,error=? WHERE key=?").run(...(refused(error) ? ["not_sent", REFUSED] : ["unknown", "Ответ Telegram не подтверждён; автоматический повтор остановлен"]), key);
         throw error;
       }
     }
@@ -281,7 +285,7 @@ export class TelegramAdapter {
         const sent = await this.call<{message_id:number}>("sendDocument",form);
         this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=? WHERE key=?").run(String(sent.message_id),key);
       } catch (error) {
-        this.store.db.prepare("UPDATE telegram_outbox SET status='unknown',error=? WHERE key=?").run("Доставка файла не подтверждена. Проверьте Telegram перед повтором.",key);
+        this.store.db.prepare("UPDATE telegram_outbox SET status=?,error=? WHERE key=?").run(...(refused(error) ? ["not_sent", REFUSED] : ["unknown", "Доставка файла не подтверждена. Проверьте Telegram перед повтором."]), key);
         throw error;
       }
     }
@@ -349,6 +353,7 @@ export class TelegramAdapter {
       this.store.migrateTelegramGroup(oldId, newId);
       this.store.markTelegramUpdate(update.update_id); return;
     }
+    if (message?.chat.title) this.store.renameTelegramGroup(String(message.chat.id), message.chat.title);
     if (!message || (!message.text?.trim() && !message.voice && !message.audio && !message.video_note && !message.document && !message.photo?.length)) { this.store.markTelegramUpdate(update.update_id); return; }
     const chatId = String(message.chat.id); let text = (message.text ?? message.caption)?.trim() ?? "";
     const groupStart = text.match(/^\/start@([\w]+)\s+choose$/i);
@@ -403,6 +408,8 @@ export class TelegramAdapter {
     const replyConversation=message.reply_to_message ? this.replyConversation(chatId,message.reply_to_message.message_id) : null;
     const conversation = replyConversation ?? (binding?.conversationId ? this.store.getConversation(binding.conversationId) : null) ?? this.store.getOrCreateConversation({ channel: "telegram", externalId: chatId, title: message.chat.title ?? "Telegram " + chatId });
     this.activeChats.set(chatId, (this.activeChats.get(chatId) ?? 0) + 1);
+    const externalId = chatId + ":" + String(message.message_id), author = [message.from?.first_name,message.from?.last_name].filter(Boolean).join(" ") || undefined;
+    let received = false;
     const prepared=(this.preparations.get(chatId) ?? Promise.resolve({text:""})).catch(()=>({text:""})).then(async()=>{
       const media=message.voice ?? message.audio ?? message.video_note ?? message.document ?? message.photo?.at(-1);
       if(!media) return {text};
@@ -420,9 +427,9 @@ export class TelegramAdapter {
     });
     this.preparations.set(chatId,prepared);
     try {
-    const input = await prepared;text=input.text;
+    const input = await prepared;text=input.text;received=true;
     const replyToAssistant = Boolean(replyConversation || replyAuthor && (replyAuthor.id === this.bot?.id || replyAuthor.is_bot && replyAuthor.username?.toLowerCase() === (this.bot?.username ?? this.store.getSetting("telegram.bot_username"))?.toLowerCase()));
-    const submission = { channel: "telegram" as const, conversationId: conversation.id, text, uploads:input.uploads, replyToAssistant, telegramSenderId:message.from ? String(message.from.id) : undefined, author:[message.from?.first_name,message.from?.last_name].filter(Boolean).join(" ") || undefined, externalId: chatId + ":" + String(message.message_id), externalChatId: chatId, title: message.chat.title ?? "Telegram " + chatId };
+    const submission = { channel: "telegram" as const, conversationId: conversation.id, text, uploads:input.uploads, replyToAssistant, telegramSenderId:message.from ? String(message.from.id) : undefined, author, externalId, externalChatId: chatId, title: message.chat.title ?? "Telegram " + chatId };
     if (contextOnly) {
       await this.messages.submit({ ...submission, contextOnly:true });
       this.store.markTelegramUpdate(update.update_id); return;
@@ -430,12 +437,22 @@ export class TelegramAdapter {
     const result: MessageResult = await this.messages.handle(submission);
     this.store.deleteSetting(accountNoticeKey);
     const currentBinding = this.store.getTelegramChat(chatId);
-    try { if (currentBinding && currentBinding.profileId === binding?.profileId && (Number(chatId) >= 0 || result.text.trim() !== "NO_REPLY")) { await this.sendMessage(message.chat.id, result.text,`reply:${result.messageId}`); await this.sendFiles(message.chat.id,result.attachments,`reply:${result.messageId}`); } }
+    try {
+      // The chat changed hands during the turn. Record that nothing was sent.
+      if (!currentBinding || currentBinding.profileId !== binding?.profileId) this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status,error) VALUES(?,?,'{}','not_sent',?)")
+        .run(`${chatId}:reply:${result.messageId}:0`, chatId, "Подключение этого чата изменилось. Ответ не отправлен в Telegram.");
+      else if (Number(chatId) >= 0 || result.text.trim() !== "NO_REPLY") { await this.sendMessage(message.chat.id, result.text,`reply:${result.messageId}`); await this.sendFiles(message.chat.id,result.attachments,`reply:${result.messageId}`); }
+    }
     catch { this.lastError="Ответ сохранён в приложении; доставку в Telegram нужно проверить"; }
     } catch (error) {
       if (contextOnly) {
         this.lastError = "Не удалось сохранить часть контекста группы. Отправьте нужное вложение в ответ на сообщение бота.";
         this.store.markTelegramUpdate(update.update_id); return;
+      }
+      // A file Telegram could not hand over never reached the employee. Keep the request visible.
+      if (!received && !agentTransfer(this.store, conversation.profileId ?? "main") && !this.store.findMessageByExternal("telegram", externalId)) {
+        const failed = this.store.addMessage({ conversationId: conversation.id, channel: "telegram", direction: "inbound", text, externalId, author });
+        this.store.setMessageStatus(failed.id, "failed", error instanceof TelegramRequestError ? "Не удалось получить файл до 20 МБ" : error instanceof Error ? error.message : "Не удалось скачать вложение");
       }
       if (error instanceof AccountUnavailableError && Number(chatId) < 0) {
         // A group may send an album or carry on talking during an account

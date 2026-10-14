@@ -24,6 +24,29 @@ import Testing
         await client.refreshConversation()
         #expect(client.usesEmployeeTimeline)
     }
+    @Test func anOfflineLaunchKeepsTheFeedItsHomeServedAndNeverReopensAnOldGroup() async throws {
+        let fixture = CatalogueFixture(); fixture.timeline = true
+        let (client, session, defaults, suite) = makeClient(fixture)
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite) }
+        await client.load(); await client.selectProfile("employee")
+        #expect(client.usesEmployeeTimeline)
+        defaults.set("group", forKey: "openstrudel.selectedChatID")
+        let offline = HomeClient(defaults: defaults, session: session, pendingDirectory: fixture.pendingDirectory, connectionID: suite, credentialReader: { _, _ in nil })
+        #expect(offline.health == nil)
+        #expect(offline.usesEmployeeTimeline)
+        #expect(offline.selectedChatID == nil)
+    }
+    @Test func anOfflineLaunchKeepsAGroupChosenOnAnOlderHome() async throws {
+        let fixture = CatalogueFixture()
+        let (client, session, defaults, suite) = makeClient(fixture)
+        defer { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite) }
+        await client.load()
+        #expect(!client.usesEmployeeTimeline)
+        defaults.set("group", forKey: "openstrudel.selectedChatID")
+        let offline = HomeClient(defaults: defaults, session: session, pendingDirectory: fixture.pendingDirectory, connectionID: suite, credentialReader: { _, _ in nil })
+        #expect(!offline.usesEmployeeTimeline)
+        #expect(offline.selectedChatID == "group")
+    }
     @Test func explicitTelegramReplyKeepsItsAudienceAndIdentityAfterLostAcknowledgement() async throws {
         let fixture = CatalogueFixture(); fixture.timeline = true
         let (client, session, defaults, suite) = makeClient(fixture)

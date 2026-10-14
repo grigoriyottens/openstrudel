@@ -317,6 +317,48 @@ struct ServerSetupTests {
         }
     }
 
+    @Test @MainActor func anInstallationThatNeverStartedPausesWithContinueInsteadOfWaiting() async throws {
+        let saved = try pendingInstallation()
+        let transport = ServerSetupTestTransport(status: Data(#"{"installationID":null,"state":"inactive","stage":"dependencies"}"#.utf8), installFailure: .connection)
+        let store = ServerSetupMemoryStore(installation: saved)
+        let flow = ServerSetupFlow(store: store, probe: { _ in nil }, transport: transport)
+        flow.confirm(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+        flow.install(access: ServerAccess(password: "fixture"))
+        for _ in 0..<1600 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .paused)
+        #expect(flow.error == .notStarted)
+        #expect(await transport.installInputs.count == 1, "Pausing never starts a second job")
+        #expect(store.installation?.id == saved.id)
+        flow.pause()
+    }
+
+    @Test @MainActor func aFinishedServerJoinsTheListWithoutOpeningSetup() async throws {
+        let saved = try pendingInstallation()
+        let store = ServerSetupMemoryStore(installation: saved)
+        let key = String(repeating: "c", count: 64)
+        let connection = HomeConnection(url: "https://127.0.0.1:9", token: key, pin: key, name: "Server")
+        let busy = ServerSetupFlow(store: store, probe: { _ in try await Task.sleep(for: .milliseconds(50)); return nil })
+        busy.resume()
+        #expect(await busy.finishedConnection() == nil, "An open setup page owns its own check")
+        busy.pause()
+
+        let flow = ServerSetupFlow(store: store, probe: { _ in connection })
+        #expect(flow.phase == .paused)
+        let finished = try #require(await flow.finishedConnection())
+        let suite = "OpenStrudel.finished-server." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(connection.url, forKey: "openstrudel.homeURL")
+        let client = HomeClient(defaults: defaults, connectionID: suite, credentialReader: { _, _ in nil }, credentialWriter: { _, _ in })
+        let library = DeviceLibrary(defaults: defaults, clients: [client])
+        #expect(try await library.adoptServer(finished, from: flow) === client)
+        #expect(client.hasToken && client.normalizedBaseURL == connection.url)
+        #expect(store.installation == nil)
+        #expect(flow.installation == nil)
+        #expect(await flow.finishedConnection() == nil)
+    }
+
     private func pendingInstallation() throws -> ServerInstallation {
         let target = try ServerTarget(host: "server.example.com", user: "root", port: 22)
         let key = try SSHHostKey(line: "host ssh-ed25519 " + Data(repeating: 1, count: 51).base64EncodedString(), target: target)

@@ -64,7 +64,8 @@ struct EmployeePicker: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Text(source.displayName)
-                                if source.homeUnreachable { Image(systemName: "wifi.slash") }
+                                if source.connectionNeedsUnlock { Image(systemName: "lock") }
+                                else if source.homeUnreachable { Image(systemName: "wifi.slash") }
                                 Spacer(minLength: 0)
                                 Image(systemName: !searchTerm.isEmpty || !library.collapsedDeviceIDs.contains(source.id) ? "chevron.down" : "chevron.right")
                                     .font(.caption.weight(.semibold))
@@ -74,7 +75,7 @@ struct EmployeePicker: View {
                             .contentShape(Rectangle())
                         }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(source.displayName)
+                            .accessibilityLabel(headerLabel(source))
                             .accessibilityValue(library.collapsedDeviceIDs.contains(source.id) && searchTerm.isEmpty ? L("Свёрнуто") : L("Развёрнуто"))
                             .accessibilityIdentifier("deviceHeader-" + source.id)
                         Menu {
@@ -83,16 +84,17 @@ struct EmployeePicker: View {
                         } label: {
                             Image(systemName: "ellipsis").frame(minWidth: controlTarget, minHeight: controlTarget)
                         }
-                            .accessibilityLabel(source.displayName)
+                            .accessibilityLabel(L("Действия: \(source.displayName)"))
                             .accessibilityIdentifier("deviceMenu-" + source.id)
                             }
                     }
                     }
+                    // A group found by name opens the feed of the employee who works there.
                     let groups = source.telegramGroups.filter { !searchTerm.isEmpty && $0.title.localizedCaseInsensitiveContains(searchTerm) }
                     if !groups.isEmpty {
-                        Section(library.hasOtherDevices ? L("Conversations · \(source.displayName)") : L("Переписки")) {
+                        Section(library.hasOtherDevices ? L("Группы в Telegram · \(source.displayName)") : L("Группы в Telegram")) {
                             ForEach(groups) { group in
-                                EmployeePickerRow(name: group.title, subtitle: group.enabled == false ? L("Бот на паузе") : L("Группа в Telegram"),
+                                EmployeePickerRow(name: group.title, subtitle: group.enabled == false ? L("Бот на паузе") : source.profiles.first { $0.id == group.profileId }?.name ?? "OpenStrudel",
                                                   selected: source === client && source.selectedChatID == group.conversationId,
                                                   appearance: nil, symbol: "person.2") {
                                     Task { await library.select(source, group: group); dismiss() }
@@ -145,6 +147,12 @@ struct EmployeePicker: View {
         }
         .sheet(item: $confirmingInvitation) { AddDeviceConfirmation(pairing: $0).environmentObject(library) }
         .modifier(InterfaceLanguage())
+    }
+
+    /// The device's name and, as the Mac sidebar shows with a symbol, why it cannot be reached.
+    private func headerLabel(_ source: HomeClient) -> String {
+        if source.connectionNeedsUnlock { return source.displayName + ", " + L("Unlock connection") }
+        return source.homeUnreachable ? source.displayName + ", " + L("Нет связи") : source.displayName
     }
 }
 

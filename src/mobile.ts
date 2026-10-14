@@ -9,18 +9,19 @@ import { createServer, type Server } from "node:https";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Store } from "./store.js";
-import { isPeerRoute } from "./home-api.js";
+import { isPeerRoute, readBody } from "./home-api.js";
 import { publicKeyPin } from "./home-transport.js";
 import { sameOrigin, type WebAccess } from "./web-access.js";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 type Options = { directory?: string; port?: number; host?: string; hostname?: string; advertisedPort?: number; now?: () => number };
+type Invitation = { id: string; hash: string; expires: number; owner: boolean; label?: string };
+type Client = { id: string; label?: string; pairedAt: string };
 
 /** The same Home API over pinned TLS, opened only by a local pairing action. */
 export class MobileAccess {
   private server?: Server;
   private starting?: Promise<void>;
-  private invitation?: { hash: string; expires: number; owner: boolean };
   private fingerprint = "";
   private keyFingerprint = "";
   private readonly directory: string;
@@ -33,13 +34,22 @@ export class MobileAccess {
   constructor(private readonly store: Store, private readonly handle: (req: IncomingMessage, res: ServerResponse, owner?: boolean) => void, private readonly options: Options = {}) {
     this.directory = options.directory ?? resolve(".data/mobile");
     this.now = options.now ?? Date.now;
-    const saved = JSON.parse(store.getSetting("mobile.invitation") ?? "null");
-    if (saved?.expires > this.now()) this.invitation = saved;
   }
 
-  status() { return { connections: this.tokens().length, clients: this.tokens().map((token, index) => ({ id: token.slice(0, 20), name: "Устройство " + (index + 1), owner: (JSON.parse(this.store.getSetting("mobile.owners") ?? "[]") as string[]).includes(token) })) }; }
+  /** `current` is the requesting client's id, so it is never mistaken for another device. */
+  status(current?: string) {
+    const owners = this.owners(), clients = this.clients();
+    return {
+      connections: this.tokens().length,
+      clients: this.tokens().map(token => {
+        const id = token.slice(0, 20), saved = clients.find(c => c.id === id);
+        return { id, label: saved?.label ?? null, role: owners.includes(token) ? "owner" : "colleague", pairedAt: saved?.pairedAt ?? null, current: id === current };
+      }),
+      invitations: this.invitations().filter(i => !i.owner).map(i => ({ id: i.id, label: i.label ?? null, expiresAt: new Date(i.expires).toISOString() })),
+    };
+  }
 
-  async restore() { if (this.tokens().length || this.invitation || this.store.getSetting("home.endpoint") || this.store.getSetting("web.sessions")) await this.start(); }
+  async restore() { if (this.tokens().length || this.invitations().length || this.store.getSetting("home.endpoint") || this.store.getSetting("web.sessions")) await this.start(); }
   async endpoint() {
     await this.start();
     const machine = hostname();
@@ -47,32 +57,36 @@ export class MobileAccess {
     return { url: `https://${host.includes(":") ? `[${host}]` : host}:${this.options.advertisedPort ?? this.port}`, pin: this.keyFingerprint };
   }
 
-  async invite(owner = false) {
+  /** The owner's own QR lasts 5 minutes and replaces the previous one. A colleague's link lasts a day and coexists with others. */
+  async invite(owner = false, label?: string) {
     await this.start();
     const key = randomBytes(32).toString("hex");
-    const expires = this.now() + 300_000;
-    this.invitation = { hash: hash(key), expires, owner };
-    this.store.setSetting("mobile.invitation", JSON.stringify(this.invitation));
+    const invitation: Invitation = { id: hash(key).slice(0, 20), hash: hash(key), expires: this.now() + (owner ? 300_000 : 86_400_000), owner, ...(label?.trim() ? { label: label.trim().slice(0, 80) } : {}) };
+    this.saveInvitations([...this.invitations().filter(i => !(owner && i.owner)), invitation].slice(-20));
     this.store.deleteSetting("mobile.pair_receipt");
     const machine = hostname();
     const name = (JSON.parse(this.store.getSetting("home.state") ?? "null") as HomeState | null)?.name ?? defaultDeviceName();
     const host = this.options.hostname ?? (machine.endsWith(".local") ? machine : machine + ".local");
     const query = new URLSearchParams({ host, port: String(this.options.advertisedPort ?? this.port), name, key, pin: this.fingerprint, keyPin: this.keyFingerprint });
-    return { url: "openstrudel://connect?" + query, expiresAt: new Date(expires).toISOString() };
+    return { id: invitation.id, url: "openstrudel://connect?" + query, expiresAt: new Date(invitation.expires).toISOString() };
   }
 
-  cancelInvite() { this.invitation = undefined; this.store.deleteSetting("mobile.invitation"); this.store.deleteSetting("mobile.pair_receipt"); }
+  /** Closing the owner's QR ends it. A colleague's link ends only when cancelled by its id or when it expires. */
+  cancelInvite(id?: string) {
+    this.saveInvitations(this.invitations().filter(i => id ? i.id !== id : !i.owner));
+    this.store.deleteSetting("mobile.pair_receipt");
+  }
 
   async revoke() {
-    this.store.deleteSetting("mobile.tokens");
-    this.store.deleteSetting("mobile.owners");
-    this.cancelInvite();
+    for (const key of ["mobile.tokens", "mobile.owners", "mobile.clients", "mobile.invitations", "mobile.pair_receipt"]) this.store.deleteSetting(key);
     if (!this.store.getSetting("home.endpoint") && !this.store.getSetting("web.sessions")) await this.close();
   }
-  revokeClient(id: string) {
+  revokeClient(id: string): boolean {
     const removed = this.tokens().filter(token => token.slice(0, 20) === id);
     this.store.setSetting("mobile.tokens", JSON.stringify(this.tokens().filter(token => !removed.includes(token))));
-    this.store.setSetting("mobile.owners", JSON.stringify((JSON.parse(this.store.getSetting("mobile.owners") ?? "[]") as string[]).filter(token => !removed.includes(token))));
+    this.store.setSetting("mobile.owners", JSON.stringify(this.owners().filter(token => !removed.includes(token))));
+    this.store.setSetting("mobile.clients", JSON.stringify(this.clients().filter(client => client.id !== id)));
+    return removed.length > 0;
   }
 
   async close() {
@@ -90,6 +104,10 @@ export class MobileAccess {
   private tokens(): string[] {
     return JSON.parse(this.store.getSetting("mobile.tokens") ?? "[]") as string[];
   }
+  private owners(): string[] { return JSON.parse(this.store.getSetting("mobile.owners") ?? "[]") as string[]; }
+  private clients(): Client[] { return JSON.parse(this.store.getSetting("mobile.clients") ?? "[]") as Client[]; }
+  private invitations(): Invitation[] { return (JSON.parse(this.store.getSetting("mobile.invitations") ?? "[]") as Invitation[]).filter(i => i.expires > this.now()); }
+  private saveInvitations(invitations: Invitation[]) { this.store.setSetting("mobile.invitations", JSON.stringify(invitations)); }
 
   private start(): Promise<void> {
     if (this.server) return Promise.resolve();
@@ -118,7 +136,7 @@ export class MobileAccess {
     this.certificateBytes = cert;
     this.fingerprint = new X509Certificate(cert).fingerprint256.replaceAll(":", "").toLowerCase();
     this.keyFingerprint = publicKeyPin(new X509Certificate(cert));
-    const server = createServer({ cert, key: await readFile(keyPath), minVersion: "TLSv1.2" }, (req, res) => {
+    const server = createServer({ cert, key: await readFile(keyPath), minVersion: "TLSv1.2" }, async (req, res) => {
       res.setHeader("content-type", "application/json; charset=utf-8");
       res.setHeader("cache-control", "no-store");
       if (!sameOrigin(req)) { res.writeHead(403).end('{"error":"Запрос с другого сайта отклонён"}'); return; }
@@ -130,24 +148,30 @@ export class MobileAccess {
       const token = req.headers.authorization?.replace(/^Bearer /, "") ?? "";
       if (req.method === "POST" && req.url === "/pair") {
         const nonce = req.headers["x-openstrudel-pair-id"];
+        // The device may send its own name for the owner's list of connections.
+        let name: string | undefined;
+        try { const value = JSON.parse((await readBody(req, 4096)).toString() || "{}"); if (typeof value.name === "string" && value.name.trim()) name = value.name.trim().slice(0, 80); }
+        catch { res.writeHead(400).end('{"error":"Не удалось проверить подключение"}'); return; }
         if (nonce !== undefined && (typeof nonce !== "string" || !/^[a-zA-Z0-9-]{32,64}$/.test(nonce))) { res.writeHead(400).end('{"error":"Не удалось проверить подключение"}'); return; }
         const previous = JSON.parse(this.store.getSetting("mobile.pair_receipt") ?? "null");
         if (nonce && previous?.expires > this.now() && previous.keyHash === hash(token) && previous.nonce === nonce && this.tokens().includes(hash(previous.token))) { res.end(JSON.stringify({ token: previous.token })); return; }
         if (previous && previous.expires <= this.now()) this.store.deleteSetting("mobile.pair_receipt");
         if (this.store.getSetting("home.transfer")) { res.writeHead(409).end('{"error":"Сейчас меняется главное устройство. Создайте приглашение после завершения."}'); return; }
-        const invitation = this.invitation;
-        if (!invitation || this.now() >= invitation.expires || hash(token) !== invitation.hash) {
+        const invitation = this.invitations().find(i => i.hash === hash(token));
+        if (!invitation) {
           res.writeHead(401).end('{"error":"QR истёк. Откройте новый код на Mac."}'); return;
         }
         const credential = randomBytes(32).toString("hex");
+        const label = invitation.label ?? name;
         this.store.db.exec("BEGIN IMMEDIATE");
         try {
           this.store.setSetting("mobile.tokens", JSON.stringify([...this.tokens(), hash(credential)]));
-          if (invitation.owner) this.store.setSetting("mobile.owners",JSON.stringify([...JSON.parse(this.store.getSetting("mobile.owners") ?? "[]"),hash(credential)]));
-          this.store.deleteSetting("mobile.invitation");
-          if (nonce) this.store.setSetting("mobile.pair_receipt", JSON.stringify({ keyHash: hash(token), nonce, token: credential, expires: invitation.expires }));
+          if (invitation.owner) this.store.setSetting("mobile.owners", JSON.stringify([...this.owners(), hash(credential)]));
+          this.store.setSetting("mobile.clients", JSON.stringify([...this.clients(), { id: hash(credential).slice(0, 20), ...(label ? { label } : {}), pairedAt: new Date(this.now()).toISOString() }]));
+          this.saveInvitations(this.invitations().filter(i => i.id !== invitation.id));
+          // The plain credential is kept only briefly, to repeat a lost response.
+          if (nonce) this.store.setSetting("mobile.pair_receipt", JSON.stringify({ keyHash: hash(token), nonce, token: credential, expires: Math.min(invitation.expires, this.now() + 300_000) }));
           this.store.db.exec("COMMIT");
-          this.invitation = undefined;
         } catch { this.store.db.exec("ROLLBACK"); res.writeHead(503).end('{"error":"Не удалось сохранить подключение. Проверьте свободное место на устройстве."}'); return; }
         res.end(JSON.stringify({ token: credential })); return;
       }
@@ -159,7 +183,7 @@ export class MobileAccess {
         res.end('{"ok":true}'); return;
       }
       // A phone cannot issue more invitations or revoke someone else's access.
-      const owner=(JSON.parse(this.store.getSetting("mobile.owners") ?? "[]") as string[]).includes(hash(token));
+      const owner = this.owners().includes(hash(token));
       if (req.url?.startsWith("/v1/mobile") && !owner) { res.writeHead(403).end('{"error":"Откройте настройки на Mac"}'); return; }
       this.handle(req, res, owner);
     });

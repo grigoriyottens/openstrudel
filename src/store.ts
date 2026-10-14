@@ -224,6 +224,14 @@ export class Store {
     return this.getTelegramChat(input.chatId)!;
   }
 
+  /** Telegram reports a group's current title on each message; captions follow renames. */
+  renameTelegramGroup(chatId: string, title: string): void {
+    const chat = this.getTelegramChat(chatId);
+    if (!chat || Number(chatId) >= 0 || !title.trim() || chat.title === title) return;
+    this.db.prepare("UPDATE telegram_chats SET title=? WHERE chat_id=?").run(title, chatId);
+    this.db.prepare("UPDATE conversations SET title=? WHERE channel='telegram' AND (external_id=? OR external_id LIKE ?)").run(title, chatId, chatId + "::employee::%");
+  }
+
   bindTelegramChat(chatId: string, profileId: string | null): TelegramChat {
     const chat = this.getTelegramChat(chatId);
     if (!chat) throw new Error("Сначала подключите этот Telegram-чат");
@@ -476,17 +484,18 @@ export class Store {
       canReply: Boolean(current && chat.enabled !== false && this.getSetting("telegram.paused." + chatId) !== "true" && message.direction === "inbound"),
     };
     let telegramMessageId = message.direction === "inbound" ? String(external ?? "").split(":")[1] : undefined;
-    if (message.direction === "outbound" && this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='telegram_outbox'").get()) {
-      const prefix = `${chatId}:reply:${message.id}:`;
-      const deliveries = this.db.prepare("SELECT key,status,message_id,error FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix, prefix + "\uffff") as Row[];
-      const uncertain = deliveries.find(r => r.status === "unknown");
+    const prefix = `${chatId}:reply:${message.id}:`;
+    const deliveries = message.direction === "outbound" && this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='telegram_outbox'").get()
+      ? this.db.prepare("SELECT key,status,message_id,error FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix, prefix + "\uffff") as Row[] : [];
+    // Replies from before delivery tracking, or saved just before a crash, have no
+    // record. Nothing is known about them, so no state is shown.
+    if (deliveries.length) {
+      const uncertain = deliveries.find(r => r.status === "unknown"), rejected = deliveries.find(r => r.status === "not_sent");
       const pending = deliveries.some(r => r.status === "pending" || r.status === "sending") || message.status === "running"
         || (message.attachments ?? []).some(file => !deliveries.some(r => r.key === prefix + "file:" + file.id));
       message.delivery = uncertain ? { state: "unknown", error: String(uncertain.error ?? "") }
-        : message.status === "failed" ? { state: deliveries.some(r => r.status === "delivered") ? "unknown" : "not_sent", error: message.error ?? undefined }
-        : pending || !deliveries.length && current ? { state: "pending" }
-        : deliveries.length && deliveries.every(r => r.status === "delivered") ? { state: "delivered" }
-        : { state: "not_sent" };
+        : message.status === "failed" || rejected ? { state: deliveries.some(r => r.status === "delivered") ? "unknown" : "not_sent", error: String(rejected?.error ?? message.error ?? "") }
+        : pending ? { state: "pending" } : { state: "delivered" };
       telegramMessageId = deliveries.find(r => r.message_id)?.message_id as string | undefined;
     }
     if (/^-100\d+$/.test(chatId) && /^\d+$/.test(telegramMessageId ?? "")) origin.url = `https://t.me/c/${chatId.slice(4)}/${telegramMessageId}`;

@@ -50,6 +50,9 @@ struct HomeHealth: Decodable {
     var turnControlVersion: Int? = nil
     var queueControlVersion: Int? = nil
     var employeeTimelineVersion: Int? = nil
+    var employeeRenameKeepsInstructions: Int? = nil
+    var deviceRenameVersion: Int? = nil
+    var colleagueInvitesVersion: Int? = nil
 }
 
 struct HomeConversation: Decodable {
@@ -346,6 +349,37 @@ struct HomeEndpoint: Codable, Equatable { let url: String; let pin: String? }
 struct HomeDevice: Decodable, Identifiable, Equatable {
     let id: String; let name: String; let platform: String; let primary: Bool; let online: Bool; let agents: Int
     let endpoint: HomeEndpoint?
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id); name = deviceTitle(try values.decode(String.self, forKey: .name))
+        platform = try values.decode(String.self, forKey: .platform); primary = try values.decode(Bool.self, forKey: .primary)
+        online = try values.decode(Bool.self, forKey: .online); agents = try values.decode(Int.self, forKey: .agents)
+        endpoint = try values.decodeIfPresent(HomeEndpoint.self, forKey: .endpoint)
+    }
+    private enum CodingKeys: String, CodingKey { case id, name, platform, primary, online, agents, endpoint }
+}
+
+/// A Home's shared name as people read it: the server default in the interface
+/// language, and a Mac's network hostname without its ".local" suffix.
+func deviceTitle(_ name: String, language: AppLanguage? = nil) -> String {
+    if name == "Server" { return L10n.text("Server", language: language) }
+    return name.count > 6 && name.lowercased().hasSuffix(".local") ? String(name.dropLast(6)) : name
+}
+
+/// A device paired with this Home, as its owner sees it in Settings.
+struct MobileClient: Decodable, Identifiable, Equatable {
+    let id: String
+    var label: String? = nil
+    var role: String? = nil
+    var pairedAt: String? = nil
+    var current: Bool? = nil
+    var isColleague: Bool { role == "colleague" }
+    var pairedDate: Date? {
+        guard let pairedAt else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: pairedAt) ?? ISO8601DateFormatter().date(from: pairedAt)
+    }
 }
 struct HomeDevices: Decodable { let devices: [HomeDevice]; let primaryId: String }
 struct HomeManagement: Decodable {

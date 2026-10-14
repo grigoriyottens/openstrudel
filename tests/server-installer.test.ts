@@ -153,4 +153,9 @@ describe("personal server installer", () => {
     expect(compose).not.toContain("docker.sock");
     expect(compose).not.toContain("privileged:");
   });
+
+  it("leaves room for a multi-tool Codex run inside the container", () => {
+    // 256 stopped a real multi-tool run from starting on a server.
+    expect(readFileSync("deploy/compose.yaml", "utf8")).toMatch(/^\s+pids_limit: 512$/m);
+  });
 });

@@ -172,6 +172,12 @@ export class HomeApi {
     if (method === "GET" && !node.online) throw new HomeError(`«${node.name}» пока не на связи. Подключимся автоматически.`, 503);
     url.searchParams.delete("deviceId");
     if (body) delete body.deviceId;
+    if (method === "PATCH" && agent && /^\/v1\/profiles\/[^/]+$/.test(path)) {
+      // Homes before the name-only rename saved empty instructions when the field
+      // was missing. Send the catalogue copy only as their fallback.
+      body = await jsonBody(request);
+      if (body.instructions === undefined) body = { ...body, instructions: this.home.resources("profile", nodeId).find(p => p.id === decodeURIComponent(agent[1]!))?.instructions, keepInstructions: true };
+    }
     if (body && path === "/v1/messages") { body.externalId ??= randomUUID(); url.searchParams.set("async", "true"); }
     const forwarded: WireRequest = { method, path: url.pathname + url.search, owner, contentType: String(request.headers["content-type"] ?? "application/json"), ...(method !== "GET" ? { body: body ? requestJSON(body) : (await readBody(request, 192 * 1024 * 1024)).toString("base64") } : {}) };
     const key = request.headers["idempotency-key"];

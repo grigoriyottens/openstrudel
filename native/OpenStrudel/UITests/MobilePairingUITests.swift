@@ -111,7 +111,7 @@ final class MobilePairingUITests: XCTestCase {
         XCTAssertTrue(input.waitForNonExistence(timeout: 10), app.debugDescription)
         XCTAssertEqual(employee.label, "Редактор · iPhone")
         XCTAssertTrue(header.isHittable, app.debugDescription)
-        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "deviceMenu-", deviceName)).firstMatch.tap()
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label IN %@", "deviceMenu-", ["Действия: " + deviceName, "Actions: " + deviceName])).firstMatch.tap()
         XCTAssertTrue(rename.waitForExistence(timeout: 5)); rename.tap()
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         input.tap()

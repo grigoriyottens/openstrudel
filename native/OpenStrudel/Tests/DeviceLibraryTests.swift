@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Testing
 
 @Suite(.serialized)
@@ -271,4 +272,255 @@ private final class CredentialReadGate: @unchecked Sendable {
     var didStart: Bool { lock.withLock { started } }
     func markStarted() { lock.withLock { started = true } }
     let finish = DispatchSemaphore(value: 0)
+}
+
+@Suite(.serialized)
+@MainActor struct DeviceManagementTests {
+    @Test func renamingAnEmployeeOnAnOlderHomeKeepsItsInstructions() async throws {
+        let fixture = DevicesFixture()
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        try await client.renameProfile(id: "employee", name: "Редактор")
+        #expect(fixture.renames.last?["instructions"] as? String == "Пиши кратко")
+        #expect(fixture.renames.last?["keepInstructions"] as? Bool == true, "A newer Home keeps its own copy over this cached one")
+        #expect(client.profiles.first?.instructions == "Пиши кратко")
+
+        fixture.flags["employeeRenameKeepsInstructions"] = 1
+        await client.load()
+        try await client.renameProfile(id: "employee", name: "Редактор 2")
+        #expect(fixture.renames.last?["name"] as? String == "Редактор 2")
+        #expect(fixture.renames.last?["instructions"] == nil)
+        #expect(client.profiles.first?.instructions == "Пиши кратко")
+    }
+
+    @Test func aHomeThatCannotShareANewNameOffersNoRename() async throws {
+        let fixture = DevicesFixture()
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        #expect(client.health?.homeProtocol == 1)
+        #expect(!client.canRenameDevice, "An older Home keeps listing the old name, so a rename would silently revert")
+        fixture.flags["deviceRenameVersion"] = 1
+        await client.load()
+        #expect(client.canRenameDevice)
+    }
+
+    @Test func namesNeverShowAHostnameSuffixAndTheServerDefaultFollowsTheLanguage() async throws {
+        #expect(deviceTitle("Server", language: .russian) == "Сервер")
+        #expect(deviceTitle("Server", language: .french) == "Serveur")
+        #expect(deviceTitle("waiMini.local") == "waiMini")
+        #expect(deviceTitle(".local") == ".local")
+        #expect(deviceTitle("Рабочий сервер") == "Рабочий сервер")
+        let fixture = DevicesFixture()
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        #expect(client.displayName == L("Этот Mac"))
+        fixture.deviceName = "waiMini.local"
+        await client.load()
+        #expect(client.displayName == "waiMini")
+        #expect(client.devices.first?.name == "waiMini")
+    }
+
+    @Test func devicesWithTheSameNameAreToldApartByTheirAddress() throws {
+        var suites: [String] = []
+        defer { suites.forEach { UserDefaults().removePersistentDomain(forName: $0) } }
+        func server(_ url: String, _ name: String) throws -> HomeClient {
+            let suite = "OpenStrudel.same-name." + UUID().uuidString
+            suites.append(suite)
+            let defaults = try #require(UserDefaults(suiteName: suite))
+            defaults.set(url, forKey: "openstrudel.homeURL")
+            defaults.set(name, forKey: "openstrudel.connectionName")
+            return HomeClient(defaults: defaults, connectionID: suite, credentialReader: { account, _ in
+                account.hasSuffix("home-certificate-pin") ? String(repeating: "b", count: 64) : account.hasSuffix("home-api-token") ? "fixture" : nil
+            }, credentialWriter: { _, _ in })
+        }
+        let first = try server("https://2.29.5.55:7789", "Команда")
+        let second = try server("https://62.238.6.198:7789", "Команда")
+        let other = try server("https://203.0.113.10:7789", "Grant")
+        let defaults = try #require(UserDefaults(suiteName: suites[0]))
+        let library = DeviceLibrary(defaults: defaults, clients: [first, second, other])
+        #expect(library.addressDetail(for: first) == "2.29.5.55")
+        #expect(library.addressDetail(for: second) == "62.238.6.198")
+        #expect(library.addressDetail(for: other) == nil)
+    }
+
+    @Test func colleagueInvitationsOutliveTheSheetAndOneColleagueCanBeDisconnected() async throws {
+        let fixture = DevicesFixture()
+        fixture.flags["colleagueInvitesVersion"] = 1
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        await client.refreshMobileStatus()
+        #expect(client.supportsColleagueInvites)
+        #expect(client.mobileClients.map(\.id) == ["owner-phone", "colleague"])
+        #expect(client.mobileClients.first?.current == true)
+        #expect(client.mobileClients.last?.isColleague == true)
+        #expect(client.mobileClients.last?.pairedDate != nil)
+
+        await client.inviteMobile(owner: false)
+        await client.cancelMobileInvitation(colleague: true)
+        #expect(fixture.cancelledInvitations == 0, "A colleague's link keeps working after the sheet closes")
+        await client.inviteMobile()
+        await client.cancelMobileInvitation()
+        #expect(fixture.cancelledInvitations == 1)
+
+        try await client.revokeMobileClient("colleague")
+        #expect(fixture.revokedClients == ["colleague"])
+        #expect(client.mobileClients.map(\.id) == ["owner-phone"])
+    }
+
+    @Test func anOlderHomeKeepsItsSingleShortInvitation() async throws {
+        let fixture = DevicesFixture()
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        await client.refreshMobileStatus()
+        #expect(!client.supportsColleagueInvites)
+        #expect(client.mobileClients.isEmpty)
+        #expect(client.canManageConnections)
+        await client.inviteMobile(owner: false)
+        await client.cancelMobileInvitation(colleague: true)
+        #expect(fixture.cancelledInvitations == 1)
+    }
+
+    @Test func credentialsAreSavedAndRemovedWithoutAKeychainDialog() async throws {
+        let suite = "OpenStrudel.silent-keychain." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let log = KeychainLog()
+        let client = HomeClient(defaults: defaults, connectionID: suite, credentialReader: { account, _ in
+            log.record(account); return nil
+        }, credentialWriter: { account, _ in log.record(account) })
+        let key = String(repeating: "c", count: 64)
+        #expect(await client.connectToCloud(HomeConnection(url: "https://127.0.0.1:9", token: key, pin: key, name: "Server")))
+        client.disconnectFromMac()
+        #expect(log.entries.count >= 5)
+        #expect(log.entries.allSatisfy { !$0.allowed }, "\(log.entries)")
+    }
+
+    private func makeClient(_ fixture: DevicesFixture) -> (HomeClient, () -> Void) {
+        let suite = "OpenStrudel.devices-test." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.set("http://127.0.0.1:57581", forKey: "openstrudel.homeURL")
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [DevicesProtocol.self]
+        DevicesProtocol.setHandler { request in await fixture.respond(request) }
+        let session = URLSession(configuration: config)
+        let client = HomeClient(defaults: defaults, session: session, pendingDirectory: FileManager.default.temporaryDirectory.appending(path: suite),
+                                connectionID: suite, credentialReader: { _, _ in nil }, credentialWriter: { _, _ in })
+        return (client, { session.invalidateAndCancel(); defaults.removePersistentDomain(forName: suite) })
+    }
+}
+
+/// The interaction flag is process-wide, so Keychain calls take turns.
+struct KeychainInteractionTests {
+    @Test func anExplicitUnlockCannotLendItsPermissionToABackgroundCall() {
+        let log = KeychainLog()
+        let unlocking = DispatchSemaphore(value: 0), answered = DispatchSemaphore(value: 0), done = DispatchGroup()
+        DispatchQueue.global().async(group: done) {
+            KeychainInteraction.run(allowing: true) {
+                log.record("unlock"); unlocking.signal(); answered.wait(); log.record("unlock")
+            }
+        }
+        unlocking.wait()
+        DispatchQueue.global().async(group: done) { KeychainInteraction.run { log.record("background") } }
+        Thread.sleep(forTimeInterval: 0.2)
+        answered.signal()
+        done.wait()
+        #expect(log.entries.map { $0.name } == ["unlock", "unlock", "background"])
+        #expect(log.entries.map { $0.allowed } == [true, true, false])
+    }
+}
+
+/// Records whether macOS could show a Keychain dialog during each credential call.
+private final class KeychainLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [(name: String, allowed: Bool)] = []
+    var entries: [(name: String, allowed: Bool)] { lock.lock(); defer { lock.unlock() }; return values }
+    func record(_ name: String) {
+        var allowed = DarwinBoolean(true)
+        SecKeychainGetUserInteractionAllowed(&allowed)
+        lock.lock(); values.append((name, allowed.boolValue)); lock.unlock()
+    }
+}
+
+@MainActor private final class DevicesFixture {
+    var flags: [String: Int] = [:]
+    var deviceName = "Mini"
+    var instructions = "Пиши кратко"
+    var profileName = "Тест"
+    var renames: [[String: Any]] = []
+    var cancelledInvitations = 0
+    var revokedClients: [String] = []
+    func respond(_ request: URLRequest) async -> (Int, Data) {
+        let path = request.url!.path, method = request.httpMethod ?? "GET"
+        func json(_ value: Any) -> (Int, Data) { (200, try! JSONSerialization.data(withJSONObject: value)) }
+        let profile: () -> [String: Any] = { ["id": "employee", "name": self.profileName, "instructions": self.instructions, "capabilities": [], "createdAt": "2026-10-09T00:00:00Z"] }
+        switch (method, path) {
+        case ("GET", "/health"):
+            return json((["ok": true, "homeId": "home-fixture", "homeProtocol": 1, "nodeId": "node"] as [String: Any]).merging(flags) { _, new in new })
+        case ("GET", "/v1/profiles"): return json(["profiles": [profile()]])
+        case ("PATCH", "/v1/profiles/employee"):
+            let body = (try? JSONSerialization.jsonObject(with: Self.body(request))) as? [String: Any] ?? [:]
+            renames.append(body)
+            profileName = body["name"] as? String ?? profileName
+            // An older Home replaces missing instructions with an empty value.
+            instructions = body["instructions"] as? String ?? (flags["employeeRenameKeepsInstructions"] == 1 ? instructions : "")
+            return json(["profile": profile()])
+        case ("GET", "/v1/devices"):
+            return json(["devices": [["id": "node", "name": deviceName, "platform": "linux", "primary": true, "online": true, "agents": 1]], "primaryId": "node"])
+        case ("GET", "/v1/account"): return json(["account": ["connected": true, "managed": true], "canManage": true])
+        case ("GET", "/v1/integrations"): return json(["telegram": ["configured": false, "running": false, "linkedChats": []]])
+        case ("GET", "/v1/mobile"):
+            guard flags["colleagueInvitesVersion"] == 1 else {
+                return json(["connections": 1, "clients": [["id": "legacy", "name": "Устройство 1", "owner": true]]])
+            }
+            let clients: [[String: Any]] = [
+                ["id": "owner-phone", "label": "iPhone", "role": "owner", "pairedAt": "2026-10-14T10:00:00.000Z", "current": true],
+                ["id": "colleague", "label": "Коллега", "role": "colleague", "pairedAt": "2026-10-14T11:00:00Z", "current": false],
+            ].filter { !revokedClients.contains($0["id"] as! String) }
+            return json(["connections": clients.count, "clients": clients])
+        case ("POST", "/v1/mobile/pairing"):
+            return json(["url": "openstrudel://connect?host=fixture.local", "expiresAt": "2026-10-15T20:00:00Z"])
+        case ("DELETE", "/v1/mobile/pairing"): cancelledInvitations += 1; return json(["ok": true])
+        case ("DELETE", _) where path.hasPrefix("/v1/mobile/clients/"):
+            revokedClients.append(String(path.dropFirst("/v1/mobile/clients/".count))); return json(["ok": true])
+        default:
+            return json(["conversation": ["id": "conversation", "channel": "api", "createdAt": "2026-10-09", "updatedAt": "2026-10-09"], "messages": [], "interactions": []])
+        }
+    }
+    private static func body(_ request: URLRequest) -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return Data() }
+        stream.open(); defer { stream.close() }
+        var data = Data(), buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+}
+
+private final class DevicesProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var handler: (@Sendable (URLRequest) async -> (Int, Data))?
+    private var operation: Task<Void, Never>?
+    static func setHandler(_ value: @escaping @Sendable (URLRequest) async -> (Int, Data)) { lock.lock(); defer { lock.unlock() }; handler = value }
+    private static func getHandler() -> (@Sendable (URLRequest) async -> (Int, Data))? { lock.lock(); defer { lock.unlock() }; return handler }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        operation = Task { @Sendable [self] in
+            guard let handler = Self.getHandler(), let url = request.url else { return }
+            let (status, data) = await handler(request)
+            guard !Task.isCancelled else { return }
+            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+    override func stopLoading() { operation?.cancel() }
 }

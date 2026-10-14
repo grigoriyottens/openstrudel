@@ -55,6 +55,10 @@ struct MobileInvitation: Decodable {
         guard let expiry = formatter.date(from: expiresAt) else { return 0 }
         return max(0, Int(ceil(expiry.timeIntervalSince(date))))
     }
+    /// A Mac invites with its ".local" name, which only its own network can reach.
+    var isLocalNetworkOnly: Bool {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "host" }?.value?.lowercased().hasSuffix(".local") == true
+    }
 }
 
 /// Store the destination, certificate and credential together in one Keychain write.
@@ -98,7 +102,7 @@ struct MacPairing: Identifiable {
         let encodedName = parts.percentEncodedQueryItems?.first { $0.name == "name" }?.value
         let name = encodedName?.replacingOccurrences(of: "+", with: " ").removingPercentEncoding?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        self.name = String((name.isEmpty ? host.replacingOccurrences(of: ".local", with: "") : name).prefix(80))
+        self.name = deviceTitle(String((name.isEmpty ? host.replacingOccurrences(of: ".local", with: "") : name).prefix(80)))
     }
 }
 
