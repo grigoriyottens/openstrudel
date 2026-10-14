@@ -7740,5 +7740,313 @@
     "es": "No se ha podido descargar el archivo",
     "he": "לא ניתן להוריד את הקובץ",
     "ru": "Не удалось скачать файл"
+  },
+  "Подключите оба устройства с доступом владельца и завершите предыдущий перенос.": {
+    "ru": "Подключите оба устройства с доступом владельца и завершите предыдущий перенос.",
+    "en": "Connect both devices with owner access and finish the previous move.",
+    "fr": "Connectez les deux appareils en tant que propriétaire et terminez le transfert précédent.",
+    "es": "Conecta ambos dispositivos con acceso de propietario y termina el traslado anterior.",
+    "he": "יש לחבר את שני המכשירים עם הרשאות בעלים ולהשלים את ההעברה הקודמת."
+  },
+  "Не удалось сохранить этап переноса. Освободите место и повторите.": {
+    "ru": "Не удалось сохранить этап переноса. Освободите место и повторите.",
+    "en": "Could not save the move progress. Free up space and try again.",
+    "fr": "Impossible d’enregistrer la progression. Libérez de l’espace et réessayez.",
+    "es": "No se pudo guardar el progreso. Libera espacio e inténtalo de nuevo.",
+    "he": "לא ניתן לשמור את התקדמות ההעברה. יש לפנות מקום ולנסות שוב."
+  },
+  "Перенести на другое устройство…": {
+    "ru": "Перенести на другое устройство…",
+    "en": "Move to another device…",
+    "fr": "Transférer vers un autre appareil…",
+    "es": "Trasladar a otro dispositivo…",
+    "he": "העברה למכשיר אחר…"
+  },
+  "Перенос: {0}": {
+    "ru": "Перенос: {0}",
+    "en": "Moving: {0}",
+    "fr": "Transfert : {0}",
+    "es": "Trasladando: {0}",
+    "he": "בהעברה: {0}"
+  },
+  "Готовим сотрудника к переносу…": {
+    "ru": "Готовим сотрудника к переносу…",
+    "en": "Preparing the employee…",
+    "fr": "Préparation de l’employé…",
+    "es": "Preparando al empleado…",
+    "he": "מכינים את העובד להעברה…"
+  },
+  "Копируем и проверяем данные…": {
+    "ru": "Копируем и проверяем данные…",
+    "en": "Copying and checking data…",
+    "fr": "Copie et vérification des données…",
+    "es": "Copiando y verificando los datos…",
+    "he": "מעתיקים ובודקים את הנתונים…"
+  },
+  "Завершаем работу на прежнем устройстве…": {
+    "ru": "Завершаем работу на прежнем устройстве…",
+    "en": "Finishing on the previous device…",
+    "fr": "Arrêt sur l’ancien appareil…",
+    "es": "Finalizando en el dispositivo anterior…",
+    "he": "מסיימים את הפעילות במכשיר הקודם…"
+  },
+  "Запускаем на новом устройстве…": {
+    "ru": "Запускаем на новом устройстве…",
+    "en": "Starting on the new device…",
+    "fr": "Démarrage sur le nouvel appareil…",
+    "es": "Iniciando en el nuevo dispositivo…",
+    "he": "מפעילים במכשיר החדש…"
+  },
+  "Подтверждаем завершение…": {
+    "ru": "Подтверждаем завершение…",
+    "en": "Confirming the move…",
+    "fr": "Confirmation du transfert…",
+    "es": "Confirmando el traslado…",
+    "he": "מאשרים את סיום ההעברה…"
+  },
+  "Отменяем перенос…": {
+    "ru": "Отменяем перенос…",
+    "en": "Canceling the move…",
+    "fr": "Annulation du transfert…",
+    "es": "Cancelando el traslado…",
+    "he": "מבטלים את ההעברה…"
+  },
+  "Перенос отменён": {
+    "ru": "Перенос отменён",
+    "en": "Move canceled",
+    "fr": "Transfert annulé",
+    "es": "Traslado cancelado",
+    "he": "ההעברה בוטלה"
+  },
+  "Переписка, файлы и расписания перенесены. Сотрудник работает на новом устройстве.": {
+    "ru": "Переписка, файлы и расписания перенесены. Сотрудник работает на новом устройстве.",
+    "en": "Chats, files and schedules have moved. The employee is running on the new device.",
+    "fr": "Les conversations, fichiers et horaires ont été transférés. L’employé fonctionne sur le nouvel appareil.",
+    "es": "Se han trasladado los chats, archivos y horarios. El empleado trabaja en el nuevo dispositivo.",
+    "he": "השיחות, הקבצים ולוחות הזמנים הועברו. העובד פועל במכשיר החדש."
+  },
+  "Используется аккаунт нового устройства. При необходимости подключите сервисы заново.": {
+    "ru": "Используется аккаунт нового устройства. При необходимости подключите сервисы заново.",
+    "en": "The new device’s account is used. Reconnect services if needed.",
+    "fr": "Le compte du nouvel appareil est utilisé. Reconnectez les services si nécessaire.",
+    "es": "Se utiliza la cuenta del nuevo dispositivo. Vuelve a conectar los servicios si es necesario.",
+    "he": "נעשה שימוש בחשבון של המכשיר החדש. יש לחבר שירותים מחדש לפי הצורך."
+  },
+  "Открыть сотрудника": {
+    "ru": "Открыть сотрудника",
+    "en": "Open employee",
+    "fr": "Ouvrir l’employé",
+    "es": "Abrir empleado",
+    "he": "פתיחת העובד"
+  },
+  "Сотрудник остался на прежнем устройстве.": {
+    "ru": "Сотрудник остался на прежнем устройстве.",
+    "en": "The employee remains on the previous device.",
+    "fr": "L’employé reste sur l’ancien appareil.",
+    "es": "El empleado sigue en el dispositivo anterior.",
+    "he": "העובד נשאר במכשיר הקודם."
+  },
+  "Можно продолжить пользоваться приложением. Если связь прервётся, перенос продолжится с сохранённого этапа.": {
+    "ru": "Можно продолжить пользоваться приложением. Если связь прервётся, перенос продолжится с сохранённого этапа.",
+    "en": "You can keep using the app. If the connection drops, the move can resume from its saved progress.",
+    "fr": "Vous pouvez continuer à utiliser l’app. En cas de coupure, le transfert peut reprendre à l’étape enregistrée.",
+    "es": "Puedes seguir usando la app. Si se pierde la conexión, el traslado puede continuar desde el punto guardado.",
+    "he": "אפשר להמשיך להשתמש באפליקציה. אם החיבור יתנתק, ניתן להמשיך את ההעברה מהשלב שנשמר."
+  },
+  "Отменить перенос": {
+    "ru": "Отменить перенос",
+    "en": "Cancel move",
+    "fr": "Annuler le transfert",
+    "es": "Cancelar traslado",
+    "he": "ביטול ההעברה"
+  },
+  "Переписка, файлы и расписания переедут вместе с сотрудником.": {
+    "ru": "Переписка, файлы и расписания переедут вместе с сотрудником.",
+    "en": "Chats, files and schedules move with the employee.",
+    "fr": "Les conversations, fichiers et horaires suivent l’employé.",
+    "es": "Los chats, archivos y horarios se trasladan con el empleado.",
+    "he": "השיחות, הקבצים ולוחות הזמנים עוברים יחד עם העובד."
+  },
+  "Сначала подключите другое устройство в настройках.": {
+    "ru": "Сначала подключите другое устройство в настройках.",
+    "en": "Connect another device in Settings first.",
+    "fr": "Connectez d’abord un autre appareil dans les réglages.",
+    "es": "Primero conecta otro dispositivo en Ajustes.",
+    "he": "יש לחבר קודם מכשיר נוסף בהגדרות."
+  },
+  "Куда перенести": {
+    "ru": "Куда перенести",
+    "en": "Move to",
+    "fr": "Transférer vers",
+    "es": "Trasladar a",
+    "he": "יעד ההעברה"
+  },
+  "Выберите устройство": {
+    "ru": "Выберите устройство",
+    "en": "Choose a device",
+    "fr": "Choisir un appareil",
+    "es": "Elige un dispositivo",
+    "he": "בחירת מכשיר"
+  },
+  "Оба устройства должны быть на связи, обновлены и подключены с доступом владельца.": {
+    "ru": "Оба устройства должны быть на связи, обновлены и подключены с доступом владельца.",
+    "en": "Both devices must be online, up to date and connected with owner access.",
+    "fr": "Les deux appareils doivent être en ligne, à jour et connectés en tant que propriétaire.",
+    "es": "Ambos dispositivos deben estar en línea, actualizados y conectados con acceso de propietario.",
+    "he": "שני המכשירים צריכים להיות מקוונים, מעודכנים ומחוברים עם הרשאות בעלים."
+  },
+  "Аккаунты и доступ к сервисам остаются на прежнем устройстве. На новом используются его подключения.": {
+    "ru": "Аккаунты и доступ к сервисам остаются на прежнем устройстве. На новом используются его подключения.",
+    "en": "Accounts and service access stay on the previous device. The new device uses its own connections.",
+    "fr": "Les comptes et accès aux services restent sur l’ancien appareil. Le nouvel appareil utilise ses propres connexions.",
+    "es": "Las cuentas y el acceso a servicios permanecen en el dispositivo anterior. El nuevo usa sus propias conexiones.",
+    "he": "החשבונות והגישה לשירותים נשארים במכשיר הקודם. המכשיר החדש משתמש בחיבורים שלו."
+  },
+  "Перенести сотрудника": {
+    "ru": "Перенести сотрудника",
+    "en": "Move employee",
+    "fr": "Transférer l’employé",
+    "es": "Trasladar empleado",
+    "he": "העברת העובד"
+  },
+  "Сотрудник перенесён на другое устройство. Откройте его там.": {
+    "ru": "Сотрудник перенесён на другое устройство. Откройте его там.",
+    "en": "The employee moved to another device. Open it there.",
+    "fr": "L’employé a été transféré vers un autre appareil. Ouvrez-le là-bas.",
+    "es": "El empleado se trasladó a otro dispositivo. Ábrelo allí.",
+    "he": "העובד הועבר למכשיר אחר. יש לפתוח אותו שם."
+  },
+  "Подключите оба устройства, чтобы завершить перенос.": {
+    "ru": "Подключите оба устройства, чтобы завершить перенос.",
+    "en": "Connect both devices to finish the move.",
+    "fr": "Connectez les deux appareils pour terminer le transfert.",
+    "es": "Conecta ambos dispositivos para terminar el traslado.",
+    "he": "יש לחבר את שני המכשירים כדי להשלים את ההעברה."
+  },
+  "Завершите или отмените перенос сотрудника перед отключением устройства.": {
+    "ru": "Завершите или отмените перенос сотрудника перед отключением устройства.",
+    "en": "Finish or cancel the employee move before disconnecting the device.",
+    "fr": "Terminez ou annulez le transfert avant de déconnecter l’appareil.",
+    "es": "Termina o cancela el traslado antes de desconectar el dispositivo.",
+    "he": "יש להשלים או לבטל את העברת העובד לפני ניתוק המכשיר."
+  },
+  "Завершите или отмените перенос сотрудника перед удалением данных.": {
+    "ru": "Завершите или отмените перенос сотрудника перед удалением данных.",
+    "en": "Finish or cancel the employee move before erasing data.",
+    "fr": "Terminez ou annulez le transfert avant d’effacer les données.",
+    "es": "Termina o cancela el traslado antes de borrar los datos.",
+    "he": "יש להשלים או לבטל את העברת העובד לפני מחיקת הנתונים."
+  },
+  "Каталог OpenAI сейчас недоступен. Можно добавить сервис по адресу MCP.": {
+    "en": "Couldn’t load the OpenAI service list. Try refreshing.",
+    "ru": "Не удалось загрузить список сервисов OpenAI. Попробуйте обновить.",
+    "fr": "Impossible de charger la liste des services OpenAI. Essayez de l’actualiser.",
+    "es": "No se pudo cargar la lista de servicios de OpenAI. Intenta actualizarla.",
+    "he": "לא ניתן לטעון את רשימת השירותים של OpenAI. כדאי לנסות לרענן."
+  },
+  "Не удалось проверить подключения OpenAI. Обновите список.": {
+    "en": "Couldn’t check your OpenAI connections. Refresh to try again.",
+    "ru": "Не удалось проверить подключения OpenAI. Обновите список.",
+    "fr": "Impossible de vérifier vos connexions OpenAI. Actualisez la liste pour réessayer.",
+    "es": "No se pudieron comprobar tus conexiones de OpenAI. Actualiza la lista para volver a intentarlo.",
+    "he": "לא ניתן לבדוק את החיבורים ל־OpenAI. יש לרענן את הרשימה כדי לנסות שוב."
+  },
+  "Не удалось проверить часть подключений. Нажмите «Обновить», чтобы проверить ещё раз.": {
+    "en": "Some connections couldn’t be checked. Refresh to try again.",
+    "ru": "Не удалось проверить часть подключений. Обновите список, чтобы проверить ещё раз.",
+    "fr": "Certaines connexions n’ont pas pu être vérifiées. Actualisez la liste pour réessayer.",
+    "es": "No se pudieron comprobar algunas conexiones. Actualiza la lista para volver a intentarlo.",
+    "he": "לא ניתן לבדוק חלק מהחיבורים. יש לרענן את הרשימה כדי לנסות שוב."
+  },
+  "Не все навыки удалось загрузить. Проверьте SKILL.md в добавленном пакете.": {
+    "en": "Some skills couldn’t load. Check SKILL.md in the package you added.",
+    "ru": "Не все навыки удалось загрузить. Проверьте SKILL.md в добавленном пакете.",
+    "fr": "Certains savoir-faire n’ont pas pu être chargés. Vérifiez le fichier SKILL.md du paquet ajouté.",
+    "es": "No se pudieron cargar algunas habilidades. Comprueba el archivo SKILL.md del paquete que añadiste.",
+    "he": "לא ניתן לטעון חלק מהמיומנויות. יש לבדוק את הקובץ SKILL.md בחבילה שהוספת."
+  },
+  "Разрешения на приложения задаются в Codex": {
+    "en": "Manage app permissions in Codex",
+    "ru": "Разрешения на приложения задаются в Codex",
+    "fr": "Gérez les autorisations des applications dans Codex",
+    "es": "Gestiona los permisos de las aplicaciones en Codex",
+    "he": "הרשאות לאפליקציות מנוהלות ב־Codex"
+  },
+  "Рабочие документы и встречи": {
+    "en": "Work documents and meetings",
+    "ru": "Рабочие документы и встречи",
+    "fr": "Documents et réunions de travail",
+    "es": "Documentos y reuniones de trabajo",
+    "he": "מסמכים ופגישות עבודה"
+  },
+  "Личные документы": {
+    "en": "Personal documents",
+    "ru": "Личные документы",
+    "fr": "Documents personnels",
+    "es": "Documentos personales",
+    "he": "מסמכים אישיים"
+  },
+  "Нужен ваш ответ": {
+    "en": "Your answer is needed",
+    "ru": "Нужен ваш ответ",
+    "fr": "Votre réponse est nécessaire",
+    "es": "Necesitamos tu respuesta",
+    "he": "נדרשת תשובתך"
+  },
+  "Разрешить действие?": {
+    "en": "Allow this action?",
+    "ru": "Разрешить действие?",
+    "fr": "Autoriser cette action ?",
+    "es": "¿Permitir esta acción?",
+    "he": "לאשר את הפעולה?"
+  },
+  "Разрешить доступ?": {
+    "en": "Allow access?",
+    "ru": "Разрешить доступ?",
+    "fr": "Autoriser l’accès ?",
+    "es": "¿Permitir el acceso?",
+    "he": "לאשר גישה?"
+  },
+  "Только для этого ответа": {
+    "en": "For this reply only",
+    "ru": "Только для этого ответа",
+    "fr": "Pour cette réponse uniquement",
+    "es": "Solo para esta respuesta",
+    "he": "לתשובה הזאת בלבד"
+  },
+  "Разрешить действие сервиса?": {
+    "en": "Allow this service action?",
+    "ru": "Разрешить действие сервиса?",
+    "fr": "Autoriser cette action du service ?",
+    "es": "¿Permitir esta acción del servicio?",
+    "he": "לאשר את פעולת השירות?"
+  },
+  "Только это действие": {
+    "en": "This action only",
+    "ru": "Только это действие",
+    "fr": "Cette action uniquement",
+    "es": "Solo esta acción",
+    "he": "הפעולה הזאת בלבד"
+  },
+  "Отказать": {
+    "en": "Deny",
+    "ru": "Отказать",
+    "fr": "Refuser",
+    "es": "Rechazar",
+    "he": "לא לאשר"
+  },
+  "Завершите подключение в браузере": {
+    "en": "Finish connecting in your browser",
+    "ru": "Завершите подключение в браузере",
+    "fr": "Terminez la connexion dans votre navigateur",
+    "es": "Termina de conectar en el navegador",
+    "he": "יש להשלים את החיבור בדפדפן"
+  },
+  "Создание изображений, видео и звука": {
+    "en": "Create images, video and audio",
+    "ru": "Создание изображений, видео и звука",
+    "fr": "Créer des images, des vidéos et du son",
+    "es": "Crear imágenes, vídeos y audio",
+    "he": "יצירת תמונות, וידאו ושמע"
   }
 }

@@ -27,6 +27,7 @@ struct Sidebar: View {
     @State private var deletion: EmployeeDeletion?
     @State private var confirmDeletion = false
     @State private var deleting = false
+    @State private var movingEmployee: EmployeeMoveRequest?
     private var searchTerm: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var showsMain: Bool { searchTerm.isEmpty || "OpenStrudel".localizedCaseInsensitiveContains(searchTerm) }
 
@@ -78,6 +79,10 @@ struct Sidebar: View {
         .contextMenu(forSelectionType: SidebarItem.self) { items in
             if items.count == 1, let target = employee(items.first) {
                 Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: target.profile, on: target.source) } }
+                Button(L("Перенести на другое устройство…"), systemImage: "arrow.right.square") {
+                    movingEmployee = EmployeeMoveRequest(source: target.source, profile: target.profile)
+                }
+                .disabled(!target.source.canManageOpenAI)
                 Divider()
                 Button(L("Удалить сотрудника…"), role: .destructive) { requestDeletion(target.profile, from: target.source) }
                     .disabled(!canDelete(on: target.source))
@@ -99,6 +104,7 @@ struct Sidebar: View {
                 .help(L("Новый сотрудник (⌘N)"))
             }
         }
+        .sheet(item: $movingEmployee) { EmployeeMoveView(request: $0) }
         .alert(L("Удалить «\(deletion?.name ?? L("сотрудника"))»?"), isPresented: $confirmDeletion) {
             Button(L("Отмена"), role: .cancel) {}
             Button(L("Удалить"), role: .destructive) {
@@ -122,12 +128,14 @@ struct Sidebar: View {
                        preview: library.hasOtherDevices ? source.displayName : L("Помощник для ваших задач"),
                        appearance: nil, offline: source.isOffline(nil), selected: isSelected(item))
                 .tag(item)
+                .modifier(EmployeeDrop(source: source, start: startMove))
         }
         if source.isEmployeeDraft && searchTerm.isEmpty {
             let item = SidebarItem.draft(client: source.id)
             SidebarRow(name: L("Новый сотрудник"), preview: L("Опишите его задачу"), appearance: source.draftAppearance,
                        selected: isSelected(item))
                 .tag(item)
+                .modifier(EmployeeDrop(source: source, start: startMove))
         }
         ForEach(people) { profile in
             let item = SidebarItem.employee(client: source.id, profile: profile.id)
@@ -137,6 +145,9 @@ struct Sidebar: View {
                        appearance: profile.resolvedAppearance, offline: source.isOffline(profile), selected: isSelected(item))
                 .tag(item)
                 .accessibilityIdentifier("employee-" + profile.id)
+                // Dragging an employee onto another device's rows moves it there.
+                .draggable(EmployeeDrop.payload(source: source, profile: profile))
+                .modifier(EmployeeDrop(source: source, start: startMove))
         }
     }
 
@@ -153,6 +164,7 @@ struct Sidebar: View {
     /// The hidden employees and the device row stay under the list, on the row text edge.
     private var footer: some View {
         VStack(alignment: .leading, spacing: 4) {
+            EmployeeMoveStatusButton()
             HiddenEmployeesButton()
             Button {
                 UserDefaults.standard.set(SettingsView.Section.devices.rawValue, forKey: "openstrudel.settingsTab")
@@ -237,6 +249,17 @@ struct Sidebar: View {
         return (source, profile)
     }
 
+    /// Opens the move sheet for an employee dropped on another device's rows.
+    private func startMove(_ value: String, to target: HomeClient) -> Bool {
+        let parts = value.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 3, parts[0] == EmployeeDrop.prefix,
+              let origin = library.visibleClients.first(where: { $0.id == parts[1] }),
+              origin !== target, origin.canManageOpenAI,
+              let profile = origin.profiles.first(where: { $0.id == parts[2] }) else { return false }
+        movingEmployee = EmployeeMoveRequest(source: origin, profile: profile, targetID: target.id)
+        return true
+    }
+
     private func canDelete(on source: HomeClient) -> Bool {
         !deleting && source.canManageOpenAI && !source.homeUnreachable
     }
@@ -247,6 +270,20 @@ struct Sidebar: View {
             : source.devices.first(where: { $0.id == profile.deviceId })?.name ?? source.displayName
         deletion = EmployeeDeletion(client: source, id: profile.id, name: profile.name, device: device)
         confirmDeletion = true
+    }
+}
+
+/// Every row of a device accepts an employee dragged from another device.
+private struct EmployeeDrop: ViewModifier {
+    static let prefix = "openstrudel-employee"
+    static func payload(source: HomeClient, profile: EmployeeProfile) -> String { [prefix, source.id, profile.id].joined(separator: "|") }
+    let source: HomeClient
+    let start: (String, HomeClient) -> Bool
+
+    func body(content: Content) -> some View {
+        content.dropDestination(for: String.self) { values, _ in
+            values.count == 1 && start(values[0], source)
+        }
     }
 }
 

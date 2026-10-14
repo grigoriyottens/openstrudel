@@ -45,13 +45,19 @@ enum ParakeetModel {
 }
 
 /// Streaming URLSession downloads keep the 740 MB model out of process memory.
-private final class ParakeetDownloadProgress: NSObject, URLSessionDownloadDelegate, Sendable {
+final class ParakeetDownloadProgress: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     let report: @MainActor @Sendable (Double?) -> Void
+    // One delegate per task; URLSession creates the observation on its serial
+    // delegate queue. Retain it until the async download finishes or is canceled.
+    private var observation: NSKeyValueObservation?
     init(_ report: @escaping @MainActor @Sendable (Double?) -> Void) { self.report = report }
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        let fraction = min(1, Double(totalBytesWritten) / Double(ParakeetModel.bytes))
-        Task { @MainActor in report(fraction) }
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+        // Async download(for:) consumes the download delegate callbacks itself.
+        // Task Progress remains observable on both macOS and iOS.
+        observation = task.progress.observe(\.fractionCompleted, options: [.initial, .new]) { [report] progress, _ in
+            let fraction = progress.totalUnitCount > 0 ? progress.fractionCompleted : nil
+            Task { @MainActor in report(fraction) }
+        }
     }
 }
 

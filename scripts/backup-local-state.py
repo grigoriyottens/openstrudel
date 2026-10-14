@@ -17,7 +17,8 @@ SCHEMA = 'openstrudel-local-backup-v1'
 DEFAULT_SOURCE = Path.home() / 'Library/Application Support/OpenStrudel'
 DEFAULT_DEST = Path.home() / 'Library/Application Support/OpenStrudelBackups'
 EXCLUDED = {('deployment',), ('releases',), ('runtime', 'node_modules'),
-            ('runtime', 'dist'), ('runtime', 'public'), ('runtime', 'bin'), ('runtime', 'scripts')}
+            ('runtime', 'dist'), ('runtime', 'public'), ('runtime', 'bin'), ('runtime', 'scripts'),
+            ('Dictation', 'parakeet-v3-q8.gguf')}
 
 def is_sqlite(path):
     if path.is_symlink() or not path.is_file():

@@ -40,6 +40,7 @@ struct HomeHealth: Decodable {
     let telegram: TelegramStatus?
     let agentArchiveVersion: Int?
     var agentArchiveEncryption: Bool? = nil
+    var employeeTransferVersion: Int? = nil
     var homeProtocol: Int? = nil
     var homeId: String? = nil
     var nodeId: String? = nil

@@ -188,6 +188,10 @@ struct BotDetailsView: View {
                 if !client.schedules.isEmpty || client.scheduleRuns.first?.error != nil {
                     Section(L("Расписание")) { schedules }
                 }
+                Section {
+                    // A move carries the saved employee, so it waits until the edits are saved or dropped.
+                    EmployeeMoveButton(profile: profile, disabled: hasChanges || isSaving).labelStyle(.titleOnly)
+                }
                 if client.canManageOpenAI {
                     Section {
                         Button(L("Удалить сотрудника…"), role: .destructive) { confirmDeletion = true }
@@ -649,8 +653,8 @@ struct ConnectionsView: View {
                 Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
                 Button(L("Повторить")) { Task { await refresh() } }.disabled(loading)
             }
-            // Every notice but the catalog's is a failure to load, so it reads as one, not as a hint.
-            if let extensionNotice, !extensionNotice.hasPrefix(L("Каталог OpenAI")) {
+            // Every notice says something failed to load, the OpenAI catalog included, so it reads as one.
+            if let extensionNotice {
                 Text(L10n.serviceText(extensionNotice)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
             }
         } footer: {
@@ -696,7 +700,7 @@ struct ConnectionsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(connection.name)
                 Group {
-                    if let detail = connection.detail { Text(detail) }
+                    if let detail = connection.detail { Text(L10n.serviceText(detail)) }
                     if let count = connection.toolCount, connection.connected { Text(L("Инструментов: \(count)")) }
                     if connection.status == "unavailable" { Text(L("Нет связи с сервисом")) }
                     if connection.status == "unknown" { Text(L("Не удалось проверить подключение")) }

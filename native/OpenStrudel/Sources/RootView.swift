@@ -33,9 +33,8 @@ struct OpenStrudelRootView: View {
             guard pollingPhase == .active else { return }
             #if os(macOS)
             if Bundle.main.bundleIdentifier == "is.openstrudel.mac",
-               client.normalizedBaseURL == "http://127.0.0.1:7788",
-               client.hasToken && !client.isPairing && LocalHome.isAvailable {
-                await client.startLocalHome()
+               let local = library.localClientToRestore, LocalHome.isAvailable {
+                await local.startLocalHome()
             }
             #endif
             if client.shouldRestoreConnection && !client.isPairing { await client.load(quiet: true) }

@@ -40,17 +40,52 @@ final class ParakeetTranscriber: @unchecked Sendable {
                         var params = transcribe_run_params()
                         transcribe_run_params_init(&params)
                         params.task = TRANSCRIBE_TASK_TRANSCRIBE
-                        params.timestamps = TRANSCRIBE_TIMESTAMPS_NONE
                         // No language hint: Parakeet recognizes its 25 languages automatically.
-                        let status = transcribe_run(session, samples, Int32(samples.count), &params)
-                        try cancellation.check()
-                        guard status == TRANSCRIBE_OK else { throw Failure.recognition }
-                        let text = String(cString: transcribe_full_text(session)).trimmingCharacters(in: .whitespacesAndNewlines)
+                        let text = try recognize(samples, session: session, params: &params, cancellation: cancellation)
                         continuation.resume(returning: text)
                     } catch { continuation.resume(throwing: error) }
                 }
             }
         } onCancel: { cancellation.cancel() }
+    }
+
+    private func recognize(_ samples: [Float], session: OpaquePointer, params: inout transcribe_run_params, cancellation: Cancellation) throws -> String {
+        // transcribe.cpp 0.2.3 cannot abort inside an encoder pass. Bound each
+        // pass instead of sending five minutes through one uninterruptible
+        // graph. Native word timestamps assign the overlapping context to one
+        // window, so a word at the boundary is neither cut nor counted twice.
+        let rate = 16_000, core = 25 * rate, context = 2 * rate
+        if samples.count <= 30 * rate {
+            params.timestamps = TRANSCRIBE_TIMESTAMPS_NONE
+            let status = transcribe_run(session, samples, Int32(samples.count), &params)
+            try cancellation.check()
+            guard status == TRANSCRIBE_OK else { throw Failure.recognition }
+            return String(cString: transcribe_full_text(session)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        params.timestamps = TRANSCRIBE_TIMESTAMPS_WORD
+        var words: [String] = []
+        for start in stride(from: 0, to: samples.count, by: core) {
+            try cancellation.check()
+            let end = min(start + core, samples.count)
+            let lower = max(0, start - context), upper = min(samples.count, end + context)
+            let status = samples.withUnsafeBufferPointer { buffer in
+                transcribe_run(session, buffer.baseAddress! + lower, Int32(upper - lower), &params)
+            }
+            try cancellation.check()
+            guard status == TRANSCRIBE_OK else { throw Failure.recognition }
+            let count = transcribe_n_words(session)
+            guard count > 0 || String(cString: transcribe_full_text(session)).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure.recognition }
+            for index in 0..<count {
+                var word = transcribe_word(); transcribe_word_init(&word)
+                guard transcribe_get_word(session, index, &word) == TRANSCRIBE_OK, let value = word.text else { throw Failure.recognition }
+                let midpoint = lower + Int((word.t0_ms + word.t1_ms) * Int64(rate) / 2_000)
+                if midpoint >= start && midpoint < end {
+                    let text = String(cString: value).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !text.isEmpty { words.append(text) }
+                }
+            }
+        }
+        return words.joined(separator: " ")
     }
 
     private func load() throws {

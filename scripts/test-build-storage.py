@@ -155,6 +155,23 @@ class StorageSafety(unittest.TestCase):
         with self.assertRaises(ValueError):
             backup.create_backup(source, source / 'backups', app=None)
 
+    def test_backup_skips_downloadable_dictation_model_but_preserves_unique_files(self):
+        source = self.base / 'user-data'
+        dictation = source / 'Dictation'
+        dictation.mkdir(parents=True)
+        model = dictation / 'parakeet-v3-q8.gguf'
+        model.write_bytes(b'redownloadable model')
+        (dictation / 'recording.wav').write_bytes(b'unique recording')
+        (dictation / 'custom-model.gguf').write_bytes(b'user supplied model')
+
+        result = backup.create_backup(source, self.base / 'backups', app=None)
+        restored = result / 'user-data/Dictation'
+        self.assertFalse((restored / model.name).exists())
+        self.assertEqual((restored / 'recording.wav').read_bytes(), b'unique recording')
+        self.assertEqual((restored / 'custom-model.gguf').read_bytes(), b'user supplied model')
+        self.assertEqual(model.read_bytes(), b'redownloadable model')
+        self.assertIn('Dictation/parakeet-v3-q8.gguf', json.loads((result / 'backup.json').read_text())['excluded'])
+
     def test_retention_only_removes_completed_healthy_managed_snapshots(self):
         root = self.base / 'backups'
         root.mkdir()

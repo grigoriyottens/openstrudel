@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// The details sheet's subject, fixed when it opens: a move can remove the employee from this
+/// device's list while its progress sheet is still open on top.
+private struct EmployeeDetailsPresentation: Identifiable {
+    let profile: EmployeeProfile?
+    var id: String { profile?.id ?? "main" }
+}
+
 struct ConversationView: View {
     @EnvironmentObject private var library: DeviceLibrary
     @EnvironmentObject private var client: HomeClient
@@ -12,7 +19,7 @@ struct ConversationView: View {
     #endif
     @State private var draft = ""
     @State private var pickedFiles: [PickedFile] = []
-    @State private var showBotDetails = false
+    @State private var details: EmployeeDetailsPresentation?
     @State private var followsLatest = true
     @State private var userIsScrolling = false
     @State private var hasNewMessages = false
@@ -28,6 +35,7 @@ struct ConversationView: View {
                 .safeAreaBar(edge: .bottom, spacing: 0) { bottomBar(proxy) }
             #else
             VStack(spacing: 0) {
+                EmployeeMoveStatusButton()
                 if !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
                     ConversationSources()
                         .padding(.horizontal, Layout.edge).padding(.vertical, 8)
@@ -74,13 +82,13 @@ struct ConversationView: View {
         .navigationTitle(client.activeAgentName)
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                ConversationTitle { showBotDetails = true }
+                ConversationTitle { openDetails() }
             }
             if !client.isEmployeeDraft && !client.employeeTelegramChats.isEmpty {
                 ToolbarItem(placement: .primaryAction) { ConversationSourceMenu() }
             }
         }
-        .focusedSceneValue(\.showEmployeeDetails, client.isEmployeeDraft ? nil : { showBotDetails = true })
+        .focusedSceneValue(\.showEmployeeDetails, client.isEmployeeDraft ? nil : { openDetails() })
         #else
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -90,7 +98,7 @@ struct ConversationView: View {
                     .accessibilityLabel(L("Чаты"))
             }
             ToolbarItem(placement: .principal) {
-                ConversationTitle { focused = false; showBotDetails = true }
+                ConversationTitle { focused = false; openDetails() }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 if client.activeProfile == nil {
@@ -103,13 +111,17 @@ struct ConversationView: View {
             EmployeePicker(isPresented: $showEmployees).environmentObject(client)
         }
         #endif
-        .sheet(isPresented: $showBotDetails) {
-            if let profile = client.activeProfile {
+        .sheet(item: $details) { presentation in
+            if let profile = presentation.profile {
                 BotDetailsView(profile: profile).environmentObject(client)
             } else {
                 MainAssistantDetailsView().environmentObject(client)
             }
         }
+    }
+
+    private func openDetails() {
+        details = EmployeeDetailsPresentation(profile: client.activeProfile)
     }
 
     private func transcript(_ proxy: ScrollViewProxy) -> some View {
@@ -140,6 +152,11 @@ struct ConversationView: View {
         .scrollEdgeEffectStyle(.hard, for: .top)
         #endif
         .defaultScrollAnchor(.bottom, for: .initialOffset)
+        #if os(iOS)
+        // Attachments settle after the initial scroll. Keep the end
+        // anchored only while the reader follows new replies.
+        .defaultScrollAnchor(followsLatest ? .bottom : nil, for: .sizeChanges)
+        #endif
         .scrollDismissesKeyboard(.interactively)
         .onScrollPhaseChange { oldPhase, phase, context in
             // A touch on an answer button also enters .tracking. Only an
@@ -495,14 +512,22 @@ struct ConversationSourceMenu: View {
 struct ConversationSources: View {
     @EnvironmentObject private var client: HomeClient
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                source(title: L("В приложении"), symbol: "bubble.left", conversation: nil)
-                ForEach(client.employeeTelegramChats) { chat in
-                    source(title: chat.title, symbol: "paperplane", conversation: chat.conversationId,
-                           detail: chat.enabled == false ? L("Telegram · бот на паузе") : "Telegram")
-                }
-            }.padding(.horizontal, 2)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    source(title: L("В приложении"), symbol: "bubble.left", conversation: nil)
+                    ForEach(client.employeeTelegramChats) { chat in
+                        source(title: chat.title, symbol: "paperplane", conversation: chat.conversationId,
+                               detail: chat.enabled == false ? L("Telegram · бот на паузе") : "Telegram")
+                    }
+                }.padding(.horizontal, 2)
+            }
+            .onChange(of: client.selectedChatID, initial: true) {
+                proxy.scrollTo(client.selectedChatID ?? "app", anchor: .center)
+            }
+            .onChange(of: client.employeeTelegramChats.map(\.conversationId)) {
+                proxy.scrollTo(client.selectedChatID ?? "app", anchor: .center)
+            }
         }
         .scrollIndicators(.hidden)
         .fixedSize(horizontal: false, vertical: true)
@@ -525,6 +550,7 @@ struct ConversationSources: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier(conversation.map { "conversationSource-" + $0 } ?? "conversationSource-app")
         .help(detail.map { title + " · " + $0 } ?? title)
+        .id(conversation ?? "app")
     }
 }
 #endif

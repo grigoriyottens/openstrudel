@@ -43,4 +43,30 @@ import Testing
             #expect(L10n.serviceText(key, language: language).contains(action))
         }
     }
+
+    @Test func serviceDiscoveryFailuresKeepTheirContextAndRecovery() {
+        let messages = [
+            "Каталог OpenAI сейчас недоступен. Можно добавить сервис по адресу MCP.",
+            "Не удалось проверить подключения OpenAI. Обновите список.",
+            "Не удалось проверить часть подключений. Нажмите «Обновить», чтобы проверить ещё раз.",
+        ]
+        for message in messages {
+            let english = L10n.serviceText(message, language: .english)
+            #expect(english.localizedCaseInsensitiveContains("refresh"))
+            for language in AppLanguage.allCases {
+                #expect(L10n.catalog[message]?[language.rawValue] != nil)
+                #expect(L10n.serviceText(message, language: language) != L10n.text("Не удалось получить ответ. Попробуйте ещё раз.", language: language))
+            }
+        }
+    }
+
+    @Test func approvalControlsTranslateWithoutChangingProviderText() {
+        #expect(L10n.text("Разрешить действие сервиса?", language: .english) == "Allow this service action?")
+        #expect(L10n.text("Только это действие", language: .english) == "This action only")
+        #expect(L10n.text("Отказать", language: .english) == "Deny")
+        let providerText = "Send файл.txt to Работа {1}?"
+        for language in AppLanguage.allCases {
+            #expect(L10n.text(providerText, language: language) == providerText)
+        }
+    }
 }

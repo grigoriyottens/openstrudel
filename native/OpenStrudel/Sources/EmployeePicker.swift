@@ -9,6 +9,7 @@ struct EmployeePicker: View {
     @State private var query = ""
     @State private var showingSettings = false
     @State private var showingHistory = false
+    @State private var movingEmployee: EmployeeMoveRequest?
     private var searchTerm: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var showsMain: Bool { searchTerm.isEmpty || "OpenStrudel".localizedCaseInsensitiveContains(searchTerm) }
 
@@ -41,6 +42,8 @@ struct EmployeePicker: View {
                             .accessibilityIdentifier("employee-" + profile.id)
                             .contextMenu {
                                 Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
+                                Button(L("Перенести на другое устройство…"), systemImage: "arrow.right.square") { movingEmployee = EmployeeMoveRequest(source: source, profile: profile) }
+                                    .disabled(!source.canManageOpenAI)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(L("Скрыть"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }.tint(.gray)
@@ -65,6 +68,7 @@ struct EmployeePicker: View {
             }
             .navigationTitle(L("Чаты"))
             .navigationDestination(isPresented: $showingHistory) { ConversationBrowser(isPresented: $isPresented, embedded: true) }
+            .sheet(item: $movingEmployee) { EmployeeMoveView(request: $0) }
             #if os(iOS)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: L("Найти чат"))
             #else

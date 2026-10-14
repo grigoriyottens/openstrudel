@@ -330,7 +330,7 @@ struct InteractionCard: View {
         // Groups 16 apart; a question sits 8 above its answer; the card's padding is 16.
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(interaction.title).font(AppTypography.interface.weight(.semibold))
+                Text(L10n.text(interaction.title)).font(AppTypography.interface.weight(.semibold))
                 if let detail = interaction.detail, !detail.isEmpty {
                     Text(detail).font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText).textSelection(.enabled)
                 }
@@ -342,11 +342,11 @@ struct InteractionCard: View {
             }
             ForEach(interaction.questions) { question in
                 VStack(alignment: .leading, spacing: 8) {
-                    if !question.question.isEmpty { Text(question.question).font(AppTypography.interface) }
+                    if !question.question.isEmpty { Text(L10n.text(question.question)).font(AppTypography.interface) }
                     if question.options.isEmpty {
                         TextField(L("Ваш ответ"), text: Binding(get: { answers[question.id] ?? "" }, set: { answers[question.id] = $0 }))
                             .textFieldStyle(.roundedBorder)
-                            .accessibilityLabel(question.question.isEmpty ? L("Ваш ответ") : question.question)
+                            .accessibilityLabel(question.question.isEmpty ? L("Ваш ответ") : L10n.text(question.question))
                             .frame(minHeight: controlTarget)
                     } else {
                         // Short choices sit side by side; long ones stack.
@@ -385,7 +385,7 @@ struct InteractionCard: View {
             } label: {
                 HStack(spacing: 8) {
                     if chosen { Image(systemName: "checkmark").font(AppTypography.meta.weight(.semibold)) }
-                    Text(option).fixedSize(horizontal: false, vertical: true)
+                    Text(L10n.text(option)).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .buttonStyle(CardButtonStyle(prominent: false))
