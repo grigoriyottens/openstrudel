@@ -33,13 +33,25 @@ private struct HiddenEmployeesView: View {
                                 AgentAvatar(appearance: profile.resolvedAppearance, size: AvatarSize.row)
                                 Text(profile.name)
                                 Spacer()
+                                // A text action is ink; the accent is for selection, focus and switches.
                                 Button(L("Показать")) { Task { await library.setHidden(false, profile: profile, on: source) } }
                                     .buttonStyle(.borderless)
+                                    .tint(AppTheme.accentText)
                                     .accessibilityLabel(L("Показать «\(profile.name)»"))
                             }.accessibilityElement(children: .contain)
                         }
                     } header: {
-                        Text(source.displayName)
+                        // Device names only when there are several, as in the sidebar.
+                        if showsTitle(source) || library.hasOtherDevices {
+                            VStack(alignment: .leading, spacing: 16) {
+                                if showsTitle(source) {
+                                    // The Mac sheet carries its title in its content, on the rows' text edge.
+                                    Text(L("Скрытые сотрудники")).font(AppTypography.title).foregroundStyle(Color.primary)
+                                        .textCase(nil).accessibilityAddTraits(.isHeader)
+                                }
+                                if library.hasOtherDevices { Text(source.displayName) }
+                            }
+                        }
                     } footer: {
                         if source === sources.last {
                             Text(L("Скрыты только в этом приложении. Сотрудники продолжают работать и доступны на других устройствах."))
@@ -49,12 +61,23 @@ private struct HiddenEmployeesView: View {
             }
             .formStyle(.grouped)
             .navigationTitle(L("Скрытые сотрудники"))
+            #if os(macOS)
+            .toolbar(removing: .title)
+            #endif
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } } }
         }
         #if os(macOS)
         // A single page: as tall as its rows.
         .frame(width: 480)
         .presentationSizing(.fitted)
+        #endif
+    }
+
+    private func showsTitle(_ source: HomeClient) -> Bool {
+        #if os(macOS)
+        source === sources.first
+        #else
+        false
         #endif
     }
 }
