@@ -726,7 +726,7 @@ private struct UsageMeter: View {
     }
 }
 
-/// A 4-pt meter: accent for what is left on a hairline track.
+/// A 4-pt meter: what is left in the secondary colour on a hairline track, at least 4.5:1 in both appearances.
 private struct UsageBar: View {
     let fraction: Double
 
@@ -737,7 +737,7 @@ private struct UsageBar: View {
             .overlay(alignment: .leading) {
                 GeometryReader { proxy in
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(AppTheme.accent)
+                        .fill(AppTheme.secondaryText)
                         .frame(width: proxy.size.width * fraction)
                 }
             }
