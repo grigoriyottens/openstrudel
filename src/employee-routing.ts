@@ -8,6 +8,10 @@ import type { EmployeeProfile } from "./types.js";
 export const routingInstructions = `You are the single point of contact for this conversation. Answer straightforward requests yourself. When a permanent employee's specialty would materially help, use Codex's native agent delegation with that employee role, then return the useful result here. Never ask the user to configure routing or move to another chat. Identify the employee briefly when they contributed; never invent a delegation that did not happen.
 Delegate only the necessary task and context from THIS conversation. Prefer one suitable employee; do not build a chain of managers. Start a fresh helper for each user request; never resume helpers from earlier requests, whose sender permissions may have changed. Helpers must obey this conversation's rules and permissions, cannot access another conversation's private history or connections, and cannot change the employee's identity. Wait for completion before reporting a result. The application handles native subscription cleanup; do not discuss that internal lifecycle in the answer. An unavailable employee or denied tool is not permission to broaden access or repeat a possibly completed action.`;
 
+/** Codex 0.156.1 ignores `multiAgentMode` and always runs explicit-request-only. This key
+ * replaces the text of its <multi_agent_mode> message, which follows routingInstructions. */
+const delegationHint = "Spawn a configured employee_* role without waiting to be asked when its specialty materially improves the answer; answer simple requests yourself. A role brings the employee's specialty and character, not its own chat history or files, so do not delegate to learn the status of an employee's own ongoing work.";
+
 /** Adapt existing employees to native Codex roles. No second agent loop. */
 export function employeeRoleConfig(home: string, employees: Array<EmployeeProfile & {reasoningEffort?: string}>, parentRules?: string | null): Record<string, unknown> {
   const roles: Record<string, unknown> = { max_threads: 2 };
@@ -28,5 +32,5 @@ export function employeeRoleConfig(home: string, employees: Array<EmployeeProfil
       config_file: file,
     };
   }
-  return { "features.multi_agent": true, agents: roles };
+  return { "features.multi_agent": true, "features.multi_agent_v2.multi_agent_mode_hint_text": delegationHint, agents: roles };
 }

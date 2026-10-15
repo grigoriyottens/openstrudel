@@ -189,3 +189,19 @@ it("delivers the bound employee's approval to its originating private chat", asy
  expect(s.getTelegramChat("42")?.profileId).toBe(news.id);
  await m.close();
 });
+
+it("keeps a private chat answering after it returns to the main assistant", async () => {
+ const {s,m,a,run}=setup();const editor=s.createProfile({name:"Editor"});
+ s.linkTelegramChat({chatId:"42",title:"Personal",allowedSenders:["42"]});
+ const update=(id:number)=>({update_id:id,message:{message_id:id,from:{id:42},chat:{id:42,type:"private"},text:"Hello "+id}});
+ await a.processUpdate(update(1));
+ const direct=s.getTelegramChat("42")!.conversationId;
+ a.bindChat("42",editor.id);a.bindChat("42",null);
+ await a.processUpdate(update(2));
+ expect(run.mock.calls.at(-1)?.[0]).toContain("Hello 2");
+ expect(s.getTelegramChat("42")).toMatchObject({enabled:true,profileId:null,conversationId:direct});
+ // An «Отвязать» from an older app left the chat paused; choosing the main assistant clears it.
+ s.setSetting("telegram.paused.42","true");a.bindChat("42",null);
+ expect(s.getTelegramChat("42")?.enabled).toBe(true);
+ await m.close();
+});

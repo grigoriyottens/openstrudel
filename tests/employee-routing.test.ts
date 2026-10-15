@@ -100,12 +100,29 @@ it('removes delegation when the last employee is deleted and refreshes the nativ
   fixture(); const engine = new CodexEngineAdapter({ codexHome: home() });
   const first = engine.run('Review', { employees: [employee] });
   await vi.waitFor(() => expect(wire.request.mock.calls.some(([m]) => m === 'turn/start')).toBe(true));
-  const start = wire.request.mock.calls.find(([m]) => m === 'turn/start')![1];
-  expect(start.multiAgentMode).toBe('proactive'); complete(); await first;
+  expect(wire.request.mock.calls.find(([m]) => m === 'thread/start')![1].config['features.multi_agent']).toBe(true); complete(); await first;
   wire.request.mockClear();
   const second = engine.run('Again', { threadId: 'parent', employees: [] });
   await vi.waitFor(() => expect(wire.request.mock.calls.some(([m]) => m === 'turn/start')).toBe(true));
   expect(wire.request.mock.calls.find(([m]) => m === 'thread/resume')![1].config['features.multi_agent']).toBe(false);
   expect(wire.request.mock.calls.map(([m]) => m)).toContain('thread/unsubscribe');
   complete(); await second; engine.close();
+});
+it('asks Codex 0.156.1 for proactive delegation through the mode hint it reads', async () => {
+  fixture(); const engine = new CodexEngineAdapter({ codexHome: home() });
+  const run = engine.run('Review', { employees: [employee] });
+  await vi.waitFor(() => expect(wire.request.mock.calls.some(([m]) => m === 'turn/start')).toBe(true));
+  const params = (method: string) => wire.request.mock.calls.find(([m]) => m === method)![1];
+  // Codex 0.156.1 ignores multiAgentMode and always runs explicit-request-only.
+  expect(params('thread/start')).not.toHaveProperty('multiAgentMode');
+  expect(params('turn/start')).not.toHaveProperty('multiAgentMode');
+  const hint = params('thread/start').config['features.multi_agent_v2.multi_agent_mode_hint_text'];
+  expect(hint).toContain('without waiting to be asked');
+  expect(hint).toContain('not its own chat history');
+  complete(); await run;
+  wire.request.mockClear();
+  const alone = engine.run('Again', { employees: [] });
+  await vi.waitFor(() => expect(wire.request.mock.calls.some(([m]) => m === 'turn/start')).toBe(true));
+  expect(params('thread/start').config).not.toHaveProperty(['features.multi_agent_v2.multi_agent_mode_hint_text']);
+  complete(); await alone; engine.close();
 });

@@ -31,6 +31,11 @@ struct TelegramSetupView: View {
     @State private var confirmDisconnect = false
     private var privateChats: [TelegramChat] { (client.telegram?.chats ?? []).filter(\.isPairedOwner) }
     private var linked: Bool { !privateChats.isEmpty }
+    /// The bot belongs to one device; its private chat can be answered only by that device's employees.
+    private var deviceEmployees: [EmployeeProfile] {
+        let device = client.activeProfile?.deviceId ?? client.health?.nodeId
+        return client.profiles.filter { $0.deviceId == nil || $0.deviceId == device }
+    }
 
     /// Rows only: TelegramSetupSection wraps them in a Form section.
     var body: some View {
@@ -77,8 +82,11 @@ struct TelegramSetupView: View {
         }
         if linked {
             ForEach(privateChats) { chat in
-                let name = client.profiles.first(where: { $0.id == chat.profileId })?.name ?? L("Общий помощник")
-                Text(L("В Telegram отвечает \(name)")).foregroundStyle(AppTheme.secondaryText)
+                Picker(L("В Telegram отвечает"), selection: Binding(get: { chat.profileId }, set: { bind(chat, to: $0) })) {
+                    Text(L("Общий помощник")).tag(String?.none)
+                    ForEach(deviceEmployees) { Text($0.name).tag(Optional($0.id)) }
+                }
+                .disabled(busy).accessibilityIdentifier("telegramResponder-" + chat.chatId)
             }
         } else if !contextual {
             Text(L("Подтвердите свой Telegram, чтобы писать боту и добавлять его в группы."))
@@ -170,6 +178,15 @@ struct TelegramSetupView: View {
             }
         } else {
             openInBrowser()
+        }
+    }
+
+    private func bind(_ chat: TelegramChat, to profileID: String?) {
+        busy = true; error = nil
+        Task {
+            await client.bindTelegram(chatID: chat.chatId, profileID: profileID)
+            if let problem = client.errorMessage { error = UserFacingError.text(problem); client.errorMessage = nil }
+            busy = false
         }
     }
 

@@ -3478,12 +3478,12 @@
     "he": "עוזר כללי",
     "ru": "Общий помощник"
   },
-  "В Telegram отвечает {0}": {
-    "en": "{0} replies in Telegram",
-    "fr": "{0} répond dans Telegram",
-    "es": "{0} responde en Telegram",
-    "he": "{0} משיב ב-Telegram",
-    "ru": "В Telegram отвечает {0}"
+  "В Telegram отвечает": {
+    "en": "Replies in Telegram",
+    "fr": "Répond dans Telegram",
+    "es": "Responde en Telegram",
+    "he": "משיב ב-Telegram",
+    "ru": "В Telegram отвечает"
   },
   "Подтвердите свой Telegram, чтобы писать боту и добавлять его в группы.": {
     "en": "Link your Telegram account to message the bot and add it to groups.",
