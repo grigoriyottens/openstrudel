@@ -136,6 +136,7 @@ final class HomeClient: ObservableObject, Identifiable {
     @Published private(set) var connectionNeedsUnlock = false
     @Published private(set) var isUnlockingConnection = false
     private var connectionGeneration = 0
+    private var managementChecked = -1
     @Published private(set) var mobileInvitation: MobileInvitation?
     @Published private(set) var mobileConnections = 0
     @Published private(set) var mobileClients: [MobileClient] = []
@@ -724,6 +725,8 @@ final class HomeClient: ObservableObject, Identifiable {
             if !connectionNeedsPairing { health = loadedHealth }
             if let homeId = loadedHealth.homeId { defaults.set(homeId, forKey: "openstrudel.catalogueIdentity") }
             await refreshDevicePresence(generation: generation)
+            // Owning the device decides who manages and renames it; its ChatGPT account may be unavailable.
+            if loadedHealth.homeProtocol == 1, managementChecked != generation { managementChecked = generation; await refreshMobileStatus() }
             guard generation == connectionGeneration else { return }
             if catalogueLoaded == true, reachability >= latestReachabilityCheck { connectionState = .connected; homeUnreachable = false; connectionNeedsPairing = false }
             // Publish employees before waiting for provider state.

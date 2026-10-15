@@ -306,6 +306,26 @@ private final class CredentialReadGate: @unchecked Sendable {
         #expect(client.canRenameDevice)
     }
 
+    @Test func theOwnerCanRenameAServerWhoseChatGPTAccountIsUnavailable() async throws {
+        let fixture = DevicesFixture()
+        fixture.flags["deviceRenameVersion"] = 1
+        fixture.accountUnavailable = true
+        let server = ["openstrudel.homeURL": "https://server.test:7789"]
+        let (client, cleanup) = makeClient(fixture, saved: server)
+        defer { cleanup() }
+        await client.load()
+        #expect(client.canRenameDevice, "Owning the device, not its ChatGPT account, decides who renames it")
+
+        let other = DevicesFixture()
+        other.flags["deviceRenameVersion"] = 1
+        other.accountUnavailable = true
+        other.colleague = true
+        let (colleague, cleanupColleague) = makeClient(other, saved: server)
+        defer { cleanupColleague() }
+        await colleague.load()
+        #expect(!colleague.canRenameDevice)
+    }
+
     @Test func namesNeverShowAHostnameSuffixAndTheServerDefaultFollowsTheLanguage() async throws {
         #expect(deviceTitle("Server", language: .russian) == "Сервер")
         #expect(deviceTitle("Server", language: .french) == "Serveur")
@@ -532,6 +552,10 @@ private final class KeychainLog: @unchecked Sendable {
 
 @MainActor private final class DevicesFixture {
     var flags: [String: Int] = [:]
+    /// The device's ChatGPT account cannot answer, for example when its limit ran out.
+    var accountUnavailable = false
+    /// This client was invited as a colleague, so device management answers 403.
+    var colleague = false
     var deviceName = "Mini"
     var instructions = "Пиши кратко"
     var profileName = "Тест"
@@ -560,7 +584,10 @@ private final class KeychainLog: @unchecked Sendable {
             return json(["profile": profile()])
         case ("GET", "/v1/devices"):
             return json(["devices": [["id": "node", "name": deviceName, "platform": "linux", "primary": true, "online": true, "agents": 1]], "primaryId": "node"])
-        case ("GET", "/v1/account"): return json(["account": ["connected": true, "managed": true], "canManage": true])
+        case ("GET", "/v1/account"):
+            if accountUnavailable { return (503, Data(#"{"error":"Лимит ChatGPT исчерпан"}"#.utf8)) }
+            return json(["account": ["connected": true, "managed": true], "canManage": true])
+        case ("GET", "/v1/mobile") where colleague: return (403, Data(#"{"error":"Откройте настройки на Mac"}"#.utf8))
         case ("GET", "/v1/integrations"): return json(["telegram": ["configured": false, "running": false, "linkedChats": []]])
         case ("GET", "/v1/mobile"):
             guard flags["colleagueInvitesVersion"] == 1 else {
