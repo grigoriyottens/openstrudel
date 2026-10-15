@@ -167,7 +167,7 @@ it("stops with session/cancel, kills an agent that ignores it after 5 s, and nam
   await expect(mock({ turn: [{ stderr: "panic: out of memory\n", exit: 3 }] }).engine.run("Привет")).rejects.toThrow(/^Grok не завершил ответ: panic: out of memory$/);
 });
 
-it("reads the agent's model catalog from a scratch session after sign-in", async () => {
+it("reads the agent's model catalog for the picker from a scratch session that sends no prompt", async () => {
   const g = mock();
   expect((await g.engine.models()).map(m => [m.id, m.isDefault])).toEqual([["grok-4.7", true], ["grok-4.6", false]]);
   expect(g.calls("session/new")).toEqual([expect.objectContaining({ mcpServers: [] })]);

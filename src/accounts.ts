@@ -282,7 +282,7 @@ export class AccountEngines implements CodexEngine {
         const chatgpt = chatgptSignedIn(this.accounts.store) ? await selection().then(selected => this.scoped(selected.id, selected.service).forContext(context).models!(refresh))
           .catch(error => { if (error instanceof AccountUnavailableError) return []; throw error; }) : [];
         const keyed = await Promise.all(providerInfos().filter(p => providerConnected(this.accounts.store, p.id))
-          .map(p => p.engine === "acp" ? subscriptionModels(this.accounts.store, p.id) : p.models.length ? providerModels(p) : this.keyed(p.id).scope.forContext(context).models!(refresh)));
+          .map(p => p.engine === "acp" ? this.subscriptionModels(p.id) : p.models.length ? providerModels(p) : this.keyed(p.id).scope.forContext(context).models!(refresh)));
         return [...chatgpt, ...keyed.flat()];
       },
       connections: async refresh => {
@@ -300,6 +300,14 @@ export class AccountEngines implements CodexEngine {
       isConnected: async name => (await current()).isConnected!(name),
       extensions: async () => (await current()).extensions!(),
     };
+  }
+  /** A subscription's catalog as its agent last reported it; until there is one, the agent is asked once per request. */
+  private async subscriptionModels(id: string) {
+    const stored = subscriptionModels(this.accounts.store, id);
+    if (stored.length) return stored;
+    const models = await this.keyed(id).engine.models!().catch(() => []);
+    if (models.length) this.accounts.store.setSetting(`providers.${id}.models`, JSON.stringify(models));
+    return models;
   }
   forContext(context: string): CodexEngine { return this.forAgent("main", context); }
   run: CodexEngine["run"] = (input, options) => this.forAgent("main", "personal").run(input, options);

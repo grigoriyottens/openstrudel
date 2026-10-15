@@ -1,19 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
-import { AcpEngine, grokCommand, grokHome, launchGrok, type GrokCommand } from "./acp.js";
+import { grokCommand, grokHome, launchGrok, type GrokCommand } from "./acp.js";
 import { HomeError } from "./home.js";
 import { safeURL } from "./interactions.js";
-import type { ModelChoice } from "./model-settings.js";
-import { disconnectProvider, markConnected, providerConnectedAt, providerInfo, providerSummaries, type ProviderSummary } from "./providers.js";
+import { disconnectProvider, markConnected, providerConnectedAt, providerSummaries, type ProviderSummary } from "./providers.js";
 import type { Store } from "./store.js";
 
 /** The shape of a ChatGPT device sign-in. */
 export type GrokLoginStart = { type: "device"; loginId: string; verificationUrl: string; userCode: string };
 export type GrokLoginStatus = { loginId: string; status: "pending" | "completed" | "failed" | "canceled"; error?: string; provider?: ProviderSummary };
 export interface GrokLoginOptions {
-  /** Test seams: the pinned CLI, the catalog read after sign-in, and how long Grok may take to show a code and to finish. */
+  /** Test seams: the pinned CLI and how long Grok may take to show a code and to finish. */
   command?: () => GrokCommand;
-  models?: () => Promise<ModelChoice[]>;
   timeouts?: { start: number; login: number };
 }
 type Session = { start: GrokLoginStart; status: GrokLoginStatus["status"]; error?: string; kill: () => void; timer: NodeJS.Timeout };
@@ -84,15 +82,13 @@ export class GrokLogin {
       };
       grok.child.stdout!.on("data", read); grok.child.stderr!.on("data", read);
       grok.child.once("error", error => fail(`Вход в Grok не завершён: ${error.message}`));
-      grok.child.once("close", async code => {
+      grok.child.once("close", code => {
         if (!shown) return fail(said() ? `Вход в Grok не завершён: ${said()}` : "Grok не отвечает. Повторите вход позже.");
         if (shown.status !== "pending") return;
         if (code !== 0) return this.finish("failed", `Вход в Grok не завершён: ${said() ?? code}`);
-        // Grok holds a valid token now; every turn starts its own process.
+        // Grok holds a valid token now; every turn starts its own process, and the picker reads its catalog when it needs it.
         if (!providerConnectedAt(this.store, "grok")) markConnected(this.store, "grok");
         this.store.setSetting("providers.grok.signedIn", new Date().toISOString());
-        const models = await (this.options.models ?? (() => new AcpEngine({ root: this.root, provider: providerInfo("grok")!, command: () => this.command() }).models()))().catch(() => []);
-        if (models.length) this.store.setSetting("providers.grok.models", JSON.stringify(models));
         this.finish("completed");
       });
     });

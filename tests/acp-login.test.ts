@@ -12,11 +12,10 @@ beforeEach(() => { root = mkdtempSync(join(tmpdir(), "grok-login-")); store = ne
 afterEach(() => { store.close(); rmSync(root, { recursive: true, force: true }); });
 
 const fixture = resolve("tests/fixtures/mock-grok.mjs");
-const model = { id: "grok-4.7", name: "Grok 4.7", description: "", isDefault: true, speeds: [{ id: "default", name: "Обычная", description: "" }], provider: "grok" };
 function grok(options: { timeouts?: { start: number; login: number }; bin?: string; args?: string[] } = {}, target = store) {
   const log = join(root, "log.jsonl"), script = join(root, "scenario.json");
   writeFileSync(log, ""); writeFileSync(script, "{}");
-  const login = new GrokLogin(target, root, { timeouts: options.timeouts, models: async () => [model],
+  const login = new GrokLogin(target, root, { timeouts: options.timeouts,
     command: () => ({ bin: options.bin ?? process.execPath, args: options.args ?? [fixture], env: { MOCK_GROK_SCENARIO: script, MOCK_GROK_LOG: log } }) });
   const launches = () => readFileSync(log, "utf8").split("\n").filter(Boolean).map(line => JSON.parse(line)).filter(m => m.start).map(m => m.start);
   return { login, launches, home: () => realpathSync(join(root, ".data/providers/grok/home")) };
@@ -37,11 +36,12 @@ it("signs in with Grok's own device code and records only that it completed", as
   writeFileSync(join(home(), "approve"), "");
   await vi.waitFor(() => expect(login.status(start.loginId).status).toBe("completed"));
   expect(login.status(start.loginId).provider).toEqual({ id: "grok", name: "Grok", auth: "signin", connected: true, keyHint: null, keysUrl: null, usedBy: 2 });
-  // The token stays in Grok's home; OpenStrudel keeps the sign-in time and the agent's catalog.
+  // The token stays in Grok's home; OpenStrudel keeps only the sign-in time. The picker reads Grok's catalog when it first needs it.
   expect(existsSync(join(home(), "auth.json"))).toBe(true);
   expect(store.getSetting("providers.grok.signedIn")).toMatch(/^\d{4}-/);
   expect(Number(store.getSetting("providers.grok.connectedAt"))).toBeGreaterThan(0);
-  expect(JSON.parse(store.getSetting("providers.grok.models")!)).toEqual([model]);
+  expect(store.getSetting("providers.grok.models")).toBeNull();
+  expect(launches().map(launch => launch.args)).toEqual([["login", "--device-auth"]]);
   expect(login.status("another")).toEqual({ loginId: "another", status: "canceled" });
 });
 

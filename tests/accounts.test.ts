@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Store } from "../src/store.js";
 import { CodexAccountService } from "../src/account.js";
-const engines = vi.hoisted(() => ({ run: vi.fn(), closed: [] as string[] }));
+const engines = vi.hoisted(() => ({ run: vi.fn(), models: vi.fn(), closed: [] as string[] }));
 vi.mock("../src/scopes.js", () => ({ ScopedCodexEngine: class {
   readonly account: string;
   constructor(_root: string, account: string, _tokens?: unknown, readonly contexts?: string, readonly provider?: { info: { id: string }; key: () => string | null }) { this.account = provider ? "provider-" + provider.info.id : account; }
@@ -17,6 +17,7 @@ vi.mock("../src/claude.js", async original => ({ ...await original<object>(), Cl
 vi.mock("../src/acp.js", async original => ({ ...await original<object>(), AcpEngine: class {
   constructor(readonly options: { provider: { id: string } }) {}
   forContext(context: string) { return { run: (input: string, options: any) => engines.run("acp-" + this.options.provider.id, context, input, options) }; }
+  models() { return engines.models(this.options.provider.id); }
 } }));
 import { Accounts, AccountEngines } from "../src/accounts.js";
 import { MessageService } from "../src/messages.js";
@@ -24,7 +25,7 @@ import { ProviderKeyError } from "../src/providers.js";
 import { AcpSessionLost, ProviderSignInError } from "../src/acp.js";
 import { saveModelSelection } from "../src/model-settings.js";
 const stores: Store[] = [];
-afterEach(() => { for (const store of stores.splice(0)) store.close(); vi.restoreAllMocks(); engines.run.mockReset(); engines.closed.length = 0; });
+afterEach(() => { for (const store of stores.splice(0)) store.close(); vi.restoreAllMocks(); engines.run.mockReset(); engines.models.mockReset(); engines.closed.length = 0; });
 function fixture() {
   const store = new Store(":memory:"); stores.push(store);
   const primary = new CodexAccountService(store, "/unused-test"); const accounts = new Accounts(store, "/unused-test", primary);
@@ -210,6 +211,20 @@ describe("Grok subscription", () => {
     await expect(pool.run("hi", { provider: "grok", byOwner: true, groupContext: true })).rejects.toMatchObject({ status: 409, reason: "policy:grok", message: refusal });
     expect(engines.run).toHaveBeenCalledTimes(2);
     await messages.close();
+  });
+  it("reads the agent's catalog once when none is stored, so a failed read at sign-in does not hide Grok's models", async () => {
+    const { store, pool } = fixture();
+    store.setSetting("providers.grok.signedIn", "2026-10-15T10:00:00.000Z");
+    const grok = async () => (await pool.forAgent("main", "personal").models!()).filter(m => m.provider === "grok");
+    // x.ai is unreachable: the picker still opens, and the next one reads again.
+    engines.models.mockRejectedValueOnce(new Error("Grok не отвечает"));
+    expect(await grok()).toEqual([]);
+    expect(store.getSetting("providers.grok.models")).toBeNull();
+    engines.models.mockResolvedValueOnce(grokModels);
+    expect(await grok()).toEqual(grokModels);
+    expect(JSON.parse(store.getSetting("providers.grok.models")!)).toEqual(grokModels);
+    expect(await grok()).toEqual(grokModels);
+    expect(engines.models.mock.calls).toEqual([["grok"], ["grok"]]);
   });
   it("lists the agent's own models, starts over once when Grok lost the session, and forgets a lost sign-in", async () => {
     const { store, accounts, pool } = fixture(), conversation = store.primaryConversation(); signedIn(store);

@@ -85,7 +85,7 @@ export class AcpEngine implements CodexEngine {
   run: CodexEngine["run"] = (input, options) => this.forContext("personal").run(input, options);
   close(): void { for (const end of this.running) end(); }
 
-  /** The agent's own catalog for the picker right after sign-in, from a scratch session that sends no prompt. */
+  /** The agent's own catalog for the picker until a turn reports one, from a scratch session that sends no prompt. */
   async models(): Promise<ModelChoice[]> {
     const { root, provider } = this.options, agent = this.launch(resolve(root, ".data/providers", provider.id, "scratch")), timer = setTimeout(agent.kill, 60_000);
     try {
