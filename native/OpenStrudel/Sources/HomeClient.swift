@@ -847,6 +847,8 @@ final class HomeClient: ObservableObject, Identifiable {
            generation == connectionGeneration, !connectionNeedsPairing {
             health = loaded
             if let homeId = loaded.homeId { defaults.set(homeId, forKey: "openstrudel.catalogueIdentity") }
+            // The owner's lists follow these abilities, so the next load asks again.
+            managementChecked = -1
         }
         // Only a Home that shares names has replaced technical ones, such as an
         // older server's container ID. Before that the saved connection name stays.
