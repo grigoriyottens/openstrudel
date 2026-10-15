@@ -63,11 +63,14 @@ struct MobileInvitation: Decodable {
     }
 }
 
-/// A colleague's link nobody has used yet. The Home lists it without the link itself.
-struct ColleagueInvitation: Decodable, Identifiable, Equatable {
+/// A link nobody has used yet. The Home lists it without the link itself.
+struct WaitingInvitation: Decodable, Identifiable, Equatable {
     let id: String
     var label: String? = nil
+    /// An older Home lists only colleague links and sends no role.
+    var role: String? = nil
     let expiresAt: String
+    var isOwner: Bool { role == "owner" }
     var expiryDate: Date? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

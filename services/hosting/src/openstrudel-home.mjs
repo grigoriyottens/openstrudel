@@ -150,7 +150,7 @@ if(!r.ok)throw Error('pairing failed');const v=await r.json();console.log(JSON.s
     const r=await this.s.provider.ssh(server,script);
     try {
       const result=JSON.parse(r.stdout),u=new URL(result.url),expires=Date.parse(result.expiresAt),pin=u.searchParams.get('pin');
-      if(u.protocol!=='openstrudel:'||u.hostname!=='connect'||pin!==row.certificate_sha256||!HASH.test(u.searchParams.get('key')||'')||expires<=this.s.now()||expires>this.s.now()+310000)throw Error('invalid');
+      if(u.protocol!=='openstrudel:'||u.hostname!=='connect'||pin!==row.certificate_sha256||!HASH.test(u.searchParams.get('key')||'')||expires<=this.s.now()||expires>this.s.now()+86410000)throw Error('invalid');
       return {host:server.ip,port:7789,certificate_sha256:pin,invitation_key:u.searchParams.get('key'),expires_at:expires,path:'/pair',method:'POST',authorization:'Bearer invitation_key'};
     } catch {fail('home_owner_recovery_unconfirmed');}
   }
@@ -162,7 +162,7 @@ export class EmulatedHomeInstaller {
   constructor(service){this.s=service;this.fault=null;this.scheduled=0;}
   async schedule(){if(this.fault==='schedule')fail('home_installation_unconfirmed');this.scheduled++;}
   async verify(server,row){if(this.fault)fail('home_identity_unverified');return {installation_id:row.id,release_sha256:row.release_sha256,certificate_sha256:digest('emulated:'+row.id),mode:'emulator',checked_at:this.s.now(),url:'https://'+server.ip+':7789'};}
-  async recover(server,row){return {host:server.ip,port:7789,certificate_sha256:row.certificate_sha256,invitation_key:digest('emulated-invitation:'+row.id),expires_at:this.s.now()+300000,path:'/pair',method:'POST',authorization:'Bearer invitation_key',emulated:true};}
+  async recover(server,row){return {host:server.ip,port:7789,certificate_sha256:row.certificate_sha256,invitation_key:digest('emulated-invitation:'+row.id),expires_at:this.s.now()+86400000,path:'/pair',method:'POST',authorization:'Bearer invitation_key',emulated:true};}
 }
 
 export const homeScriptsForTest={installationScript,inspectScript};

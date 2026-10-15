@@ -2687,12 +2687,12 @@
     "he": "יש לסרוק את קוד ה-QR או להדביק את הקישור ב-OpenStrudel במכשיר הזה.",
     "ru": "Отсканируйте QR или вставьте ссылку в OpenStrudel на этом устройстве."
   },
-  "Ссылка одноразовая и действует пять минут. Если срок истёк, получите новую.": {
-    "en": "The link works once and expires after five minutes. Get a new one if it expires.",
-    "fr": "Le lien est à usage unique et expire après cinq minutes. Obtenez-en un nouveau s’il a expiré.",
-    "es": "El enlace es de un solo uso y caduca a los cinco minutos. Obtén otro si ha caducado.",
-    "he": "הקישור חד-פעמי ותקף לחמש דקות. אם פג תוקפו, יש לקבל קישור חדש.",
-    "ru": "Ссылка одноразовая и действует пять минут. Если срок истёк, получите новую."
+  "Ссылка одноразовая и действует сутки. Если срок истёк, получите новую.": {
+    "en": "The link works once and expires after 24 hours. Get a new one if it expires.",
+    "fr": "Le lien est à usage unique et expire après 24 heures. Obtenez-en un nouveau s’il a expiré.",
+    "es": "El enlace es de un solo uso y caduca a las 24 horas. Obtén otro si ha caducado.",
+    "he": "הקישור חד-פעמי ותקף ל-24 שעות. אם פג תוקפו, יש לקבל קישור חדש.",
+    "ru": "Ссылка одноразовая и действует сутки. Если срок истёк, получите новую."
   },
   "Если нет связи": {
     "en": "If you can’t connect",
@@ -5865,12 +5865,12 @@
     "he": "פתיחה במכשיר אחר",
     "ru": "Открыть на другом устройстве"
   },
-  "На другом Mac откройте Настройки → Устройства → Подключить устройство и вставьте эту ссылку. Она действует пять минут.": {
-    "en": "On the other Mac, open Settings → Devices → Connect a device and paste this link. It lasts five minutes.",
-    "fr": "Sur l’autre Mac, ouvrez Réglages → Appareils → Connecter un appareil et collez ce lien. Il est valable cinq minutes.",
-    "es": "En el otro Mac, abre Ajustes → Dispositivos → Conectar un dispositivo y pega el enlace. Dura cinco minutos.",
-    "he": "ב-Mac השני יש לפתוח הגדרות ← מכשירים ← חיבור מכשיר ולהדביק את הקישור. הוא תקף לחמש דקות.",
-    "ru": "На другом Mac откройте Настройки → Устройства → Подключить устройство и вставьте эту ссылку. Она действует пять минут."
+  "На другом Mac откройте Настройки → Устройства → Подключить устройство и вставьте эту ссылку. Она действует сутки.": {
+    "en": "On the other Mac, open Settings → Devices → Connect a device and paste this link. It lasts 24 hours.",
+    "fr": "Sur l’autre Mac, ouvrez Réglages → Appareils → Connecter un appareil et collez ce lien. Il est valable 24 heures.",
+    "es": "En el otro Mac, abre Ajustes → Dispositivos → Conectar un dispositivo y pega el enlace. Dura 24 horas.",
+    "he": "ב-Mac השני יש לפתוח הגדרות ← מכשירים ← חיבור מכשיר ולהדביק את הקישור. הוא תקף ל-24 שעות.",
+    "ru": "На другом Mac откройте Настройки → Устройства → Подключить устройство и вставьте эту ссылку. Она действует сутки."
   },
   "Личная ссылка подключения": {
     "en": "Private connection link",
@@ -8903,12 +8903,12 @@
     "he": "יש לעדכן את OpenStrudel במכשיר הזה כדי לשנות את שמו.",
     "ru": "Обновите OpenStrudel на этом устройстве, чтобы переименовать его."
   },
-  "Ссылка действует 24 часа и подходит для одного подключения.": {
+  "Ссылка действует сутки и подключает одно устройство.": {
     "en": "The link works for 24 hours and connects one device.",
     "fr": "Le lien fonctionne pendant 24 heures et connecte un seul appareil.",
     "es": "El enlace funciona durante 24 horas y conecta un solo dispositivo.",
     "he": "הקישור פעיל 24 שעות ומחבר מכשיר אחד.",
-    "ru": "Ссылка действует 24 часа и подходит для одного подключения."
+    "ru": "Ссылка действует сутки и подключает одно устройство."
   },
   "Ссылка работает только в той же сети Wi-Fi, что и это устройство.": {
     "en": "The link works only on the same Wi-Fi network as this device.",
@@ -8972,6 +8972,13 @@
     "es": "Enlace para un colega",
     "he": "קישור לעמית",
     "ru": "Ссылка для коллеги"
+  },
+  "Ссылка для своего устройства": {
+    "en": "Link for your own device",
+    "fr": "Lien pour votre propre appareil",
+    "es": "Enlace para tu propio dispositivo",
+    "he": "קישור למכשיר שלך",
+    "ru": "Ссылка для своего устройства"
   },
   "действует до {0}": {
     "en": "valid until {0}",

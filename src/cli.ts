@@ -30,7 +30,7 @@ async function main(): Promise<void> {
     });
     const invite = await response.json() as { url: string; error?: string };
     if (!response.ok) throw new Error(invite.error ?? "Could not create invitation");
-    console.log("Откройте эту личную ссылку на Mac или iPhone. Она действует 5 минут и используется один раз.\n\n" + invite.url);
+    console.log("Откройте эту личную ссылку на Mac или iPhone. Она действует сутки и используется один раз.\n\n" + invite.url);
     return;
   }
 

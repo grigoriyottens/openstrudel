@@ -383,6 +383,7 @@ private final class CredentialReadGate: @unchecked Sendable {
         await client.cancelMobileInvitation(colleague: true)
         #expect(fixture.cancelledInvitations == 0, "A colleague's link keeps working after the sheet closes")
         await client.inviteMobile()
+        #expect(!client.keepsInvitation(owner: true), "This Home's own links last five minutes")
         await client.cancelMobileInvitation()
         #expect(fixture.cancelledInvitations == 1)
 
@@ -418,11 +419,35 @@ private final class CredentialReadGate: @unchecked Sendable {
         let second = try #require(client.mobileInvitation?.id)
         await client.cancelMobileInvitation(colleague: true)
         await client.refreshMobileStatus()
-        #expect(client.colleagueInvitations.map(\.id) == [second], "Closing the sheet keeps the link, and Settings lists it")
-        #expect(client.colleagueInvitations.first?.expiryDate != nil)
-        try await client.cancelColleagueInvitation(second)
+        #expect(client.waitingInvitations.map(\.id) == [second], "Closing the sheet keeps the link, and Settings lists it")
+        #expect(client.waitingInvitations.first?.expiryDate != nil)
+        #expect(client.waitingInvitations.first?.isOwner == false, "A Home that sends no role lists only colleague links")
+        try await client.cancelInvitation(second)
         #expect(fixture.cancelledInvitationIDs == [first, second])
-        #expect(client.colleagueInvitations.isEmpty)
+        #expect(client.waitingInvitations.isEmpty)
+    }
+
+    @Test func theOwnersOwnLinkLastsADayOutlivesTheSheetAndCanBeCancelledInSettings() async throws {
+        let fixture = DevicesFixture()
+        fixture.flags["colleagueInvitesVersion"] = 1
+        fixture.flags["ownerInvitesVersion"] = 1
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        #expect(client.keepsInvitation(owner: true) && client.keepsInvitation(owner: false))
+        await client.inviteMobile(owner: false)
+        let colleague = try #require(client.mobileInvitation?.id)
+        await client.cancelMobileInvitation(colleague: true)
+        await client.inviteMobile()
+        let own = try #require(client.mobileInvitation?.id)
+        await client.cancelMobileInvitation()
+        #expect(fixture.cancelledInvitations == 0, "Closing the owner's sheet keeps the link")
+        await client.refreshMobileStatus()
+        #expect(client.waitingInvitations.map(\.id) == [colleague, own])
+        #expect(client.waitingInvitations.map(\.isOwner) == [false, true])
+        try await client.cancelInvitation(own)
+        #expect(fixture.cancelledInvitationIDs == [own])
+        #expect(client.waitingInvitations.map(\.id) == [colleague])
     }
 
     @Test func anOlderHomeKeepsItsSingleShortInvitation() async throws {
@@ -563,8 +588,8 @@ private final class KeychainLog: @unchecked Sendable {
     var cancelledInvitations = 0
     var revokedClients: [String] = []
     var homeRenames: [String] = []
-    /// Colleague links waiting to be used, and the ones cancelled by their id.
-    var invitations: [String] = []
+    /// Links waiting to be used, and the ones cancelled by their id.
+    var invitations: [(id: String, owner: Bool)] = []
     var cancelledInvitationIDs: [String] = []
     private var issuedInvitations = 0
     func respond(_ request: URLRequest) async -> (Int, Data) {
@@ -597,16 +622,24 @@ private final class KeychainLog: @unchecked Sendable {
                 ["id": "owner-phone", "label": "iPhone", "role": "owner", "pairedAt": "2026-10-14T10:00:00.000Z", "current": true],
                 ["id": "colleague", "label": "Коллега", "role": "colleague", "pairedAt": "2026-10-14T11:00:00Z", "current": false],
             ].filter { !revokedClients.contains($0["id"] as! String) }
-            return json(["connections": clients.count, "clients": clients, "invitations": invitations.map { ["id": $0, "label": NSNull(), "expiresAt": "2026-10-15T20:00:00.000Z"] }])
+            // A Home before day-long owner links lists only colleague links, without a role.
+            let listed = flags["ownerInvitesVersion"] == 1 ? invitations : invitations.filter { !$0.owner }
+            return json(["connections": clients.count, "clients": clients, "invitations": listed.map { invitation -> [String: Any] in
+                var item: [String: Any] = ["id": invitation.id, "label": NSNull(), "expiresAt": "2026-10-15T20:00:00.000Z"]
+                if flags["ownerInvitesVersion"] == 1 { item["role"] = invitation.owner ? "owner" : "colleague" }
+                return item
+            }])
         case ("POST", "/v1/mobile/pairing"):
             issuedInvitations += 1
             let id = String(format: "%020d", issuedInvitations)
-            if ((try? JSONSerialization.jsonObject(with: Self.body(request))) as? [String: Any])?["owner"] as? Bool == false { invitations.append(id) }
+            let owner = ((try? JSONSerialization.jsonObject(with: Self.body(request))) as? [String: Any])?["owner"] as? Bool == true
+            // A new owner link replaces the previous one.
+            invitations.removeAll { owner && $0.owner }; invitations.append((id, owner))
             return json(["id": id, "url": "openstrudel://connect?host=fixture.local", "expiresAt": "2026-10-15T20:00:00Z"])
-        case ("DELETE", "/v1/mobile/pairing"): cancelledInvitations += 1; return json(["ok": true])
+        case ("DELETE", "/v1/mobile/pairing"): cancelledInvitations += 1; invitations.removeAll { $0.owner }; return json(["ok": true])
         case ("DELETE", _) where path.hasPrefix("/v1/mobile/pairing/"):
             let id = String(path.dropFirst("/v1/mobile/pairing/".count))
-            cancelledInvitationIDs.append(id); invitations.removeAll { $0 == id }
+            cancelledInvitationIDs.append(id); invitations.removeAll { $0.id == id }
             return json(["ok": true])
         case ("PATCH", "/v1/home"):
             let name = ((try? JSONSerialization.jsonObject(with: Self.body(request))) as? [String: Any])?["name"] as? String ?? ""

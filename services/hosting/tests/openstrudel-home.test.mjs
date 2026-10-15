@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {generateKeyPairSync,randomUUID,createPublicKey,X509Certificate} from 'node:crypto';
 import {EventEmitter} from 'node:events';
-import {validateHomeBootstrap,verifyHomeCertificate,verifyHomeAttestation,probePinnedHome,homeScriptsForTest,HOME_RECIPE_SHA256} from '../src/openstrudel-home.mjs';
+import {validateHomeBootstrap,verifyHomeCertificate,verifyHomeAttestation,probePinnedHome,homeScriptsForTest,HOME_RECIPE_SHA256,HomeInstaller} from '../src/openstrudel-home.mjs';
 import {hash} from '../src/security.mjs';
 import {HOME_RELEASE_SHA256} from '../src/openstrudel.mjs';
 function cert(t) {
@@ -41,4 +41,14 @@ test('installation uses pinned vendored recipe, one staging directory, secret cl
   execFileSync('sh',['-n'],{input:script});execFileSync('sh',['-n'],{input:inspect});
   assert(script.includes(HOME_RECIPE_SHA256));assert(script.includes('ExecStartPost=/bin/rm -f /var/lib/openstrudel-cloud/bootstrap.json'));assert(script.includes('wai-owner-sha256'));
   assert(!script.includes(f.payload.privateKeyPEM));assert(inspect.includes('label=com.docker.compose.project=openstrudel'));assert(inspect.includes('docker volume inspect openstrudel_data'));assert(!inspect.includes(f.payload.privateKeyPEM));assert(!inspect.includes('docker compose up'));
+});
+test('owner recovery accepts the Home\'s day-long owner link and nothing longer',async()=>{
+  const now=Date.parse('2026-10-15T12:00:00Z'),pin='a'.repeat(64),key='b'.repeat(64),server={ip:'8.8.8.8'},row={certificate_sha256:pin};
+  const recover=async lifetime=>{
+    const installer=new HomeInstaller({now:()=>now,provider:{ssh:async()=>({stdout:JSON.stringify({url:`openstrudel://connect?host=8.8.8.8&port=7789&key=${key}&pin=${pin}`,expiresAt:new Date(now+lifetime).toISOString()})})}});
+    installer.verify=async()=>{};return installer.recover(server,row);
+  };
+  assert.equal((await recover(86_400_000)).expires_at,now+86_400_000);
+  assert.equal((await recover(300_000)).expires_at,now+300_000);
+  await assert.rejects(()=>recover(2*86_400_000),e=>e.code==='home_owner_recovery_unconfirmed');
 });

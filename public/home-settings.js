@@ -200,7 +200,7 @@ async function openDevices() {
     if(state.owner) {
       action(page,t("Открыть на другом устройстве"),async()=>{
         const invite=await api('/v1/mobile/pairing',{method:'POST',body:JSON.stringify({owner:true})});
-        state.back=here; const next=modalPage(t("Подключение устройства"),t("На другом Mac откройте Настройки → Устройства → Подключить устройство и вставьте эту ссылку. Она действует пять минут."));
+        state.back=here; const next=modalPage(t("Подключение устройства"),t("На другом Mac откройте Настройки → Устройства → Подключить устройство и вставьте эту ссылку. Она действует сутки."));
         const text=field(next.content,t("Личная ссылка подключения"),'password'); text.value=invite.url; text.readOnly=true;
         action(next,t("Скопировать ссылку"),async()=>{await navigator.clipboard.writeText(invite.url);next.error.textContent=t("Ссылка скопирована. Продолжите на другом устройстве.");},true);
       },true);
