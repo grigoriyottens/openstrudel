@@ -164,10 +164,15 @@ it("never gives a different bot the old update cursor or membership events", asy
 it("answers a pairing /start that Telegram delivers twice only once", async () => {
   const { store, adapter } = setup(); const link = adapter.createLink();
   const start = (id: number) => message(id, `/start ${link.code}`, 77, 77, { message_id: 1950 });
+  const sent = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/sendMessage")).map(([, init]) => JSON.parse(String(init!.body))).map(({ chat_id, text }) => ({ chat_id, text }));
   await Promise.all([adapter.processUpdate(start(565291610)), adapter.processUpdate(start(565291611))]);
-  const sent = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/sendMessage")).map(([, init]) => JSON.parse(String(init!.body)).text);
   expect(store.getTelegramChat("77")).toMatchObject({ allowedSenders: ["77"] });
-  expect(sent).toEqual(["Telegram подключён. Здесь отвечает «Общий помощник»."]);
+  expect(sent()).toEqual([{ chat_id: "77", text: "Telegram подключён. Здесь отвечает «Общий помощник»." }]);
+  // Only the chat that redeemed the link is spared the refusal.
+  vi.mocked(fetch).mockClear();
+  await adapter.processUpdate(message(565291612, `/start ${link.code}`, 88, 88));
+  expect(store.getTelegramChat("88")).toBeNull();
+  expect(sent()).toEqual([{ chat_id: "88", text: "Ссылка уже использована или устарела. Откройте новую в OpenStrudel." }]);
 });
 
 it("does not re-answer a redeemed pairing when its uncertain update is replayed", async () => {
