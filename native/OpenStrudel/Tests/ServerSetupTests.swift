@@ -141,6 +141,65 @@ struct ServerSetupTests {
         #expect(status.canUpdateRelease == nil)
     }
 
+    @Test func eachInstallerStageOwnsALaterPartOfTheBar() {
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        var spans: [(first: Double, last: Double)] = []
+        for (index, stage) in ["connecting", "dependencies", "download", "build", "verify"].enumerated() {
+            var progress = ServerSetupProgress(at: start)
+            progress.report(stage, at: start)
+            #expect(progress.step == index + 1)
+            spans.append((progress.value(at: start), progress.value(at: start + 86_400)))
+        }
+        #expect(ServerSetupProgress.steps == 5)
+        #expect(spans[0].first == 0)
+        // Even a day inside one stage never reaches the next stage's part.
+        for (earlier, later) in zip(spans, spans.dropFirst()) { #expect(earlier.last < later.first) }
+        // Building the image is most of the wait, so it owns most of the bar.
+        #expect(spans[3].last - spans[3].first > 0.5)
+    }
+
+    @Test func progressEasesForwardInsideAStageWithoutCompletingIt() {
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        var progress = ServerSetupProgress(at: start)
+        progress.report("build", at: start)
+        let values = stride(from: 0.0, through: 1200, by: 60).map { progress.value(at: start + $0) }
+        for (earlier, later) in zip(values, values.dropFirst()) { #expect(later > earlier) }
+        // Each minute adds less than the one before, so a slow build still moves.
+        let steps = zip(values, values.dropFirst()).map { $1 - $0 }
+        for (earlier, later) in zip(steps, steps.dropFirst()) { #expect(later < earlier) }
+        var verify = ServerSetupProgress(at: start)
+        verify.report("verify", at: start)
+        #expect(verify.value(at: start + 86_400 * 365) < 1)
+    }
+
+    @Test func progressNeverMovesBackAndHoldsWhileReconnecting() {
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        var progress = ServerSetupProgress(at: start)
+        let reports: [(at: TimeInterval, stage: String)] = [
+            (6, "dependencies"), (20, "reconnecting"), (45, "dependencies"), (50, "build"), (120, "reconnecting"),
+            (150, "build"), (200, "dependencies"), (230, "build"), (420, "verify"), (430, "reconnecting"),
+        ]
+        var last = progress.value(at: start), second: TimeInterval = 0
+        for report in reports {
+            while second < report.at {
+                second += 1
+                let value = progress.value(at: start + second)
+                #expect(value >= last, "\(second) s"); last = value
+            }
+            progress.report(report.stage, at: start + report.at)
+            let value = progress.value(at: start + report.at)
+            #expect(value >= last, "\(report.stage) at \(report.at) s"); last = value
+        }
+        // While SSH is away the bar keeps its place and its step.
+        #expect(progress.stage == "reconnecting")
+        #expect(progress.step == 5)
+        #expect(progress.value(at: start + 900) == last)
+        #expect(last < 1)
+        progress.report("ready", at: start + 905)
+        #expect(progress.value(at: start + 905) == 1)
+        #expect(progress.step == 5)
+    }
+
     @Test @MainActor func lockedRecoveryCannotStartAnotherInstallation() throws {
         let store = ServerSetupLockedStore()
         let flow = ServerSetupFlow(store: store)
@@ -330,6 +389,22 @@ struct ServerSetupTests {
         #expect(flow.error == .notStarted)
         #expect(await transport.installInputs.count == 1, "Pausing never starts a second job")
         #expect(store.installation?.id == saved.id)
+        flow.pause()
+    }
+
+    @Test @MainActor func installingMovesTheProgressToTheServersStage() async throws {
+        let saved = try pendingInstallation()
+        let status = try JSONSerialization.data(withJSONObject: ["installationID": saved.id, "state": "activating", "stage": "build"])
+        let transport = ServerSetupTestTransport(status: status)
+        let flow = ServerSetupFlow(store: ServerSetupMemoryStore(installation: saved), probe: { _ in nil }, transport: transport)
+        flow.confirm(access: ServerAccess(password: "fixture"))
+        for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
+        flow.install(access: ServerAccess(password: "fixture"))
+        for _ in 0..<400 where flow.stage != "build" { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.phase == .installing)
+        #expect(flow.stage == "build")
+        #expect(flow.progress.step == 4)
+        #expect(flow.progress.value(at: .now) > 0.1)
         flow.pause()
     }
 
