@@ -29,6 +29,8 @@ export class MessageService {
   onAuthenticationError?: () => void;
   readonly files: ConversationFiles;
   get hasActiveRuns(): boolean { return this.inflight.size > 0; }
+  /** A queued or running turn in this conversation. */
+  isRunning(conversationId: string): boolean { return this.drains.has(conversationId); }
 
   constructor(private readonly store: Store, private readonly engine: CodexEngine, root = process.cwd()) { this.files = new ConversationFiles(store,root); }
 

@@ -7895,13 +7895,6 @@
     "es": "Elige un dispositivo",
     "he": "בחירת מכשיר"
   },
-  "Оба устройства должны быть на связи, обновлены и подключены с доступом владельца.": {
-    "ru": "Оба устройства должны быть на связи, обновлены и подключены с доступом владельца.",
-    "en": "Both devices must be online, up to date and connected with owner access.",
-    "fr": "Les deux appareils doivent être en ligne, à jour et connectés en tant que propriétaire.",
-    "es": "Ambos dispositivos deben estar en línea, actualizados y conectados con acceso de propietario.",
-    "he": "שני המכשירים צריכים להיות מקוונים, מעודכנים ומחוברים עם הרשאות בעלים."
-  },
   "Аккаунты и доступ к сервисам остаются на прежнем устройстве. На новом используются его подключения.": {
     "ru": "Аккаунты и доступ к сервисам остаются на прежнем устройстве. На новом используются его подключения.",
     "en": "Accounts and service access stay on the previous device. The new device uses its own connections.",
@@ -9000,5 +8993,229 @@
     "es": "Este no es un código QR de conexión de OpenStrudel.",
     "he": "זה לא קוד QR לחיבור OpenStrudel.",
     "ru": "Это не QR-код подключения OpenStrudel."
+  },
+  "Сотрудник ещё выполняет задачу. Повторите перенос, когда он закончит.": {
+    "en": "This assistant is still working on a task. Try the move again when it finishes.",
+    "fr": "Cet assistant travaille encore sur une tâche. Relancez le transfert quand il aura terminé.",
+    "es": "Este asistente aún está trabajando en una tarea. Vuelve a intentar el traslado cuando termine.",
+    "he": "העוזר עדיין עובד על משימה. יש לנסות שוב את ההעברה כשיסיים.",
+    "ru": "Сотрудник ещё выполняет задачу. Повторите перенос, когда он закончит."
+  },
+  "Сотрудники ещё работают. Дождитесь завершения их ответов и повторите экспорт.": {
+    "en": "Assistants are still working. Wait for their replies to finish, then export again.",
+    "fr": "Des assistants travaillent encore. Attendez la fin de leurs réponses, puis relancez l’export.",
+    "es": "Hay asistentes trabajando todavía. Espera a que terminen sus respuestas y vuelve a exportar.",
+    "he": "עוזרים עדיין עובדים. יש להמתין לסיום התשובות שלהם ולייצא שוב.",
+    "ru": "Сотрудники ещё работают. Дождитесь завершения их ответов и повторите экспорт."
+  },
+  "Обновите OpenStrudel на обоих устройствах.": {
+    "en": "Update OpenStrudel on both devices.",
+    "fr": "Mettez à jour OpenStrudel sur les deux appareils.",
+    "es": "Actualiza OpenStrudel en ambos dispositivos.",
+    "he": "יש לעדכן את OpenStrudel בשני המכשירים.",
+    "ru": "Обновите OpenStrudel на обоих устройствах."
+  },
+  "Копия агента не соответствует переносу.": {
+    "en": "The assistant’s copy doesn’t match this move.",
+    "fr": "La copie de l’assistant ne correspond pas à ce transfert.",
+    "es": "La copia del asistente no coincide con este traslado.",
+    "he": "העותק של העוזר לא תואם להעברה הזו.",
+    "ru": "Копия агента не соответствует переносу."
+  },
+  "Копия квитанций неполная.": {
+    "en": "The copy of the receipts is incomplete.",
+    "fr": "La copie des reçus est incomplète.",
+    "es": "La copia de los recibos está incompleta.",
+    "he": "העותק של הקבלות חלקי.",
+    "ru": "Копия квитанций неполная."
+  },
+  "Копия квитанций повреждена.": {
+    "en": "The copy of the receipts is damaged.",
+    "fr": "La copie des reçus est endommagée.",
+    "es": "La copia de los recibos está dañada.",
+    "he": "העותק של הקבלות פגום.",
+    "ru": "Копия квитанций повреждена."
+  },
+  "Копия расписаний повреждена.": {
+    "en": "The copy of the schedules is damaged.",
+    "fr": "La copie des planifications est endommagée.",
+    "es": "La copia de las programaciones está dañada.",
+    "he": "העותק של התזמונים פגום.",
+    "ru": "Копия расписаний повреждена."
+  },
+  "Сначала дождитесь завершения действий агента.": {
+    "en": "Wait for the assistant’s actions to finish first.",
+    "fr": "Attendez d’abord la fin des actions de l’assistant.",
+    "es": "Espera primero a que terminen las acciones del asistente.",
+    "he": "יש להמתין קודם לסיום הפעולות של העוזר.",
+    "ru": "Сначала дождитесь завершения действий агента."
+  },
+  "Перенос не подтверждён.": {
+    "en": "The move isn’t confirmed.",
+    "fr": "Le transfert n’est pas confirmé.",
+    "es": "El traslado no está confirmado.",
+    "he": "ההעברה לא אושרה.",
+    "ru": "Перенос не подтверждён."
+  },
+  "Перенос не найден.": {
+    "en": "Move not found.",
+    "fr": "Transfert introuvable.",
+    "es": "No se encontró el traslado.",
+    "he": "ההעברה לא נמצאה.",
+    "ru": "Перенос не найден."
+  },
+  "Источник не готов к передаче.": {
+    "en": "The original device isn’t ready to hand over the assistant.",
+    "fr": "L’appareil d’origine n’est pas prêt à transférer l’assistant.",
+    "es": "El dispositivo de origen no está listo para entregar al asistente.",
+    "he": "המכשיר המקורי לא מוכן למסור את העוזר.",
+    "ru": "Источник не готов к передаче."
+  },
+  "Копия не подтверждена.": {
+    "en": "The copy isn’t confirmed.",
+    "fr": "La copie n’est pas confirmée.",
+    "es": "La copia no está confirmada.",
+    "he": "העותק לא אושר.",
+    "ru": "Копия не подтверждена."
+  },
+  "Передача уже состоялась. Отмена не включит прежнюю копию.": {
+    "en": "The handover already happened. Canceling won’t turn the previous copy back on.",
+    "fr": "Le transfert a déjà eu lieu. L’annulation ne réactivera pas la copie précédente.",
+    "es": "La entrega ya se hizo. Cancelar no volverá a activar la copia anterior.",
+    "he": "המסירה כבר בוצעה. ביטול לא יפעיל מחדש את העותק הקודם.",
+    "ru": "Передача уже состоялась. Отмена не включит прежнюю копию."
+  },
+  "Передача ещё не завершена.": {
+    "en": "The handover isn’t finished yet.",
+    "fr": "Le transfert n’est pas encore terminé.",
+    "es": "La entrega aún no ha terminado.",
+    "he": "המסירה עדיין לא הסתיימה.",
+    "ru": "Передача ещё не завершена."
+  },
+  "Неизвестный этап переноса.": {
+    "en": "Unknown move step.",
+    "fr": "Étape de transfert inconnue.",
+    "es": "Paso de traslado desconocido.",
+    "he": "שלב העברה לא ידוע.",
+    "ru": "Неизвестный этап переноса."
+  },
+  "Этот перенос относится к другому сотруднику.": {
+    "en": "This move belongs to another assistant.",
+    "fr": "Ce transfert concerne un autre assistant.",
+    "es": "Este traslado corresponde a otro asistente.",
+    "he": "ההעברה הזו שייכת לעוזר אחר.",
+    "ru": "Этот перенос относится к другому сотруднику."
+  },
+  "Перенос отменён.": {
+    "en": "The move was canceled.",
+    "fr": "Le transfert a été annulé.",
+    "es": "El traslado se canceló.",
+    "he": "ההעברה בוטלה.",
+    "ru": "Перенос отменён."
+  },
+  "Агент уже передан.": {
+    "en": "The assistant has already been handed over.",
+    "fr": "L’assistant a déjà été transféré.",
+    "es": "El asistente ya se entregó.",
+    "he": "העוזר כבר נמסר.",
+    "ru": "Агент уже передан."
+  },
+  "Агент не найден.": {
+    "en": "Assistant not found.",
+    "fr": "Assistant introuvable.",
+    "es": "No se encontró el asistente.",
+    "he": "העוזר לא נמצא.",
+    "ru": "Агент не найден."
+  },
+  "Агент уже переносится.": {
+    "en": "This assistant is already being moved.",
+    "fr": "Cet assistant est déjà en cours de transfert.",
+    "es": "Este asistente ya se está trasladando.",
+    "he": "העוזר כבר מועבר.",
+    "ru": "Агент уже переносится."
+  },
+  "У агента общая рабочая папка с другими агентами. Сначала сделайте отдельное пространство; перенос общей папки одним агентом изменит доступы остальных.": {
+    "en": "This assistant shares a work folder with other assistants. Give it its own space first: moving a shared folder with one assistant would change the others’ access.",
+    "fr": "Cet assistant partage un dossier de travail avec d’autres assistants. Donnez-lui d’abord son propre espace : transférer un dossier partagé avec un seul assistant modifierait l’accès des autres.",
+    "es": "Este asistente comparte una carpeta de trabajo con otros asistentes. Primero dale su propio espacio: trasladar una carpeta compartida con un solo asistente cambiaría el acceso de los demás.",
+    "he": "לעוזר יש תיקיית עבודה משותפת עם עוזרים אחרים. קודם יש ליצור לו מרחב נפרד: העברת תיקייה משותפת עם עוזר אחד תשנה את הגישה של האחרים.",
+    "ru": "У агента общая рабочая папка с другими агентами. Сначала сделайте отдельное пространство; перенос общей папки одним агентом изменит доступы остальных."
+  },
+  "Копия агента больше 64 МБ. Прямой перенос пока не поддерживает такой объём. Агент останется на прежнем устройстве; сохраните его экспорт.": {
+    "en": "The assistant’s copy is larger than 64 MB. A direct move doesn’t support that size yet. The assistant stays on its current device; save an export of it instead.",
+    "fr": "La copie de l’assistant dépasse 64 Mo. Le transfert direct ne prend pas encore en charge cette taille. L’assistant reste sur son appareil actuel ; enregistrez plutôt un export.",
+    "es": "La copia del asistente supera los 64 MB. El traslado directo aún no admite ese tamaño. El asistente se queda en su dispositivo actual; guarda una exportación.",
+    "he": "העותק של העוזר גדול מ-64 MB. העברה ישירה עדיין לא תומכת בגודל כזה. העוזר יישאר במכשיר הנוכחי; כדאי לשמור ממנו ייצוא.",
+    "ru": "Копия агента больше 64 МБ. Прямой перенос пока не поддерживает такой объём. Агент останется на прежнем устройстве; сохраните его экспорт."
+  },
+  "Копия изменилась во время передачи.": {
+    "en": "The copy changed during the transfer.",
+    "fr": "La copie a changé pendant le transfert.",
+    "es": "La copia cambió durante la transferencia.",
+    "he": "העותק השתנה במהלך ההעברה.",
+    "ru": "Копия изменилась во время передачи."
+  },
+  "На устройстве уже есть агент с этим идентификатором.": {
+    "en": "This device already has an assistant with this ID.",
+    "fr": "Cet appareil a déjà un assistant avec cet identifiant.",
+    "es": "Este dispositivo ya tiene un asistente con este identificador.",
+    "he": "במכשיר כבר יש עוזר עם המזהה הזה.",
+    "ru": "На устройстве уже есть агент с этим идентификатором."
+  },
+  "Работающий агент не может быть заменён.": {
+    "en": "An active assistant can’t be replaced.",
+    "fr": "Un assistant actif ne peut pas être remplacé.",
+    "es": "No se puede reemplazar un asistente activo.",
+    "he": "אי אפשר להחליף עוזר פעיל.",
+    "ru": "Работающий агент не может быть заменён."
+  },
+  "Переносить сотрудников может владелец устройства.": {
+    "en": "Only the device owner can move assistants.",
+    "fr": "Seul le propriétaire de l’appareil peut transférer des assistants.",
+    "es": "Solo el propietario del dispositivo puede trasladar asistentes.",
+    "he": "רק הבעלים של המכשיר יכולים להעביר עוזרים.",
+    "ru": "Переносить сотрудников может владелец устройства."
+  },
+  "Подключённое устройство изменилось. Проверьте подключение перед переносом.": {
+    "en": "The connected device changed. Check the connection before moving.",
+    "fr": "L’appareil connecté a changé. Vérifiez la connexion avant le transfert.",
+    "es": "El dispositivo conectado cambió. Comprueba la conexión antes del traslado.",
+    "he": "המכשיר המחובר השתנה. יש לבדוק את החיבור לפני ההעברה.",
+    "ru": "Подключённое устройство изменилось. Проверьте подключение перед переносом."
+  },
+  "Выберите сотрудника для переноса.": {
+    "en": "Choose an assistant to move.",
+    "fr": "Choisissez un assistant à transférer.",
+    "es": "Elige un asistente para trasladar.",
+    "he": "יש לבחור עוזר להעברה.",
+    "ru": "Выберите сотрудника для переноса."
+  },
+  "«{0}» не ответил за 5 минут. Перенос можно продолжить: «Продолжить перенос».": {
+    "en": "“{0}” didn’t respond within 5 minutes. You can resume with “Continue transfer”.",
+    "fr": "« {0} » n’a pas répondu en 5 minutes. Vous pouvez reprendre avec « Reprendre le transfert ».",
+    "es": "«{0}» no respondió en 5 minutos. Puedes reanudarlo con «Continuar traslado».",
+    "he": "״{0}״ לא הגיב תוך 5 דקות. אפשר להמשיך עם ״המשך העברה״.",
+    "ru": "«{0}» не ответил за 5 минут. Перенос можно продолжить: «Продолжить перенос»."
+  },
+  "Нет связи с «{0}». Когда связь появится, нажмите «Продолжить перенос».": {
+    "en": "Can’t reach “{0}”. When it’s back online, choose “Continue transfer”.",
+    "fr": "Impossible de joindre « {0} ». Quand il sera de nouveau en ligne, choisissez « Reprendre le transfert ».",
+    "es": "No hay conexión con «{0}». Cuando vuelva a estar en línea, elige «Continuar traslado».",
+    "he": "אין חיבור אל ״{0}״. כשהחיבור יחזור, יש לבחור ״המשך העברה״.",
+    "ru": "Нет связи с «{0}». Когда связь появится, нажмите «Продолжить перенос»."
+  },
+  "Подключение к «{0}» без доступа владельца. Переносить сотрудников может только владелец.": {
+    "en": "Your connection to “{0}” doesn’t have owner access. Only the owner can move assistants.",
+    "fr": "Votre connexion à « {0} » n’a pas l’accès propriétaire. Seul le propriétaire peut transférer des assistants.",
+    "es": "Tu conexión con «{0}» no tiene acceso de propietario. Solo el propietario puede trasladar asistentes.",
+    "he": "לחיבור שלך אל ״{0}״ אין הרשאות בעלים. רק הבעלים יכולים להעביר עוזרים.",
+    "ru": "Подключение к «{0}» без доступа владельца. Переносить сотрудников может только владелец."
+  },
+  "Обновите OpenStrudel на «{0}», чтобы переносить сотрудников.": {
+    "en": "Update OpenStrudel on “{0}” to move assistants.",
+    "fr": "Mettez à jour OpenStrudel sur « {0} » pour transférer des assistants.",
+    "es": "Actualiza OpenStrudel en «{0}» para trasladar asistentes.",
+    "he": "יש לעדכן את OpenStrudel ב״{0}״ כדי להעביר עוזרים.",
+    "ru": "Обновите OpenStrudel на «{0}», чтобы переносить сотрудников."
   }
 }

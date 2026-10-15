@@ -44,10 +44,11 @@ export class AgentArchives {
   constructor(private readonly store: Store, private readonly messages: MessageService) {}
 
   export(profileId?: string): AgentArchive {
-    if (this.messages.hasActiveRuns) throw new Error("Сотрудники ещё работают. Дождитесь завершения их ответов и повторите экспорт.");
     const store = this.store;
     const visible = (id: string) => !["moved", "staged"].includes(JSON.parse(store.getSetting("agent.transfer." + id) ?? "null")?.phase);
     const conversations = store.listConversations().filter(c => (profileId ? (c.profileId ?? "main") === profileId : visible(c.profileId ?? "main")));
+    // One employee's copy waits only for that employee; colleagues keep working.
+    if (profileId ? conversations.some(c => this.messages.isRunning(c.id)) : this.messages.hasActiveRuns) throw new Error("Сотрудники ещё работают. Дождитесь завершения их ответов и повторите экспорт.");
     const profiles: Profile[] = store.listProfiles().filter(p => profileId ? p.id === profileId : visible(p.id)).map(({ preview: _, ...p }) => ({ ...p, context: store.getSetting("employee.context." + p.id) ?? p.domain ?? "personal" }));
     // The main assistant becomes an ordinary added employee on import. Never
     // overwrite the receiving Home's main personality or primary conversation.

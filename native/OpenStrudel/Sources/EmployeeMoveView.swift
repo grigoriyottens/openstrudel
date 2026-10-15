@@ -16,7 +16,7 @@ struct EmployeeMoveButton: View {
     @State private var showing = false
     var body: some View {
         Button(L("Перенести на другое устройство…"), systemImage: "arrow.right.square") { showing = true }
-            .disabled(disabled || !client.canManageOpenAI)
+            .disabled(disabled || !client.ownsDevice)
             .accessibilityIdentifier("moveEmployee")
             .sheet(isPresented: $showing, onDismiss: {
                 if !client.profiles.contains(where: { $0.id == profile.id }) { dismissDetails() }
@@ -96,7 +96,7 @@ struct EmployeeMoveView: View {
                             Text(L("Можно продолжить пользоваться приложением. Если связь прервётся, перенос продолжится с сохранённого этапа."))
                                 .font(.callout).foregroundStyle(.secondary)
                             if let failure = moves.error {
-                                Text(L10n.serviceText(failure)).foregroundStyle(AppTheme.destructive)
+                                Text(UserFacingError.text(failure)).foregroundStyle(AppTheme.destructive)
                                     .accessibilityIdentifier("employeeMoveError")
                                 Button(L("Продолжить перенос")) { moves.resume(using: library.moveTransport) }
                                     .buttonStyle(.glassProminent).disabled(moves.busy)
@@ -120,10 +120,6 @@ struct EmployeeMoveView: View {
                                     Text(destination.displayName).tag(destination.id)
                                 }
                             }.accessibilityIdentifier("employeeMoveDestination")
-                            if !request.source.canMoveEmployees || target != nil && target?.canMoveEmployees != true {
-                                Text(L("Оба устройства должны быть на связи, обновлены и подключены с доступом владельца."))
-                                    .font(.callout).foregroundStyle(.secondary)
-                            }
                             Text(L("Аккаунты и доступ к сервисам остаются на прежнем устройстве. На новом используются его подключения."))
                                 .font(.caption).foregroundStyle(.secondary)
                             Button(L("Перенести сотрудника")) {
@@ -133,6 +129,11 @@ struct EmployeeMoveView: View {
                             }.buttonStyle(.glassProminent)
                                 .disabled(!request.source.canMoveEmployees || target?.canMoveEmployees != true)
                                 .accessibilityIdentifier("confirmEmployeeMove")
+                            let blockers = [request.source.employeeMoveBlocker, target?.employeeMoveBlocker].compactMap { $0 }
+                            if !blockers.isEmpty {
+                                Text(blockers.joined(separator: "\n")).font(.callout).foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("employeeMoveBlocked")
+                            }
                         }
                         if let error { Text(L10n.serviceText(error)).foregroundStyle(AppTheme.destructive) }
                     }

@@ -115,9 +115,11 @@ export class LocalAgentMoves {
     if (shared) throw new HomeError("У агента общая рабочая папка с другими агентами. Сначала сделайте отдельное пространство; перенос общей папки одним агентом изменит доступы остальных.", 409);
     const operation = { id: input.id, proofHash: digest(input.proof), agent, phase: "preparing" };
     this.home.transaction(() => { this.save(operation); this.store.setSetting(lockKey(agent), JSON.stringify({ id: input.id, phase: "preparing" })); });
+    // The lock stops new work for this employee only. Other employees keep
+    // working: they never write this employee's chats or private workspace.
     const deadline = Date.now() + 15_000;
-    while (this.messages.hasActiveRuns || this.messages.scheduler?.hasActiveRuns) {
-      if (Date.now() >= deadline) throw new HomeError("Ещё выполняется действие. Перенос отменится после подтверждения обоих устройств; повторите его после завершения работы.", 409);
+    while (chats.some(c => this.messages.isRunning(c.id) || this.messages.scheduler?.isRunning(c.id))) {
+      if (Date.now() >= deadline) throw new HomeError("Сотрудник ещё выполняет задачу. Повторите перенос, когда он закончит.", 409);
       await new Promise(resolve => setTimeout(resolve, 25));
     }
     if (this.saved(input.id)?.phase === "canceled" || agentTransfer(this.store, agent)?.id !== input.id) throw new HomeError("Перенос отменён.", 409);

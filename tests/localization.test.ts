@@ -43,4 +43,13 @@ describe('interface languages', () => {
       expect(l.error(error), error).not.toBe(l.text('Не удалось получить ответ. Попробуйте ещё раз.'));
     }
   });
+  it('explains every refusal of a move between devices instead of claiming no reply came', () => {
+    const l = localizer(), lost = l.text('Не удалось получить ответ. Попробуйте ещё раз.');
+    const steps = readFileSync('src/agent-move.ts', 'utf8').split('/** Durable control state')[0]!;
+    const errors = [...steps.matchAll(/HomeError\("([^"]+)"/g)].map(m => m[1]!);
+    expect(errors.length).toBeGreaterThan(20);
+    errors.push('Сотрудники ещё работают. Дождитесь завершения их ответов и повторите экспорт.', 'Переносить сотрудников может владелец устройства.',
+      'Подключённое устройство изменилось. Проверьте подключение перед переносом.', 'Выберите сотрудника для переноса.');
+    for (const error of errors) expect(l.error(error), error).not.toBe(lost);
+  });
 });
