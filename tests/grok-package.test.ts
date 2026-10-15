@@ -24,6 +24,12 @@ it("unpacks the pinned Grok Build to bin/grok, which accepts the commands OpenSt
   for (const command of [["--sandbox", "openstrudel", "agent", "stdio"], ["login", "--device-auth"], ["logout"]]) expect(grok(...command, "--help").status, command.join(" ")).toBe(0);
 }, 60_000);
 
+it("ships Grok Build's Apache-2.0 license and the notices of the pinned version", () => {
+  expect(readFileSync("licenses/Grok-LICENSE.txt", "utf8")).toMatch(/^Copyright 2023-2026 SpaceXAI\n[\s\S]*Apache License\s+Version 2\.0/);
+  // Every platform package carries the same notices; a new Grok Build must bring its own.
+  expect(readFileSync("licenses/Grok-THIRD_PARTY_NOTICES.md", "utf8")).toBe(readFileSync(`node_modules/@xai-official/grok-${process.platform}-${process.arch}/THIRD_PARTY_NOTICES.md`, "utf8"));
+});
+
 it("runs under its own sandbox: the workspace, system paths and Grok's home, never the Home's data or the owner's files", () => {
   // Every profile may use the temp folders, so this Home lives in the checkout, as in scripts/check-sandbox.mjs.
   const root = mkdtempSync(resolve(".grok-sandbox-"));

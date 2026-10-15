@@ -11,3 +11,5 @@ src/migration.ts
 !scripts/container-start.sh
 !scripts/check-sandbox.mjs
 !scripts/extract-grok.mjs
+!licenses
+!licenses/**
