@@ -46,8 +46,11 @@ struct DeviceSignOutView: View {
                 // Not the default button: Return must not remove a device.
                 ToolbarItem(placement: .destructiveAction) {
                     Button(L("Убрать подключение"), role: .destructive) {
+                        // The sheet hangs on the device's row; close it before the row goes away,
+                        // or it stays open with nothing left to remove.
                         let source = client
-                        Task { await library.removeConnection(source); completed() }
+                        completed()
+                        Task { await library.removeConnection(source) }
                     }
                     .disabled(client.isSigningOut)
                     .accessibilityIdentifier("confirmDeviceSignOut")
