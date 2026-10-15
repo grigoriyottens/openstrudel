@@ -8504,6 +8504,13 @@
     "es": "Para los modelos con clave de API, te pregunta a ti.",
     "he": "במודלים עם מפתח API, תתבקשו לאשר בעצמכם."
   },
+  "Для моделей по API-ключу и подписке Grok спрашивает вас.": {
+    "en": "For models on an API key or the Grok subscription, it asks you instead.",
+    "ru": "Для моделей по API-ключу и подписке Grok спрашивает вас.",
+    "fr": "Pour les modèles avec une clé API ou l’abonnement Grok, il vous demande à la place.",
+    "es": "Para los modelos con clave de API o la suscripción de Grok, te pregunta a ti.",
+    "he": "במודלים עם מפתח API או מינוי Grok, תתבקשו לאשר בעצמכם."
+  },
   "Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI или другой выбранный вами провайдер получает сообщения, нужную часть переписки и выбранные файлы.": {
     "en": "Chats are stored on your Mac or server. To respond, OpenAI or another provider you choose receives your messages, relevant conversation history and selected files.",
     "ru": "Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI или другой выбранный вами провайдер получает сообщения, нужную часть переписки и выбранные файлы.",
