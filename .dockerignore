@@ -1,6 +1,7 @@
 **
 !package.json
 !package-lock.json
+!.npmrc
 !tsconfig.json
 !src
 !src/**
@@ -10,3 +11,6 @@ src/migration.ts
 !scripts
 !scripts/container-start.sh
 !scripts/check-sandbox.mjs
+!scripts/extract-grok.mjs
+!licenses
+!licenses/**

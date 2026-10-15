@@ -83,6 +83,15 @@ it("allows colleagues to address the employee but not change the binding", async
   expect(messages.contextFor(store.getTelegramChat("-100")!.conversationId!)).toMatch(/^group-/);
 });
 
+it("marks only the paired owner's private chat as the owner's turn", async () => {
+  const { adapter, profile, run } = setup(); const a = adapter.createLink(profile.id, "group");
+  await adapter.processUpdate(message(1, `/start@strudel_bot ${a.code}`));
+  await adapter.processUpdate(message(2, "Hello", 42));
+  await adapter.processUpdate(message(3, "@strudel_bot hello", -100, 42));
+  await adapter.processUpdate(message(4, "@strudel_bot hello", -100, 77));
+  expect(run.mock.calls.map(call => (call as any[])[1].byOwner)).toEqual([true, false, false]);
+});
+
 it("preserves existing groups and requires explicit replacement in the app", async () => {
   const { store, adapter, profile } = setup(); const original = store.createProfile({ name: "Wolf" });
   store.linkTelegramChat({ chatId: "-100", title: "Test group", allowedSenders: ["42", "77"] });

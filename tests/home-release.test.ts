@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -19,6 +19,10 @@ it("packages a committed Home release that both shipped installers can extract",
     for (const file of ["Dockerfile", "deploy/compose.yaml", "scripts/container-start.sh", "scripts/check-sandbox.mjs", "src/cloud-bootstrap.ts", "package-lock.json"]) {
       expect(readFileSync(join(destination, "OpenStrudel-Home", file))).toEqual(execFileSync("git", ["show", `HEAD:${file}`]));
     }
+    // The server builds its image from this archive, so it holds everything the Dockerfile copies in.
+    const copied = readFileSync(join(destination, "OpenStrudel-Home/Dockerfile"), "utf8").split("\n").flatMap(line => /^COPY (?!--)(.+) \S+$/.exec(line)?.[1]!.split(" ") ?? []);
+    expect(copied).toContain("licenses/Grok-LICENSE.txt");
+    for (const file of copied) expect(existsSync(join(destination, "OpenStrudel-Home", file)), file).toBe(true);
   }
   const original = readFileSync(archive);
   expect(spawnSync("python3", ["scripts/package-home.py", "--ref", "HEAD", "--output", archive]).status).not.toBe(0);

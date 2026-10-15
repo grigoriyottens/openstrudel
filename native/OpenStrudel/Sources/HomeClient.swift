@@ -332,6 +332,10 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     var openAIRecoveryMessage: String {
+        if let provider = openAIAccount?.keyProviderName, openAIAccount?.signsIn == true {
+            return canManageOpenAI ? L("Войдите в \(provider) в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены.")
+                : L("Вход в \(provider) выполняет владелец устройства этого сотрудника. Чаты и черновики сохранены.")
+        }
         if let provider = openAIAccount?.keyProviderName {
             return canManageOpenAI ? L("Добавьте ключ \(provider) в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены.")
                 : L("Ключ \(provider) добавляет владелец устройства этого сотрудника. Чаты и черновики сохранены.")
@@ -1585,6 +1589,12 @@ final class HomeClient: ObservableObject, Identifiable {
 
     func removeProvider(_ id: String, deviceID: String? = nil) async throws {
         let _: HomeActionResult = try await management("/v1/providers/" + id + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: "DELETE")
+    }
+
+    /// Grok signs in with a device code inside its own agent on the device that runs the employees:
+    /// `login`, `login/<id>` and `logout`. The token stays with that agent; the Home and this app never see it.
+    func subscription<T: Decodable>(_ id: String, _ action: String, method: String = "GET", deviceID: String? = nil) async throws -> T {
+        try await management("/v1/providers/" + id + "/" + action + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: method)
     }
 
     func management<T: Decodable>(_ path: String, method: String = "GET", payload: [String: Any]? = nil) async throws -> T {

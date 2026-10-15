@@ -558,8 +558,12 @@ struct DeviceAccountsView: View {
     @State private var keys: ProviderList?
     @State private var keyProvider: ProviderSummary?
     @State private var removingKey: ProviderSummary?
+    /// The subscription being signed in; nil while `login` belongs to a ChatGPT account.
+    @State private var loginProvider: ProviderSummary?
+    @State private var signingOut: ProviderSummary?
     @State private var requestID = UUID()
     private var query: String { deviceID.isEmpty ? "" : "?deviceId=" + deviceID }
+    private var selectedDevice: String? { deviceID.isEmpty ? nil : deviceID }
     private var deviceName: String { deviceID == client.health?.nodeId ? client.displayName : client.devices.first(where: { $0.id == deviceID })?.name ?? client.displayName }
     private func path(_ id: String, _ action: String) -> String { "/v1/accounts/" + id + "/" + action + query }
 
@@ -585,36 +589,44 @@ struct DeviceAccountsView: View {
                 Section { accountRows(account, index: index) }
             }
             // A new account is listed once its sign-in completes; until then the code has its own section.
-            if let login, !accounts.contains(where: { $0.id == loginAccount }) {
+            if let login, loginProvider == nil, !accounts.contains(where: { $0.id == loginAccount }) {
                 Section { loginRows(login) } header: { Text(L("Завершите вход на сайте OpenAI")) }
             }
-            Section {
-                if let notice { Text(notice).foregroundStyle(AppTheme.secondaryText) }
-                if login == nil && canManage && !accounts.isEmpty {
-                    Button(L("Добавить аккаунт OpenAI")) { perform {
-                        notice = nil
-                        struct Added: Decodable { let id: String }
-                        let result: Added = try await client.management("/v1/accounts" + query, method: "POST", payload: ["name": "ChatGPT"])
-                        try await signIn(result.id)
-                    } }.disabled(busy)
-                }
-                if accounts.hasUsage {
-                    HStack {
-                        Button(L("Обновить остатки")) {
-                            refreshing = true
-                            Task { await refresh(force: true); refreshing = false }
-                        }.disabled(loading)
-                        Spacer()
-                        if refreshing { ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем остатки…")) }
+            let addsAccount = login == nil && canManage && !accounts.isEmpty
+            // On the Mac an empty section, as during a sign-in, turns the next section's header into a row.
+            if notice != nil || addsAccount || accounts.hasUsage {
+                Section {
+                    if let notice { Text(notice).foregroundStyle(AppTheme.secondaryText) }
+                    if addsAccount {
+                        Button(L("Добавить аккаунт OpenAI")) { perform {
+                            notice = nil
+                            struct Added: Decodable { let id: String }
+                            let result: Added = try await client.management("/v1/accounts" + query, method: "POST", payload: ["name": "ChatGPT"])
+                            try await signIn(result.id)
+                        } }.disabled(busy)
+                    }
+                    if accounts.hasUsage {
+                        HStack {
+                            Button(L("Обновить остатки")) {
+                                refreshing = true
+                                Task { await refresh(force: true); refreshing = false }
+                            }.disabled(loading)
+                            Spacer()
+                            if refreshing { ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем остатки…")) }
+                        }
+                    }
+                } footer: {
+                    if accounts.hasUsage {
+                        Text((accounts.compactMap({ UsageSummary.checked($0.usage) }).max().map { UsageSummary.updated($0) + "\n" } ?? "")
+                             + L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
                     }
                 }
-            } footer: {
-                if accounts.hasUsage {
-                    Text((accounts.compactMap({ UsageSummary.checked($0.usage) }).max().map { UsageSummary.updated($0) + "\n" } ?? "")
-                         + L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
-                }
             }
-            if let keys, keys.canManage { keySection(keys.providers) }
+            if let keys, keys.canManage {
+                let subscriptions = keys.providers.filter(\.isSubscription)
+                if client.health?.subscriptionsVersion == 1 && !subscriptions.isEmpty { subscriptionSection(subscriptions) }
+                keySection(keys.providers)
+            }
         }
         .task(id: deviceID) {
             if deviceID.isEmpty, let localDeviceID = client.health?.nodeId {
@@ -632,6 +644,13 @@ struct DeviceAccountsView: View {
             while !Task.isCancelled && login?.loginId == current.loginId {
                 do {
                     try await Task.sleep(for: .seconds(2))
+                    if let provider = loginProvider {
+                        let status: OpenAILoginStatus = try await client.subscription(provider.id, "login/" + current.loginId, deviceID: selectedDevice)
+                        if status.status == "completed" { await keysChanged(); login = nil; break }
+                        // The Home names the reason, such as a plan without Grok Build.
+                        if ["failed", "canceled"].contains(status.status) { login = nil; error = status.error ?? L("Вход не завершён. Попробуйте ещё раз.") }
+                        continue
+                    }
                     let status: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + current.loginId))
                     if status.status == "completed" {
                         // Clearing login cancels this .task. Finish both refreshes
@@ -682,6 +701,39 @@ struct DeviceAccountsView: View {
         } message: { provider in
             Text(provider.usedBy > 0 ? provider.removalWarning : L("Ключ будет удалён с «\(deviceName)»."))
         }
+        .confirmationDialog(signingOut.map { L("Выйти из \($0.name)?") } ?? "", isPresented: Binding(get: { signingOut != nil }, set: { if !$0 { signingOut = nil } }),
+                            titleVisibility: .visible, presenting: signingOut) { provider in
+            Button(L("Выйти"), role: .destructive) { perform {
+                let _: HomeActionResult = try await client.subscription(provider.id, "logout", method: "POST", deviceID: selectedDevice)
+                signingOut = nil; await keysChanged()
+            } }
+        } message: { provider in
+            Text(provider.usedBy > 0 ? provider.signOutWarning : L("Вход в \(provider.name) на «\(deviceName)» будет удалён."))
+        }
+    }
+
+    /// Grok signs in with a device code inside its own agent on the device, which keeps the token.
+    @ViewBuilder private func subscriptionSection(_ providers: [ProviderSummary]) -> some View {
+        Section {
+            ForEach(providers) { provider in
+                let signingIn = login != nil && loginProvider?.id == provider.id
+                LabeledContent {
+                    if provider.connected {
+                        Button(L("Выйти…")) { signingOut = provider }
+                            .disabled(busy).accessibilityIdentifier("signOutSubscription-" + provider.id)
+                    } else if !signingIn {
+                        Button(L("Войти")) { perform { try await signIn(provider) } }
+                            .disabled(login != nil || busy).accessibilityIdentifier("signInSubscription-" + provider.id)
+                    }
+                } label: {
+                    Text(verbatim: provider.name)
+                    if provider.connected { Text(L("Вход выполнен")) }
+                }
+                if signingIn, let login { loginRows(login, provider: provider) }
+            }
+        } header: {
+            Text(L("Подписки"))
+        }
     }
 
     /// API keys under the ChatGPT accounts: connected ones as rows, the others in Add key.
@@ -714,6 +766,11 @@ struct DeviceAccountsView: View {
             }
         } header: {
             Text(L("API-ключи"))
+        } footer: {
+            // Moonshot and Z.ai license these plans to one person's own interactive work.
+            if client.health?.subscriptionsVersion == 1 {
+                Text(L("Подписки Kimi Code и GLM Coding Plan — только для личного использования: расписания и ответы другим людям могут нарушать правила сервиса."))
+            }
         }
     }
 
@@ -737,7 +794,7 @@ struct DeviceAccountsView: View {
     }
 
     /// The code takes the place of Sign in, so it appears where the person tapped, even with the largest text.
-    @ViewBuilder private func loginRows(_ login: OpenAILogin) -> some View {
+    @ViewBuilder private func loginRows(_ login: OpenAILogin, provider: ProviderSummary? = nil) -> some View {
         if let code = login.userCode {
             // The largest text gives the code a line of its own; it never breaks.
             let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout())
@@ -749,13 +806,17 @@ struct DeviceAccountsView: View {
                 Button(copiedCode ? L("Код скопирован") : L("Скопировать код")) { copy(code) }
                     .accessibilityIdentifier("copyOpenAICode")
             }
-            Text(L("Введите этот код на сайте OpenAI")).foregroundStyle(AppTheme.secondaryText)
+            Text(provider == nil ? L("Введите этот код на сайте OpenAI") : L("Введите этот код на странице входа")).foregroundStyle(AppTheme.secondaryText)
         }
         if let url = login.url {
-            InkLink(title: L("Открыть OpenAI"), destination: url)
+            InkLink(title: provider == nil ? L("Открыть OpenAI") : L("Открыть страницу входа"), destination: url)
         }
         Button(L("Отменить вход")) { perform {
-            let _: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + login.loginId), method: "DELETE")
+            if let provider {
+                let _: HomeActionResult = try await client.subscription(provider.id, "login/" + login.loginId, method: "DELETE", deviceID: selectedDevice)
+            } else {
+                let _: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + login.loginId), method: "DELETE")
+            }
             self.login = nil
         } }.accessibilityIdentifier("cancelOpenAILogin")
     }
@@ -834,9 +895,14 @@ struct DeviceAccountsView: View {
         await client.refreshOpenAIAccount(force: true)
     }
     private func signIn(_ id: String) async throws {
-        loginAccount = id
+        loginAccount = id; loginProvider = nil
         login = try await client.management(path(id, "login"), method: "POST")
         if let url = login?.url { openURL(url) }
+    }
+    private func signIn(_ provider: ProviderSummary) async throws {
+        let started: OpenAILogin = try await client.subscription(provider.id, "login", method: "POST", deviceID: selectedDevice)
+        loginAccount = ""; loginProvider = provider; login = started
+        if let url = started.url { openURL(url) }
     }
     private func perform(_ work: @escaping () async throws -> Void) {
         busy = true; error = nil

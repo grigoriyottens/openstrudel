@@ -41,6 +41,7 @@ with tempfile.TemporaryDirectory(prefix="openstrudel-sign-") as temporary:
         if magic not in [b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"\xca\xfe\xba\xbf"]:
             continue
         extra = ["--entitlements", str(entitlements)] if path.name in ["node", "codex-code-mode-host"] else []
+        # Grok Build (bin/grok) is Rust and its vendor signature carries no entitlements, so it gets none.
         # Claude Code is a Bun binary: keep the JIT entitlements its vendor signed it with.
         if path.parent.name == "claude-agent-sdk-darwin-arm64" and path.name == "claude":
             extra = ["--preserve-metadata=entitlements"]

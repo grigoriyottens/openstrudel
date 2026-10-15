@@ -216,6 +216,29 @@ describe("user-owned primary Home", () => {
       expect(mini.runtime.store.getSetting("providers.xai.key")).toBe("xai-remote");
     } finally { delete process.env.OPENSTRUDEL_PROVIDER_XAI_BASE_URL; provider.close(); }
   });
+  it("relays a Grok sign-in only while its device answers, and never queues one", async () => {
+    const laptop = await node("Laptop"), mini = await node("Mini");
+    // Shipped apps show API keys on `providers: 1`; the Grok subscription has its own flag.
+    expect((await laptop.api("/health")).value).toMatchObject({ providers: 1, subscriptionsVersion: 1 });
+    await connect(laptop, mini);
+    const started = { type: "device", loginId: "l-1", verificationUrl: "https://accounts.x.ai/device?user_code=AB-12", userCode: "AB-12" };
+    (mini.runtime.accounts as any).grok = { start: async () => started, status: (loginId: string) => ({ loginId, status: "pending" }), close() {} };
+    const remote = (path: string) => `/v1/providers/grok/${path}?deviceId=${mini.home.state.nodeId}`;
+    expect(await laptop.api(remote("login"), "POST")).toEqual({ status: 201, value: started });
+    expect(await laptop.api(remote("login/l-1"))).toEqual({ status: 200, value: { loginId: "l-1", status: "pending" } });
+    const busy = "Устройство не на связи. Войдите в подписку, когда оно подключится.";
+    await mini.runtime.api.homeLink.stop();
+    await expect(laptop.runtime.api.homeLink.call(mini.home.state.nodeId, { method: "POST", path: "/v1/providers/grok/login", owner: true }, undefined, 200)).rejects.toMatchObject({ status: 503, message: busy });
+    expect(laptop.home.pending(mini.home.state.nodeId)).toEqual([]);
+    laptop.runtime.store.db.prepare("UPDATE home_nodes SET info=json_set(info,'$.seenAt',0) WHERE id=?").run(mini.home.state.nodeId);
+    expect(await laptop.api(remote("logout"), "POST")).toEqual({ status: 503, value: { error: busy } });
+    expect(laptop.home.pending(mini.home.state.nodeId)).toEqual([]);
+    // After a restart nobody waits for a sign-in that was never delivered.
+    laptop.home.enqueue(mini.home.state.nodeId, { method: "POST", path: "/v1/providers/grok/login", owner: true });
+    const restarted = new HomeLink(laptop.home, async () => wireJSON({}));
+    restarted.start(); await restarted.stop();
+    expect(laptop.home.pending(mini.home.state.nodeId)).toEqual([]);
+  });
   it("routes extension reads and writes to the employee's device and reports legacy shared workspaces", async () => {
     const primary = await node("Laptop"), worker = await node("Mac mini");
     const profile = worker.runtime.store.createProfile({name:"Writer",instructions:""});

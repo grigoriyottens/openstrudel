@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Grok Build unpacked by scripts/extract-grok.mjs in a source install.
+/bin/
 .data/
 .env
 *.log

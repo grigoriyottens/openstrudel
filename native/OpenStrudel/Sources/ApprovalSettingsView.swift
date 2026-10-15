@@ -43,8 +43,9 @@ struct ApprovalSettingsView: View {
         } footer: {
             if let settings {
                 let mode = shown(choice ?? settings.mode)
-                // Codex's reviewer exists only for ChatGPT, so the Home asks on API-key providers.
-                Text(mode.explanation + (mode == .auto && client.health?.providers == 1 ? " " + L("Для моделей по API-ключу спрашивает вас.") : "") + "\n"
+                // Codex's reviewer exists only for ChatGPT, so the Home asks on API-key providers and the Grok subscription.
+                let asks = client.health?.subscriptionsVersion == 1 ? L("Для моделей по API-ключу и подписке Grok спрашивает вас.") : L("Для моделей по API-ключу спрашивает вас.")
+                Text(mode.explanation + (mode == .auto && client.health?.providers == 1 ? " " + asks : "") + "\n"
                      + (settings.canManage ? L("Режим меняется со следующего поручения. Доступ к сервисам и правила сотрудника сохраняются.") : L("Режим меняет владелец этого устройства.")))
             }
         }

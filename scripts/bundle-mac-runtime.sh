@@ -37,10 +37,20 @@ while IFS= read -r -d '' file; do
   mkdir -p "$WORK/source/$(dirname "$file")"
   cp "$ROOT/$file" "$WORK/source/$file"
 done < <(git -C "$ROOT" ls-files -z -- src public package.json package-lock.json tsconfig.json)
+# The checkout's .npmrc does not reach another --prefix, so install scripts are turned off here too.
 npm ci --prefix "$WORK/source" --ignore-scripts
 npm run --prefix "$WORK/source" build
 cp "$WORK/source/package.json" "$WORK/source/package-lock.json" "$RUNTIME/"
-npm ci --prefix "$RUNTIME" --omit=dev --ignore-scripts
+# Native packages for the app's architecture rather than the build machine's.
+npm ci --prefix "$RUNTIME" --omit=dev --ignore-scripts --os=darwin --cpu="$NODE_ARCH"
+# The Grok subscription runs xAI's pinned Grok Build. Its native binary goes to bin/grok with its Apache-2.0
+# license and notices; the compressed npm copy is not shipped twice.
+"$RUNTIME/bin/node" "$ROOT/scripts/extract-grok.mjs" "$RUNTIME" "darwin-$NODE_ARCH"
+cp "$ROOT/licenses/Grok-LICENSE.txt" "$ROOT/licenses/Grok-THIRD_PARTY_NOTICES.md" "$RUNTIME/"
+# npm links bin/grok there too; a link to nothing fails `codesign --verify --deep --strict`.
+rm -rf "$RUNTIME/node_modules/@xai-official" "$RUNTIME/node_modules/.bin/grok"
+mkdir -p "$WORK/grok-home"
+env -i PATH=/usr/bin:/bin HOME="$WORK/grok-home" GROK_HOME="$WORK/grok-home" GROK_DISABLE_AUTOUPDATER=1 "$RUNTIME/bin/grok" --no-auto-update --version
 ditto "$WORK/source/dist" "$RUNTIME/dist"
 ditto "$WORK/source/public" "$RUNTIME/public"
 cp "$ROOT/scripts/install-prebuilt-mac.sh" "$RUNTIME/scripts/"
@@ -58,4 +68,4 @@ if ! ditto "$RUNTIME" "$APP/Contents/Resources/Runtime"; then
   if [[ -e "$WORK/previous-runtime" ]]; then mv "$WORK/previous-runtime" "$APP/Contents/Resources/Runtime"; fi
   exit 1
 fi
-echo "Codex and its runtime are bundled. No Node or terminal setup is needed."
+echo "Codex, Grok Build and their runtime are bundled. No Node or terminal setup is needed."

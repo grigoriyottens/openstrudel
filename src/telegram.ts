@@ -430,7 +430,9 @@ export class TelegramAdapter {
     try {
     const input = await prepared;text=input.text;received=true;
     const replyToAssistant = Boolean(replyConversation || replyAuthor && (replyAuthor.id === this.bot?.id || replyAuthor.is_bot && replyAuthor.username?.toLowerCase() === (this.bot?.username ?? this.store.getSetting("telegram.bot_username"))?.toLowerCase()));
-    const submission = { channel: "telegram" as const, conversationId: conversation.id, text, uploads:input.uploads, replyToAssistant, telegramSenderId:message.from ? String(message.from.id) : undefined, author, externalId, externalChatId: chatId, title: message.chat.title ?? "Telegram " + chatId };
+    // Only the paired owner in a private chat; a group's audience is never just the owner.
+    const byOwner = Number(chatId) > 0 && this.isOwner(message.from?.id);
+    const submission = { channel: "telegram" as const, conversationId: conversation.id, text, uploads:input.uploads, replyToAssistant, telegramSenderId:message.from ? String(message.from.id) : undefined, author, externalId, externalChatId: chatId, title: message.chat.title ?? "Telegram " + chatId, byOwner };
     if (contextOnly) {
       await this.messages.submit({ ...submission, contextOnly:true });
       this.store.markTelegramUpdate(update.update_id); return;
