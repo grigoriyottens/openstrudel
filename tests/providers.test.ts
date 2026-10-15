@@ -161,7 +161,7 @@ it("serves providers per device with owner-only writes, a provider-aware catalog
     runtime.store.setSetting("codex.auth.mode", "managed");
     runtime.account.read = async () => ({ connected: true, email: "owner@example.invalid", planType: "plus", managed: true });
     const employee = runtime.store.createProfile({ name: "Researcher" });
-    expect((await (await call("/health")).json()).providers).toBe(2);
+    expect(await (await call("/health")).json()).toMatchObject({ providers: 1, subscriptionsVersion: 1 });
     const initial = await (await call("/v1/providers")).json();
     expect(initial.canManage).toBe(true);
     expect(initial.providers[0]).toEqual({ id: "chatgpt", name: "ChatGPT", auth: "signin", connected: true, keyHint: null, keysUrl: null, usedBy: 3 });
