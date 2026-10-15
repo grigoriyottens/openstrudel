@@ -349,7 +349,7 @@ final class HomeClient: ObservableObject, Identifiable {
             return L("Войдите в OpenAI на устройстве этого сотрудника. Здесь подключение восстановится автоматически; отдельный вход не нужен.")
         }
         // A new key never moves a chat off ChatGPT, so the owner learns the other way out.
-        if health?.supportsProviderKeys == true {
+        if health?.providers == 1 {
             return L("Войдите в OpenAI снова или выберите в настройках сотрудника модель с API-ключом. Чаты и черновики сохранены.")
         }
         return L("Войдите в OpenAI один раз для устройства этого сотрудника. Подключённые устройства продолжат работу автоматически. Чаты и черновики сохранены.")

@@ -44,7 +44,7 @@ struct ApprovalSettingsView: View {
             if let settings {
                 let mode = shown(choice ?? settings.mode)
                 // Codex's reviewer exists only for ChatGPT, so the Home asks on API-key providers.
-                Text(mode.explanation + (mode == .auto && client.health?.supportsProviderKeys == true ? " " + L("Для моделей по API-ключу спрашивает вас.") : "") + "\n"
+                Text(mode.explanation + (mode == .auto && client.health?.providers == 1 ? " " + L("Для моделей по API-ключу спрашивает вас.") : "") + "\n"
                      + (settings.canManage ? L("Режим меняется со следующего поручения. Доступ к сервисам и правила сотрудника сохраняются.") : L("Режим меняет владелец этого устройства.")))
             }
         }
@@ -99,7 +99,7 @@ struct ApprovalSettingsView: View {
         loading = true; error = nil
         defer { loading = false }
         do {
-            if client.health?.supportsProviderKeys == true, let list = try? await client.providers() { reviews = list.reviewsAutomatically }
+            if client.health?.providers == 1, let list = try? await client.providers() { reviews = list.reviewsAutomatically }
             settings = try await client.management("/v1/settings/approvals")
         } catch is CancellationError { }
         catch { self.error = error }

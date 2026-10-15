@@ -348,8 +348,8 @@ struct OpenAIWelcomeView: View {
                 try await client.connectFirstProvider(provider.id, key: key)
             }
         }
-        .task(id: client.health?.supportsProviderKeys == true && client.canManageOpenAI) {
-            guard client.health?.supportsProviderKeys == true, client.canManageOpenAI, let list = try? await client.providers(), list.canManage else { return }
+        .task(id: client.health?.providers == 1 && client.canManageOpenAI) {
+            guard client.health?.providers == 1, client.canManageOpenAI, let list = try? await client.providers(), list.canManage else { return }
             keyProviders = list.providers.filter(\.canAddKey)
         }
         .onChange(of: client.openAILogin) { _, login in if let url = login?.url { openURL(url) } }

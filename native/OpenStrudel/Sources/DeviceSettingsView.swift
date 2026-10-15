@@ -625,7 +625,7 @@ struct DeviceAccountsView: View {
             }
             if let keys, keys.canManage {
                 let subscriptions = keys.providers.filter(\.isSubscription)
-                if client.health?.supportsSubscriptions == true && !subscriptions.isEmpty { subscriptionSection(subscriptions) }
+                if client.health?.subscriptionsVersion == 1 && !subscriptions.isEmpty { subscriptionSection(subscriptions) }
                 keySection(keys.providers)
             }
         }
@@ -776,7 +776,7 @@ struct DeviceAccountsView: View {
             Text(L("API-ключи"))
         } footer: {
             // Moonshot and Z.ai license these plans to one person's own interactive work.
-            if client.health?.supportsSubscriptions == true {
+            if client.health?.subscriptionsVersion == 1 {
                 Text(L("Подписки Kimi Code и GLM Coding Plan — только для личного использования: расписания и ответы другим людям могут нарушать правила сервиса."))
             }
         }
@@ -892,7 +892,7 @@ struct DeviceAccountsView: View {
     /// so a key goes only to a device that answers.
     private func loadKeys() async {
         let selected = deviceID
-        guard client.health?.supportsProviderKeys == true else { return }
+        guard client.health?.providers == 1 else { return }
         let list = try? await client.providers(deviceID: selected.isEmpty ? nil : selected)
         guard selected == deviceID, !Task.isCancelled else { return }
         keys = list

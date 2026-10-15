@@ -235,7 +235,7 @@ struct BotDetailsView: View {
                     NavigationLink(value: DetailsPage.telegram) { DetailsRow(title: "Telegram", symbol: "paperplane", value: telegramChats) }
                 }
                 Section(L("Модель и скорость")) { ModelSettingsView(agentID: profile.id) { runsOnChatGPT = $0.runsOnChatGPT } }
-                if client.health?.homeProtocol == 1 && (client.health?.supportsProviderKeys != true || runsOnChatGPT == true) { AgentAccountPreference(profile: profile) }
+                if client.health?.homeProtocol == 1 && (client.health?.providers != 1 || runsOnChatGPT == true) { AgentAccountPreference(profile: profile) }
                 if !client.schedules.isEmpty || client.scheduleRuns.contains(where: { $0.error != nil }) {
                     Section(L("Расписание")) { schedules }
                 }

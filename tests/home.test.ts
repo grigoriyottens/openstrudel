@@ -218,6 +218,8 @@ describe("user-owned primary Home", () => {
   });
   it("relays a Grok sign-in only while its device answers, and never queues one", async () => {
     const laptop = await node("Laptop"), mini = await node("Mini");
+    // Shipped apps show API keys on `providers: 1`; the Grok subscription has its own flag.
+    expect((await laptop.api("/health")).value).toMatchObject({ providers: 1, subscriptionsVersion: 1 });
     await connect(laptop, mini);
     const started = { type: "device", loginId: "l-1", verificationUrl: "https://accounts.x.ai/device?user_code=AB-12", userCode: "AB-12" };
     (mini.runtime.accounts as any).grok = { start: async () => started, status: (loginId: string) => ({ loginId, status: "pending" }), close() {} };

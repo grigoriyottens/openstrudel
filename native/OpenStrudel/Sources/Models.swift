@@ -54,9 +54,8 @@ struct HomeHealth: Decodable {
     var deviceRenameVersion: Int? = nil
     var colleagueInvitesVersion: Int? = nil
     var providers: Int? = nil
-    /// 1: API keys. 2: also the Grok subscription.
-    var supportsProviderKeys: Bool { (providers ?? 0) >= 1 }
-    var supportsSubscriptions: Bool { (providers ?? 0) >= 2 }
+    /// 1: the Grok subscription, signed in on the device.
+    var subscriptionsVersion: Int? = nil
 }
 
 struct HomeConversation: Decodable {

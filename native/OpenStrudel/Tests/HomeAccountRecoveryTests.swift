@@ -373,18 +373,18 @@ import Testing
                           "DELETE /v1/providers/grok/login/grok-login?", "POST /v1/providers/grok/logout?deviceId=mac-mini"])
     }
 
-    @Test(arguments: [0, 1, 2]) func anExpiredChatGPTSignInSaysAModelWithAnAPIKeyAlsoWorks(providers: Int) async throws {
+    @Test(arguments: [false, true]) func anExpiredChatGPTSignInSaysAModelWithAnAPIKeyAlsoWorks(homeHasKeys: Bool) async throws {
         let state = AccountFixtureState()
         state.accountBody = #"{"account":{"connected":false,"email":null,"planType":null,"managed":true,"issue":"sign_in_required"},"canManage":true,"loginPending":false}"#
         state.customResponse = { request in
-            guard providers > 0, request.url!.path == "/health" else { return nil }
-            return (200, Data(#"{"ok":true,"service":"openstrudel","agentArchiveVersion":1,"providers":\#(providers)}"#.utf8))
+            guard homeHasKeys, request.url!.path == "/health" else { return nil }
+            return (200, Data(#"{"ok":true,"service":"openstrudel","agentArchiveVersion":1,"providers":1}"#.utf8))
         }
         let (client, session) = makeClient(state)
         defer { session.invalidateAndCancel() }
         await client.load()
         // A key added in Accounts does not move a chat off ChatGPT, so the notice also names the other way out.
-        let key = providers > 0 ? "Войдите в OpenAI снова или выберите в настройках сотрудника модель с API-ключом. Чаты и черновики сохранены."
+        let key = homeHasKeys ? "Войдите в OpenAI снова или выберите в настройках сотрудника модель с API-ключом. Чаты и черновики сохранены."
             : "Войдите в OpenAI один раз для устройства этого сотрудника. Подключённые устройства продолжат работу автоматически. Чаты и черновики сохранены."
         #expect(client.openAIRecoveryMessage == L10n.text(key))
         #expect(AppLanguage.allCases.allSatisfy { L10n.catalog[key]?[$0.rawValue] != nil })

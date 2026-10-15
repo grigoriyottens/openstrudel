@@ -159,11 +159,4 @@ import Testing
         #expect(try account("xai", "xAI").providerNeed == L("Нужен ключ \("xAI")"))
         #expect(try account("chatgpt", "ChatGPT").providerNeed == nil)
     }
-    @Test func subscriptionsNeedTheNewerProvidersFlag() throws {
-        func health(_ flag: String) throws -> HomeHealth { try JSONDecoder().decode(HomeHealth.self, from: Data(#"{"ok":true\#(flag)}"#.utf8)) }
-        let older = try health(""), keys = try health(#","providers":1"#), subscriptions = try health(#","providers":2"#)
-        #expect(!older.supportsProviderKeys && !older.supportsSubscriptions)
-        #expect(keys.supportsProviderKeys && !keys.supportsSubscriptions)
-        #expect(subscriptions.supportsProviderKeys && subscriptions.supportsSubscriptions)
-    }
 }
