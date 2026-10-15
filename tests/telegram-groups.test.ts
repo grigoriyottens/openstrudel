@@ -160,3 +160,21 @@ it("never gives a different bot the old update cursor or membership events", asy
   expect(store.telegramChats()).toHaveLength(0);
   expect(store.listMessages(chat.id)[0]?.text).toBe("Keep history");
 });
+
+it("answers a pairing /start that Telegram delivers twice only once", async () => {
+  const { store, adapter } = setup(); const link = adapter.createLink();
+  const start = (id: number) => message(id, `/start ${link.code}`, 77, 77, { message_id: 1950 });
+  await Promise.all([adapter.processUpdate(start(565291610)), adapter.processUpdate(start(565291611))]);
+  const sent = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/sendMessage")).map(([, init]) => JSON.parse(String(init!.body)).text);
+  expect(store.getTelegramChat("77")).toMatchObject({ allowedSenders: ["77"] });
+  expect(sent).toEqual(["Telegram подключён. Здесь отвечает «Общий помощник»."]);
+});
+
+it("does not re-answer a redeemed pairing when its uncertain update is replayed", async () => {
+  const { store, adapter, messages } = setup(); const link = adapter.createLink();
+  vi.mocked(fetch).mockRejectedValueOnce(new Error("socket hang up"));
+  await expect(adapter.processUpdate(message(7, `/start ${link.code}`, 77, 77))).rejects.toThrow();
+  vi.mocked(fetch).mockClear();
+  await new TelegramAdapter("123:test", store, messages).processUpdate(message(7, `/start ${link.code}`, 77, 77));
+  expect(store.wasTelegramUpdateProcessed(7)).toBe(true); expect(fetch).not.toHaveBeenCalled();
+});
