@@ -173,7 +173,7 @@ export class MobileAccess {
         if (this.store.getSetting("home.transfer")) { res.writeHead(409).end('{"error":"Сейчас меняется главное устройство. Создайте приглашение после завершения."}'); return; }
         const invitation = this.invitations().find(i => i.hash === hash(token));
         if (!invitation) {
-          res.writeHead(401).end('{"error":"QR истёк. Откройте новый код на Mac."}'); return;
+          res.writeHead(401).end('{"error":"Ссылка устарела или уже использована. Попросите новую."}'); return;
         }
         const credential = randomBytes(32).toString("hex");
         const label = invitation.label ?? name;
@@ -190,7 +190,7 @@ export class MobileAccess {
         res.end(JSON.stringify({ token: credential })); return;
       }
       if (!token || !this.tokens().includes(hash(token))) {
-        res.writeHead(401).end('{"error":"Подключите iPhone заново через QR на Mac."}'); return;
+        res.writeHead(401).end('{"error":"Это устройство отключено. Подключитесь заново по новой ссылке."}'); return;
       }
       // The device holds its credential now, so its lost-response copy is no longer needed.
       this.dropReceipts((_, receipt) => receipt.token === token);

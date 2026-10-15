@@ -55,8 +55,10 @@ export class ScopedCodexEngine implements CodexEngine {
     for (const path of computer) (base as any).permissions.openstrudel.filesystem[path] = "read";
     atomicText(resolve(home,"openstrudel-extensions.toml"),stringify(extensions));
     // Local plugins are explicit per audience. Never auto-import the owner's
-    // account-wide remote plugin collection into a Telegram group.
-    atomicText(configPath, stringify({ ...extensions, ...base, features:{apps:!this.provider,plugins:true,remote_plugin:false},
+    // account-wide remote plugin collection into a Telegram group. With plugins
+    // on, Codex syncs OpenAI's catalog from chatgpt.com and GitHub at start, so
+    // a key provider has none.
+    atomicText(configPath, stringify({ ...extensions, ...base, features:{apps:!this.provider,plugins:!this.provider,remote_plugin:false},
       mcp_servers:{...extensions.mcp_servers,...legacy.mcp_servers} }));
     const telegramPath = resolve(this.root,".data/connections",context + ".telegram.json");
     const telegramServers:TelegramMcpServers | undefined = existsSync(telegramPath) ? JSON.parse(readFileSync(telegramPath,"utf8")) : undefined;

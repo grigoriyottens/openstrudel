@@ -555,10 +555,12 @@ export class HttpApi {
         else if (request.method === "POST" && path === "/v1/extensions/computer") this.send(response,200,await extensions.connectComputerUse());
         else if (request.method === "DELETE" && path === "/v1/extensions/computer") this.send(response,200,await extensions.removeMcp("cua_repl"));
         else if (request.method === "GET" && path === "/v1/extensions") {
-          // A context's skills and plugins stay listed for every route, but the Claude engine loads only its MCP services.
+          // A context's skills and plugins stay listed for every route, but the Claude engine loads only its MCP services
+          // and a key provider's Codex loads no plugins.
           const provider = providerInfo(resolveModelSelection(this.store,conversation.profileId ?? "main").provider ?? "");
           const state = await extensions.list();
-          this.send(response,200,provider?.engine === "claude" ? {...state,notice:`С ${provider.name} сотрудник использует только сервисы MCP. Навыки и плагины работают с ChatGPT, OpenAI API и xAI.`} : state);
+          this.send(response,200,!provider ? state : {...state,notice:provider.engine === "claude" ? `С ${provider.name} сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.`
+            : `С ${provider.name} сотрудник не использует плагины: они работают только с ChatGPT.`});
         }
         else if (request.method === "POST" && path === "/v1/extensions/install") this.send(response,200,await extensions.install(body.files,String(body.digest ?? ""),body.replaces == null ? undefined : String(body.replaces)));
         else if (request.method === "POST" && path === "/v1/extensions/mcp") this.send(response,200,await extensions.addMcp(body));

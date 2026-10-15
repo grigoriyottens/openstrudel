@@ -26,16 +26,23 @@ struct NameEditor: View {
     private var nameLimit: Int { target.profile == nil ? 120 : 80 }
 
     var body: some View {
+        let title = target.profile == nil ? L("Название устройства") : L("Переименовать сотрудника")
         NavigationStack {
             Form {
-                TextField(L("Имя"), text: $name)
-                    .focused($focused).disabled(saving)
-                    .accessibilityIdentifier("renameName")
-                    .onSubmit { save() }
-                if let error { Text(error).foregroundStyle(AppTheme.destructive) }
+                Section {
+                    TextField(L("Имя"), text: $name)
+                        .focused($focused).disabled(saving)
+                        .accessibilityIdentifier("renameName")
+                        .onSubmit { save() }
+                    if let error { Text(error).foregroundStyle(AppTheme.destructive) }
+                } header: {
+                    #if os(macOS)
+                    SheetTitle(title: title)
+                    #endif
+                }
             }
             .formStyle(.grouped)
-            .navigationTitle(target.profile == nil ? L("Название устройства") : L("Переименовать сотрудника"))
+            .fittedSheetPage(title)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.disabled(saving) }
                 ToolbarItem(placement: .confirmationAction) {
@@ -46,9 +53,7 @@ struct NameEditor: View {
             }
         }
         #if os(macOS)
-        .frame(width: 420, height: 220)
-        #else
-        .presentationDetents([.medium])
+        .frame(width: 420)
         #endif
         .interactiveDismissDisabled(saving)
         .task { focused = true }
@@ -610,19 +615,20 @@ struct DeviceAccountsView: View {
                         try await signIn(result.id)
                     } }.disabled(busy)
                 }
-                HStack {
-                    Button(L("Обновить остатки")) {
-                        refreshing = true
-                        Task { await refresh(force: true); refreshing = false }
-                    }.disabled(loading)
-                    Spacer()
-                    if refreshing { ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем остатки…")) }
+                if accounts.hasUsage {
+                    HStack {
+                        Button(L("Обновить остатки")) {
+                            refreshing = true
+                            Task { await refresh(force: true); refreshing = false }
+                        }.disabled(loading)
+                        Spacer()
+                        if refreshing { ProgressView().controlSize(.small).accessibilityLabel(L("Обновляем остатки…")) }
+                    }
                 }
             } footer: {
-                if let checked = accounts.compactMap({ UsageSummary.checked($0.usage) }).max() {
-                    Text(UsageSummary.updated(checked) + "\n" + L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
-                } else {
-                    Text(L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
+                if accounts.hasUsage {
+                    Text((accounts.compactMap({ UsageSummary.checked($0.usage) }).max().map { UsageSummary.updated($0) + "\n" } ?? "")
+                         + L("Лимиты относятся к подписке. Кредиты — отдельный баланс аккаунта."))
                 }
             }
             if let keys, keys.canManage { keySection(keys.providers) }

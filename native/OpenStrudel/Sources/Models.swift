@@ -417,6 +417,10 @@ struct ManagedCodexAccount: Decodable, Identifiable {
     var identityLabel: String { [title, account.planLabel].joined(separator: " · ") }
 }
 struct ManagedCodexAccounts: Decodable { let accounts: [ManagedCodexAccount]; let canManage: Bool }
+extension [ManagedCodexAccount] {
+    /// Limits and credits belong to a signed-in ChatGPT account, also one OpenAI cannot confirm right now.
+    var hasUsage: Bool { contains { $0.account.connected || $0.account.isUnavailable } }
+}
 
 /// Who powers employees on a device: ChatGPT sign-in or an API key, which never comes back from the Home.
 struct ProviderSummary: Decodable, Identifiable, Equatable {
@@ -428,7 +432,18 @@ struct ProviderSummary: Decodable, Identifiable, Equatable {
     /// `usedBy` counts employees, the main chat and the device default together, so it is not a number of employees.
     var removalWarning: String { L("Сотрудников и настроек на этом ключе: \(usedBy). Их модель станет «Как на устройстве» или «Автоматически».") }
 }
-struct ProviderList: Decodable { let providers: [ProviderSummary]; let canManage: Bool }
+struct ProviderList: Decodable {
+    let providers: [ProviderSummary]; let canManage: Bool
+    /// Codex reviews actions only on ChatGPT. With every model on a key the device asks instead.
+    var reviewsAutomatically: Bool { providers.contains { $0.id == "chatgpt" && $0.usedBy > 0 } }
+}
+/// The key sheet's field: a new key clears the provider's answer about the old one.
+struct ProviderKeyEntry {
+    var key = "" { didSet { if key != oldValue { error = nil } } }
+    var error: String?
+    var busy = false
+    var ready: Bool { !busy && !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+}
 
 struct ModelSelection: Codable, Equatable {
     /// Nil from older Homes, and with a nil model: as on the device, or automatic for the device itself.

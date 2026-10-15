@@ -100,4 +100,33 @@ import Testing
         // usedBy also counts the main chat and the device default, so it is never called a number of employees.
         #expect(list.providers[1].removalWarning == L("Сотрудников и настроек на этом ключе: \(3). Их модель станет «Как на устройстве» или «Автоматически»."))
     }
+    @Test func aNewKeyClearsTheProvidersAnswerAboutTheOldOne() {
+        var entry = ProviderKeyEntry()
+        #expect(!entry.ready)
+        entry.key = "sk-bad"; entry.error = "Anthropic не принял ключ."
+        entry.key = "sk-bad"
+        #expect(entry.error != nil)
+        entry.key = "sk-good"
+        #expect(entry.error == nil && entry.ready)
+        entry.busy = true
+        #expect(!entry.ready)
+    }
+    @Test func balancesBelongToASignedInChatGPTAccount() throws {
+        func account(_ fields: String) throws -> ManagedCodexAccount {
+            try JSONDecoder().decode(ManagedCodexAccount.self, from: Data(#"{"id":"a","name":"ChatGPT","account":{"connected":\#(fields)},"usage":{"checkedAt":"2026-10-14T00:00:00Z","windows":[]},"activeRuns":0,"loginPending":false}"#.utf8))
+        }
+        let signedOut = try account("false"), signedIn = try account("true"), unreachable = try account(#"false,"issue":"unavailable""#)
+        #expect(![ManagedCodexAccount]().hasUsage)
+        #expect(![signedOut].hasUsage)
+        #expect([signedOut, signedIn].hasUsage)
+        // OpenAI cannot confirm the account right now, so Refresh stays its way back.
+        #expect([unreachable].hasUsage)
+    }
+    @Test func automaticReviewIsOfferedOnlyWhileAModelRunsOnChatGPT() throws {
+        func list(chatgptUsers: Int) throws -> ProviderList {
+            try JSONDecoder().decode(ProviderList.self, from: Data(#"{"providers":[{"id":"chatgpt","name":"ChatGPT","auth":"signin","connected":true,"keyHint":null,"keysUrl":null,"usedBy":\#(chatgptUsers)},{"id":"xai","name":"xAI","auth":"key","connected":true,"keyHint":"••••7Qa","keysUrl":"https://console.x.ai","usedBy":3}],"canManage":true}"#.utf8))
+        }
+        #expect(try !list(chatgptUsers: 0).reviewsAutomatically)
+        #expect(try list(chatgptUsers: 1).reviewsAutomatically)
+    }
 }

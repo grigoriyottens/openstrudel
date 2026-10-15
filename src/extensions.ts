@@ -135,8 +135,10 @@ export class CodexExtensions {
   async prepare() {
     // Codex keeps plugin caches per CODEX_HOME. Reinstall the same local,
     // owner-selected package when a different subscription opens this scope.
-    // The official CLI owns cache layout and validation.
+    // The official CLI owns cache layout and validation. A scope with plugins
+    // off, such as a key provider's, loads none.
     const config=readToml(this.configPath);
+    if(config.features?.plugins === false)return;
     for(const [id,value] of Object.entries(config.plugins ?? {})) {
       if(!(value as any)?.enabled || !id.endsWith("@openstrudel-local"))continue;
       const name=slug(id.split("@")[0]);

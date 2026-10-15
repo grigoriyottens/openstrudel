@@ -107,24 +107,21 @@ struct ProviderKeySheet: View {
     let provider: ProviderSummary
     let deviceName: String
     let connect: @MainActor (String) async throws -> Void
-    @State private var key = ""
-    @State private var busy = false
-    @State private var error: String?
-    private var ready: Bool { !busy && !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    @State private var entry = ProviderKeyEntry()
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     // The Telegram pattern: the label leads, the prompt sits in the field.
-                    SecureField(L("API-ключ"), text: $key, prompt: Text(L("Вставьте ключ")))
+                    SecureField(L("API-ключ"), text: $entry.key, prompt: Text(L("Вставьте ключ")))
                         .onSubmit(submit)
                         .accessibilityIdentifier("providerKey")
                     if let url = provider.keysUrl.flatMap(URL.init(string:)) {
                         InkLink(L("Получить ключ"), destination: url)
                     }
-                    if busy { LabeledContent(L("Проверяем ключ в \(provider.name)…")) { ProgressView().controlSize(.small) } }
-                    if let error {
+                    if entry.busy { LabeledContent(L("Проверяем ключ в \(provider.name)…")) { ProgressView().controlSize(.small) } }
+                    if let error = entry.error {
                         Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("providerKeyError")
                     }
@@ -138,32 +135,30 @@ struct ProviderKeySheet: View {
                 }
             }
             .formStyle(.grouped)
-            .sheetPageTitle(provider.name)
+            .fittedSheetPage(provider.name)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.disabled(busy) }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() }.disabled(entry.busy) }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L("Подключить"), action: submit).disabled(!ready).accessibilityIdentifier("connectProviderKey")
+                    Button(L("Подключить"), action: submit).disabled(!entry.ready).accessibilityIdentifier("connectProviderKey")
                 }
             }
         }
         .sheetTint()
         #if os(macOS)
-        // A single page: as tall as its rows.
         .frame(width: 480)
-        .presentationSizing(.fitted)
         #endif
-        .interactiveDismissDisabled(busy)
+        .interactiveDismissDisabled(entry.busy)
         .modifier(InterfaceLanguage())
     }
 
     /// Return in the field and the Connect button both land here; the first press wins.
     private func submit() {
-        guard ready else { return }
-        busy = true; error = nil
+        guard entry.ready else { return }
+        entry.busy = true; entry.error = nil
         Task {
-            defer { busy = false }
-            do { try await connect(key); dismiss() }
-            catch { self.error = error.localizedDescription }
+            defer { entry.busy = false }
+            do { try await connect(entry.key); dismiss() }
+            catch { entry.error = error.localizedDescription }
         }
     }
 }

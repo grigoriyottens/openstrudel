@@ -69,6 +69,20 @@ extension View {
         navigationTitle(title).navigationBarTitleDisplayMode(.inline)
         #endif
     }
+
+    /// Names a single-page form sheet that stays as tall as its rows when a row such as an error comes or goes.
+    /// On the Mac the title is in the content, so the bar keeps no empty title band, and the form stops
+    /// scrolling, so the sheet follows its height. Its sizing stays automatic: a `.fitted` sheet keeps its first
+    /// height and pushes a new row's neighbours out. An iPhone sheet cannot fit its content: half height, and
+    /// the form scrolls when large text needs more.
+    func fittedSheetPage(_ title: String) -> some View {
+        #if os(macOS)
+        navigationTitle(title).toolbar(removing: .title)
+            .scrollDisabled(true).fixedSize(horizontal: false, vertical: true)
+        #else
+        navigationTitle(title).navigationBarTitleDisplayMode(.inline).presentationDetents([.medium])
+        #endif
+    }
 }
 
 /// Pages a details sheet pushes. The sheet's stack owns them, so a push never resizes the sheet.

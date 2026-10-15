@@ -187,7 +187,38 @@ it("serves providers per device with owner-only writes, a provider-aware catalog
   } finally { await runtime.stop(); provider.close(); }
 });
 
-it("says on Services and skills that a Claude-engine provider uses only MCP services", async () => {
+it("adding another key never changes an agent's model", async () => {
+  const provider: Server = createServer((_request, response) => response.writeHead(200).end("{}"));
+  await new Promise<void>(done => provider.listen(0, "127.0.0.1", done));
+  const base = `http://127.0.0.1:${(provider.address() as any).port}`;
+  vi.stubEnv("OPENSTRUDEL_CODEX_MODEL", ""); vi.stubEnv("OPENSTRUDEL_PROVIDER_XAI_BASE_URL", base + "/v1"); vi.stubEnv("OPENSTRUDEL_PROVIDER_OPENAI_BASE_URL", base + "/v1"); vi.stubEnv("OPENSTRUDEL_PROVIDER_ANTHROPIC_BASE_URL", base);
+  const { OpenStrudelRuntime } = await import("../src/runtime.js");
+  let runtime!: InstanceType<typeof OpenStrudelRuntime>;
+  runtime = new OpenStrudelRuntime({ dbPath: ":memory:", startTelegram: false, apiToken: "owner", engine: {
+    models: async () => ["xai", "anthropic"].flatMap(id => runtime.store.getSetting(`providers.${id}.key`) ? providerModels(providerInfo(id)!) : []),
+    run: async () => ({ threadId: "t", response: "OK", events: [] }),
+  } });
+  const address = await runtime.api.listen("127.0.0.1", 0);
+  const call = (path: string, method = "GET", body?: unknown) => fetch(`http://127.0.0.1:${address.port}${path}`, { method, headers: { authorization: "Bearer owner", "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const effective = async (agent: string) => (await (await call("/v1/settings/models?agentId=" + agent)).json()).effective;
+  const grok = { provider: "xai", model: "grok-4.7", serviceTier: "default" };
+  try {
+    const employee = runtime.store.createProfile({ name: "Researcher" });
+    expect((await call("/v1/providers/xai", "PUT", { key: "xai-key" })).status).toBe(200);
+    expect((await call("/v1/providers/anthropic", "PUT", { key: "sk-ant" })).status).toBe(200);
+    expect(await effective("main")).toEqual(grok);
+    expect(await effective(employee.id)).toEqual(grok);
+    // The first key fixed the device default once; Automatic follows the key connected first, not the list order.
+    expect(readModelSelection(runtime.store)).toEqual(grok);
+    expect((await call("/v1/settings/models", "POST", { model: null, serviceTier: "default" })).status).toBe(200);
+    expect((await call("/v1/providers/openai", "PUT", { key: "sk-api" })).status).toBe(200);
+    expect(readModelSelection(runtime.store)).toEqual({ provider: null, model: null, serviceTier: "default" });
+    expect(await effective("main")).toEqual(grok);
+    expect(await effective(employee.id)).toEqual(grok);
+  } finally { await runtime.stop(); provider.close(); }
+});
+
+it("says on Services and skills what a key provider uses: plugins only with ChatGPT", async () => {
   const { OpenStrudelRuntime } = await import("../src/runtime.js");
   const runtime = new OpenStrudelRuntime({ dbPath: ":memory:", startTelegram: false, apiToken: "owner", engine: {
     run: async () => ({ threadId: "t", response: "OK", events: [] }),
@@ -198,7 +229,10 @@ it("says on Services and skills that a Claude-engine provider uses only MCP serv
   try {
     runtime.store.setSetting("providers.kimi.key", "kimi-key");
     saveModelSelection(runtime.store, { provider: "kimi", model: "kimi-k3", serviceTier: "default" }, "main");
-    expect(await list()).toEqual({ items: [expect.objectContaining({ name: "Notes" })], notice: "С Kimi сотрудник использует только сервисы MCP. Навыки и плагины работают с ChatGPT, OpenAI API и xAI." });
+    expect(await list()).toEqual({ items: [expect.objectContaining({ name: "Notes" })], notice: "С Kimi сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT." });
+    runtime.store.setSetting("providers.xai.key", "xai-key");
+    saveModelSelection(runtime.store, { provider: "xai", model: "grok-4.7", serviceTier: "default" }, "main");
+    expect((await list()).notice).toBe("С xAI сотрудник не использует плагины: они работают только с ChatGPT.");
     saveModelSelection(runtime.store, { provider: "chatgpt", model: "gpt-6-sol", serviceTier: "default" }, "main");
     expect((await list()).notice).toBeUndefined();
   } finally { await runtime.stop(); }

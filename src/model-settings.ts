@@ -1,7 +1,7 @@
 import type { Store } from './store.js';
 import { HomeError } from './home.js';
 import { chatgptSignedIn } from './account.js';
-import { providerInfo, providerInfos, providerKey, providerModels, providerNotConnected } from './providers.js';
+import { providerConnectedAt, providerInfo, providerInfos, providerKey, providerModels, providerNotConnected } from './providers.js';
 
 /** `provider` is null only with a null model: as on the device, or automatic for the device itself. */
 export type ModelSelection = { provider: string | null; model: string | null; serviceTier: string | null };
@@ -34,9 +34,9 @@ export function readModelSelection(store: Store, agent?: string): ModelSelection
   if (!profile) throw new HomeError('Сотрудник не найден.',404);
   return stored({...profile,serviceTier:profile.serviceTier ?? (profile.model ? 'default' : null)});
 }
-/** ChatGPT when signed in, otherwise the first connected key provider. Quota never switches it. */
+/** ChatGPT when signed in, otherwise the key connected first, so adding a key changes nothing. Quota never switches it. */
 export function automaticProvider(store: Store): string {
-  return chatgptSignedIn(store) ? 'chatgpt' : providerInfos().find(p => providerKey(store,p.id))?.id ?? 'chatgpt';
+  return chatgptSignedIn(store) ? 'chatgpt' : providerInfos().filter(p => providerKey(store,p.id)).sort((a,b) => providerConnectedAt(store,a.id) - providerConnectedAt(store,b.id))[0]?.id ?? 'chatgpt';
 }
 /** Employee → device default → automatic. A Codex catalog fills the model only when one is given. */
 export function resolveModelSelection(store: Store, agent?: string, models?: ModelChoice[]): ModelSelection {

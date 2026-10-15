@@ -7,6 +7,7 @@ import { readExtensionBundle } from "../src/extension-bundle.js";
 import { CodexRpc } from "../src/rpc.js";
 import { ScopedCodexEngine } from "../src/scopes.js";
 import { CodexEngineAdapter } from "../src/codex.js";
+import { providerInfo } from "../src/providers.js";
 
 const roots:string[]=[];
 afterEach(()=>{for(const root of roots.splice(0))rmSync(root,{recursive:true,force:true,maxRetries:5,retryDelay:50});});
@@ -104,6 +105,20 @@ it("preserves employee extensions across scoped restarts and isolates another au
   expect(readToml(join(root,"second-account/personal/config.toml")).mcp_servers.shared).toBeDefined();
   second.close();
   scoped.close();
+});
+
+it("keeps a key provider's Codex away from chatgpt.com and GitHub, even where a local plugin is enabled",async()=>{
+  const {root}=fixture(),source=join(root,"source"),contexts=join(root,"provider");mkdirSync(source);
+  mkdirSync(join(root,".data/extensions/personal"),{recursive:true});
+  writeFileSync(join(root,".data/extensions/personal/config.toml"),'[plugins."recipe@openstrudel-local"]\nenabled = true\n');
+  // Codex syncs OpenAI's plugin catalog from chatgpt.com and GitHub at start whenever plugins are on.
+  const keyed=new ScopedCodexEngine(root,undefined,undefined,contexts,{info:providerInfo("xai")!,key:()=>"xai-key"});
+  const engine=keyed.forContext("personal") as CodexEngineAdapter;
+  expect(readToml(join(contexts,"personal/config.toml")).features).toEqual({apps:false,plugins:false,remote_plugin:false});
+  await expect(engine.extensions().prepare()).resolves.toBeUndefined();
+  const chatgpt=new ScopedCodexEngine(root,source);chatgpt.forContext("personal");
+  expect(readToml(join(root,".data/contexts/personal/config.toml")).features).toEqual({apps:true,plugins:true,remote_plugin:false});
+  keyed.close();chatgpt.close();
 });
 
 it("installs, disables, reloads and removes a real Codex skill and local plugin",async()=>{

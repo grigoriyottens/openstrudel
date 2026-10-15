@@ -8336,12 +8336,19 @@
     "es": "El inicio de sesión en servicios desde el navegador no está disponible con {0}. Añade el servicio con una clave de acceso en «Servicios y habilidades».",
     "he": "התחברות לשירותים דרך הדפדפן אינה זמינה עם {0}. הוסיפו את השירות עם מפתח גישה ב״שירותים ומיומנויות״."
   },
-  "С {0} сотрудник использует только сервисы MCP. Навыки и плагины работают с ChatGPT, OpenAI API и xAI.": {
-    "en": "With {0}, the assistant uses only MCP services. Skills and plugins work with ChatGPT, OpenAI API and xAI.",
-    "ru": "С {0} сотрудник использует только сервисы MCP. Навыки и плагины работают с ChatGPT, OpenAI API и xAI.",
-    "fr": "Avec {0}, l’assistant utilise uniquement les services MCP. Les compétences et les plugins fonctionnent avec ChatGPT, OpenAI API et xAI.",
-    "es": "Con {0}, el asistente usa solo servicios MCP. Las habilidades y los plugins funcionan con ChatGPT, OpenAI API y xAI.",
-    "he": "עם {0} העוזר משתמש רק בשירותי MCP. מיומנויות ותוספים עובדים עם ChatGPT, ‏OpenAI API ו־xAI."
+  "С {0} сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.": {
+    "en": "With {0}, the assistant uses only MCP services. Skills work with ChatGPT, OpenAI API and xAI; plugins only with ChatGPT.",
+    "ru": "С {0} сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.",
+    "fr": "Avec {0}, l’assistant utilise uniquement les services MCP. Les compétences fonctionnent avec ChatGPT, OpenAI API et xAI ; les plugins uniquement avec ChatGPT.",
+    "es": "Con {0}, el asistente usa solo servicios MCP. Las habilidades funcionan con ChatGPT, OpenAI API y xAI; los plugins, solo con ChatGPT.",
+    "he": "עם {0} העוזר משתמש רק בשירותי MCP. מיומנויות עובדות עם ChatGPT, ‏OpenAI API ו־xAI, ותוספים רק עם ChatGPT."
+  },
+  "С {0} сотрудник не использует плагины: они работают только с ChatGPT.": {
+    "en": "With {0}, the assistant doesn’t use plugins: they work only with ChatGPT.",
+    "ru": "С {0} сотрудник не использует плагины: они работают только с ChatGPT.",
+    "fr": "Avec {0}, l’assistant n’utilise pas les plugins : ils fonctionnent uniquement avec ChatGPT.",
+    "es": "Con {0}, el asistente no usa plugins: solo funcionan con ChatGPT.",
+    "he": "עם {0} העוזר לא משתמש בתוספים: הם עובדים רק עם ChatGPT."
   },
   "У ключа {0} закончился лимит или баланс. Проверьте оплату у провайдера или повторите позже.": {
     "en": "The {0} key has run out of quota or credit. Check billing with the provider or try again later.",
@@ -8818,6 +8825,20 @@
     "fr": "Connexion introuvable.",
     "es": "No se encontró la conexión.",
     "he": "החיבור לא נמצא."
+  },
+  "Ссылка устарела или уже использована. Попросите новую.": {
+    "en": "This link has expired or was already used. Ask for a new one.",
+    "ru": "Ссылка устарела или уже использована. Попросите новую.",
+    "fr": "Ce lien a expiré ou a déjà été utilisé. Demandez-en un nouveau.",
+    "es": "Este enlace ha caducado o ya se ha usado. Pide uno nuevo.",
+    "he": "תוקף הקישור פג או שהוא כבר נוצל. יש לבקש קישור חדש."
+  },
+  "Это устройство отключено. Подключитесь заново по новой ссылке.": {
+    "en": "This device was disconnected. Connect again with a new link.",
+    "ru": "Это устройство отключено. Подключитесь заново по новой ссылке.",
+    "fr": "Cet appareil a été déconnecté. Reconnectez-le avec un nouveau lien.",
+    "es": "Este dispositivo se ha desconectado. Vuelve a conectarlo con un enlace nuevo.",
+    "he": "המכשיר הזה נותק. יש להתחבר מחדש עם קישור חדש."
   },
   "Отключайте подключения по одному, чтобы не потерять доступ к этому устройству.": {
     "en": "Disconnect devices one at a time so you keep access to this device.",

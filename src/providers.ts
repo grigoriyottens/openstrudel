@@ -99,6 +99,8 @@ export interface ProviderSummary { id: string; name: string; auth: "signin" | "k
 
 /** Keys live only in this Home's private settings. They are never returned, logged or exported. */
 export const providerKey = (store: Store, id: string): string | null => store.getSetting(`providers.${id}.key`);
+/** Connection order. A key saved before it was recorded counts as earliest. */
+export const providerConnectedAt = (store: Store, id: string) => Number(store.getSetting(`providers.${id}.connectedAt`) ?? 0);
 /** Codex reserves built-in ids such as `openai`; a thread-scoped provider must not collide with them. */
 export const codexProviderId = (id: string) => "openstrudel-" + id;
 export const providerNotConnected = (id: string) => new ProviderIncident(`Подключите ${providerInfo(id)?.name ?? id} на этом устройстве или выберите другую модель.`, 409, "missing:" + id);
@@ -139,9 +141,13 @@ export async function connectProvider(store: Store, id: string, value: unknown):
     const detail = String(body?.error?.message ?? body?.message ?? response.statusText).replace(/\s+/g, " ").slice(0, 200);
     throw new HomeError(`${info.name} не подтвердил ключ: ${response.status} ${detail}`.trim(), response.status >= 500 ? 502 : 400);
   }
-  const previous = providerKey(store, id);
+  const previous = providerKey(store, id), first = !providerInfos().some(p => providerKey(store, p.id));
   store.setSetting(`providers.${id}.key`, key);
   if (previous && previous !== key) forgetThreads(store, id);
+  if (!previous) store.setSetting(`providers.${id}.connectedAt`, String(Math.max(Date.now(), ...providerInfos().map(p => providerConnectedAt(store, p.id) + 1))));
+  // The first key fixes the automatic device default, so no later key or sign-in changes an agent's model.
+  const recommended = info.models.find(m => m.recommended);
+  if (first && recommended && !chatgptSignedIn(store) && !readModelSelection(store).model) saveModelSelection(store, { provider: id, model: recommended.id, serviceTier: "default" });
   return providerSummaries(store).find(p => p.id === id)!;
 }
 
@@ -160,7 +166,7 @@ export function disconnectProvider(store: Store, id: string): number {
   if (!providerInfo(id)) throw new HomeError("Провайдер не найден.", 404);
   let reset = Number(store.db.prepare("UPDATE employee_profiles SET provider=NULL,model=NULL,service_tier=NULL WHERE provider=?").run(id).changes);
   for (const agent of [undefined, "main"]) if (readModelSelection(store, agent).provider === id) { saveModelSelection(store, { provider: null, model: null, serviceTier: agent ? null : "default" }, agent); reset++; }
-  store.deleteSetting(`providers.${id}.key`);
+  store.deleteSetting(`providers.${id}.key`); store.deleteSetting(`providers.${id}.connectedAt`);
   forgetThreads(store, id);
   return reset;
 }
