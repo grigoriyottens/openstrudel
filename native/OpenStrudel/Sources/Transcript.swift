@@ -111,8 +111,10 @@ struct MessageBubble: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let origin = message.origin, origin.channel != "api", isInbound || ownerReply || previous?.conversationId != message.conversationId {
-                sourceCaption(origin).frame(maxWidth: .infinity, alignment: ownerReply ? .trailing : .leading)
+            if let origin = message.origin, let line = MessagePages.sourceLine(message), isInbound || ownerReply || previous?.conversationId != message.conversationId {
+                // A request's line sits over its bubble text, where its author used to be.
+                sourceCaption(line, origin: origin).lineLimit(1).padding(.leading, fromSomeoneElse ? 16 : 0)
+                    .frame(maxWidth: .infinity, alignment: ownerReply ? .trailing : .leading)
             } else if message.direction == "inbound", client.messages.contains(where: { $0.origin?.channel == "telegram" }) {
                 Text(L("В приложении")).modifier(MetaLine()).frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -140,16 +142,13 @@ struct MessageBubble: View {
             if message.direction == "inbound", message.channel == "telegram", message.status == "queued" || message.status == "running" {
                 Label(L("Готовим ответ…"), systemImage: "ellipsis").modifier(MetaLine())
             }
-            if let delivery = message.delivery {
+            // A delivered reply stays silent; only a send in flight or a problem speaks.
+            if let delivery = message.delivery, delivery.state != "delivered" {
                 VStack(alignment: ownerReply ? .trailing : .leading, spacing: 0) {
                     deliveryCaption(delivery).padding(.trailing, ownerReply ? 16 : 0)
                     deliveryRecovery
                 }
                 .frame(maxWidth: .infinity, alignment: ownerReply ? .trailing : .leading)
-            }
-            if message.origin?.canReply == true && client.canManageOpenAI {
-                Button(L("Ответить в Telegram")) { telegramReply = TelegramReplyTarget(request: message) }
-                    .modifier(StatusAction()).accessibilityIdentifier("telegramReply-" + message.id)
             }
         }
         .quickLookPreview($previewURL)
@@ -171,16 +170,33 @@ struct MessageBubble: View {
         }
     }
 
-    @ViewBuilder private func sourceCaption(_ origin: MessageOrigin) -> some View {
-        let title = (origin.channel == "telegram" ? "Telegram" : L("Архив")) + " · " + origin.title
+    @ViewBuilder private func sourceCaption(_ line: String, origin: MessageOrigin) -> some View {
         if let raw = origin.url, let url = URL(string: raw), url.scheme == "https", url.host == "t.me" {
-            Link(title, destination: url).modifier(MetaLine()).accessibilityLabel(L("Открыть в Telegram: \(origin.title)"))
-        } else { Text(title).modifier(MetaLine()) }
+            Link(line, destination: url).modifier(MetaLine()).accessibilityLabel(L("Открыть в Telegram: \(origin.title)"))
+        } else { Text(line).modifier(MetaLine()) }
+    }
+
+    /// A Telegram request's actions: its context menu and its accessibility actions. Its text is not selectable,
+    /// so a right-click or a long press always opens this menu, and Copy lives here.
+    @ViewBuilder private var requestActions: some View {
+        if message.origin?.canReply == true && client.canManageOpenAI {
+            Button(L("Ответить в Telegram"), systemImage: "arrowshape.turn.up.left") { telegramReply = TelegramReplyTarget(request: message) }
+                .accessibilityIdentifier("telegramReply-" + message.id)
+        }
+        if message.origin?.channel == "telegram", !message.text.isEmpty {
+            Button(L("Скопировать"), systemImage: "doc.on.doc") {
+                #if os(macOS)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(message.text, forType: .string)
+                #else
+                UIPasteboard.general.string = message.text
+                #endif
+            }
+        }
     }
 
     private func deliveryCaption(_ delivery: MessageDelivery) -> some View {
         let text: String = switch delivery.state {
-        case "delivered": L("Доставлено в Telegram")
         case "unknown": L("Доставка не подтверждена. Проверьте Telegram перед новой отправкой.")
         case "not_sent": L("Не отправлено в Telegram")
         default: L("Отправляем в Telegram…")
@@ -207,15 +223,17 @@ struct MessageBubble: View {
     }
 
     private var someoneElse: some View {
-        let author = [message.author, headed ? nil : message.time].compactMap { $0 }.joined(separator: " · ")
+        // A Telegram request names its author in its one source line.
+        let author = message.origin?.channel == "telegram" ? "" : [message.author, headed ? nil : message.time].compactMap { $0 }.joined(separator: " · ")
         return VStack(alignment: .leading, spacing: 4) {
             if !author.isEmpty { Text(author).modifier(MetaLine()).padding(.leading, 16) }
             VStack(alignment: .leading, spacing: 8) {
                 if message.text.isEmpty { EmptyView() }
                 else if message.imported == true { ImportedMessageText(source: message.text) }
-                else { ChatBubble(text: message.text, fill: AppTheme.surface) }
+                else { ChatBubble(text: message.text, fill: AppTheme.surface, selectable: message.origin?.channel != "telegram").accessibilityActions { requestActions } }
                 attachments
             }
+            .contextMenu { requestActions }
             if let error = message.error { warning(error).padding(.leading, 16) }
         }
         .frame(maxWidth: bubbleWidth, alignment: .leading)

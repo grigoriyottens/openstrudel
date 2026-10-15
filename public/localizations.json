@@ -8630,19 +8630,19 @@
     "he": "השבה ב־Telegram",
     "ru": "Ответить в Telegram"
   },
+  "Скопировать": {
+    "en": "Copy",
+    "fr": "Copier",
+    "es": "Copiar",
+    "he": "העתקה",
+    "ru": "Скопировать"
+  },
   "Открыть в Telegram: {0}": {
     "en": "Open in Telegram: {0}",
     "fr": "Ouvrir dans Telegram : {0}",
     "es": "Abrir en Telegram: {0}",
     "he": "פתיחה ב־Telegram: {0}",
     "ru": "Открыть в Telegram: {0}"
-  },
-  "Доставлено в Telegram": {
-    "en": "Delivered to Telegram",
-    "fr": "Livré dans Telegram",
-    "es": "Entregado en Telegram",
-    "he": "נמסר ב־Telegram",
-    "ru": "Доставлено в Telegram"
   },
   "Доставка не подтверждена. Проверьте Telegram перед новой отправкой.": {
     "en": "Delivery unconfirmed. Check Telegram before sending again.",

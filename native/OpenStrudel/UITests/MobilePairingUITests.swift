@@ -17,11 +17,25 @@ final class MobilePairingUITests: XCTestCase {
         let employee = app.buttons["employee-" + profileID]
         for _ in 0..<10 where !employee.isHittable { app.swipeUp() }
         XCTAssertTrue(employee.isHittable, app.debugDescription); employee.tap()
-        let reply = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "telegramReply-")).firstMatch
-        for _ in 0..<8 where !reply.isHittable { app.swipeDown() }
-        XCTAssertTrue(reply.waitForExistence(timeout: 10), app.debugDescription)
+        let request = app.staticTexts["Собери решения встречи и следующий шаг."]
+        XCTAssertTrue(request.waitForExistence(timeout: 10), app.debugDescription)
+        for _ in 0..<8 where !request.isHittable { app.swipeDown() }
+        // One source line per request, no inline Reply, and a delivered reply stays silent.
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "telegramReply-")).firstMatch.exists, app.debugDescription)
+        XCTAssertFalse(app.staticTexts["Доставлено в Telegram"].exists, app.debugDescription)
+        // The author lives in the group's line, a link named after the group, never on a line of its own.
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Гриша")).firstMatch.exists, app.debugDescription)
+        XCTAssertTrue(app.links["Открыть в Telegram: WAI Core Team · тест"].exists, app.debugDescription)
+        // Only a reply Telegram did not confirm speaks, with its one way on.
+        XCTAssertTrue(app.staticTexts["Доставка не подтверждена. Проверьте Telegram перед новой отправкой."].exists, app.debugDescription)
+        XCTAssertTrue(app.links["Открыть в Telegram"].exists, app.debugDescription)
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Посторонняя беседа")).firstMatch.exists)
         capture("phone-unified-telegram-feed", app)
+        // Reply lives in the request's context menu. Menu items may not carry identifiers, so it is found by its title.
+        request.press(forDuration: 1)
+        let reply = app.buttons.matching(NSPredicate(format: "label IN %@", ["Ответить в Telegram", "Reply in Telegram"])).firstMatch
+        XCTAssertTrue(reply.waitForExistence(timeout: 5), app.debugDescription)
+        capture("phone-telegram-request-menu", app)
         reply.tap()
         let input = app.textFields["telegramReplyText"]
         XCTAssertTrue(input.waitForExistence(timeout: 5), app.debugDescription)
