@@ -46,7 +46,8 @@ npm ci --prefix "$RUNTIME" --omit=dev --ignore-scripts --os=darwin --cpu="$NODE_
 # license and notices; the compressed npm copy is not shipped twice.
 "$RUNTIME/bin/node" "$ROOT/scripts/extract-grok.mjs" "$RUNTIME" "darwin-$NODE_ARCH"
 cp "$RUNTIME/node_modules/@xai-official/grok-darwin-$NODE_ARCH/THIRD_PARTY_NOTICES.md" "$RUNTIME/Grok-THIRD_PARTY_NOTICES.md"
-rm -rf "$RUNTIME/node_modules/@xai-official"
+# npm links bin/grok there too; a link to nothing fails `codesign --verify --deep --strict`.
+rm -rf "$RUNTIME/node_modules/@xai-official" "$RUNTIME/node_modules/.bin/grok"
 curl --fail --silent --show-error --location --retry 2 --connect-timeout 15 --max-time 60 \
   "https://raw.githubusercontent.com/xai-org/grok-build/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/LICENSE" -o "$RUNTIME/Grok-LICENSE.txt"
 printf '%s  %s\n' "116f7778b9802e569b7fa3a532b17bd80eb13c67837def01eed093d4ea472f28" "$RUNTIME/Grok-LICENSE.txt" | shasum -a 256 -c -

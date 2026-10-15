@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -44,4 +44,11 @@ it.skipIf(process.platform !== "darwin" || !app)("runs the packaged Home without
     expect(execFileSync(grok, ["--no-auto-update", "--version"], { env: { ...env, GROK_HOME: join(fixture, "grok"), GROK_DISABLE_AUTOUPDATER: "1" }, encoding: "utf8", timeout: 20_000 })).toContain(`grok ${pinned} `);
     for (const file of ["Grok-LICENSE.txt", "Grok-THIRD_PARTY_NOTICES.md"]) expect(readFileSync(join(runtime, file), "utf8").length).toBeGreaterThan(0);
   } finally { rmSync(fixture, { recursive: true, force: true }); }
+});
+
+// `codesign --verify --deep --strict`, the last step of signing, fails on a link to nothing.
+it.skipIf(process.platform !== "darwin" || !app)("ships no link that points at nothing", () => {
+  const runtime = resolve(app!, "Contents/Resources/Runtime");
+  const links = readdirSync(runtime, { recursive: true, withFileTypes: true }).filter(entry => entry.isSymbolicLink()).map(entry => join(entry.parentPath, entry.name));
+  expect(links.filter(link => !existsSync(link)).map(link => link.slice(runtime.length + 1))).toEqual([]);
 });

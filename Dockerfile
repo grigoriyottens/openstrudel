@@ -10,7 +10,7 @@ COPY scripts/extract-grok.mjs ./scripts/
 # The Grok subscription runs xAI's pinned Grok Build, unpacked to bin/grok with its notices.
 RUN npm run build && npm prune --omit=dev \
     && node scripts/extract-grok.mjs . && cp node_modules/@xai-official/grok-linux-*/THIRD_PARTY_NOTICES.md Grok-THIRD_PARTY_NOTICES.md \
-    && rm -rf node_modules/@xai-official scripts
+    && rm -rf node_modules/@xai-official node_modules/.bin/grok scripts
 
 # Official whisper.cpp v1.9.4, built for the image architecture (no native CPU flags).
 # Source: https://github.com/ggml-org/whisper.cpp/releases/tag/v1.9.4
