@@ -34,5 +34,10 @@ it.skipIf(process.platform !== "darwin" || !app)("runs the packaged Home without
     const plist = JSON.parse(execFileSync("/usr/bin/plutil", ["-convert", "json", "-o", "-", launchAgent], { encoding: "utf8" }));
     expect(plist.ProgramArguments).toEqual([node, join(runtime, "dist/cli.js"), "start"]);
     expect(plist.OpenStrudelRuntimeVersion).toBe(readFileSync(join(runtime, "release.txt"), "utf8").trim());
+    // Claude Code is a Bun binary; without its JIT entitlements it falls back to a slow interpreter.
+    const claude = join(runtime, "node_modules/@anthropic-ai/claude-agent-sdk-darwin-arm64/claude");
+    expect(execFileSync(claude, ["--version"], { env, encoding: "utf8", timeout: 20_000 })).toMatch(/Claude Code/);
+    const entitlements = execFileSync("/usr/bin/codesign", ["-d", "--entitlements", "-", "--xml", claude], { encoding: "utf8" });
+    expect(entitlements).toContain("com.apple.security.cs.allow-jit");
   } finally { rmSync(fixture, { recursive: true, force: true }); }
 });
