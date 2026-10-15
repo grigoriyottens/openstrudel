@@ -17,6 +17,7 @@ export class Scheduler {
   private timer?: ReturnType<typeof setInterval>;
   private readonly active = new Map<string, Promise<void>>();
   get hasActiveRuns() { return this.active.size > 0; }
+  isRunning(conversationId: string) { return this.list(conversationId).some(s => this.active.has(s.id)); }
   deliver?: (chatId: string, text: string, key: string, attachments?: Attachment[]) => Promise<void>;
   constructor(private readonly store: Store, private readonly messages: MessageService) {
     store.db.exec(`CREATE TABLE IF NOT EXISTS schedules (

@@ -63,6 +63,8 @@ struct EmployeeMove: Codable, Identifiable {
             defer { busy = false; work = nil }
             do { try await advance(using: transport) }
             catch is CancellationError { /* The journal, source and staged copy remain recoverable. */ }
+            // Service text is translated once, where it is shown, so a device name stays intact.
+            catch HomeClientError.server(let message) { self.error = message }
             catch { self.error = UserFacingError.text(error.localizedDescription) }
         }
     }
@@ -136,7 +138,14 @@ struct EmployeeMove: Codable, Identifiable {
         body["id"] = value.id; body["proof"] = value.proof
         body["homeId"] = onSource ? value.sourceHome : value.targetHome
         let data = try JSONSerialization.data(withJSONObject: body)
-        let response = try await transport(onSource ? value.sourceID : value.targetID, action, data)
+        let device = onSource ? value.sourceName : value.targetName
+        let response: Data
+        do { response = try await transport(onSource ? value.sourceID : value.targetID, action, data) }
+        catch let failure as URLError where failure.code == .timedOut {
+            throw HomeClientError.server(L10n.text("«{0}» не ответил за 5 минут. Перенос можно продолжить: «Продолжить перенос».", arguments: [device], language: .russian))
+        } catch let failure as URLError where [.networkConnectionLost, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed, .notConnectedToInternet].contains(failure.code) {
+            throw HomeClientError.server(L10n.text("Нет связи с «{0}». Когда связь появится, нажмите «Продолжить перенос».", arguments: [device], language: .russian))
+        }
         try Task.checkCancellation()
         guard let result = try JSONSerialization.jsonObject(with: response) as? [String: Any] else { throw HomeClientError.invalidResponse }
         return result
@@ -144,5 +153,15 @@ struct EmployeeMove: Codable, Identifiable {
 }
 
 extension HomeClient {
-    var canMoveEmployees: Bool { canManageOpenAI && health?.employeeTransferVersion == 1 && !homeUnreachable && !connectionNeedsPairing }
+    /// Owning the device, not its ChatGPT account, decides who moves its employees.
+    var ownsDevice: Bool { canManageOpenAI || canManageConnections }
+    var canMoveEmployees: Bool { employeeMoveBlocker == nil }
+    /// Why this device cannot take part in a move right now.
+    var employeeMoveBlocker: String? {
+        if connectionNeedsPairing { return L("Подключите «\(displayName)» снова. Переписка сохранена на устройстве.") }
+        if health == nil || homeUnreachable { return L("«\(displayName)» пока не на связи. Подключимся автоматически.") }
+        if !ownsDevice { return L("Подключение к «\(displayName)» без доступа владельца. Переносить сотрудников может только владелец.") }
+        if health?.employeeTransferVersion != 1 { return L("Обновите OpenStrudel на «\(displayName)», чтобы переносить сотрудников.") }
+        return nil
+    }
 }

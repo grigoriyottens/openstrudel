@@ -326,6 +326,29 @@ private final class CredentialReadGate: @unchecked Sendable {
         #expect(!colleague.canRenameDevice)
     }
 
+    @Test func theOwnerCanMoveEmployeesWhileTheChatGPTAccountCannotAnswer() async throws {
+        let fixture = DevicesFixture()
+        fixture.flags["employeeTransferVersion"] = 1
+        fixture.accountUnavailable = true; fixture.holdAccount = true
+        let server = ["openstrudel.homeURL": "https://server.test:7789"]
+        let (client, cleanup) = makeClient(fixture, saved: server)
+        defer { cleanup() }
+        #expect(client.employeeMoveBlocker == L("«\(client.displayName)» пока не на связи. Подключимся автоматически."))
+        let loading = Task { await client.load() }
+        for _ in 0..<500 where !client.canManageConnections { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(!client.canManageOpenAI, "The ChatGPT account has not answered")
+        #expect(client.canMoveEmployees, "Owning the device, not its ChatGPT account, decides who moves its employees")
+        fixture.holdAccount = false; await loading.value
+        #expect(client.canMoveEmployees && client.employeeMoveBlocker == nil)
+
+        let other = DevicesFixture()
+        other.accountUnavailable = true; other.colleague = true
+        let (colleague, cleanupColleague) = makeClient(other, saved: server)
+        defer { cleanupColleague() }
+        await colleague.load()
+        #expect(colleague.employeeMoveBlocker == L("Подключение к «\(colleague.displayName)» без доступа владельца. Переносить сотрудников может только владелец."))
+    }
+
     @Test func namesNeverShowAHostnameSuffixAndTheServerDefaultFollowsTheLanguage() async throws {
         #expect(deviceTitle("Server", language: .russian) == "Сервер")
         #expect(deviceTitle("Server", language: .french) == "Serveur")
@@ -579,6 +602,8 @@ private final class KeychainLog: @unchecked Sendable {
     var flags: [String: Int] = [:]
     /// The device's ChatGPT account cannot answer, for example when its limit ran out.
     var accountUnavailable = false
+    /// The account request waits, as it does while the device asks ChatGPT.
+    var holdAccount = false
     /// This client was invited as a colleague, so device management answers 403.
     var colleague = false
     var deviceName = "Mini"
@@ -610,6 +635,7 @@ private final class KeychainLog: @unchecked Sendable {
         case ("GET", "/v1/devices"):
             return json(["devices": [["id": "node", "name": deviceName, "platform": "linux", "primary": true, "online": true, "agents": 1]], "primaryId": "node"])
         case ("GET", "/v1/account"):
+            while holdAccount { try? await Task.sleep(for: .milliseconds(10)) }
             if accountUnavailable { return (503, Data(#"{"error":"Лимит ChatGPT исчерпан"}"#.utf8)) }
             return json(["account": ["connected": true, "managed": true], "canManage": true])
         case ("GET", "/v1/mobile") where colleague: return (403, Data(#"{"error":"Откройте настройки на Mac"}"#.utf8))
