@@ -130,6 +130,8 @@ export class Store {
     for (const chatId of jsonArray(this.getSetting("telegram.linked_chats"))) {
       if (!this.getTelegramChat(chatId)) this.linkTelegramChat({ chatId, title: chatId.startsWith("-") ? "Telegram-группа" : "Личный чат", allowedSenders: chatId.startsWith("-") ? [] : [chatId] });
     }
+    // Only groups pause. An «Отвязать» in apps before build 45 paused a private chat and hid every message.
+    this.db.exec("DELETE FROM settings WHERE key LIKE 'telegram.paused.%' AND key NOT LIKE 'telegram.paused.-%'");
     this.migrateLegacyMainConversation();
   }
 

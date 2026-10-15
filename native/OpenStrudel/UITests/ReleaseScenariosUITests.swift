@@ -164,13 +164,16 @@ final class ReleaseScenariosUITests: XCTestCase {
         let direct = try XCTUnwrap(privateChat(state)?["conversationId"] as? String)
         let responder = app.buttons["telegramResponder-42"]
         try reveal(responder, in: app)
+        waitUntil(responder, shows: "Общий помощник")
         try choose("Редактор", in: responder, app)
-        capture("telegram-private-employee", app)
         try await waitForState(fixture) { privateChat($0)?["profileId"] as? String == state["editor"] as? String }
+        waitUntil(responder, shows: "Редактор")
+        capture("telegram-private-employee", app)
         try choose("Общий помощник", in: responder, app)
         let restored = try await waitForState(fixture) { privateChat($0)?["profileId"] as? String == nil }
         XCTAssertEqual(privateChat(restored)?["enabled"] as? Bool, true)
         XCTAssertEqual(privateChat(restored)?["conversationId"] as? String, direct)
+        waitUntil(responder, shows: "Общий помощник")
         let toggle = app.buttons["toggleTelegramGroup--100"]
         try reveal(toggle, in: app)
         capture("telegram-auto-connected", app)
@@ -433,6 +436,12 @@ final class ReleaseScenariosUITests: XCTestCase {
         let item = app.buttons.matching(NSPredicate(format: "label == %@", option))
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in item.allElementsBoundByIndex.contains(where: \.isHittable) }, object: nil)], timeout: 5), .completed, app.debugDescription)
         try XCTUnwrap(item.allElementsBoundByIndex.last(where: \.isHittable)).tap()
+    }
+
+    /// The owner sees the chat's responder, and the picker takes the next choice only after the Home answers.
+    @MainActor private func waitUntil(_ picker: XCUIElement, shows option: String) {
+        let shown = NSPredicate(format: "enabled == true AND label BEGINSWITH %@ AND (label CONTAINS %@ OR value CONTAINS %@)", "Личный чат", option, option)
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: shown, object: picker)], timeout: 10), .completed, picker.debugDescription)
     }
 
     @MainActor @discardableResult private func waitForState(_ fixture: String, until condition: ([String: Any]) -> Bool) async throws -> [String: Any] {

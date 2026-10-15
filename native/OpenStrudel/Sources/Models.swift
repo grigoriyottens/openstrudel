@@ -57,6 +57,8 @@ struct HomeHealth: Decodable {
     var providers: Int? = nil
     /// 1: the Grok subscription, signed in on the device.
     var subscriptionsVersion: Int? = nil
+    /// 1: an employee can answer the bot's private chat, which keeps answering after the switch back.
+    var telegramPrivateChoiceVersion: Int? = nil
 }
 
 struct HomeConversation: Decodable {

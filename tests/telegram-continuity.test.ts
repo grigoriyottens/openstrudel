@@ -1,8 +1,13 @@
 import { afterEach,expect,it,vi } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Store } from "../src/store.js";
 import { Scheduler } from "../src/scheduler.js";
 import { MessageService } from "../src/messages.js";
 import { TelegramAdapter } from "../src/telegram.js";
+import { OpenStrudelRuntime } from "../src/runtime.js";
+import { MockCodexEngine } from "../src/codex.js";
 import { AccountUnavailableError } from "../src/account-errors.js";
 import { ProviderKeyError, providerFailure, providerInfo, providerNotConnected } from "../src/providers.js";
 const stores:Store[]=[];
@@ -204,4 +209,29 @@ it("keeps a private chat answering after it returns to the main assistant", asyn
  s.setSetting("telegram.paused.42","true");a.bindChat("42",null);
  expect(s.getTelegramChat("42")?.enabled).toBe(true);
  await m.close();
+});
+
+it("tells the app it may offer the private-chat choice, and the owner's switch back keeps the chat answering", async () => {
+ const runtime=new OpenStrudelRuntime({dbPath:":memory:",engine:new MockCodexEngine(),startTelegram:false});
+ const {port}=await runtime.api.listen("127.0.0.1",0);
+ const call=async(path:string,body?:unknown)=>(await fetch(`http://127.0.0.1:${port}${path}`,{method:body===undefined?"GET":"PATCH",headers:{"content-type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)})).json();
+ try {
+  // Older Homes pause the chat on the switch back, so the app shows the choice only with this flag.
+  expect(await call("/health")).toMatchObject({telegramPrivateChoiceVersion:1});
+  runtime.store.linkTelegramChat({chatId:"42",title:"Personal",allowedSenders:["42"]});
+  const editor=runtime.store.createProfile({name:"Editor"});
+  expect((await call("/v1/integrations/telegram/chats/42",{profileId:editor.id})).telegram.chats[0]).toMatchObject({profileId:editor.id,enabled:true});
+  expect((await call("/v1/integrations/telegram/chats/42",{profileId:null})).telegram.chats[0]).toMatchObject({profileId:null,enabled:true});
+ } finally { await runtime.stop(); }
+});
+
+it("answers again in a private chat that an older app paused, and keeps a paused group quiet", () => {
+ const dir=mkdtempSync(join(tmpdir(),"strudel-paused-")),file=join(dir,"db.sqlite");
+ const old=new Store(file);
+ old.linkTelegramChat({chatId:"42",title:"Personal",allowedSenders:["42"]});old.linkTelegramChat({chatId:"-100",title:"Group",allowedSenders:["42"]});
+ old.setSetting("telegram.paused.42","true");old.setSetting("telegram.paused.-100","true");old.close();
+ const s=new Store(file);
+ expect(s.getTelegramChat("42")?.enabled).toBe(true);
+ expect(s.getTelegramChat("-100")?.enabled).toBe(false);
+ s.close();rmSync(dir,{recursive:true,force:true});
 });

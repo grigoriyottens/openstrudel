@@ -165,7 +165,7 @@ export class CodexEngineAdapter implements CodexEngine {
       const common = { model, ...(provider ? { modelProvider:codexProviderId(provider.id) } : {}), ...tier, cwd, ...policy, ...(this.options.scoped ? {} : { sandbox: "workspace-write" }), developerInstructions: instructions, config };
       const result = threadId
         ? await rpc.request("thread/resume", { ...common, threadId, excludeTurns: true })
-        : await rpc.request("thread/start", { ...common, dynamicTools: options.tools?.definitions ?? [], serviceName: "openstrudel" });
+        : await rpc.request("thread/start", { ...common, ...(employees.length ? { multiAgentMode: "proactive" } : {}), dynamicTools: options.tools?.definitions ?? [], serviceName: "openstrudel" });
       threadId = result.thread.id;
       // resume preserves the model's earlier developer history. Use Codex's
       // native history update to apply a changed SOUL without losing the chat.
@@ -184,7 +184,7 @@ export class CodexEngineAdapter implements CodexEngine {
     const abort = () => { if (active.turnId) void rpc.request("turn/interrupt", { threadId, turnId: active.turnId }).catch(() => undefined); };
     options.signal?.addEventListener("abort", abort, { once: true });
     try {
-      const result = await rpc.request("turn/start", { threadId, model, effort, ...tier, ...policy, input: [{ type: "text", text: input }, ...(options.images ?? []).map(path=>({type:"localImage",path}))] });
+      const result = await rpc.request("turn/start", { threadId, model, effort, ...tier, ...policy, ...(employees.length ? { multiAgentMode: "proactive" } : {}), input: [{ type: "text", text: input }, ...(options.images ?? []).map(path=>({type:"localImage",path}))] });
       active.turnId = result.turn.id;
       if (options.signal?.aborted) abort();
       return await completion;

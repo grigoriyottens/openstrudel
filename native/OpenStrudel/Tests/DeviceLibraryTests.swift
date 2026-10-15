@@ -533,6 +533,55 @@ private final class CredentialReadGate: @unchecked Sendable {
         #expect(log.entries.allSatisfy { !$0.allowed }, "\(log.entries)")
     }
 
+    @Test func onlyTheOwnerOfAHomeThatKeepsThePrivateChatAnsweringChoosesWhoAnswersIt() async throws {
+        let fixture = DevicesFixture()
+        fixture.bot = true
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        #expect(client.telegram?.chats?.first?.chatId == "42")
+        #expect(client.ownsDevice)
+        #expect(!client.canChooseTelegramResponder, "An older Home pauses the private chat when it returns to the main assistant")
+        fixture.flags["telegramPrivateChoiceVersion"] = 1
+        await client.load()
+        #expect(client.canChooseTelegramResponder)
+        // The employee's bot runs on another device, whose version this connection cannot see.
+        fixture.profileDevice = "worker"
+        await client.load()
+        await client.selectProfile("employee")
+        #expect(client.activeProfile?.deviceId == "worker")
+        #expect(!client.canChooseTelegramResponder)
+
+        let other = DevicesFixture()
+        other.bot = true; other.flags["telegramPrivateChoiceVersion"] = 1
+        other.accountUnavailable = true; other.colleague = true
+        let (colleague, cleanupColleague) = makeClient(other, saved: ["openstrudel.homeURL": "https://server.test:7789"])
+        defer { cleanupColleague() }
+        await colleague.load()
+        #expect(colleague.health?.telegramPrivateChoiceVersion == 1)
+        #expect(!colleague.canChooseTelegramResponder, "Only the device's owner may change who answers")
+    }
+
+    @Test func aSlowTelegramReadDoesNotUndoTheChosenResponder() async throws {
+        let fixture = DevicesFixture()
+        fixture.bot = true
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        #expect(client.telegram?.chats?.first?.profileId == nil)
+        // Polls that began before the choice answer later with what they saw then.
+        fixture.holdTelegram = true
+        let poll = Task { await client.loadChatSettings() }
+        let catalogue = Task { await client.refreshCatalogue() }
+        for _ in 0..<500 where fixture.heldTelegramReads < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(fixture.heldTelegramReads == 2)
+        await client.bindTelegram(chatID: "42", profileID: "employee")
+        #expect(client.telegram?.chats?.first?.profileId == "employee")
+        fixture.holdTelegram = false
+        await poll.value; await catalogue.value
+        #expect(client.telegram?.chats?.first?.profileId == "employee")
+    }
+
     private func makeClient(_ fixture: DevicesFixture, saved: [String: String] = [:]) -> (HomeClient, () -> Void) {
         let suite = "OpenStrudel.devices-test." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
@@ -617,13 +666,32 @@ private final class KeychainLog: @unchecked Sendable {
     var invitations: [(id: String, owner: Bool)] = []
     var cancelledInvitationIDs: [String] = []
     private var issuedInvitations = 0
+    /// The device runs a bot linked to the owner's private chat 42.
+    var bot = false
+    /// The employee lives on another device of this Home.
+    var profileDevice: String?
+    var telegramResponder: String?
+    /// Telegram reads wait, then answer with what they saw on arrival, like a slow poll.
+    var holdTelegram = false
+    var heldTelegramReads = 0
+    private func telegram() -> [String: Any] {
+        ["configured": true, "running": true, "linkedChats": ["42"],
+         "chats": [["chatId": "42", "title": "Личный чат", "profileId": telegramResponder.map { $0 as Any } ?? NSNull(), "allowedSenders": ["42"], "enabled": true]]]
+    }
+    private func readTelegram() async -> [String: Any] {
+        let seen = telegram()
+        if holdTelegram { heldTelegramReads += 1 }
+        while holdTelegram { try? await Task.sleep(for: .milliseconds(10)) }
+        return seen
+    }
     func respond(_ request: URLRequest) async -> (Int, Data) {
         let path = request.url!.path, method = request.httpMethod ?? "GET"
         func json(_ value: Any) -> (Int, Data) { (200, try! JSONSerialization.data(withJSONObject: value)) }
-        let profile: () -> [String: Any] = { ["id": "employee", "name": self.profileName, "instructions": self.instructions, "capabilities": [], "createdAt": "2026-10-09T00:00:00Z"] }
+        let profile: () -> [String: Any] = { ["id": "employee", "name": self.profileName, "instructions": self.instructions, "capabilities": [], "createdAt": "2026-10-09T00:00:00Z", "deviceId": self.profileDevice ?? NSNull()] }
         switch (method, path) {
         case ("GET", "/health"):
             return json((["ok": true, "homeId": "home-fixture", "homeProtocol": 1, "nodeId": "node"] as [String: Any]).merging(flags) { _, new in new })
+        case ("GET", "/v1/profiles") where bot: return json(["profiles": [profile()], "telegram": await readTelegram()])
         case ("GET", "/v1/profiles"): return json(["profiles": [profile()]])
         case ("PATCH", "/v1/profiles/employee"):
             let body = (try? JSONSerialization.jsonObject(with: Self.body(request))) as? [String: Any] ?? [:]
@@ -639,7 +707,11 @@ private final class KeychainLog: @unchecked Sendable {
             if accountUnavailable { return (503, Data(#"{"error":"Лимит ChatGPT исчерпан"}"#.utf8)) }
             return json(["account": ["connected": true, "managed": true], "canManage": true])
         case ("GET", "/v1/mobile") where colleague: return (403, Data(#"{"error":"Откройте настройки на Mac"}"#.utf8))
+        case ("GET", "/v1/integrations") where bot: return json(["telegram": await readTelegram()])
         case ("GET", "/v1/integrations"): return json(["telegram": ["configured": false, "running": false, "linkedChats": []]])
+        case ("PATCH", "/v1/integrations/telegram/chats/42"):
+            telegramResponder = ((try? JSONSerialization.jsonObject(with: Self.body(request))) as? [String: Any])?["profileId"] as? String
+            return json(["telegram": telegram()])
         case ("GET", "/v1/mobile"):
             guard flags["colleagueInvitesVersion"] == 1 else {
                 return json(["connections": 1, "clients": [["id": "legacy", "name": "Устройство 1", "owner": true]]])

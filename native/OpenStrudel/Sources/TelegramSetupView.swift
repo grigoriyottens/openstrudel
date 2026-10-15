@@ -82,11 +82,17 @@ struct TelegramSetupView: View {
         }
         if linked {
             ForEach(privateChats) { chat in
-                Picker(L("В Telegram отвечает"), selection: Binding(get: { chat.profileId }, set: { bind(chat, to: $0) })) {
-                    Text(L("Общий помощник")).tag(String?.none)
-                    ForEach(deviceEmployees) { Text($0.name).tag(Optional($0.id)) }
+                // The owner chooses once the device has an employee; otherwise the row only says who answers.
+                if client.canChooseTelegramResponder && !deviceEmployees.isEmpty {
+                    Picker(L("Личный чат"), selection: Binding(get: { chat.profileId }, set: { bind(chat, to: $0) })) {
+                        Text(L("Общий помощник")).tag(String?.none)
+                        ForEach(deviceEmployees) { Text($0.name).tag(Optional($0.id)) }
+                    }
+                    .disabled(busy).accessibilityIdentifier("telegramResponder-" + chat.chatId)
+                } else {
+                    let name = client.profiles.first(where: { $0.id == chat.profileId })?.name ?? L("Общий помощник")
+                    Text(L("В Telegram отвечает \(name)")).foregroundStyle(AppTheme.secondaryText)
                 }
-                .disabled(busy).accessibilityIdentifier("telegramResponder-" + chat.chatId)
             }
         } else if !contextual {
             Text(L("Подтвердите свой Telegram, чтобы писать боту и добавлять его в группы."))

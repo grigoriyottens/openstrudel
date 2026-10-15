@@ -3478,12 +3478,19 @@
     "he": "עוזר כללי",
     "ru": "Общий помощник"
   },
-  "В Telegram отвечает": {
-    "en": "Replies in Telegram",
-    "fr": "Répond dans Telegram",
-    "es": "Responde en Telegram",
-    "he": "משיב ב-Telegram",
-    "ru": "В Telegram отвечает"
+  "В Telegram отвечает {0}": {
+    "en": "{0} replies in Telegram",
+    "fr": "{0} répond dans Telegram",
+    "es": "{0} responde en Telegram",
+    "he": "{0} משיב ב-Telegram",
+    "ru": "В Telegram отвечает {0}"
+  },
+  "В этом чате ещё идёт ответ. Дождитесь его и повторите.": {
+    "en": "A reply is still in progress in this chat. Wait for it, then try again.",
+    "fr": "Une réponse est encore en cours dans cette conversation. Attendez-la, puis réessayez.",
+    "es": "Todavía hay una respuesta en curso en este chat. Espera a que termine y vuelve a intentarlo.",
+    "he": "בשיחה הזו עדיין נכתבת תשובה. יש להמתין לסיומה ולנסות שוב.",
+    "ru": "В этом чате ещё идёт ответ. Дождитесь его и повторите."
   },
   "Подтвердите свой Telegram, чтобы писать боту и добавлять его в группы.": {
     "en": "Link your Telegram account to message the bot and add it to groups.",

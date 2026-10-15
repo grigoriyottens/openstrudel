@@ -111,7 +111,8 @@ it("blocks rebinding until the original answer is delivered", async () => {
   run.mockImplementationOnce(async () => { await new Promise<void>(resolve => { finish = resolve; }); return { threadId: "fixture", response: "Ready", events: [] }; });
   const turn = adapter.processUpdate(message(1, "Please continue"));
   await vi.waitFor(() => expect(finish).toBeDefined());
-  expect(() => adapter.bindChat("-100", null)).toThrow("ещё отвечает");
+  // The same refusal reaches a private chat, so it does not say «группа».
+  expect(() => adapter.bindChat("-100", null)).toThrow("В этом чате ещё идёт ответ. Дождитесь его и повторите.");
   finish(); await turn; adapter.bindChat("-100", null);
   expect(store.getTelegramChat("-100")?.profileId).toBeNull();
 });

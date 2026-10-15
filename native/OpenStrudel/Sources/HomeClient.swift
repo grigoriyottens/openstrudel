@@ -198,6 +198,8 @@ final class HomeClient: ObservableObject, Identifiable {
     private var latestReachabilityCheck = 0
     private var refreshingCatalogue: Int?
     private var catalogueETag: String?
+    /// Each Telegram change bumps it; a read that began earlier must not undo the change.
+    private var telegramGeneration = 0
     @Published var syncError: String?
     @Published private(set) var isCreating = false
     @Published var draftEmployeeDomain = "personal"
@@ -738,13 +740,14 @@ final class HomeClient: ObservableObject, Identifiable {
             guard generation == connectionGeneration else { return }
             if catalogueLoaded == true, reachability >= latestReachabilityCheck { connectionState = .connected; homeUnreachable = false; connectionNeedsPairing = false }
             // Publish employees before waiting for provider state.
+            let telegramRead = telegramGeneration
             async let integrations: TelegramEnvelope? = try? request("/v1/integrations")
             async let account = loadOpenAIAccount()
 
             await refreshConversation()
             let (value, loadedAccount) = try await (integrations, account)
             guard generation == connectionGeneration else { return }
-            if let value { telegram = value.telegram }
+            if let value, telegramRead == telegramGeneration { telegram = value.telegram }
             applyOpenAIAccount(loadedAccount)
         } catch {
             guard generation == connectionGeneration else { return }
@@ -767,7 +770,7 @@ final class HomeClient: ObservableObject, Identifiable {
     /// deletion or overwrite a newly created employee.
     @discardableResult func refreshCatalogue(refreshPresence: Bool = true, reachabilityCheck: Int? = nil) async -> Bool? {
         guard acceptsOperations, isConfigured, !isSignedOut, refreshingCatalogue == nil else { return nil }
-        let generation = connectionGeneration, catalogue = catalogueGeneration
+        let generation = connectionGeneration, catalogue = catalogueGeneration, telegramRead = telegramGeneration
         let reachability = reachabilityCheck ?? nextReachabilityCheck()
         refreshingCatalogue = generation
         defer { if refreshingCatalogue == generation { refreshingCatalogue = nil } }
@@ -778,7 +781,7 @@ final class HomeClient: ObservableObject, Identifiable {
             guard catalogue == catalogueGeneration else { catalogueETag = nil; return nil }
             if !data.isEmpty {
                 let loaded = try decoder.decode(ProfilesEnvelope.self, from: data)
-                if let status = loaded.telegram {
+                if let status = loaded.telegram, telegramRead == telegramGeneration {
                     telegram = status
                     // A removed/reassigned chat must not stay selected under its old employee.
                     if let selectedChatID, !(loaded.importedConversations ?? importedConversations).contains(where: { $0.id == selectedChatID }),
@@ -1152,8 +1155,9 @@ final class HomeClient: ObservableObject, Identifiable {
 
     func loadChatSettings() async {
         do {
+            let telegramRead = telegramGeneration
             let value: TelegramEnvelope = try await request("/v1/integrations" + employeeDeviceQuery)
-            telegram = value.telegram
+            if telegramRead == telegramGeneration { telegram = value.telegram }
             // The employee card keeps a schedule made in any of its chats, with that chat's latest run.
             var found: [ChatSchedule] = [], latest: [ScheduleRun] = [], scopes = Set<String>()
             for scope in ([conversationID] + employeeTelegramChats.map(\.conversationId)).compactMap({ $0 }) where scopes.insert(scope).inserted {
@@ -1217,7 +1221,7 @@ final class HomeClient: ObservableObject, Identifiable {
         do {
             let body = try JSONSerialization.data(withJSONObject: ["profileId": profileID as Any? ?? NSNull()])
             let response: TelegramEnvelope = try await request("/v1/integrations/telegram/chats/" + chatID + employeeDeviceQuery, method: "PATCH", body: body)
-            telegram = response.telegram
+            telegramGeneration += 1; telegram = response.telegram
             await refreshConversation()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -1225,7 +1229,7 @@ final class HomeClient: ObservableObject, Identifiable {
     func setTelegramGroupEnabled(_ chatID: String, enabled: Bool) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["enabled": enabled])
         let response: TelegramEnvelope = try await request("/v1/integrations/telegram/chats/" + chatID + employeeDeviceQuery, method: "PATCH", body: body)
-        telegram = response.telegram
+        telegramGeneration += 1; telegram = response.telegram
     }
 
     func setSchedule(_ schedule: ChatSchedule, enabled: Bool) async {
@@ -1409,22 +1413,27 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     private var employeeDeviceQuery: String { activeProfile?.deviceId.map { "?deviceId=" + $0 } ?? "" }
+    /// Only the owner chooses who answers the bot's private chat. An older device pauses that chat when
+    /// it returns to the main assistant, and another device's version is not known here.
+    var canChooseTelegramResponder: Bool {
+        ownsDevice && health?.telegramPrivateChoiceVersion == 1 && (activeProfile?.deviceId ?? health?.nodeId) == health?.nodeId
+    }
 
     func configureTelegram(token: String) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["token": token.trimmingCharacters(in: .whitespacesAndNewlines)])
         let value: TelegramEnvelope = try await request("/v1/integrations/telegram" + employeeDeviceQuery, method: "POST", body: body)
-        telegram = value.telegram
+        telegramGeneration += 1; telegram = value.telegram
     }
 
     func checkTelegramConnection() async throws {
         let value: TelegramEnvelope = try await request("/v1/integrations/telegram/check" + employeeDeviceQuery, method: "POST")
-        telegram = value.telegram
+        telegramGeneration += 1; telegram = value.telegram
     }
 
     func disconnectTelegram() async {
         do {
             let response: TelegramEnvelope = try await request("/v1/integrations/telegram" + employeeDeviceQuery, method: "DELETE")
-            telegram = response.telegram
+            telegramGeneration += 1; telegram = response.telegram
         } catch {
             errorMessage = error.localizedDescription
         }
