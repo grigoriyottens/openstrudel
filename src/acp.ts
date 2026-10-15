@@ -7,7 +7,7 @@ import { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { stringify } from "smol-toml";
 import { toolBridge } from "./acp-mcp.js";
-import { agentInstructions, contextServers, imageType, insideWorkspace } from "./claude.js";
+import { agentInstructions, contextServers, hostEnvironment, imageType, insideWorkspace } from "./claude.js";
 import type { ModelChoice } from "./model-settings.js";
 import { ProviderIncident, type ProviderInfo } from "./providers.js";
 import { contextPattern } from "./scopes.js";
@@ -45,13 +45,11 @@ export function grokHome(root: string): string {
   return home;
 }
 
-/** One `grok` process in its own process group, so nothing it starts outlives it. Its environment is an allowlist:
- * no OpenStrudel keys or data, and no XAI_API_KEY that would bill another account. */
+/** One `grok` process in its own process group, so nothing it starts outlives it. Its environment is the host allowlist,
+ * so no XAI_API_KEY bills another account. */
 export function launchGrok(command: GrokCommand, args: string[], cwd: string, home: string) {
-  const env: Record<string, string> = {};
-  for (const name of ["PATH", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TZ", "USER", "LOGNAME", "TERM"]) if (process.env[name]) env[name] = process.env[name]!;
   const child = spawn(command.bin, [...command.args, ...args], { cwd, stdio: ["pipe", "pipe", "pipe"], detached: true,
-    env: { ...env, ...command.env, HOME: home, GROK_HOME: home, GROK_DISABLE_AUTOUPDATER: "1" } });
+    env: { ...hostEnvironment(), ...command.env, HOME: home, GROK_HOME: home, GROK_DISABLE_AUTOUPDATER: "1" } });
   let stderr = "";
   child.stderr!.on("data", (chunk: Buffer) => { stderr = (stderr + chunk.toString("utf8")).slice(-8192); });
   child.stdin!.on("error", () => {});

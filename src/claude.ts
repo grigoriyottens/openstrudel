@@ -29,6 +29,9 @@ export const agentInstructions = (question: string) => INSTRUCTIONS.replace("Use
   .replace("where the owner can add MCP services, SKILL.md skills and local Codex plugins", "where the owner can add MCP services")
   .replace("request_user_input", question).replace("Follow Codex's native approval policy", "Follow the approval policy");
 const instructions = agentInstructions("AskUserQuestion");
+/** The only host variables a vendor's CLI gets: no OpenStrudel keys or data, and no vendor key that would bill another account. */
+export const hostEnvironment = (): Record<string, string> => Object.fromEntries(["PATH", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TZ", "USER", "LOGNAME", "TERM"]
+  .flatMap(name => process.env[name] ? [[name, process.env[name]!]] : []));
 // Claude Code sends background and helper work to Claude aliases; another vendor must only see its own model.
 const aliases = ["ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"];
 const edits = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
@@ -52,8 +55,7 @@ export class ClaudeEngine implements CodexEngine {
     for (const dir of [home, cwd]) mkdirSync(dir, { recursive: true, mode: 0o700 });
     const data = realpathSync(resolve(root, ".data")), workspace = realpathSync(cwd), owner = realpathSync(homedir());
     const model = options.model ?? (provider.models.find(m => m.recommended) ?? provider.models[0])!.id;
-    const env: Record<string, string> = {};
-    for (const name of ["PATH", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TZ", "USER", "LOGNAME", "TERM"]) if (process.env[name]) env[name] = process.env[name]!;
+    const env: Record<string, string> = hostEnvironment();
     Object.assign(env, { HOME: home, CLAUDE_CONFIG_DIR: config, ANTHROPIC_BASE_URL: provider.baseUrl,
       ...provider.auth === "bearer" ? { ANTHROPIC_AUTH_TOKEN: key, ANTHROPIC_API_KEY: "" } : { ANTHROPIC_API_KEY: key },
       CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: "1",
