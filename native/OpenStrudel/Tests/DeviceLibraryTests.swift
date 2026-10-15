@@ -306,6 +306,42 @@ private final class CredentialReadGate: @unchecked Sendable {
         #expect(client.canRenameDevice)
     }
 
+    @Test func aDeviceThatComesBackUpdatedOffersRenameWithoutWaitingForTheNextLoad() async throws {
+        let fixture = DevicesFixture()
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        #expect(client.ownsDevice && !client.canRenameDevice)
+        let checks = fixture.healthChecks
+        await client.refreshCatalogue()
+        #expect(fixture.healthChecks == checks, "A device that stays online is not asked for its health on every poll")
+        fixture.offline = true
+        await client.refreshCatalogue()
+        #expect(client.homeUnreachable)
+        fixture.offline = false; fixture.flags["deviceRenameVersion"] = 1
+        await client.refreshCatalogue()
+        #expect(!client.homeUnreachable)
+        #expect(client.canRenameDevice, "The returning Home's abilities, not the ones from before its update")
+    }
+
+    @Test func anOwnerCheckTheHomeNeverAnsweredIsAskedAgainOnTheNextLoad() async throws {
+        let fixture = DevicesFixture()
+        fixture.mobileTimesOut = true
+        let (client, cleanup) = makeClient(fixture, saved: ["openstrudel.homeURL": "https://server.test:7789"])
+        defer { cleanup() }
+        await client.load()
+        #expect(!client.canManageConnections)
+        fixture.mobileTimesOut = false
+        await client.load()
+        #expect(client.canManageConnections, "A timeout is not a refusal, so the owner keeps the invite buttons")
+        let asked = fixture.mobileChecks
+        await client.load()
+        #expect(fixture.mobileChecks == asked, "An answered check runs once per connection")
+        fixture.mobileTimesOut = true
+        await client.refreshMobileStatus()
+        #expect(client.canManageConnections, "Only the Home's refusal takes owner rights away")
+    }
+
     @Test func theOwnerCanRenameAServerWhoseChatGPTAccountIsUnavailable() async throws {
         let fixture = DevicesFixture()
         fixture.flags["deviceRenameVersion"] = 1
@@ -540,7 +576,7 @@ private final class CredentialReadGate: @unchecked Sendable {
         saved.forEach { defaults.set($0.value, forKey: $0.key) }
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [DevicesProtocol.self]
-        DevicesProtocol.setHandler { request in await fixture.respond(request) }
+        DevicesProtocol.setHandler { request in try await fixture.respond(request) }
         let session = URLSession(configuration: config)
         // A remote Home answers only a paired credential.
         let remote = saved["openstrudel.homeURL"]?.hasPrefix("https://") == true
@@ -606,6 +642,12 @@ private final class KeychainLog: @unchecked Sendable {
     var holdAccount = false
     /// This client was invited as a colleague, so device management answers 403.
     var colleague = false
+    /// The device is down, for example while it updates.
+    var offline = false
+    /// The owner check never gets an answer.
+    var mobileTimesOut = false
+    var healthChecks = 0
+    var mobileChecks = 0
     var deviceName = "Mini"
     var instructions = "Пиши кратко"
     var profileName = "Тест"
@@ -617,12 +659,15 @@ private final class KeychainLog: @unchecked Sendable {
     var invitations: [(id: String, owner: Bool)] = []
     var cancelledInvitationIDs: [String] = []
     private var issuedInvitations = 0
-    func respond(_ request: URLRequest) async -> (Int, Data) {
+    func respond(_ request: URLRequest) async throws -> (Int, Data) {
+        if offline { return (503, Data()) }
         let path = request.url!.path, method = request.httpMethod ?? "GET"
         func json(_ value: Any) -> (Int, Data) { (200, try! JSONSerialization.data(withJSONObject: value)) }
         let profile: () -> [String: Any] = { ["id": "employee", "name": self.profileName, "instructions": self.instructions, "capabilities": [], "createdAt": "2026-10-09T00:00:00Z"] }
+        if method == "GET", path == "/v1/mobile" { mobileChecks += 1 }
         switch (method, path) {
         case ("GET", "/health"):
+            healthChecks += 1
             return json((["ok": true, "homeId": "home-fixture", "homeProtocol": 1, "nodeId": "node"] as [String: Any]).merging(flags) { _, new in new })
         case ("GET", "/v1/profiles"): return json(["profiles": [profile()]])
         case ("PATCH", "/v1/profiles/employee"):
@@ -638,6 +683,7 @@ private final class KeychainLog: @unchecked Sendable {
             while holdAccount { try? await Task.sleep(for: .milliseconds(10)) }
             if accountUnavailable { return (503, Data(#"{"error":"Лимит ChatGPT исчерпан"}"#.utf8)) }
             return json(["account": ["connected": true, "managed": true], "canManage": true])
+        case ("GET", "/v1/mobile") where mobileTimesOut: throw URLError(.timedOut)
         case ("GET", "/v1/mobile") where colleague: return (403, Data(#"{"error":"Откройте настройки на Mac"}"#.utf8))
         case ("GET", "/v1/integrations"): return json(["telegram": ["configured": false, "running": false, "linkedChats": []]])
         case ("GET", "/v1/mobile"):
@@ -693,20 +739,22 @@ private final class KeychainLog: @unchecked Sendable {
 
 private final class DevicesProtocol: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var handler: (@Sendable (URLRequest) async -> (Int, Data))?
+    nonisolated(unsafe) private static var handler: (@Sendable (URLRequest) async throws -> (Int, Data))?
     private var operation: Task<Void, Never>?
-    static func setHandler(_ value: @escaping @Sendable (URLRequest) async -> (Int, Data)) { lock.lock(); defer { lock.unlock() }; handler = value }
-    private static func getHandler() -> (@Sendable (URLRequest) async -> (Int, Data))? { lock.lock(); defer { lock.unlock() }; return handler }
+    static func setHandler(_ value: @escaping @Sendable (URLRequest) async throws -> (Int, Data)) { lock.lock(); defer { lock.unlock() }; handler = value }
+    private static func getHandler() -> (@Sendable (URLRequest) async throws -> (Int, Data))? { lock.lock(); defer { lock.unlock() }; return handler }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         operation = Task { @Sendable [self] in
             guard let handler = Self.getHandler(), let url = request.url else { return }
-            let (status, data) = await handler(request)
-            guard !Task.isCancelled else { return }
-            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: nil)!, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
+            do {
+                let (status, data) = try await handler(request)
+                guard !Task.isCancelled else { return }
+                client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: data)
+                client?.urlProtocolDidFinishLoading(self)
+            } catch { client?.urlProtocol(self, didFailWithError: error) }
         }
     }
     override func stopLoading() { operation?.cancel() }
