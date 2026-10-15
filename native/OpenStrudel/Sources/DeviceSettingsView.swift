@@ -561,7 +561,6 @@ struct DeviceAccountsView: View {
     /// The subscription being signed in; nil while `login` belongs to a ChatGPT account.
     @State private var loginProvider: ProviderSummary?
     @State private var signingOut: ProviderSummary?
-    @State private var subscriptionError: String?
     @State private var requestID = UUID()
     private var query: String { deviceID.isEmpty ? "" : "?deviceId=" + deviceID }
     private var selectedDevice: String? { deviceID.isEmpty ? nil : deviceID }
@@ -647,10 +646,9 @@ struct DeviceAccountsView: View {
                     try await Task.sleep(for: .seconds(2))
                     if let provider = loginProvider {
                         let status: OpenAILoginStatus = try await client.subscription(provider.id, "login/" + current.loginId, deviceID: selectedDevice)
-                        subscriptionError = nil
                         if status.status == "completed" { await keysChanged(); login = nil; break }
                         // The Home names the reason, such as a plan without Grok Build.
-                        if ["failed", "canceled"].contains(status.status) { login = nil; subscriptionError = status.error ?? L("Вход не завершён. Попробуйте ещё раз.") }
+                        if ["failed", "canceled"].contains(status.status) { login = nil; error = status.error ?? L("Вход не завершён. Попробуйте ещё раз.") }
                         continue
                     }
                     let status: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + current.loginId))
@@ -665,10 +663,7 @@ struct DeviceAccountsView: View {
                     }
                     if ["failed", "canceled"].contains(status.status) { login = nil; error = L("Вход не завершён. Попробуйте ещё раз.") }
                 } catch is CancellationError { break }
-                catch {
-                    let message = L("Не удалось проверить вход. Повторим, когда появится связь.")
-                    if loginProvider == nil { self.error = message } else { subscriptionError = message }
-                }
+                catch { self.error = L("Не удалось проверить вход. Повторим, когда появится связь.") }
             }
         }
         .confirmationDialog(L("Выйти из аккаунта OpenAI?"), isPresented: Binding(get: { logout != nil }, set: { if !$0 { logout = nil } })) {
@@ -708,7 +703,7 @@ struct DeviceAccountsView: View {
         }
         .confirmationDialog(signingOut.map { L("Выйти из \($0.name)?") } ?? "", isPresented: Binding(get: { signingOut != nil }, set: { if !$0 { signingOut = nil } }),
                             titleVisibility: .visible, presenting: signingOut) { provider in
-            Button(L("Выйти"), role: .destructive) { perform(subscription: true) {
+            Button(L("Выйти"), role: .destructive) { perform {
                 let _: HomeActionResult = try await client.subscription(provider.id, "logout", method: "POST", deviceID: selectedDevice)
                 signingOut = nil; await keysChanged()
             } }
@@ -727,7 +722,7 @@ struct DeviceAccountsView: View {
                         Button(L("Выйти…")) { signingOut = provider }
                             .disabled(busy).accessibilityIdentifier("signOutSubscription-" + provider.id)
                     } else if !signingIn {
-                        Button(L("Войти")) { perform(subscription: true) { try await signIn(provider) } }
+                        Button(L("Войти")) { perform { try await signIn(provider) } }
                             .disabled(login != nil || busy).accessibilityIdentifier("signInSubscription-" + provider.id)
                     }
                 } label: {
@@ -735,9 +730,6 @@ struct DeviceAccountsView: View {
                     if provider.connected { Text(L("Вход выполнен")) }
                 }
                 if signingIn, let login { loginRows(login, provider: provider) }
-            }
-            if let subscriptionError {
-                Text(L10n.serviceText(subscriptionError)).foregroundStyle(AppTheme.warning).fixedSize(horizontal: false, vertical: true)
             }
         } header: {
             Text(L("Подписки"))
@@ -819,7 +811,7 @@ struct DeviceAccountsView: View {
         if let url = login.url {
             InkLink(title: provider == nil ? L("Открыть OpenAI") : L("Открыть страницу входа"), destination: url)
         }
-        Button(L("Отменить вход")) { perform(subscription: provider != nil) {
+        Button(L("Отменить вход")) { perform {
             if let provider {
                 let _: HomeActionResult = try await client.subscription(provider.id, "login/" + login.loginId, method: "DELETE", deviceID: selectedDevice)
             } else {
@@ -878,7 +870,7 @@ struct DeviceAccountsView: View {
     private func refresh(force: Bool = false) async {
         let selected = deviceID, token = UUID()
         requestID = token
-        if loadedDeviceID != selected { accounts = []; canManage = false; keys = nil; subscriptionError = nil; loadedDeviceID = selected }
+        if loadedDeviceID != selected { accounts = []; canManage = false; keys = nil; loadedDeviceID = selected }
         loading = true; error = nil
         defer { if selected == deviceID && requestID == token { loading = false } }
         do {
@@ -912,13 +904,9 @@ struct DeviceAccountsView: View {
         loginAccount = ""; loginProvider = provider; login = started
         if let url = started.url { openURL(url) }
     }
-    /// A subscription's failure shows in its own section, beside the button that caused it.
-    private func perform(subscription: Bool = false, _ work: @escaping () async throws -> Void) {
-        busy = true; error = nil; subscriptionError = nil
-        Task {
-            defer { busy = false }
-            do { try await work() } catch { if subscription { subscriptionError = error.localizedDescription } else { self.error = error.localizedDescription } }
-        }
+    private func perform(_ work: @escaping () async throws -> Void) {
+        busy = true; error = nil
+        Task { defer { busy = false }; do { try await work() } catch { self.error = error.localizedDescription } }
     }
 }
 
