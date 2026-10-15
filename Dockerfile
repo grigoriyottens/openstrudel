@@ -1,8 +1,8 @@
 FROM node:24.13.0-bookworm-slim AS build
 WORKDIR /opt/openstrudel
-COPY package.json package-lock.json ./
-# Vendor install scripts never run: Grok Build's would install itself into ~/.grok.
-RUN npm ci --ignore-scripts
+# .npmrc keeps vendor install scripts from running: Grok Build's would install itself into ~/.grok.
+COPY package.json package-lock.json .npmrc ./
+RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
 COPY public ./public

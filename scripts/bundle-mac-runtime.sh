@@ -37,6 +37,7 @@ while IFS= read -r -d '' file; do
   mkdir -p "$WORK/source/$(dirname "$file")"
   cp "$ROOT/$file" "$WORK/source/$file"
 done < <(git -C "$ROOT" ls-files -z -- src public package.json package-lock.json tsconfig.json)
+# The checkout's .npmrc does not reach another --prefix, so install scripts are turned off here too.
 npm ci --prefix "$WORK/source" --ignore-scripts
 npm run --prefix "$WORK/source" build
 cp "$WORK/source/package.json" "$WORK/source/package-lock.json" "$RUNTIME/"

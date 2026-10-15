@@ -15,8 +15,8 @@ if [[ "$NODE_MAJOR" -lt 22 ]]; then
   exit 1
 fi
 
-# Vendor install scripts never run: Grok Build's would install itself into ~/.grok.
-npm ci --ignore-scripts
+# .npmrc keeps vendor install scripts from running: Grok Build's would install itself into ~/.grok.
+npm ci
 npm run build
 node scripts/extract-grok.mjs .
 mkdir -p .data
