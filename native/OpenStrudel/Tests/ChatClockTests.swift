@@ -133,3 +133,76 @@ struct ChatClockTests {
         #expect(MessagePages.isMultiAuthor(history))
     }
 }
+
+/// The employee's one feed: who wrote each message, what a failed delivery offers, and what waits for a decision.
+struct EmployeeFeedTests {
+    private func message(_ id: String, direction: String = "inbound", channel: String = "telegram", replyTo: String? = nil, status: String = "completed",
+                         author: String? = nil, imported: Bool? = nil, origin: MessageOrigin? = nil, delivery: String? = nil, conversation: String = "group") -> HomeMessage {
+        HomeMessage(id: id, conversationId: conversation, channel: channel, direction: direction, replyToId: replyTo, text: "Text " + id,
+                    externalId: nil, createdAt: "2026-10-14T12:00:00.000Z", status: status, error: nil, kind: "text", author: author,
+                    imported: imported, origin: origin, delivery: delivery.map { MessageDelivery(state: $0) })
+    }
+
+    @Test func theOwnersExplicitTelegramReplyIsTheOwnersNotTheEmployees() {
+        #expect(MessagePages.isOwnerReply(message("explicit", direction: "outbound", author: "OpenStrudel")))
+        #expect(!MessagePages.isOwnerReply(message("employee", direction: "outbound")))
+        #expect(!MessagePages.isOwnerReply(message("archive", direction: "outbound", author: "Editor", imported: true)))
+        #expect(!MessagePages.isOwnerReply(message("person", author: "Anna")))
+        #expect(!MessagePages.isOwnerReply(message("app", direction: "outbound", channel: "api", author: "Mik")))
+    }
+
+    @Test func aFailedOrUncertainDeliveryOffersOneActionAndNothingIsResentByItself() throws {
+        let group = MessageOrigin(channel: "telegram", title: "Team", chatId: "-1001", url: "https://t.me/c/1/7", canReply: true)
+        let privateChat = MessageOrigin(channel: "telegram", title: "Mik", chatId: "42", canReply: true)
+        let linked = message("request", origin: group)
+        let unlinked = message("private", origin: privateChat)
+        let link = try #require(URL(string: "https://t.me/c/1/7"))
+        for state in ["not_sent", "unknown"] {
+            let reply = message("reply", direction: "outbound", replyTo: "request", origin: group, delivery: state)
+            #expect(MessagePages.deliveryAction(for: reply, in: [linked, reply], canReply: true) == .open(link))
+            let local = message("reply", direction: "outbound", replyTo: "private", origin: privateChat, delivery: state)
+            #expect(MessagePages.deliveryAction(for: local, in: [unlinked, local], canReply: true) == .resend(unlinked))
+            #expect(MessagePages.deliveryAction(for: local, in: [unlinked, local], canReply: false) == nil)
+            #expect(MessagePages.deliveryAction(for: local, in: [local], canReply: true) == nil)
+        }
+        for state in ["delivered", "pending", nil] as [String?] {
+            let reply = message("reply", direction: "outbound", replyTo: "request", origin: group, delivery: state)
+            #expect(MessagePages.deliveryAction(for: reply, in: [linked, reply], canReply: true) == nil)
+        }
+    }
+
+    @Test func aRuleGroupMessageJoinsTheFeedOnlyOnceTheEmployeeTakesIt() {
+        let rules = MessageOrigin(channel: "telegram", title: "Rules", chatId: "-1")
+        let mentions = MessageOrigin(channel: "telegram", title: "Mentions", chatId: "-2")
+        let feed = [
+            message("deciding", status: "running", origin: rules),
+            message("queued", status: "queued", origin: rules),
+            message("taken", origin: rules),
+            message("failed", status: "failed", origin: rules),
+            message("mentioned", status: "running", origin: mentions),
+            message("app", channel: "api", status: "running", origin: MessageOrigin(channel: "api", title: "")),
+        ]
+        #expect(MessagePages.feed(feed, decidingChats: ["-1"]).map(\.id) == ["taken", "failed", "mentioned", "app"])
+        #expect(MessagePages.feed(feed, decidingChats: []).map(\.id) == feed.map(\.id))
+    }
+
+    @Test func aRequestWaitingForTheOwnersApprovalStaysVisibleWithItsCard() {
+        let rules = MessageOrigin(channel: "telegram", title: "Rules", chatId: "-1")
+        let feed = [message("asking", status: "running", origin: rules), message("deciding", status: "running", origin: rules)]
+        #expect(MessagePages.feed(feed, decidingChats: ["-1"], awaiting: ["asking"]).map(\.id) == ["asking"])
+    }
+
+    /// Group B's reply follows group A's request on screen, so it names group B again and quotes its request.
+    @Test func eachRowFollowsTheRowShownAboveItNotAHiddenMessage() {
+        let a = MessageOrigin(channel: "telegram", title: "A", chatId: "-1"), b = MessageOrigin(channel: "telegram", title: "B", chatId: "-2")
+        let feed = MessagePages.feed([
+            message("requestB", origin: b, conversation: "b"),
+            message("requestA", origin: a, conversation: "a"),
+            message("hiddenB", status: "queued", origin: b, conversation: "b"),
+            message("replyB", direction: "outbound", replyTo: "requestB", origin: b, conversation: "b"),
+        ], decidingChats: ["-2"])
+        let rows = MessagePages.rows(feed)
+        #expect(rows.map(\.id) == ["requestB", "requestA", "replyB"])
+        #expect(rows.map(\.previous?.id) == [nil, "requestB", "requestA"])
+    }
+}

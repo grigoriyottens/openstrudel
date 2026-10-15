@@ -117,7 +117,10 @@ private struct AgentMetalLedger: Codable {
          kSecAttrService as String: (Bundle.main.bundleIdentifier ?? "is.openstrudel.mac") + ".agentmetal",
          kSecAttrAccount as String: "orders"]
     }
-    func load() throws -> Data? {
+    // Orders are saved while checkout and setup run in the background: never with a dialog.
+    func load() throws -> Data? { try KeychainInteraction.run { try read() } }
+    func save(_ value: Data) throws { try KeychainInteraction.run { try write(value) } }
+    private func read() throws -> Data? {
         var query = query; query[kSecReturnData as String] = true; query[kSecMatchLimit as String] = kSecMatchLimitOne
         query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
         var value: CFTypeRef?
@@ -126,7 +129,7 @@ private struct AgentMetalLedger: Codable {
         guard status == errSecSuccess, let value = value as? Data else { throw AgentMetalFailure.storage }
         return value
     }
-    func save(_ value: Data) throws {
+    private func write(_ value: Data) throws {
         var query = query; query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
         let attrs: [String: Any] = [kSecValueData as String: value, kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
         var status = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)

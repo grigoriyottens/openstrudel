@@ -26,6 +26,9 @@ export interface Message {
   author?: string | null;
   imported?: boolean;
   attachments?: Attachment[];
+  /** Presentation metadata only. Never changes the conversation's audience or model context. */
+  origin?: { channel: "api" | "telegram" | "archive"; title: string; chatId?: string; url?: string; canReply?: boolean };
+  delivery?: { state: "pending" | "delivered" | "unknown" | "not_sent"; error?: string };
 }
 
 export interface Attachment { id: string; conversationId: string; name: string; mimeType: string; size: number; }

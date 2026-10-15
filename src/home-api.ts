@@ -51,13 +51,9 @@ export class HomeApi {
     if (path === "/v1/home" && method === "PATCH") {
       if (!owner) throw new HomeError("Управление устройствами доступно владельцу.", 403);
       const input = await jsonBody(request);
-      if (input.name !== undefined) {
-        const name = String(input.name).trim();
-        if (!name || name.length > 120) throw new HomeError("Введите название до 120 символов.");
-        this.home.save({ ...this.home.state, name });
-      }
+      if (input.name !== undefined) this.home.rename(input.name);
       if (input.endpoint) this.home.setEndpoint(endpoint(input.endpoint));
-      return wireJSON({ home: this.link.status() });
+      return wireJSON({ home: this.link.status(), devices: this.home.nodes() });
     }
     if (path === "/v1/home/join" && method === "POST") {
       if (!this.home.self().endpoint) this.home.setEndpoint(await this.address());
@@ -176,6 +172,12 @@ export class HomeApi {
     if (method === "GET" && !node.online) throw new HomeError(`«${node.name}» пока не на связи. Подключимся автоматически.`, 503);
     url.searchParams.delete("deviceId");
     if (body) delete body.deviceId;
+    if (method === "PATCH" && agent && /^\/v1\/profiles\/[^/]+$/.test(path)) {
+      // Homes before the name-only rename saved empty instructions when the field
+      // was missing. Send the catalogue copy only as their fallback.
+      body = await jsonBody(request);
+      if (body.instructions === undefined) body = { ...body, instructions: this.home.resources("profile", nodeId).find(p => p.id === decodeURIComponent(agent[1]!))?.instructions, keepInstructions: true };
+    }
     if (body && path === "/v1/messages") { body.externalId ??= randomUUID(); url.searchParams.set("async", "true"); }
     const forwarded: WireRequest = { method, path: url.pathname + url.search, owner, contentType: String(request.headers["content-type"] ?? "application/json"), ...(method !== "GET" ? { body: body ? requestJSON(body) : (await readBody(request, 192 * 1024 * 1024)).toString("base64") } : {}) };
     const key = request.headers["idempotency-key"];

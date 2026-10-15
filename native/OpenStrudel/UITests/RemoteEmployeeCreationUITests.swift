@@ -20,7 +20,7 @@ import XCTest
         }
         let chats = app.buttons["Чаты"]
         XCTAssertTrue(chats.waitForExistence(timeout: 15)); chats.tap()
-        app.buttons["newEmployee"].tap()
+        app.buttons["addMenu"].tap(); app.buttons["newEmployee"].tap()
         capture("choose-creation-device", app)
         app.buttons["Mac mini · Проверка"].firstMatch.tap()
         let destination = app.buttons["employeeCreationDevice"]
@@ -53,14 +53,14 @@ import XCTest
             for _ in 0..<5 where !employee.exists { app.collectionViews.firstMatch.swipeUp() }
         }
         XCTAssertTrue(employee.exists, app.debugDescription)
-        app.buttons["newEmployee"].tap(); app.buttons["MacBook · Проверка"].firstMatch.tap()
+        app.buttons["addMenu"].tap(); app.buttons["newEmployee"].tap(); app.buttons["MacBook · Проверка"].firstMatch.tap()
         XCTAssertTrue(composer.waitForExistence(timeout: 10)); composer.tap(); composer.typeText("Планировщик: помогай с делами.")
         app.buttons["Отправить"].tap()
         try await expectEmployees(fixture, counts: [1, 1])
         XCTAssertTrue(app.staticTexts["Готов помогать на «MacBook · Проверка»."].firstMatch.waitForExistence(timeout: 20))
         _ = try await read(fixture + "/offline?host=mini&value=1")
         // Catalogue refresh is conditional and bounded to five seconds.
-        chats.tap(); app.buttons["newEmployee"].tap()
+        chats.tap(); app.buttons["addMenu"].tap(); app.buttons["newEmployee"].tap()
         let offline = app.buttons["Mac mini · Проверка · недоступно"]
         XCTAssertTrue(offline.waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertFalse(offline.isEnabled)

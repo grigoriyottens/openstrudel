@@ -17,6 +17,7 @@ final class DeviceLibrary: ObservableObject {
     @Published private(set) var erased = false
     @Published private(set) var viewGeneration = 0
     @Published private(set) var hiddenEmployees: [String: [String]]
+    @Published private(set) var collapsedDeviceIDs: Set<String>
     var fileDrafts: [String: [PickedFile]] = [:]
     private let defaults: UserDefaults
     let employeeMoves: EmployeeMoves
@@ -25,7 +26,7 @@ final class DeviceLibrary: ObservableObject {
     var active: HomeClient { clients.first { $0.id == selectedID } ?? clients[0] }
     var visibleClients: [HomeClient] { clients.filter { !$0.isSignedOut && ($0.isConfigured || $0.connectionNeedsPairing || $0 === active) } }
     var hasOtherDevices: Bool { visibleClients.count > 1 }
-    var connectionListKey: String { visibleClients.map { $0.id + ":" + $0.normalizedBaseURL }.joined(separator: "|") }
+    var connectionListKey: String { visibleClients.map { $0.id + ":" + $0.normalizedBaseURL + ":" + String($0.shouldRestoreConnection && !$0.isPairing) }.joined(separator: "|") }
 
     var localClientToRestore: HomeClient? {
         guard !isErasing else { return nil }
@@ -63,6 +64,7 @@ final class DeviceLibrary: ObservableObject {
 
     init(defaults: UserDefaults = .standard, clients supplied: [HomeClient]? = nil) {
         self.defaults = defaults
+        collapsedDeviceIDs = Set(defaults.stringArray(forKey: "openstrudel.collapsedDevices") ?? [])
         employeeMoves = EmployeeMoves(defaults: defaults)
         hiddenEmployees = defaults.dictionary(forKey: "openstrudel.hiddenEmployees") as? [String: [String]] ?? [:]
         if let supplied, !supplied.isEmpty {
@@ -126,11 +128,18 @@ final class DeviceLibrary: ObservableObject {
         await client.refreshOpenAIAccount()
     }
 
+    func setCollapsed(_ collapsed: Bool, client: HomeClient) {
+        if collapsed { collapsedDeviceIDs.insert(client.id) }
+        else { collapsedDeviceIDs.remove(client.id) }
+        defaults.set(collapsedDeviceIDs.sorted(), forKey: "openstrudel.collapsedDevices")
+    }
+
     func beginEmployee(on client: HomeClient? = nil, deviceID: String? = nil) {
         guard !isErasing else { return }
         let target = client ?? active
         guard clients.contains(where: { $0 === target }), !target.isSignedOut, !target.connectionNeedsPairing else { return }
         select(target)
+        setCollapsed(false, client: target)
         target.beginEmployee()
         if let deviceID { target.draftDeviceID = deviceID }
     }
@@ -256,7 +265,39 @@ final class DeviceLibrary: ObservableObject {
         }
     }
 
+    /// Devices with the same name are told apart by their address, never by a renamed copy.
+    func addressDetail(for client: HomeClient) -> String? {
+        guard visibleClients.contains(where: { $0 !== client && $0.displayName == client.displayName }) else { return nil }
+        return URL(string: client.savedBaseURL)?.host
+    }
+
     #if os(macOS)
+    /// Adds a server whose installation answered over its pinned HTTPS and forgets the saved setup.
+    /// The watcher and an open setup page can finish the same server together: both get one client.
+    func adoptServer(_ connection: HomeConnection, from flow: ServerSetupFlow) async throws -> HomeClient {
+        if let adoption = adoptions[connection.url] { return try await adoption.value }
+        let adoption = Task { @MainActor in
+            let client = clients.first { $0.savedBaseURL == connection.url } ?? newConnection()
+            guard await client.connectToCloud(connection) else { throw HomeClientError.server(client.pairingError ?? L("Не удалось получить ответ. Попробуйте ещё раз.")) }
+            // Not selected: an open setup sheet stays on its account step.
+            add(client, select: false)
+            try flow.finish()
+            return client
+        }
+        adoptions[connection.url] = adoption
+        defer { adoptions[connection.url] = nil }
+        return try await adoption.value
+    }
+    private var adoptions: [String: Task<HomeClient, Error>] = [:]
+
+    /// A server that finishes after its setup window closed joins the list by itself.
+    func watchPendingServer(_ flow: ServerSetupFlow = .shared) async {
+        while !Task.isCancelled {
+            if !isErasing, let connection = await flow.finishedConnection() { _ = try? await adoptServer(connection, from: flow) }
+            do { try await Task.sleep(for: .seconds(30)) } catch { break }
+        }
+    }
+
     func openLocal() async {
         guard !isErasing else { return }
         if let local = clients.first(where: { $0.isLocalConnection && !$0.isSignedOut }) {

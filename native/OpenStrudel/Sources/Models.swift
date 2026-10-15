@@ -49,6 +49,10 @@ struct HomeHealth: Decodable {
     var deviceLogoutVersion: Int? = nil
     var turnControlVersion: Int? = nil
     var queueControlVersion: Int? = nil
+    var employeeTimelineVersion: Int? = nil
+    var employeeRenameKeepsInstructions: Int? = nil
+    var deviceRenameVersion: Int? = nil
+    var colleagueInvitesVersion: Int? = nil
 }
 
 struct HomeConversation: Decodable {
@@ -74,6 +78,8 @@ struct ConversationEnvelope: Decodable {
     var pagination: MessagePagination? = nil
     var updates: [HomeMessage]? = nil
     var queuedMessages: [HomeMessage]? = nil
+    var timeline: Bool? = nil
+    var removedIds: [String]? = nil
 }
 
 struct MessageQueueEnvelope: Decodable { let queuedMessages: [HomeMessage] }
@@ -153,6 +159,19 @@ struct TelegramLinkState: Decodable {
     let error: String?
 }
 
+struct MessageOrigin: Codable, Hashable {
+    let channel: String
+    let title: String
+    var chatId: String? = nil
+    var url: String? = nil
+    var canReply: Bool? = nil
+}
+
+struct MessageDelivery: Codable, Hashable {
+    let state: String
+    var error: String? = nil
+}
+
 struct HomeMessage: Codable, Identifiable, Hashable {
     let id: String
     let conversationId: String
@@ -168,6 +187,8 @@ struct HomeMessage: Codable, Identifiable, Hashable {
     var author: String? = nil
     var imported: Bool? = nil
     var attachments: [ChatAttachment]? = nil
+    var origin: MessageOrigin? = nil
+    var delivery: MessageDelivery? = nil
 
     var scheduleTitle: String? {
         guard direction == "inbound", externalId?.hasPrefix("schedule:") == true else { return nil }
@@ -243,6 +264,8 @@ struct PendingHomeMessage: Codable, Identifiable, Equatable {
     var operationID: String? = nil
     var appearance: AgentAppearance? = nil
     var mode: ComposerSendMode? = nil
+    var telegramReplyToID: String? = nil
+    var telegramChatTitle: String? = nil
 }
 
 enum ComposerSendMode: String, Codable, CaseIterable {
@@ -323,9 +346,45 @@ struct HomeMessageResponse: Decodable {
 }
 
 struct HomeEndpoint: Codable, Equatable { let url: String; let pin: String? }
-struct HomeDevice: Decodable, Identifiable {
+struct HomeDevice: Decodable, Identifiable, Equatable {
     let id: String; let name: String; let platform: String; let primary: Bool; let online: Bool; let agents: Int
     let endpoint: HomeEndpoint?
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id); name = deviceTitle(try values.decode(String.self, forKey: .name))
+        platform = try values.decode(String.self, forKey: .platform); primary = try values.decode(Bool.self, forKey: .primary)
+        online = try values.decode(Bool.self, forKey: .online); agents = try values.decode(Int.self, forKey: .agents)
+        endpoint = try values.decodeIfPresent(HomeEndpoint.self, forKey: .endpoint)
+    }
+    private enum CodingKeys: String, CodingKey { case id, name, platform, primary, online, agents, endpoint }
+}
+
+/// A Home's shared name as people read it: the server default in the interface
+/// language, and a Mac's network hostname without its ".local" suffix. An older
+/// server Home still names itself by its container ID, which reads as the default.
+func deviceTitle(_ name: String, language: AppLanguage? = nil) -> String {
+    if name == "Server" || name.range(of: "^[a-f0-9]{12}([a-f0-9]{52})?$", options: [.regularExpression, .caseInsensitive]) != nil {
+        return L10n.text("Server", language: language)
+    }
+    return name.count > 6 && name.lowercased().hasSuffix(".local") ? String(name.dropLast(6)) : name
+}
+
+/// A device paired with this Home, as its owner sees it in Settings.
+struct MobileClient: Decodable, Identifiable, Equatable {
+    let id: String
+    var label: String? = nil
+    var role: String? = nil
+    var pairedAt: String? = nil
+    var current: Bool? = nil
+    var isColleague: Bool { role == "colleague" }
+    /// Any other device, an owner's lost phone included. The Home refuses the one asking.
+    var canDisconnect: Bool { current != true }
+    var pairedDate: Date? {
+        guard let pairedAt else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: pairedAt) ?? ISO8601DateFormatter().date(from: pairedAt)
+    }
 }
 struct HomeDevices: Decodable { let devices: [HomeDevice]; let primaryId: String }
 struct HomeManagement: Decodable {
@@ -534,6 +593,7 @@ struct ChatInteraction: Decodable, Identifiable, Equatable {
     let detail: String?
     let url: String?
     let questions: [ChatQuestion]
+    var sourceTitle: String? = nil
 }
 struct ChatQuestion: Decodable, Identifiable, Equatable {
     let id: String

@@ -10,6 +10,8 @@ enum MessagePages {
         let header: Date?
         /// The previous message came from the other side, so a new turn begins.
         let startsTurn: Bool
+        /// The message shown right above, never one the feed hides.
+        let previous: HomeMessage?
         var id: String { message.id }
     }
 
@@ -25,9 +27,9 @@ enum MessagePages {
         return messages.map { message in
             let sentAt = message.sentAt
             let opens = sentAt.map { opensCluster($0, after: previous?.sentAt, calendar: calendar) } ?? false
-            let startsTurn = previous.map { $0.direction != message.direction } ?? false
-            previous = message
-            return Row(message: message, header: opens ? sentAt : nil, startsTurn: startsTurn)
+            let startsTurn = previous.map { $0.direction != message.direction || $0.conversationId != message.conversationId } ?? false
+            defer { previous = message }
+            return Row(message: message, header: opens ? sentAt : nil, startsTurn: startsTurn, previous: previous)
         }
     }
 
@@ -42,12 +44,42 @@ enum MessagePages {
         return false
     }
 
+    /// The owner's explicit reply in Telegram: the bot publishes it, a person wrote it.
+    /// The employee's own replies carry no author.
+    static func isOwnerReply(_ message: HomeMessage) -> Bool {
+        message.direction == "outbound" && message.channel == "telegram" && message.author != nil && message.imported != true
+    }
+
+    /// In a group where the employee decides by its own rules, a message still being decided is not
+    /// a request yet: it joins the feed with its reply, and never if the employee stays silent.
+    /// A request whose approval card waits for the owner stays visible with it.
+    static func feed(_ messages: [HomeMessage], decidingChats: Set<String>, awaiting: Set<String> = []) -> [HomeMessage] {
+        guard !decidingChats.isEmpty else { return messages }
+        return messages.filter { message in
+            awaiting.contains(message.id) || !(message.direction == "inbound" && message.origin?.channel == "telegram" && (message.status == "queued" || message.status == "running")
+              && decidingChats.contains(message.origin?.chatId ?? ""))
+        }
+    }
+
+    enum DeliveryAction: Equatable { case open(URL), resend(HomeMessage) }
+
+    /// One clear way on from a reply Telegram did not take or did not confirm: open the request in
+    /// Telegram, or let the owner send the prepared text again. Nothing is resent by itself.
+    static func deliveryAction(for reply: HomeMessage, in messages: [HomeMessage], canReply: Bool) -> DeliveryAction? {
+        guard reply.direction == "outbound", ["not_sent", "unknown"].contains(reply.delivery?.state) else { return nil }
+        let request = messages.first { $0.id == reply.replyToId }
+        if let raw = reply.origin?.url ?? request?.origin?.url, let url = URL(string: raw), url.scheme == "https", url.host == "t.me" { return .open(url) }
+        if canReply, let request, request.origin?.canReply == true { return .resend(request) }
+        return nil
+    }
+
     /// Pages are ordered by the server, including messages with identical dates.
-    static func merge(existing: [HomeMessage], page: [HomeMessage], updates: [HomeMessage] = [], prepend: Bool = false) -> [HomeMessage] {
+    static func merge(existing: [HomeMessage], page: [HomeMessage], updates: [HomeMessage] = [], prepend: Bool = false, removedIDs: [String] = []) -> [HomeMessage] {
+        let removed = Set(removedIDs)
         let existingIDs = Set(existing.map(\.id))
         let changes = Dictionary((page + updates).map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
-        let current = existing.map { changes[$0.id] ?? $0 }
-        let new = page.filter { !existingIDs.contains($0.id) }
+        let current = existing.filter { !removed.contains($0.id) }.map { changes[$0.id] ?? $0 }
+        let new = page.filter { !existingIDs.contains($0.id) && !removed.contains($0.id) }
         return prepend ? new + current : current + new
     }
 }

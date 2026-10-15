@@ -6,7 +6,8 @@ import { randomUUID } from "node:crypto";
 import { OpenStrudelRuntime } from "../src/runtime.js";
 import { MockCodexEngine } from "../src/codex.js";
 import { Store } from "../src/store.js";
-import { Home, decryptBackup, encryptBackup, type WireRequest } from "../src/home.js";
+import { execFileSync } from "node:child_process";
+import { Home, decryptBackup, defaultDeviceName, encryptBackup, type WireRequest } from "../src/home.js";
 import { HomeLink } from "../src/home-link.js";
 import { requestJSON, resultJSON, wireJSON } from "../src/home-transport.js";
 
@@ -37,6 +38,88 @@ async function eventually(f: () => Promise<void> | void) {
 }
 
 describe("user-owned primary Home", () => {
+  it("serves a bounded employee timeline through the primary Home while keeping ordinary message routes separate", async () => {
+    const primary = await node("Primary"), worker = await node("Worker");
+    const store = worker.runtime.store;
+    const employee = store.createProfile({ name: "Timeline editor" });
+    const app = store.profileConversation(employee.id);
+    store.linkTelegramChat({ chatId: "-1001234567890", title: "Core team", allowedSenders: ["42"] });
+    const group = store.bindTelegramChat("-1001234567890", employee.id);
+    store.addMessage({ conversationId: app.id, channel: "api", direction: "inbound", text: "Private request" });
+    store.addMessage({ conversationId: group.conversationId!, channel: "telegram", direction: "inbound", text: "Team request", externalId: "-1001234567890:1", author: "Dasha" });
+    await connect(primary, worker);
+    await eventually(async () => expect((await primary.api("/v1/profiles")).value.profiles.find((p: any) => p.id === employee.id)?.deviceId).toBe(worker.home.state.nodeId));
+    const response = await primary.api("/v1/agents/" + employee.id + "/conversation?timeline=true&page=true");
+    expect(response.status).toBe(200);
+    expect(response.value.timeline).toBe(true);
+    expect(response.value.conversation.id).toBe(app.id);
+    expect(response.value.messages.map((m: any) => m.text)).toEqual(["Private request", "Team request"]);
+    expect((await primary.api("/v1/agents/" + employee.id + "/conversation?page=true")).value.messages).toHaveLength(1);
+    expect((await fetch(primary.url + "/v1/agents/" + employee.id + "/conversation?timeline=true")).status).toBe(401);
+  });
+
+  it("renames an employee without replacing instructions saved by another client", async () => {
+    const host = await node("Team");
+    const employee = host.runtime.store.createProfile({ name: "Editor", instructions: "Original instructions" });
+    host.runtime.store.updateProfile(employee.id, { name: employee.name, instructions: "New instructions from iPhone" });
+    const renamed = await host.api("/v1/profiles/" + employee.id, "PATCH", { name: "Редактор" });
+    expect(renamed.status).toBe(200);
+    expect(renamed.value.profile).toMatchObject({ name: "Редактор", instructions: "New instructions from iPhone" });
+    expect((await host.api("/health")).value.employeeRenameKeepsInstructions).toBe(1);
+  });
+
+  it("protects an older worker's instructions when the primary forwards a name-only rename", async () => {
+    const primary = await node("Primary"), worker = await node("Worker");
+    const employee = worker.runtime.store.createProfile({ name: "Editor", instructions: "Catalogue instructions" });
+    await connect(primary, worker);
+    await eventually(() => expect(primary.home.nodeFor("profile", employee.id)).toBe(worker.home.state.nodeId));
+    await worker.runtime.api.homeLink.stop();
+    worker.runtime.store.updateProfile(employee.id, { name: "Editor", instructions: "Saved on the worker" });
+    const rename = primary.api("/v1/profiles/" + employee.id, "PATCH", { name: "Редактор" });
+    const pending = await new Promise<WireRequest>(resolve => { const check = () => { const command = primary.home.pending(worker.home.state.nodeId)[0]; if (command) resolve(command.request); else setTimeout(check, 20); }; check(); });
+    // An older worker requires the field and would otherwise save empty instructions.
+    expect(JSON.parse(Buffer.from(pending.body!, "base64").toString())).toEqual({ name: "Редактор", instructions: "Catalogue instructions", keepInstructions: true });
+    worker.runtime.api.homeLink.start();
+    expect((await rename).status).toBe(200);
+    expect(worker.runtime.store.getProfile(employee.id)).toMatchObject({ name: "Редактор", instructions: "Saved on the worker" });
+  });
+
+  it("renames the device for every client immediately without changing its identity or address", async () => {
+    const host = await node("Old server");
+    const before = host.home.state;
+    const renamed = await host.api("/v1/home", "PATCH", { name: "  Рабочий сервер  " });
+    expect(renamed.status).toBe(200);
+    expect(renamed.value.home.name).toBe("Рабочий сервер");
+    for (let client = 0; client < 2; client++) {
+      expect((await host.api("/v1/devices")).value.devices).toContainEqual(expect.objectContaining({ id: before.nodeId, name: "Рабочий сервер" }));
+    }
+    expect(host.home.state).toMatchObject({ ...before, name: "Рабочий сервер" });
+    expect(host.home.self().endpoint?.url).toBe(host.url);
+    expect(new Home(host.runtime.store).state.name).toBe("Рабочий сервер");
+    for (const name of [" ", "a".repeat(121), 42]) expect((await host.api("/v1/home", "PATCH", { name })).status).toBe(400);
+    expect(host.home.state.name).toBe("Рабочий сервер");
+    expect((await host.api("/health")).value.deviceRenameVersion).toBe(1);
+  });
+
+  it("replaces a container hostname once but preserves a name explicitly chosen by the owner", async () => {
+    const host = await node("020bc40355c2");
+    expect(new Home(host.runtime.store).state.name).toBe("Server");
+    await host.api("/v1/home", "PATCH", { name: "020bc40355c2" });
+    expect(new Home(host.runtime.store).state.name).toBe("020bc40355c2");
+  });
+
+  it("replaces a raw macOS network name once but preserves the same name chosen by the owner", async () => {
+    const host = await node("waiMini.local");
+    expect(new Home(host.runtime.store).state.name).toBe(defaultDeviceName());
+    expect(defaultDeviceName()).not.toMatch(/\.local$/i);
+    await host.api("/v1/home", "PATCH", { name: "waiMini.local" });
+    expect(new Home(host.runtime.store).state.name).toBe("waiMini.local");
+  });
+
+  it.skipIf(process.platform !== "darwin")("names a new Mac Home after the computer name shown in macOS", () => {
+    expect(defaultDeviceName()).toBe(execFileSync("/usr/sbin/scutil", ["--get", "ComputerName"], { encoding: "utf8" }).trim());
+  });
+
   it("discovers Telegram conversations in the conditional catalogue without combining their histories", async () => {
     const host = await node("Telegram host");
     const read = (etag?: string) => fetch(host.url + "/v1/profiles", { headers: { authorization: "Bearer test-owner", ...(etag ? { "if-none-match": etag } : {}) } });

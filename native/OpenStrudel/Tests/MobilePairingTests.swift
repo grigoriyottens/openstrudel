@@ -49,6 +49,13 @@ struct MobilePairingTests {
         #expect(item.remainingSeconds(at: start.addingTimeInterval(301)) == 0)
     }
 
+    @Test func aMacLinkSaysItWorksOnlyOnItsOwnNetwork() throws {
+        let local = try MobileInvitation(url: #require(URL(string: invitation(host: "waiMini.local"))), expiresAt: "2026-10-15T12:00:00Z")
+        let server = try MobileInvitation(url: #require(URL(string: invitation(host: "2.29.5.55"))), expiresAt: "2026-10-15T12:00:00Z")
+        #expect(local.isLocalNetworkOnly)
+        #expect(!server.isLocalNetworkOnly)
+    }
+
     @Test func missingOrWeakCredentialsCannotConnect() throws {
         for value in [invitation().replacingOccurrences(of: key, with: "123456"), invitation().replacingOccurrences(of: pin, with: ""), invitation().replacingOccurrences(of: "7789", with: "0")] {
             let url = try #require(URL(string: value))

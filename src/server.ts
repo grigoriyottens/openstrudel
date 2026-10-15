@@ -194,10 +194,14 @@ export class HttpApi {
       if (path === "/v1/web/sessions" && request.method === "GET") { this.send(response, 200, { sessions: this.web.list() }); return; }
       const webRevoke = path.match(/^\/v1\/web\/sessions\/([a-f0-9]+)$/);
       if (webRevoke && request.method === "DELETE") { this.web.revoke(webRevoke[1]!); this.send(response, 200, { ok: true }); return; }
+      // The paired client making this request, so its own connection is never listed as someone else's.
+      const currentClient = paired && path.startsWith("/v1/mobile") ? digest(request.headers.authorization?.replace(/^Bearer /, "") ?? "").slice(0, 20) : undefined;
       const mobileClient = path.match(/^\/v1\/mobile\/clients\/([a-f0-9]{20})$/);
       if (mobileClient && request.method === "DELETE") {
         if (!canManageAccount) throw new HomeError("Управление доступом доступно владельцу.", 403);
-        this.mobile.revokeClient(mobileClient[1]!); this.send(response, 200, this.mobile.status()); return;
+        if (mobileClient[1] === currentClient) throw new HomeError("Это подключение используется сейчас. Отключите его на самом устройстве.", 409);
+        if (!this.mobile.revokeClient(mobileClient[1]!)) throw new HomeError("Подключение не найдено.", 404);
+        this.send(response, 200, this.mobile.status(currentClient)); return;
       }
       if (path === "/v1/settings/approvals" && ["GET", "POST"].includes(request.method ?? "")) {
         if (request.method === "POST") {
@@ -291,20 +295,23 @@ export class HttpApi {
         }
         if (request.method === "POST" && path === "/v1/mobile/pairing") {
           const body=await this.body(request);
-          this.send(response, 201, await this.mobile.invite(body.owner === true)); return;
+          this.send(response, 201, await this.mobile.invite(body.owner === true, typeof body.label === "string" ? body.label : undefined)); return;
         }
-        if (request.method === "DELETE" && path === "/v1/mobile/pairing") {
-          this.mobile.cancelInvite(); this.send(response, 200, { ok: true }); return;
+        const invitation = path.match(/^\/v1\/mobile\/pairing(?:\/([a-f0-9]{20}))?$/);
+        if (request.method === "DELETE" && invitation) {
+          this.mobile.cancelInvite(invitation[1]); this.send(response, 200, { ok: true }); return;
         }
         if (request.method === "GET" && path === "/v1/mobile") {
-          this.send(response, 200, this.mobile.status()); return;
+          this.send(response, 200, this.mobile.status(currentClient)); return;
         }
         if (request.method === "DELETE" && path === "/v1/mobile") {
+          // A remote owner's own credential is one of these, as on servers set up from the app.
+          if (paired) throw new HomeError("Отключайте подключения по одному, чтобы не потерять доступ к этому устройству.", 409);
           await this.mobile.revoke(); this.send(response, 200, { ok: true }); return;
         }
       }
       if (request.method === "GET" && path === "/health") {
-        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
+        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
         return;
       }
       if (request.method === "GET" && path === "/v1/integrations") {
@@ -348,6 +355,7 @@ export class HttpApi {
       }
       if (request.method === "GET" && path === "/v1/conversation") {
         const conversation = this.store.primaryConversation();
+        if (url.searchParams.get("timeline") === "true") { this.send(response, 200, this.employeeTimeline(conversation, url.searchParams)); return; }
         this.send(response, 200, { conversation, ...(url.searchParams.get("page") === "true" ? this.store.messagePage(conversation.id, url.searchParams) : { messages: this.store.listMessages(conversation.id, messageLimit) }), interactions: this.messages.interactions.list(conversation.id), queuedMessages: this.messages.queuedMessages(conversation.id) });
         return;
       }
@@ -359,6 +367,7 @@ export class HttpApi {
           return;
         }
         const conversation = this.store.profileConversation(profile.id);
+        if (url.searchParams.get("timeline") === "true") { this.send(response, 200, this.employeeTimeline(conversation, url.searchParams)); return; }
         this.send(response, 200, { conversation, ...(url.searchParams.get("page") === "true" ? this.store.messagePage(conversation.id, url.searchParams) : { messages: this.store.listMessages(conversation.id, messageLimit) }), interactions: this.messages.interactions.list(conversation.id), queuedMessages: this.messages.queuedMessages(conversation.id) });
         return;
       }
@@ -430,9 +439,13 @@ export class HttpApi {
       }
       if (request.method === "PATCH" && profileMatch) {
         const body = await this.body(request);
-        const name = String(body.name ?? "").trim();
-        const instructions = String(body.instructions ?? "").trim();
-        const profile = this.store.updateProfile(decodeURIComponent(profileMatch[1] ?? ""), { name, instructions, purpose: body.purpose == null ? undefined : String(body.purpose), appearance: body.appearance as import("./agent-appearance.js").AgentAppearance | undefined });
+        const id = decodeURIComponent(profileMatch[1] ?? "");
+        const current = this.store.getProfile(id);
+        if (!current) throw new HomeError("Сотрудник не найден.", 404);
+        const name = body.name === undefined ? current.name : String(body.name).trim();
+        // keepInstructions marks instructions sent only for older Homes that require the field.
+        const instructions = body.instructions === undefined || body.keepInstructions === true ? current.instructions : String(body.instructions).trim();
+        const profile = this.store.updateProfile(id, { name, instructions, purpose: body.purpose == null ? undefined : String(body.purpose), appearance: body.appearance as import("./agent-appearance.js").AgentAppearance | undefined });
         this.send(response, 200, { profile });
         return;
       }
@@ -480,6 +493,14 @@ export class HttpApi {
           const schedule=scheduler.save({conversationId,id:b.id ? String(b.id):undefined,name:String(b.name ?? ""),prompt:String(b.prompt ?? ""),cron:String(b.cron ?? ""),timezone:String(b.timezone ?? ""),enabled:b.enabled!==false,telegramChatId:b.telegramChatId ? String(b.telegramChatId):null,delivery:b.delivery === "app" || b.delivery === "telegram" ? b.delivery : existing?.delivery,backupOf:existing?.backupOf});
           this.send(response,201,{schedule});return;
         }
+      }
+      const telegramReply = path.match(/^\/v1\/conversations\/([^/]+)\/telegram-reply$/);
+      if (request.method === "POST" && telegramReply) {
+        if (!canManageAccount) throw new HomeError("Отправить ответ в Telegram может владелец устройства.", 403);
+        const body = await this.body(request);
+        const receipt = await this.telegram.replyFromApp({ conversationId: telegramReply[1]!, replyToId: String(body.replyToId ?? ""),
+          text: String(body.text ?? ""), externalId: String(body.externalId ?? ""), attachments: body.attachments as string[] | undefined });
+        this.send(response, 200, receipt); return;
       }
       const singleConversation=path.match(/^\/v1\/conversations\/([^/]+)$/);
       if(request.method==="GET" && singleConversation) {
@@ -586,6 +607,13 @@ export class HttpApi {
     } finally {
       if (counted) this.activeWrites--;
     }
+  }
+
+  private employeeTimeline(conversation: import("./types.js").Conversation, query: URLSearchParams) {
+    const profileId = conversation.profileId ?? null;
+    const interactions = this.store.listConversations().filter(c => (c.profileId ?? null) === profileId)
+      .flatMap(c => this.messages.interactions.list(c.id).map(i => ({ ...i, sourceTitle: c.channel === "telegram" ? c.title : undefined })));
+    return { conversation, timeline: true, ...this.store.employeeMessagePage(profileId, query), interactions, queuedMessages: this.messages.queuedMessages(conversation.id) };
   }
 
   private authorized(request: IncomingMessage): boolean {

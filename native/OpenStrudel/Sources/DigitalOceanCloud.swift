@@ -148,12 +148,9 @@ struct DigitalOceanSavedState: Codable {
         return value
     }
     func load() throws -> Data? {
-        #if os(macOS)
-        var allowed = DarwinBoolean(true)
-        SecKeychainGetUserInteractionAllowed(&allowed)
-        SecKeychainSetUserInteractionAllowed(false)
-        defer { SecKeychainSetUserInteractionAllowed(allowed.boolValue) }
-        #endif
+        try KeychainInteraction.run { try read() }
+    }
+    private func read() throws -> Data? {
         var request = query
         request[kSecReturnData as String] = true; request[kSecMatchLimit as String] = kSecMatchLimitOne
         var result: CFTypeRef?
@@ -163,12 +160,9 @@ struct DigitalOceanSavedState: Codable {
         return data
     }
     func save(_ data: Data) throws {
-        #if os(macOS)
-        var allowed = DarwinBoolean(true)
-        SecKeychainGetUserInteractionAllowed(&allowed)
-        SecKeychainSetUserInteractionAllowed(false)
-        defer { SecKeychainSetUserInteractionAllowed(allowed.boolValue) }
-        #endif
+        try KeychainInteraction.run { try write(data) }
+    }
+    private func write(_ data: Data) throws {
         let attributes: [String: Any] = [kSecValueData as String: data, kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
         var status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {
