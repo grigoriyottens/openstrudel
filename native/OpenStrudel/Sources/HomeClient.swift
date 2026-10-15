@@ -147,6 +147,8 @@ final class HomeClient: ObservableObject, Identifiable {
         // An offline launch keeps the screens this Home served last time.
         didSet {
             guard let health else { return }
+            // The owner's lists follow what this Home supports, so a change asks the owner check again.
+            if health.colleagueInvitesVersion != oldValue?.colleagueInvitesVersion { managementChecked = -1 }
             servedTimeline = health.employeeTimelineVersion == 1; defaults.set(servedTimeline, forKey: "openstrudel.employeeTimeline")
             // However the feed is found, a group opened before it closes, so the composer stays private.
             if usesEmployeeTimeline && selectedChatID != nil { selectedChatID = nil; conversationID = nil; resetHistory() }
@@ -847,8 +849,6 @@ final class HomeClient: ObservableObject, Identifiable {
            generation == connectionGeneration, !connectionNeedsPairing {
             health = loaded
             if let homeId = loaded.homeId { defaults.set(homeId, forKey: "openstrudel.catalogueIdentity") }
-            // The owner's lists follow these abilities, so the next load asks again.
-            managementChecked = -1
         }
         // Only a Home that shares names has replaced technical ones, such as an
         // older server's container ID. Before that the saved connection name stays.

@@ -339,6 +339,21 @@ private final class CredentialReadGate: @unchecked Sendable {
         #expect(client.mobileClients.count == 2, "The owner's lists follow the returning Home's abilities")
     }
 
+    @Test func anUpdateFoundByALoadListsTheOwnersDevicesInThatLoad() async throws {
+        let fixture = DevicesFixture()
+        let (client, cleanup) = makeClient(fixture, saved: ["openstrudel.homeURL": "https://server.test:7789"])
+        defer { cleanup() }
+        await client.load()
+        #expect(client.canManageConnections && client.mobileClients.isEmpty)
+        // The Home restarted between two polls, so only the next load sees what it supports now.
+        fixture.flags["colleagueInvitesVersion"] = 1
+        await client.load()
+        #expect(client.mobileClients.count == 2, "The owner's lists follow the Home's abilities however they arrive")
+        let asked = fixture.mobileChecks
+        await client.load()
+        #expect(fixture.mobileChecks == asked, "Unchanged abilities keep the check once per connection")
+    }
+
     @Test func anOwnerCheckTheHomeNeverAnsweredIsAskedAgainOnTheNextLoad() async throws {
         let fixture = DevicesFixture()
         fixture.mobileTimesOut = true; fixture.flags["colleagueInvitesVersion"] = 1
