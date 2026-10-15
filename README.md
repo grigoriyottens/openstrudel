@@ -105,7 +105,7 @@ OPENSTRUDEL_PUBLIC_PORT=17789
 
 These settings survive app updates. Legacy public-address and TLS-path settings in the installed Mac LaunchAgent are also retained. The relay's client and server both check for lost connections, so a disconnected session releases the public port for reconnection. The Mac and relay must stay online. [Remote access validation](docs/releases/2026-10-09-remote-access.md).
 
-The link is single-use and expires after five minutes. Anyone holding an unused link can connect with the access it grants. The client checks the Mac's TLS identity against the fingerprint in the link, then keeps its own credential in Keychain. Settings can revoke each connected device. The existing HTTP API stays on localhost; paired devices use a separate HTTPS listener on port 7789. Employees and their data remain on the device where they run.
+The link is single-use and expires after 24 hours. Anyone holding an unused link can connect with the access it grants. Settings lists each unused link and can cancel it. The client checks the Mac's TLS identity against the fingerprint in the link, then keeps its own credential in Keychain. Settings can revoke each connected device. The existing HTTP API stays on localhost; paired devices use a separate HTTPS listener on port 7789. Employees and their data remain on the device where they run.
 
 ## Verify
 

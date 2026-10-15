@@ -47,14 +47,20 @@ describe("iPhone pairing", () => {
         const response = await fetch(`http://127.0.0.1:${address.port}${path}`, { method, headers: { authorization: "Bearer test-owner", "content-type": "application/json" }, ...(body ? { body: JSON.stringify(body) } : {}) });
         return { status: response.status, body: await response.json() as any };
       };
-      expect((await local("/health")).body.colleagueInvitesVersion).toBe(1);
+      expect((await local("/health")).body).toMatchObject({ colleagueInvitesVersion: 1, ownerInvitesVersion: 1 });
       const invite = async (body: unknown) => (await local("/v1/mobile/pairing", "POST", body)).body;
       const pair = async (invitation: { url: string }, name?: string) => (await send(runtime.api.mobile.port!, "/pair", { method: "POST", token: new URL(invitation.url).searchParams.get("key")!, body: name ? { name } : undefined })).body.token as string;
       const owner = await pair(await invite({ owner: true }), "Mik's iPhone");
       const port = runtime.api.mobile.port!;
       const first = await invite({ owner: false, label: "Юля" }), second = await invite({ owner: false });
       expect(first.id).not.toBe(second.id);
-      expect((await local("/v1/mobile/pairing", "DELETE")).status).toBe(200); // The owner's sheet closed.
+      // Every waiting link is listed with its role and can be cancelled by its id.
+      const waiting = await invite({ owner: true });
+      expect((await local("/v1/mobile")).body.invitations.map((i: any) => i.role)).toEqual(["colleague", "colleague", "owner"]);
+      expect((await local("/v1/mobile/pairing/" + waiting.id, "DELETE")).status).toBe(200);
+      await invite({ owner: true });
+      expect((await local("/v1/mobile/pairing", "DELETE")).status).toBe(200); // An older app closed the owner's sheet.
+      expect((await local("/v1/mobile")).body.invitations.map((i: any) => i.id)).toEqual([first.id, second.id]);
       const yulia = await pair(first), dasha = await pair(second, "iPhone Даши");
       const status = (await send(port, "/v1/mobile", { token: owner })).body;
       expect(status.clients).toEqual([
@@ -91,8 +97,7 @@ describe("iPhone pairing", () => {
     try {
       const key = (invitation: { url: string }) => new URL(invitation.url).searchParams.get("key")!;
       const owner = await mobile.invite(true), yulia = await mobile.invite(false, "Юля"), dasha = await mobile.invite(false), later = await mobile.invite(false);
-      expect(Date.parse(yulia.expiresAt) - Date.parse(owner.expiresAt)).toBeGreaterThan(23 * 3_600_000);
-      mobile.cancelInvite();
+      mobile.cancelInvite(); // An older app's owner sheet closed.
       expect((await call(mobile.port!, "/pair", key(owner))).status).toBe(401);
       expect(mobile.status().invitations.map(i => i.label)).toEqual(["Юля", null, null]);
       mobile.cancelInvite(dasha.id);
@@ -271,18 +276,33 @@ describe("iPhone pairing", () => {
     } finally { await mobile.close(); store.close(); await rm(directory, { recursive: true, force: true }); }
   });
 
-  it("expires invitations and invalidates a previous QR when a new one is created", async () => {
+  it("keeps the owner's own link for a day, replaces it with the next one and lists it beside colleague links", async () => {
     const directory = await mkdtemp(join(tmpdir(), "strudel-mobile-"));
     const store = new Store(":memory:");
     let offset = 0;
     const mobile = new MobileAccess(store, (_req, res) => res.end("{}"), { directory, port: 0, host: "127.0.0.1", hostname: "test.local", now: () => Date.now() + offset });
     try {
-      const first = new URL((await mobile.invite(true)).url);
-      const second = new URL((await mobile.invite(true)).url);
-      const port = Number(second.searchParams.get("port"));
-      expect((await call(port, "/pair", first.searchParams.get("key")!)).status).toBe(401);
-      offset += 301_000;
-      expect((await call(port, "/pair", second.searchParams.get("key")!)).status).toBe(401);
+      const key = (invitation: { url: string }) => new URL(invitation.url).searchParams.get("key")!;
+      const first = await mobile.invite(true), yulia = await mobile.invite(false, "Юля"), second = await mobile.invite(true);
+      expect(Date.parse(second.expiresAt) - Date.now()).toBeGreaterThan(23 * 3_600_000);
+      expect(Math.abs(Date.parse(second.expiresAt) - Date.parse(yulia.expiresAt))).toBeLessThan(60_000);
+      expect((await call(mobile.port!, "/pair", key(first))).status).toBe(401);
+      expect(mobile.status().invitations).toEqual([
+        { id: yulia.id, label: "Юля", role: "colleague", expiresAt: yulia.expiresAt },
+        { id: second.id, label: null, role: "owner", expiresAt: second.expiresAt },
+      ]);
+      offset += 23 * 3_600_000;
+      await mobile.close(); await mobile.restore();
+      expect(mobile.status().invitations.map(i => i.id)).toEqual([yulia.id, second.id]);
+      mobile.cancelInvite(second.id);
+      expect((await call(mobile.port!, "/pair", key(second))).status).toBe(401);
+      const third = await mobile.invite(true);
+      expect((await call(mobile.port!, "/pair", key(third))).status).toBe(200);
+      expect(mobile.status().clients).toEqual([expect.objectContaining({ role: "owner" })]);
+      const fourth = await mobile.invite(true);
+      offset += 24 * 3_600_000 + 1_000;
+      expect((await call(mobile.port!, "/pair", key(fourth))).status).toBe(401);
+      expect(mobile.status().invitations).toEqual([]);
     } finally { await mobile.close(); store.close(); await rm(directory, { recursive: true, force: true }); }
   });
 });

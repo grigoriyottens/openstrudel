@@ -140,7 +140,7 @@ final class HomeClient: ObservableObject, Identifiable {
     @Published private(set) var mobileInvitation: MobileInvitation?
     @Published private(set) var mobileConnections = 0
     @Published private(set) var mobileClients: [MobileClient] = []
-    @Published private(set) var colleagueInvitations: [ColleagueInvitation] = []
+    @Published private(set) var waitingInvitations: [WaitingInvitation] = []
     @Published private(set) var canManageConnections = false
     @Published var baseURLString: String
     @Published private(set) var health: HomeHealth? {
@@ -645,7 +645,7 @@ final class HomeClient: ObservableObject, Identifiable {
         hasOpenedConversation = false; checkingOpenAIAccount = false
         errorMessage = nil; syncError = nil; homeUnreachable = false
         connectionNeedsPairing = false; connectionNeedsUnlock = false; isLoading = false
-        canManageConnections = false; mobileConnections = 0; mobileClients = []; colleagueInvitations = []; mobileInvitation = nil
+        canManageConnections = false; mobileConnections = 0; mobileClients = []; waitingInvitations = []; mobileInvitation = nil
     }
 
     /// A new colleague link replaces the one on screen; links already sent stay valid.
@@ -655,25 +655,29 @@ final class HomeClient: ObservableObject, Identifiable {
         await refreshMobileStatus()
         do {
             mobileInvitation = try await request("/v1/mobile/pairing", method: "POST", body: try JSONSerialization.data(withJSONObject: ["owner": owner]))
-            if let replaced { try await cancelColleagueInvitation(replaced) }
+            if let replaced { try await cancelInvitation(replaced) }
         } catch { errorMessage = error.localizedDescription }
     }
 
     func refreshMobileStatus() async {
-        struct Status: Decodable { let connections: Int; let clients: [MobileClient]?; let invitations: [ColleagueInvitation]? }
+        struct Status: Decodable { let connections: Int; let clients: [MobileClient]?; let invitations: [WaitingInvitation]? }
         if let status: Status = try? await request("/v1/mobile") {
             mobileConnections = status.connections
             let clients = supportsColleagueInvites ? status.clients ?? [] : []
             if mobileClients != clients { mobileClients = clients }
             let invitations = supportsColleagueInvites ? status.invitations ?? [] : []
-            if colleagueInvitations != invitations { colleagueInvitations = invitations }
+            if waitingInvitations != invitations { waitingInvitations = invitations }
             canManageConnections = true
             if openAIAccount != nil { canManageOpenAI = true }
-        } else { canManageConnections = false; mobileClients = []; colleagueInvitations = [] }
+        } else { canManageConnections = false; mobileClients = []; waitingInvitations = [] }
     }
 
     /// Several colleague links can wait for 24 hours, and the owner sees each paired device.
     var supportsColleagueInvites: Bool { health?.colleagueInvitesVersion == 1 }
+
+    /// Whether a link outlives its sheet: the Home keeps it for a day and lists it in Settings
+    /// until it is used or cancelled. An older Home keeps the owner's own link for five minutes.
+    func keepsInvitation(owner: Bool) -> Bool { owner ? health?.ownerInvitesVersion == 1 : supportsColleagueInvites }
 
     /// Owner only. Never revokes every device: an app-installed server also
     /// knows the owner's own connection as a paired device.
@@ -683,17 +687,17 @@ final class HomeClient: ObservableObject, Identifiable {
         await refreshMobileStatus()
     }
 
-    /// Ends a colleague's link that nobody has used yet.
-    func cancelColleagueInvitation(_ id: String) async throws {
+    /// Ends a link that nobody has used yet.
+    func cancelInvitation(_ id: String) async throws {
         guard let path = ("/v1/mobile/pairing/" + id).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { throw HomeClientError.invalidURL }
         _ = try await requestData(path, method: "DELETE")
         await refreshMobileStatus()
     }
 
-    /// A colleague's link stays valid after its sheet closes when the Home keeps it.
+    /// A link stays valid after its sheet closes when the Home keeps it.
     func cancelMobileInvitation(colleague: Bool = false) async {
         mobileInvitation = nil
-        guard !(colleague && supportsColleagueInvites) else { return }
+        guard !keepsInvitation(owner: !colleague) else { return }
         let _: [String: Bool]? = try? await request("/v1/mobile/pairing", method: "DELETE")
     }
 
