@@ -11,7 +11,7 @@ describe("server setup", () => {
       const source = await (await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/setup.js`)).text();
       const nodes = new Map<string, any>(), events = new Map<string, () => void>();
       const location = { hash: "#" + "a".repeat(64), pathname: "/review/" };
-      const pairing = vi.fn(async (_path: string, _options: { headers: { Authorization: string } }) => ({ ok: true, json: async () => ({ url: "openstrudel://connect?qa", expiresAt: new Date(Date.now() + 300_000).toISOString() }) }));
+      const pairing = vi.fn(async (_path: string, _options: { headers: { Authorization: string } }) => ({ ok: true, json: async () => ({ url: "openstrudel://connect?qa", expiresAt: new Date(Date.now() + 86_400_000).toISOString() }) }));
       const context = vm.createContext({
         document: { getElementById: (id: string) => { if (!nodes.has(id)) nodes.set(id, { append() {} }); return nodes.get(id); }, createElement: () => ({}) },
         location, history: { replaceState: () => { location.hash = ""; } },
@@ -22,6 +22,8 @@ describe("server setup", () => {
       });
       vm.runInContext(source, context);
       await vi.waitFor(() => expect(pairing).toHaveBeenCalledTimes(1));
+      // A day-long link needs no countdown.
+      await vi.waitFor(() => expect(nodes.get("expiry")?.textContent).toBe("Ссылка действует сутки и подключает одно устройство."));
       location.hash = "#" + "b".repeat(64);
       events.get("hashchange")?.();
       await vi.waitFor(() => expect(pairing).toHaveBeenCalledTimes(2));

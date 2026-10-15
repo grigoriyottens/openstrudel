@@ -99,7 +99,7 @@ struct Sidebar: View {
                 Button(L("Перенести на другое устройство…"), systemImage: "arrow.right.square") {
                     movingEmployee = EmployeeMoveRequest(source: target.source, profile: target.profile)
                 }
-                .disabled(!target.source.canManageOpenAI)
+                .disabled(!target.source.ownsDevice)
                 Divider()
                 Button(L("Удалить сотрудника…"), role: .destructive) { requestDeletion(target.profile, from: target.source) }
                     .disabled(!canDelete(on: target.source))
@@ -339,7 +339,7 @@ struct Sidebar: View {
         let parts = value.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
         guard parts.count == 3, parts[0] == EmployeeDrop.prefix,
               let origin = library.visibleClients.first(where: { $0.id == parts[1] }),
-              origin !== target, origin.canManageOpenAI,
+              origin !== target, origin.ownsDevice,
               let profile = origin.profiles.first(where: { $0.id == parts[2] }) else { return false }
         movingEmployee = EmployeeMoveRequest(source: origin, profile: profile, targetID: target.id)
         return true

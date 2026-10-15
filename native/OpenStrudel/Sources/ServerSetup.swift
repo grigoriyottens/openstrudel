@@ -47,6 +47,48 @@ struct ServerInstallationStatus: Decodable {
     }
 }
 
+/// The installation bar. Each installer stage owns a part of the bar sized by
+/// its typical duration (a fresh Ubuntu server on 12 October 2026: packages and
+/// Docker 26 s, release 1 s, image build 235 s, health check 4 s). Inside a
+/// stage the bar eases toward the end of its part without reaching it, so it
+/// keeps moving on a slow server and only the next stage completes the part.
+/// It never moves back, holds while SSH reconnects and fills only when ready.
+struct ServerSetupProgress {
+    private static let stages: [(name: String, seconds: Double)] = [
+        ("connecting", 10), ("dependencies", 30), ("download", 10), ("build", 240), ("verify", 10),
+    ]
+    private static let total = stages.reduce(0) { $0 + $1.seconds }
+    static var steps: Int { stages.count }
+    /// The installer's latest report, including "reconnecting" while SSH is away.
+    private(set) var stage = "connecting"
+    private var index = 0
+    private var started: Date
+    private var held = 0.0
+
+    init(at date: Date = .now) { started = date }
+
+    var step: Int { min(index, Self.steps - 1) + 1 }
+
+    mutating func report(_ stage: String, at date: Date) {
+        held = value(at: date)
+        self.stage = stage
+        let next = stage == "ready" ? Self.steps : Self.stages.firstIndex { $0.name == stage }
+        guard let next, next != index else { return }
+        index = next; started = date
+    }
+
+    func value(at date: Date) -> Double {
+        guard index < Self.steps else { return 1 }
+        guard stage != "reconnecting" else { return held }
+        let typical = Self.stages[index].seconds
+        let start = Self.stages[..<index].reduce(0) { $0 + $1.seconds }
+        let elapsed = max(0, date.timeIntervalSince(started))
+        // Two thirds of the part at the typical duration; the rest only ever approached.
+        let eased = elapsed / (elapsed + typical / 2)
+        return max(held, (start + typical * eased) / Self.total)
+    }
+}
+
 struct ServerTarget: Codable, Equatable, Sendable {
     let host: String
     let user: String
@@ -378,7 +420,8 @@ extension ServerSetupStore {
     @Published private(set) var target: ServerTarget?
     @Published private(set) var hostKey: SSHHostKey?
     @Published private(set) var preflight: ServerPreflight?
-    @Published private(set) var stage = "connecting"
+    @Published private(set) var progress = ServerSetupProgress()
+    var stage: String { progress.stage }
     @Published private(set) var error: ServerSetupFailure?
     @Published private(set) var connection: HomeConnection?
     @Published private(set) var installation: ServerInstallation?
@@ -474,7 +517,7 @@ extension ServerSetupStore {
     func install(access: ServerAccess) {
         guard let target, let key = hostKey, phase == .ready || (phase == .failed && installation != nil) else { return }
         start {
-            self.phase = .installing; self.stage = "connecting"
+            self.phase = .installing; self.progress = ServerSetupProgress()
             var saved: ServerInstallation
             if let pending = self.installation {
                 saved = pending
@@ -576,13 +619,13 @@ extension ServerSetupStore {
                 // arrived. Pause with Continue instead of waiting out every poll.
                 idleChecks = status.installationID == nil && status.state == "inactive" ? idleChecks + 1 : 0
                 if idleChecks >= 2 { phase = .paused; error = .notStarted; return }
-                stage = ["connecting", "dependencies", "download", "build", "verify", "ready"].contains(status.stage) ? status.stage : "dependencies"
+                progress.report(["connecting", "dependencies", "download", "build", "verify", "ready"].contains(status.stage) ? status.stage : "dependencies", at: .now)
             } catch ServerSetupFailure.connection {
                 // SSH may briefly disappear while packages/networking change.
                 // Keep the same bounded polling loop and pinned HTTPS probe.
                 try Task.checkCancellation()
                 readyChecks = 0; idleChecks = 0
-                stage = "reconnecting"
+                progress.report("reconnecting", at: .now)
             }
             try await Task.sleep(for: .seconds(5))
         }

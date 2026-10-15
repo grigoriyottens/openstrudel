@@ -50,7 +50,7 @@ struct EmployeePicker: View {
                                     .disabled(source.isOffline(profile))
                                 Button(L("Скрыть у меня"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }
                                 Button(L("Перенести на другое устройство…"), systemImage: "arrow.right.square") { movingEmployee = EmployeeMoveRequest(source: source, profile: profile) }
-                                    .disabled(!source.canManageOpenAI)
+                                    .disabled(!source.ownsDevice)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(L("Скрыть"), systemImage: "eye.slash") { Task { await library.setHidden(true, profile: profile, on: source) } }.tint(.gray)

@@ -204,8 +204,8 @@ private struct OwnServerSetupView: View {
         default: L("Set up my server")
         }
     }
-    private var stageTitle: String {
-        switch flow.stage {
+    private func stageTitle(_ stage: String) -> String {
+        switch stage {
         case "dependencies": L("Preparing the server")
         case "download": L("Downloading OpenStrudel")
         case "build": L("Installing OpenStrudel")
@@ -286,12 +286,14 @@ private struct OwnServerSetupView: View {
             }
             if busy {
                 Section {
-                    if busy {
+                    if flow.phase == .checkingIdentity || flow.phase == .checking {
                         Label {
-                            Text(flow.phase == .checkingIdentity ? L("Checking the server's identity") : flow.phase == .checking ? L("Checking your server") : stageTitle)
+                            Text(flow.phase == .checkingIdentity ? L("Checking the server's identity") : L("Checking your server"))
                                 .fixedSize(horizontal: false, vertical: true)
                         } icon: { ProgressView().controlSize(.small).frame(width: 20) }
                             .accessibilityElement(children: .combine).accessibilityIdentifier("serverSetupProgress")
+                    } else {
+                        installationProgress
                     }
                 } footer: {
                     if busy && flow.phase == .installing && flow.stage != "connecting" {
@@ -327,6 +329,25 @@ private struct OwnServerSetupView: View {
                 key = try SSHPrivateKey.normalized(Data(contentsOf: url)); keyName = url.lastPathComponent; passphrase = ""; localError = nil
             } catch { key = nil; keyName = nil; localError = ServerSetupFailure.privateKey.localizedDescription }
         }
+    }
+
+    /// The bar keeps moving between status checks. Once the server answers,
+    /// it is full while the server joins the device list.
+    private var installationProgress: some View {
+        var progress = flow.progress
+        if flow.phase == .connected { progress.report("ready", at: .now) }
+        return VStack(alignment: .leading, spacing: 8) {
+            TimelineView(.periodic(from: .now, by: 0.5)) { context in
+                ProgressView(value: progress.value(at: context.date))
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(stageTitle(progress.stage)).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Text(L("Шаг \(progress.step) из \(ServerSetupProgress.steps)"))
+                    .font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+            }
+        }
+        .accessibilityElement(children: .combine).accessibilityIdentifier("serverSetupProgress")
     }
 
     @ViewBuilder private func serverResources(_ check: ServerPreflight) -> some View {

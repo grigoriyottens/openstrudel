@@ -31,7 +31,7 @@ struct MobilePairingSettings: View {
             .accessibilityIdentifier("inviteColleague")
         if client.supportsColleagueInvites {
             ForEach(client.mobileClients) { MobileClientRow(item: $0) }
-            ForEach(client.colleagueInvitations) { ColleagueInvitationRow(item: $0) }
+            ForEach(client.waitingInvitations) { WaitingInvitationRow(item: $0) }
         } else if client.isLocalConnection && client.mobileConnections > 0 {
             LabeledContent {
                 Button(L("Отключить"), role: .destructive) { revokeConfirmation = true }
@@ -106,23 +106,23 @@ private struct MobileClientRow: View {
     }
 }
 
-/// A colleague's link nobody has used yet. Cancelling it ends the link at once.
-private struct ColleagueInvitationRow: View {
+/// A link nobody has used yet, the owner's own or a colleague's. Cancelling it ends the link at once.
+private struct WaitingInvitationRow: View {
     @EnvironmentObject private var client: HomeClient
-    let item: ColleagueInvitation
+    let item: WaitingInvitation
     @State private var error: String?
 
     var body: some View {
         LabeledContent {
             Button(L("Отменить"), role: .destructive) {
                 Task {
-                    do { try await client.cancelColleagueInvitation(item.id); error = nil }
+                    do { try await client.cancelInvitation(item.id); error = nil }
                     catch { self.error = error.localizedDescription }
                 }
             }
             .accessibilityIdentifier("cancelInvitation-" + item.id)
         } label: {
-            Text(item.label ?? L("Ссылка для коллеги"))
+            Text(item.isOwner ? L("Ссылка для своего устройства") : item.label ?? L("Ссылка для коллеги"))
             if let expiry = item.expiryDate {
                 Text(L("действует до \(expiry.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)))")).monospacedDigit()
             }
@@ -250,9 +250,9 @@ private struct MobileQRCodeView: View {
     }
 
     @ViewBuilder private func status(_ remaining: Int) -> some View {
-        if remaining > 0 && !owner && client.supportsColleagueInvites {
+        if remaining > 0 && client.keepsInvitation(owner: owner) {
             // The link outlives this sheet, so a countdown would only distract.
-            Text(L("Ссылка действует 24 часа и подходит для одного подключения.")).font(AppTypography.meta)
+            Text(L("Ссылка действует сутки и подключает одно устройство.")).font(AppTypography.meta)
         } else if remaining > 0 {
             // One argument, so in Hebrew the minutes and seconds stay in reading order.
             let time = "\(remaining / 60):\(String(format: "%02d", remaining % 60))"
@@ -443,7 +443,7 @@ struct MobileConnectionHelpView: View {
                           L("Для сервера откройте его веб-интерфейс → Настройки → Устройства."))
                     topic(L("Как подключиться"),
                           L("Отсканируйте QR или вставьте ссылку в OpenStrudel на этом устройстве."),
-                          L("Ссылка одноразовая и действует пять минут. Если срок истёк, получите новую."))
+                          L("Ссылка одноразовая и действует сутки. Если срок истёк, получите новую."))
                     topic(L("Если нет связи"),
                           L("Устройство с сотрудниками должно быть включено и доступно по сети. Для подключения по локальной сети используйте один Wi-Fi."),
                           L("Связь восстановится автоматически. Новая ссылка нужна, только если подключение отозвано."))

@@ -9,12 +9,13 @@ import { MockCodexEngine } from "../src/codex.js";
 import { HomeLink } from "../src/home-link.js";
 import { LocalAgentMoves, agentTransfer } from "../src/agent-move.js";
 import { homeRequest, requestJSON, resultJSON } from "../src/home-transport.js";
+import type { CodexEngine, CodexRunResult } from "../src/types.js";
 
 const runtimes: OpenStrudelRuntime[] = [], roots: string[] = [];
 afterEach(async () => { for (const runtime of runtimes.splice(0)) await runtime.stop(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
-async function node(name: string, previousRoot?: string, port = 0) {
+async function node(name: string, previousRoot?: string, port = 0, engine: CodexEngine = new MockCodexEngine()) {
   const root = previousRoot ?? mkdtempSync(join(tmpdir(), "openstrudel-move-")); if (!previousRoot) roots.push(root);
-  const runtime = new OpenStrudelRuntime({ dbPath: join(root, "home.sqlite"), rootDirectory: root, startTelegram: false, engine: new MockCodexEngine(), apiToken: "test-owner", mobilePort: 0 }); runtimes.push(runtime);
+  const runtime = new OpenStrudelRuntime({ dbPath: join(root, "home.sqlite"), rootDirectory: root, startTelegram: false, engine, apiToken: "test-owner", mobilePort: 0 }); runtimes.push(runtime);
   const home = runtime.api.home; home.save({ ...home.state, name });
   const address = await runtime.api.listen("127.0.0.1", port), url = `http://127.0.0.1:${address.port}`; home.setEndpoint({ url });
   const api = async (path: string, method = "GET", body?: unknown) => {
@@ -195,6 +196,25 @@ describe("employee moves between independent homes", () => {
     expect((await b.api("/v1/profiles")).value.profiles).toHaveLength(0);
     expect(a.home.nodes()).toHaveLength(1); expect(b.home.nodes()).toHaveLength(1);
   });
+
+  it("prepares an idle employee at once while another employee works, and waits only for the employee's own turn", async () => {
+    const releases: Array<() => void> = [];
+    const engine: CodexEngine = { run: async () => new Promise<CodexRunResult>(resolve => releases.push(() => resolve({ threadId: "busy", response: "Done", events: [] }))) };
+    const a = await node("Server", undefined, 0, engine);
+    const idle = a.runtime.store.createProfile({ name: "Idle" }), busy = a.runtime.store.createProfile({ name: "Researcher" });
+    const working = a.runtime.messages.handle({ channel: "api", profile: busy.id, text: "Long research" });
+    try {
+      await eventually(() => expect(releases).toHaveLength(1));
+      const started = Date.now();
+      await step(a, "prepare", { id: randomUUID(), proof: "a".repeat(64), agent: idle.id, agentId: idle.id });
+      expect(Date.now() - started).toBeLessThan(5000);
+      const own = step(a, "prepare", { id: randomUUID(), proof: "b".repeat(64), agent: busy.id, agentId: busy.id });
+      await new Promise(resolve => setTimeout(resolve, 200));
+      expect(agentTransfer(a.runtime.store, busy.id)?.phase).toBe("preparing");
+      releases[0]!();
+      expect((await own).bundle.archive.messages.map((m: any) => m.status)).toEqual(["completed", "completed"]);
+    } finally { releases.forEach(release => release()); await working; }
+  }, 30000);
 
   it("checks owner access, home identity, proof and cancellation barriers", async () => {
     const a = await node("Source"), b = await node("Target");

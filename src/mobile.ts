@@ -14,6 +14,8 @@ import { publicKeyPin } from "./home-transport.js";
 import { sameOrigin, type WebAccess } from "./web-access.js";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+/** Every connection link, the owner's own and a colleague's, lasts a day. */
+const INVITATION_LIFETIME = 86_400_000;
 type Options = { directory?: string; port?: number; host?: string; hostname?: string; advertisedPort?: number; now?: () => number };
 type Invitation = { id: string; hash: string; expires: number; owner: boolean; label?: string };
 type Client = { id: string; label?: string; pairedAt: string };
@@ -47,7 +49,7 @@ export class MobileAccess {
         const id = token.slice(0, 20), saved = clients.find(c => c.id === id);
         return { id, label: saved?.label ?? null, role: owners.includes(token) ? "owner" : "colleague", pairedAt: saved?.pairedAt ?? null, current: id === current };
       }),
-      invitations: this.invitations().filter(i => !i.owner).map(i => ({ id: i.id, label: i.label ?? null, expiresAt: new Date(i.expires).toISOString() })),
+      invitations: this.invitations().map(i => ({ id: i.id, label: i.label ?? null, role: i.owner ? "owner" : "colleague", expiresAt: new Date(i.expires).toISOString() })),
     };
   }
 
@@ -63,11 +65,11 @@ export class MobileAccess {
     return { url: `https://${host.includes(":") ? `[${host}]` : host}:${this.options.advertisedPort ?? this.port}`, pin: this.keyFingerprint };
   }
 
-  /** The owner's own QR lasts 5 minutes and replaces the previous one. A colleague's link lasts a day and coexists with others. */
+  /** Each link connects one device within a day. The owner's own link replaces the previous one; colleague links coexist. */
   async invite(owner = false, label?: string) {
     await this.start();
     const key = randomBytes(32).toString("hex");
-    const invitation: Invitation = { id: hash(key).slice(0, 20), hash: hash(key), expires: this.now() + (owner ? 300_000 : 86_400_000), owner, ...(label?.trim() ? { label: label.trim().slice(0, 80) } : {}) };
+    const invitation: Invitation = { id: hash(key).slice(0, 20), hash: hash(key), expires: this.now() + INVITATION_LIFETIME, owner, ...(label?.trim() ? { label: label.trim().slice(0, 80) } : {}) };
     this.saveInvitations([...this.invitations().filter(i => !(owner && i.owner)), invitation].slice(-20));
     this.dropReceipts((_, receipt) => owner && receipt.owner);
     const machine = hostname();
@@ -77,7 +79,7 @@ export class MobileAccess {
     return { id: invitation.id, url: "openstrudel://connect?" + query, expiresAt: new Date(invitation.expires).toISOString() };
   }
 
-  /** Closing the owner's QR ends it. A colleague's link ends only when cancelled by its id or when it expires. */
+  /** Ends one waiting link by its id. Without an id, ends the owner's own link, as older apps do when its sheet closes. */
   cancelInvite(id?: string) {
     this.saveInvitations(this.invitations().filter(i => id ? i.id !== id : !i.owner));
     this.dropReceipts((keyHash, receipt) => id ? keyHash.slice(0, 20) === id : receipt.owner);

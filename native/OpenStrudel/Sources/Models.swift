@@ -53,6 +53,7 @@ struct HomeHealth: Decodable {
     var employeeRenameKeepsInstructions: Int? = nil
     var deviceRenameVersion: Int? = nil
     var colleagueInvitesVersion: Int? = nil
+    var ownerInvitesVersion: Int? = nil
     var providers: Int? = nil
     /// 1: the Grok subscription, signed in on the device.
     var subscriptionsVersion: Int? = nil
