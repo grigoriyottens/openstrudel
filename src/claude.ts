@@ -6,7 +6,7 @@ import { basename, dirname, resolve, sep } from "node:path";
 import { z } from "zod";
 import { INSTRUCTIONS } from "./codex.js";
 import { readToml } from "./extensions.js";
-import { ProviderKeyError, providerNotConnected, type ProviderInfo } from "./providers.js";
+import { ProviderKeyError, exhaustedPlan, providerNotConnected, type ProviderInfo } from "./providers.js";
 import { contextPattern } from "./scopes.js";
 import { telegramMcpConfig } from "./telegram-mcp.js";
 import type { CodexEngine, CodexRunResult } from "./types.js";
@@ -24,9 +24,11 @@ export interface ClaudeEngineOptions {
 
 type RunOptions = NonNullable<Parameters<CodexEngine["run"]>[1]>;
 
-const instructions = INSTRUCTIONS.replace("Use Codex's native tools, memory, skills and connectors.", "Use your native tools and connected services.")
+/** OpenStrudel's instructions for a vendor's own agent, which asks its questions with `question`. */
+export const agentInstructions = (question: string) => INSTRUCTIONS.replace("Use Codex's native tools, memory, skills and connectors.", "Use your native tools and connected services.")
   .replace("where the owner can add MCP services, SKILL.md skills and local Codex plugins", "where the owner can add MCP services")
-  .replace("request_user_input", "AskUserQuestion").replace("Follow Codex's native approval policy", "Follow the approval policy");
+  .replace("request_user_input", question).replace("Follow Codex's native approval policy", "Follow the approval policy");
+const instructions = agentInstructions("AskUserQuestion");
 // Claude Code sends background and helper work to Claude aliases; another vendor must only see its own model.
 const aliases = ["ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"];
 const edits = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
@@ -56,7 +58,7 @@ export class ClaudeEngine implements CodexEngine {
       ...provider.auth === "bearer" ? { ANTHROPIC_AUTH_TOKEN: key, ANTHROPIC_API_KEY: "" } : { ANTHROPIC_API_KEY: key },
       CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", CLAUDE_CODE_DISABLE_REFUSAL_FALLBACK: "1",
       // Commands and MCP servers inherit the CLI environment; the key must not reach them.
-      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1" });
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1", ...provider.env });
     if (provider.id !== "anthropic") for (const name of aliases) env[name] = model;
 
     const mode = options.approvalMode ?? "ask", group = options.groupContext === true, ask = options.onRequest;
@@ -91,11 +93,7 @@ export class ClaudeEngine implements CodexEngine {
       } catch (error) { return deny(error instanceof Error ? error.message : String(error)); }
     };
 
-    // The same services as the Codex scope: shared, then installer-provisioned, then Telegram's for the verified sender only.
-    const servers = extensionServers({ ...readToml(resolve(root, ".data/extensions", context, "config.toml")).mcp_servers, ...readToml(resolve(root, ".data/connections", context + ".toml")).mcp_servers });
-    const telegram = resolve(root, ".data/connections", context + ".telegram.json");
-    for (const [key, s] of Object.entries(telegramMcpConfig(existsSync(telegram) ? JSON.parse(readFileSync(telegram, "utf8")) : undefined, options.telegramActor, options.conversationId)) as Array<[string, any]>)
-      if (s.enabled) servers[key.slice("mcp_servers.".length)] = { type: "http", url: s.url, headers: s.http_headers };
+    const servers = contextServers(root, context, options);
     const sdkServers: Record<string, McpServerConfig> = {}, tools = options.tools;
     if (tools) sdkServers.openstrudel = createSdkMcpServer({ name: "openstrudel", alwaysLoad: true, tools: tools.definitions.map(d =>
       tool(d.name, d.description, (z.fromJSONSchema(d.inputSchema as any) as z.ZodObject).shape, async args => {
@@ -135,10 +133,11 @@ export class ClaudeEngine implements CodexEngine {
       for await (const m of turn) {
         if (!threadId && "session_id" in m && m.session_id) { threadId = m.session_id; options.onEvent?.({ type: "thread.started", payload: { threadId } }); }
         // The CLI retries a rejected key for minutes; the owner has to replace it instead.
-        if (m.type === "system" && m.subtype === "api_retry" && (m.error_status === 401 || m.error_status === 403) || m.type === "assistant" && m.error === "authentication_failed") { rejected = true; stop(); }
+        if (m.type === "system" && m.subtype === "api_retry" && (m.error_status === 401 || m.error_status === 403)
+          || m.type === "assistant" && m.error === "authentication_failed" && !exhaustedPlan(JSON.stringify(m.message.content))) { rejected = true; stop(); }
         if (m.type === "result") {
           if (m.subtype === "success" && !m.is_error) response = m.result;
-          else if (m.subtype === "success" && (m.api_error_status === 401 || m.api_error_status === 403)) rejected = true;
+          else if (m.subtype === "success" && (m.api_error_status === 401 || m.api_error_status === 403) && !exhaustedPlan(m.result)) rejected = true;
           else failure = (m.subtype === "success" ? m.result : m.errors.join("\n")) || m.subtype;
         }
       }
@@ -149,6 +148,15 @@ export class ClaudeEngine implements CodexEngine {
     if (failure !== undefined) throw new Error(`${provider.name} не завершил ответ: ${failure.replace(/^API Error:\s*/, "").split("\n")[0]!.slice(0, 300)}`);
     return { threadId, response: response || "Готово.", events: [] };
   }
+}
+
+/** The same services as the Codex scope: shared, then installer-provisioned, then Telegram's for the verified sender only. */
+export function contextServers(root: string, context: string, options: Pick<RunOptions, "telegramActor" | "conversationId">): Record<string, McpServerConfig> {
+  const servers = extensionServers({ ...readToml(resolve(root, ".data/extensions", context, "config.toml")).mcp_servers, ...readToml(resolve(root, ".data/connections", context + ".toml")).mcp_servers });
+  const telegram = resolve(root, ".data/connections", context + ".telegram.json");
+  for (const [key, s] of Object.entries(telegramMcpConfig(existsSync(telegram) ? JSON.parse(readFileSync(telegram, "utf8")) : undefined, options.telegramActor, options.conversationId)) as Array<[string, any]>)
+    if (s.enabled) servers[key.slice("mcp_servers.".length)] = { type: "http", url: s.url, headers: s.http_headers };
+  return servers;
 }
 
 /** Codex-style MCP services. Computer Use runs on Codex's own kernel and is left out. */
@@ -169,7 +177,7 @@ function physical(path: string, hops = 0): string {
 }
 
 /** The API checks the bytes, not the uploaded name or declared type. */
-function imageType(data: Buffer): "image/png" | "image/jpeg" | "image/gif" | "image/webp" | undefined {
+export function imageType(data: Buffer): "image/png" | "image/jpeg" | "image/gif" | "image/webp" | undefined {
   if (data.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))) return "image/png";
   if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return "image/jpeg";
   if (data.subarray(0, 4).toString("latin1") === "GIF8") return "image/gif";

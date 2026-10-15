@@ -1,11 +1,16 @@
 FROM node:24.13.0-bookworm-slim AS build
 WORKDIR /opt/openstrudel
 COPY package.json package-lock.json ./
-RUN npm ci
+# Vendor install scripts never run: Grok Build's would install itself into ~/.grok.
+RUN npm ci --ignore-scripts
 COPY tsconfig.json ./
 COPY src ./src
 COPY public ./public
-RUN npm run build && npm prune --omit=dev
+COPY scripts/extract-grok.mjs ./scripts/
+# The Grok subscription runs xAI's pinned Grok Build, unpacked to bin/grok with its notices.
+RUN npm run build && npm prune --omit=dev \
+    && node scripts/extract-grok.mjs . && cp node_modules/@xai-official/grok-linux-*/THIRD_PARTY_NOTICES.md Grok-THIRD_PARTY_NOTICES.md \
+    && rm -rf node_modules/@xai-official scripts
 
 # Official whisper.cpp v1.9.4, built for the image architecture (no native CPU flags).
 # Source: https://github.com/ggml-org/whisper.cpp/releases/tag/v1.9.4
@@ -41,6 +46,11 @@ COPY --from=speech-build /build/models/LICENSE /usr/local/share/licenses/whisper
 COPY --from=speech-build /build/models/ggml-large-v3-turbo-q5_0.bin /opt/openstrudel/voice/ggml-large-v3-turbo-q5_0.bin
 COPY scripts/container-start.sh /usr/local/bin/openstrudel-start
 COPY scripts/check-sandbox.mjs /opt/openstrudel/scripts/check-sandbox.mjs
+# Grok Build's Apache-2.0 license, pinned to a reviewed commit. The image fails here if Grok Build cannot run on it.
+RUN curl -fL --retry 3 --connect-timeout 30 --max-time 60 \
+      https://raw.githubusercontent.com/xai-org/grok-build/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/LICENSE -o /opt/openstrudel/Grok-LICENSE.txt \
+    && echo '116f7778b9802e569b7fa3a532b17bd80eb13c67837def01eed093d4ea472f28  /opt/openstrudel/Grok-LICENSE.txt' | sha256sum -c - \
+    && HOME=/tmp/grok-check GROK_HOME=/tmp/grok-check GROK_DISABLE_AUTOUPDATER=1 /opt/openstrudel/bin/grok --no-auto-update --version && rm -rf /tmp/grok-check
 RUN chmod 755 /usr/local/bin/openstrudel-start && mkdir -p /data && chown node:node /data
 ENV NODE_ENV=production OPENSTRUDEL_DB=/data/.data/openstrudel.sqlite OPENSTRUDEL_CODEX_HOME=/data/.data/codex OPENSTRUDEL_SETUP_HOST=0.0.0.0
 WORKDIR /data

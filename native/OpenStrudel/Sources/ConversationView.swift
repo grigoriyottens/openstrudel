@@ -363,13 +363,13 @@ struct OpenAIRecoveryNotice: View {
     @Environment(\.openSettings) private var openSettings
     #endif
     @State private var showAccounts = false
-    /// An employee on an API-key provider needs that key on its device, not an OpenAI sign-in.
+    /// An employee on an API-key provider needs that key on its device, and one on Grok its sign-in, not an OpenAI sign-in.
     private var provider: String? { client.openAIAccount?.keyProviderName }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if dynamicTypeSize.isAccessibilitySize {
-                Text(provider.map { L("Нужен ключ \($0)") } ?? (client.openAIAccount?.isUnavailable == true ? L("Связь с OpenAI") : L("Вход в OpenAI")))
+                Text(client.openAIAccount?.providerNeed ?? (client.openAIAccount?.isUnavailable == true ? L("Связь с OpenAI") : L("Вход в OpenAI")))
                     .font(titleFont).accessibilityIdentifier("openAIRecoveryNotice")
                 Text(L("Чаты и черновики сохранены.")).font(detailFont).foregroundStyle(AppTheme.secondaryText)
                     .wrapsInFull()
@@ -431,7 +431,7 @@ struct OpenAIRecoveryNotice: View {
 
     private var explanation: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(provider.map { L("Нужен ключ \($0)") } ?? (client.openAIAccount?.isUnavailable == true ? L("Не удалось проверить соединение с OpenAI.")
+            Text(client.openAIAccount?.providerNeed ?? (client.openAIAccount?.isUnavailable == true ? L("Не удалось проверить соединение с OpenAI.")
                  : L("Вход в OpenAI нужно восстановить."))).font(titleFont)
                 .accessibilityIdentifier("openAIRecoveryNotice")
             Text(client.openAIRecoveryMessage).font(detailFont).foregroundStyle(AppTheme.secondaryText)

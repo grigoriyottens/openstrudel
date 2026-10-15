@@ -344,7 +344,7 @@ struct ServerAccountSetupView: View {
                 Section {
                     LabeledContent(L("Server"), value: client.displayName)
                     if connected, let provider = client.openAIAccount?.keyProviderName {
-                        LabeledContent { Text(L("API-ключ")) } label: { Text(verbatim: provider) }
+                        LabeledContent { Text(client.openAIAccount?.signsIn == true ? L("Подписка") : L("API-ключ")) } label: { Text(verbatim: provider) }
                     } else if connected, let account = client.openAIAccount {
                         LabeledContent {
                             VStack(alignment: .trailing, spacing: 2) {

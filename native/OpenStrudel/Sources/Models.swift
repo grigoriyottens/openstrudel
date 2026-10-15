@@ -54,6 +54,9 @@ struct HomeHealth: Decodable {
     var deviceRenameVersion: Int? = nil
     var colleagueInvitesVersion: Int? = nil
     var providers: Int? = nil
+    /// 1: API keys. 2: also the Grok subscription.
+    var supportsProviderKeys: Bool { (providers ?? 0) >= 1 }
+    var supportsSubscriptions: Bool { (providers ?? 0) >= 2 }
 }
 
 struct HomeConversation: Decodable {
@@ -429,8 +432,11 @@ struct ProviderSummary: Decodable, Identifiable, Equatable {
     let keyHint: String?; let keysUrl: String?; let usedBy: Int
     var canAddKey: Bool { auth == "key" && !connected }
     var connectedKey: Bool { auth == "key" && connected }
+    /// Grok signs in inside its own agent on the device; ChatGPT has its own accounts.
+    var isSubscription: Bool { auth == "signin" && id != "chatgpt" }
     /// `usedBy` counts employees, the main chat and the device default together, so it is not a number of employees.
     var removalWarning: String { L("Сотрудников и настроек на этом ключе: \(usedBy). Их модель станет «Как на устройстве» или «Автоматически».") }
+    var signOutWarning: String { L("Сотрудников и настроек на этой подписке: \(usedBy). Их модель станет «Как на устройстве» или «Автоматически».") }
 }
 struct ProviderList: Decodable {
     let providers: [ProviderSummary]; let canManage: Bool
@@ -482,10 +488,11 @@ struct ModelSettings: Decodable {
         return providers.map { provider in Group(provider: provider, models: models.filter { $0.provider == provider.id }) }.filter { !$0.models.isEmpty }
     }
     func model(_ ref: ModelRef?) -> ModelChoice? { models.first { $0.ref == ref } }
-    /// With several providers a name alone is ambiguous: ChatGPT and an OpenAI key share models, OpenRouter repeats vendors' names.
+    /// With several providers a name alone is ambiguous: ChatGPT and an OpenAI key share models, OpenRouter repeats vendors' names,
+    /// and the Grok subscription shares xAI's: "Grok 4.7 · подписка Grok" beside "Grok 4.7 · xAI".
     func title(_ model: ModelChoice) -> String {
-        guard let providers, providers.count > 1, let name = providers.first(where: { $0.id == model.provider })?.name else { return model.name }
-        return model.name + " · " + name
+        guard let providers, providers.count > 1, let provider = providers.first(where: { $0.id == model.provider }) else { return model.name }
+        return model.name + " · " + (provider.isSubscription ? L("подписка \(provider.name)") : provider.name)
     }
     /// Only OpenAI's catalog marks its own default; for another provider the recommended model is our pick.
     func recommendation(_ model: ModelChoice) -> String {
@@ -539,6 +546,9 @@ struct OpenAIAccount: Decodable, Equatable {
 
     /// The API-key provider this account stands for, by name; nil for ChatGPT.
     var keyProviderName: String? { provider.flatMap { $0 == "chatgpt" ? nil : providerName ?? $0 } }
+    /// Grok signs in again; a key provider needs its key.
+    var signsIn: Bool { provider == "grok" }
+    var providerNeed: String? { keyProviderName.map { signsIn ? L("Нужен вход в \($0)") : L("Нужен ключ \($0)") } }
 
     var planLabel: String {
         switch planType?.lowercased() {

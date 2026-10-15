@@ -4,10 +4,11 @@ import { chatgptSignedIn } from "./account.js";
 import { isOpenAIAuthenticationError } from "./account-errors.js";
 import { readModelSelection, resolveModelSelection, saveModelSelection, type ModelChoice } from "./model-settings.js";
 
-/** Providers reachable with an API key. ChatGPT sign-in stays in accounts.ts.
+/** Providers reachable with an API key or a vendor subscription. ChatGPT sign-in stays in accounts.ts.
  * Responses-native providers run on Codex; the rest use their documented
- * Anthropic-compatible endpoint through the Claude Agent SDK. */
-export type ProviderEngine = "codex" | "claude";
+ * Anthropic-compatible endpoint through the Claude Agent SDK. The Grok subscription
+ * runs xAI's own agent over ACP, which signs in and keeps its token itself. */
+export type ProviderEngine = "codex" | "claude" | "acp";
 
 export interface ProviderModel {
   id: string;
@@ -24,13 +25,15 @@ export interface ProviderInfo {
   engine: ProviderEngine;
   /** Codex: OpenAI Responses base (`…/v1`). Claude: Anthropic base (`ANTHROPIC_BASE_URL`). */
   baseUrl: string;
-  /** `x-api-key` only for Anthropic itself; compatible endpoints take a bearer token. */
-  auth: "bearer" | "x-api-key";
+  /** The header the vendor documents for Claude Code; a subscription signs in through its own agent. */
+  auth: "bearer" | "x-api-key" | "signin";
   keysUrl: string;
   /** Codex's native web search tool is sent only where the provider accepts it. */
   webSearch: boolean;
-  /** Empty for `openai`: its catalog is Codex's own `model/list`. */
+  /** Empty for `openai`: its catalog is Codex's own `model/list`. A subscription's comes from its agent. */
   models: ProviderModel[];
+  /** Extra Claude Code environment the vendor recommends. */
+  env?: Record<string, string>;
 }
 
 const providers: ProviderInfo[] = [
@@ -48,13 +51,20 @@ const providers: ProviderInfo[] = [
       { id: "grok-4.7", name: "Grok 4.7", recommended: true, contextWindow: 500_000, images: true },
       { id: "grok-4.5", name: "Grok 4.5", contextWindow: 500_000, images: true },
     ] },
+  { id: "grok", name: "Grok", engine: "acp", baseUrl: "", auth: "signin", keysUrl: "", webSearch: true, models: [] },
   { id: "kimi", name: "Kimi", engine: "claude", baseUrl: "https://api.moonshot.ai/anthropic", auth: "bearer",
     keysUrl: "https://platform.moonshot.ai/console/api-keys", webSearch: false, models: [
       { id: "kimi-k3", name: "Kimi K3", recommended: true, contextWindow: 1_048_576, images: true },
       { id: "kimi-k2.7-code", name: "Kimi K2.7 Code", contextWindow: 262_144, images: true },
     ] },
-  { id: "zai", name: "GLM", engine: "claude", baseUrl: "https://api.z.ai/api/anthropic", auth: "bearer",
-    keysUrl: "https://z.ai/manage-apikey/apikey-list", webSearch: false, models: [
+  { id: "kimicode", name: "Kimi Code", engine: "claude", baseUrl: "https://api.kimi.ai/coding", auth: "x-api-key",
+    keysUrl: "https://www.kimi.com/code/console", webSearch: false, models: [
+      { id: "k3-256k", name: "Kimi K3", recommended: true, contextWindow: 262_144, images: true },
+      { id: "kimi-for-coding", name: "Kimi K2.8 Preview", contextWindow: 1_048_576, images: true },
+    ] },
+  // The GLM Coding Plan's documented Claude Code route.
+  { id: "zai", name: "GLM Coding Plan", engine: "claude", baseUrl: "https://api.z.ai/api/anthropic", auth: "bearer",
+    keysUrl: "https://z.ai/manage-apikey/apikey-list", webSearch: false, env: { API_TIMEOUT_MS: "3000000" }, models: [
       { id: "glm-5.3", name: "GLM-5.3", recommended: true, contextWindow: 1_048_576, images: false },
       { id: "glm-5.3-flash", name: "GLM-5.3 Flash", contextWindow: 1_048_576, images: true },
     ] },
@@ -99,6 +109,11 @@ export interface ProviderSummary { id: string; name: string; auth: "signin" | "k
 
 /** Keys live only in this Home's private settings. They are never returned, logged or exported. */
 export const providerKey = (store: Store, id: string): string | null => store.getSetting(`providers.${id}.key`);
+/** A subscription's token stays in its agent's own home; this only records that its sign-in completed. */
+export const providerConnected = (store: Store, id: string): boolean =>
+  providerInfo(id)?.auth === "signin" ? store.getSetting(`providers.${id}.signedIn`) !== null : Boolean(providerKey(store, id));
+/** A subscription's catalog, as its agent last reported it. */
+export const subscriptionModels = (store: Store, id: string): ModelChoice[] => JSON.parse(store.getSetting(`providers.${id}.models`) ?? "[]");
 /** Connection order. A key saved before it was recorded counts as earliest. */
 export const providerConnectedAt = (store: Store, id: string) => Number(store.getSetting(`providers.${id}.connectedAt`) ?? 0);
 /** Codex reserves built-in ids such as `openai`; a thread-scoped provider must not collide with them. */
@@ -116,17 +131,36 @@ export function providerSummaries(store: Store): ProviderSummary[] {
   const usedBy = (id: string) => used.filter(provider => provider === id).length;
   return [{ id: "chatgpt", name: "ChatGPT", auth: "signin", connected: chatgptSignedIn(store), keyHint: null, keysUrl: null, usedBy: usedBy("chatgpt") },
     ...providerInfos().map(p => {
+      if (p.auth === "signin") return { id: p.id, name: p.name, auth: "signin" as const, connected: providerConnected(store, p.id), keyHint: null, keysUrl: null, usedBy: usedBy(p.id) };
       const key = providerKey(store, p.id);
       return { id: p.id, name: p.name, auth: "key" as const, connected: Boolean(key), keyHint: key ? "••••" + key.slice(-3) : null, keysUrl: p.keysUrl, usedBy: usedBy(p.id) };
     })];
 }
 
-/** A key is saved only after the provider accepts it. */
+/** A key is saved only after the provider accepts it. Kimi Code answers any client but a coding agent
+ * with 403 "only available for Coding Agents", so its key is saved unchecked and its first turn reports a rejected key. */
 export async function connectProvider(store: Store, id: string, value: unknown): Promise<ProviderSummary> {
   const info = providerInfo(id);
-  if (!info) throw new HomeError("Провайдер не найден.", 404);
+  if (!info || info.auth === "signin") throw new HomeError("Провайдер не найден.", 404);
   const key = typeof value === "string" ? value.trim() : "";
   if (!key || key.length > 4096 || /\s/.test(key)) throw new HomeError("Вставьте ключ.");
+  if (id !== "kimicode") await checkKey(info, key);
+  const previous = providerKey(store, id), first = !providerInfos().some(p => providerConnected(store, p.id));
+  store.setSetting(`providers.${id}.key`, key);
+  if (previous && previous !== key) forgetThreads(store, id);
+  if (!previous) markConnected(store, id);
+  // The first key fixes the automatic device default, so no later key or sign-in changes an agent's model.
+  const recommended = info.models.find(m => m.recommended);
+  if (first && recommended && !chatgptSignedIn(store) && !readModelSelection(store).model) saveModelSelection(store, { provider: id, model: recommended.id, serviceTier: "default" });
+  return providerSummaries(store).find(p => p.id === id)!;
+}
+
+/** Records the connection order, which decides Automatic. */
+export function markConnected(store: Store, id: string) {
+  store.setSetting(`providers.${id}.connectedAt`, String(Math.max(Date.now(), ...providerInfos().map(p => providerConnectedAt(store, p.id) + 1))));
+}
+
+async function checkKey(info: ProviderInfo, key: string) {
   const auth: Record<string, string> = info.auth === "x-api-key" ? { "x-api-key": key } : { authorization: "Bearer " + key };
   let response: Response;
   try {
@@ -141,14 +175,6 @@ export async function connectProvider(store: Store, id: string, value: unknown):
     const detail = String(body?.error?.message ?? body?.message ?? response.statusText).replace(/\s+/g, " ").slice(0, 200);
     throw new HomeError(`${info.name} не подтвердил ключ: ${response.status} ${detail}`.trim(), response.status >= 500 ? 502 : 400);
   }
-  const previous = providerKey(store, id), first = !providerInfos().some(p => providerKey(store, p.id));
-  store.setSetting(`providers.${id}.key`, key);
-  if (previous && previous !== key) forgetThreads(store, id);
-  if (!previous) store.setSetting(`providers.${id}.connectedAt`, String(Math.max(Date.now(), ...providerInfos().map(p => providerConnectedAt(store, p.id) + 1))));
-  // The first key fixes the automatic device default, so no later key or sign-in changes an agent's model.
-  const recommended = info.models.find(m => m.recommended);
-  if (first && recommended && !chatgptSignedIn(store) && !readModelSelection(store).model) saveModelSelection(store, { provider: id, model: recommended.id, serviceTier: "default" });
-  return providerSummaries(store).find(p => p.id === id)!;
 }
 
 /** Another key may belong to another organization, which cannot resume threads holding this one's encrypted reasoning. */
@@ -166,16 +192,23 @@ export function disconnectProvider(store: Store, id: string): number {
   if (!providerInfo(id)) throw new HomeError("Провайдер не найден.", 404);
   let reset = Number(store.db.prepare("UPDATE employee_profiles SET provider=NULL,model=NULL,service_tier=NULL WHERE provider=?").run(id).changes);
   for (const agent of [undefined, "main"]) if (readModelSelection(store, agent).provider === id) { saveModelSelection(store, { provider: null, model: null, serviceTier: agent ? null : "default" }, agent); reset++; }
-  store.deleteSetting(`providers.${id}.key`); store.deleteSetting(`providers.${id}.connectedAt`);
+  for (const name of ["key", "connectedAt", "signedIn", "models"]) store.deleteSetting(`providers.${id}.${name}`);
   forgetThreads(store, id);
   return reset;
 }
 
-/** A key route's failure names its provider. It never invalidates a ChatGPT account. */
+/** Kimi Code refuses an exhausted plan with 403: one that names a quota or limit is not a rejected key. */
+export const exhaustedPlan = (text: string) => /\b403\b/.test(text) && /quota|limit/i.test(text);
+
+/** A key route's failure names its provider. It never invalidates a ChatGPT account.
+ * A subscription has no key to reject: its engine reports a lost sign-in itself. */
 export function providerFailure(info: ProviderInfo, error: unknown): unknown {
   if (error instanceof HomeError) return error;
-  const message = error instanceof Error ? error.message : String(error);
-  if (isOpenAIAuthenticationError(error) || /\b40[13]\b|forbidden|authentication|invalid.{0,20}(?:api.?key|token)/i.test(message)) return new ProviderKeyError(info);
-  if (/\b4(?:02|29)\b|rate.?limit|quota|insufficient|billing|credit|balance|usage limit|too many requests/i.test(message)) return new ProviderIncident(`У ключа ${info.name} закончился лимит или баланс. Проверьте оплату у провайдера или повторите позже.`, 429, "limits:" + info.id);
+  const message = error instanceof Error ? error.message : String(error), subscription = info.auth === "signin";
+  const limits = new ProviderIncident(subscription ? `Лимит подписки ${info.name} исчерпан. Повторите позже или выберите другую модель.`
+    : `У ключа ${info.name} закончился лимит или баланс. Проверьте оплату у провайдера или повторите позже.`, 429, "limits:" + info.id);
+  if (exhaustedPlan(message)) return limits;
+  if (!subscription && (isOpenAIAuthenticationError(error) || /\b40[13]\b|forbidden|authentication|invalid.{0,20}(?:api.?key|token)/i.test(message))) return new ProviderKeyError(info);
+  if (/\b4(?:02|29)\b|rate.?limit|quota|insufficient|billing|credit|balance|usage limit|too many requests/i.test(message)) return limits;
   return error;
 }

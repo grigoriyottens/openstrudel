@@ -1,7 +1,7 @@
 import type { Store } from './store.js';
 import { HomeError } from './home.js';
 import { chatgptSignedIn } from './account.js';
-import { providerConnectedAt, providerInfo, providerInfos, providerKey, providerModels, providerNotConnected } from './providers.js';
+import { providerConnected, providerConnectedAt, providerInfo, providerInfos, providerModels, providerNotConnected, subscriptionModels } from './providers.js';
 
 /** `provider` is null only with a null model: as on the device, or automatic for the device itself. */
 export type ModelSelection = { provider: string | null; model: string | null; serviceTier: string | null };
@@ -34,18 +34,19 @@ export function readModelSelection(store: Store, agent?: string): ModelSelection
   if (!profile) throw new HomeError('Сотрудник не найден.',404);
   return stored({...profile,serviceTier:profile.serviceTier ?? (profile.model ? 'default' : null)});
 }
-/** ChatGPT when signed in, otherwise the key connected first, so adding a key changes nothing. Quota never switches it. */
+/** ChatGPT when signed in, otherwise the key or subscription connected first, so adding one changes nothing. Quota never switches it. */
 export function automaticProvider(store: Store): string {
-  return chatgptSignedIn(store) ? 'chatgpt' : providerInfos().filter(p => providerKey(store,p.id)).sort((a,b) => providerConnectedAt(store,a.id) - providerConnectedAt(store,b.id))[0]?.id ?? 'chatgpt';
+  return chatgptSignedIn(store) ? 'chatgpt' : providerInfos().filter(p => providerConnected(store,p.id)).sort((a,b) => providerConnectedAt(store,a.id) - providerConnectedAt(store,b.id))[0]?.id ?? 'chatgpt';
 }
 /** Employee → device default → automatic. A Codex catalog fills the model only when one is given. */
 export function resolveModelSelection(store: Store, agent?: string, models?: ModelChoice[]): ModelSelection {
   const selection = readModelSelection(store,agent);
   const resolved = selection.model ? selection : readModelSelection(store);
   if (resolved.model) return resolved;
-  const provider = automaticProvider(store), info = providerInfo(provider);
-  const registry = info?.models.length ? providerModels(info) : undefined, catalog = registry ?? models?.filter(m => m.provider === provider);
-  return {provider,model:catalog ? recommendedModel(catalog).id : null,serviceTier:registry ? 'default' : resolved.serviceTier};
+  // A subscription's catalog is the one its agent last reported; without one, the agent runs its own default.
+  const provider = automaticProvider(store), info = providerInfo(provider), reported = info?.engine === 'acp' ? subscriptionModels(store,provider) : undefined;
+  const registry = reported ?? (info?.models.length ? providerModels(info) : undefined), catalog = registry ?? models?.filter(m => m.provider === provider);
+  return {provider,model:catalog && (catalog.length || !reported) ? recommendedModel(catalog).id : null,serviceTier:registry ? 'default' : resolved.serviceTier};
 }
 /** `models` is one provider's catalog. */
 export function validateModelSelection(value: Pick<ModelSelection, 'model' | 'serviceTier'>, models: ModelChoice[]) {
@@ -56,7 +57,7 @@ export function validateModelSelection(value: Pick<ModelSelection, 'model' | 'se
 /** A saved choice must run here: its provider is connected and offers the model and speed. */
 export function checkModelSelection(store: Store, value: ModelSelection, models: ModelChoice[]) {
   const provider = value.model ? value.provider! : automaticProvider(store);
-  if (provider !== 'chatgpt' && !providerKey(store,provider)) throw providerNotConnected(provider);
+  if (provider !== 'chatgpt' && !providerConnected(store,provider)) throw providerNotConnected(provider);
   validateModelSelection(value,models.filter(m=>m.provider === provider));
 }
 /** Older apps send no provider: their models are ChatGPT models. */

@@ -238,8 +238,21 @@ export class HttpApi {
         if (!canManageAccount) throw new HomeError("Подключать аккаунты может владелец устройства.", 403);
         const id = decodeURIComponent(providerAction[1]!);
         if (request.method === "PUT") this.send(response, 200, { provider: await connectProvider(this.store, id, (await this.body(request)).key) });
+        // A subscription signs out through its own CLI, which removes the token; forgetting it here would leave the token behind.
+        else if (providerInfo(id)?.auth === "signin") throw new HomeError("Провайдер не найден.", 404);
         else this.send(response, 200, { ok: true, reset: disconnectProvider(this.store, id) });
         return;
+      }
+      // Grok signs in inside its own CLI on the device that runs the employees, with a device code.
+      const grok = path.match(/^\/v1\/providers\/([^/]+)\/(login|logout)(?:\/([^/]+))?$/);
+      if (grok && this.accounts) {
+        if (!canManageAccount) throw new HomeError("Подключать аккаунты может владелец устройства.", 403);
+        if (decodeURIComponent(grok[1]!) !== "grok") throw new HomeError("Провайдер не найден.", 404);
+        const loginId = grok[3] && decodeURIComponent(grok[3]), login = this.accounts.grok;
+        if (grok[2] === "login" && request.method === "POST" && !loginId) { this.send(response, 201, await login.start()); return; }
+        if (grok[2] === "login" && request.method === "GET" && loginId) { this.send(response, 200, login.status(loginId)); return; }
+        if (grok[2] === "login" && request.method === "DELETE" && loginId) { this.send(response, 200, login.cancel(loginId)); return; }
+        if (grok[2] === "logout" && request.method === "POST" && !loginId) { this.accounts.assertIdle("provider-grok"); this.send(response, 200, { ok: true, reset: await login.logout() }); return; }
       }
       if (path === "/v1/accounts" && request.method === "GET") {
         this.send(response, 200, { accounts: await this.accounts?.list(url.searchParams.get("refresh") === "true") ?? [], canManage: canManageAccount }); return;
@@ -324,7 +337,7 @@ export class HttpApi {
         }
       }
       if (request.method === "GET" && path === "/health") {
-        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
+        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, providers: 2, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
         return;
       }
       if (request.method === "GET" && path === "/v1/integrations") {
@@ -555,11 +568,11 @@ export class HttpApi {
         else if (request.method === "POST" && path === "/v1/extensions/computer") this.send(response,200,await extensions.connectComputerUse());
         else if (request.method === "DELETE" && path === "/v1/extensions/computer") this.send(response,200,await extensions.removeMcp("cua_repl"));
         else if (request.method === "GET" && path === "/v1/extensions") {
-          // A context's skills and plugins stay listed for every route, but the Claude engine loads only its MCP services
+          // A context's skills and plugins stay listed for every route, but the Claude and Grok engines load only their MCP services
           // and a key provider's Codex loads no plugins.
           const provider = providerInfo(resolveModelSelection(this.store,conversation.profileId ?? "main").provider ?? "");
           const state = await extensions.list();
-          this.send(response,200,!provider ? state : {...state,notice:provider.engine === "claude" ? `С ${provider.name} сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.`
+          this.send(response,200,!provider ? state : {...state,notice:provider.engine !== "codex" ? `С ${provider.name} сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.`
             : `С ${provider.name} сотрудник не использует плагины: они работают только с ChatGPT.`});
         }
         else if (request.method === "POST" && path === "/v1/extensions/install") this.send(response,200,await extensions.install(body.files,String(body.digest ?? ""),body.replaces == null ? undefined : String(body.replaces)));
@@ -607,6 +620,7 @@ export class HttpApi {
           conversationId: body.conversationId == null ? undefined : String(body.conversationId),
           profile: body.profile == null ? undefined : String(body.profile),
           attachments: body.attachments as string[] | undefined,
+          byOwner: canManageAccount,
         });
         this.send(response, url.searchParams.get("async") === "true" ? 202 : 200, url.searchParams.get("async") === "true" ? submission.receipt : await submission.completion);
         return;

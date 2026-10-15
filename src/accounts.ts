@@ -7,8 +7,10 @@ import type { Store } from "./store.js";
 import type { CodexEngine } from "./types.js";
 import { AccountUnavailableError, isOpenAIAuthenticationError } from "./account-errors.js";
 import { resolveModelSelection } from "./model-settings.js";
-import { providerFailure, providerInfo, providerInfos, providerKey, providerModels, providerNotConnected, type ProviderInfo } from "./providers.js";
+import { ProviderIncident, providerConnected, providerFailure, providerInfo, providerInfos, providerKey, providerModels, providerNotConnected, subscriptionModels, type ProviderInfo } from "./providers.js";
 import { ClaudeEngine } from "./claude.js";
+import { AcpEngine, AcpSessionLost, ProviderSignInError } from "./acp.js";
+import { GrokLogin } from "./acp-login.js";
 
 export class Accounts {
   private services = new Map<string, CodexAccountService>();
@@ -17,7 +19,9 @@ export class Accounts {
   private consolidating?: Promise<void>;
   private readonly merged = new Map<string, string>();
   onChange?: (id: string) => void;
-  constructor(readonly store: Store, readonly root: string, readonly primary: CodexAccountService) { this.services.set("default", primary); this.watch("default", primary); }
+  /** The Grok subscription's sign-in on this device. */
+  readonly grok: GrokLogin;
+  constructor(readonly store: Store, readonly root: string, readonly primary: CodexAccountService) { this.services.set("default", primary); this.watch("default", primary); this.grok = new GrokLogin(store, root); }
   private watch(id: string, service: CodexAccountService) {
     service.setOnChange(identityChanged => {
       this.onChange?.(id);
@@ -127,7 +131,7 @@ export class Accounts {
   async statusFor(agent: string, refresh = false) {
     // A client may still ask about an employee removed elsewhere; that keeps the device's own account.
     const provider = agent === "main" || this.store.getProfile(agent) ? resolveModelSelection(this.store, agent).provider! : "chatgpt";
-    if (provider !== "chatgpt") return { account: { connected: Boolean(providerKey(this.store, provider)), email: null, planType: null, provider, providerName: providerInfo(provider)?.name ?? provider }, accountId: "provider-" + provider, loginPending: false };
+    if (provider !== "chatgpt") return { account: { connected: providerConnected(this.store, provider), email: null, planType: null, provider, providerName: providerInfo(provider)?.name ?? provider }, accountId: "provider-" + provider, loginPending: false };
     await this.consolidate();
     const ids = this.policy(agent) ?? this.entries().map(a => a.id);
     let first: { account: Awaited<ReturnType<CodexAccountService["read"]>>; accountId: string; loginPending: boolean } | undefined;
@@ -179,7 +183,7 @@ export class Accounts {
     await this.withIdle(id, () => this.get(id).logout()); this.get(id).close(); this.services.delete(id);
     this.store.setSetting("codex.accounts", JSON.stringify(this.entries().filter(a => a.id !== id)));
   }
-  close() { for (const service of this.services.values()) service.close(); }
+  close() { for (const service of this.services.values()) service.close(); this.grok.close(); }
 }
 
 /** Account choice is fixed for a whole turn. No retry of a partly executed turn.
@@ -197,15 +201,16 @@ export class AccountEngines implements CodexEngine {
     this.engines.set(id, engine);
     return engine;
   }
-  /** A Claude route keeps its MCP services in the context's Codex scope; skills and plugins there apply only to Codex routes. */
+  /** A Claude or Grok route keeps its MCP services in the context's Codex scope; skills and plugins there apply only to Codex routes. */
   private keyed(id: string): { info: ProviderInfo; engine: CodexEngine; scope: ScopedCodexEngine } {
-    const info = providerInfo(id);
-    if (!info || !providerKey(this.accounts.store, id)) throw providerNotConnected(id);
+    const info = providerInfo(id), store = this.accounts.store, root = this.accounts.root;
+    if (!info || !providerConnected(store, id)) throw providerNotConnected(id);
     let route = this.providers.get(id);
     if (!route) {
-      const key = () => providerKey(this.accounts.store, id);
-      const scope = new ScopedCodexEngine(this.accounts.root, undefined, undefined, resolve(this.accounts.root, ".data/providers", id, "contexts"), { info, key });
-      route = { scope, engine: info.engine === "claude" ? new ClaudeEngine({ root: this.accounts.root, provider: info, key }) : scope };
+      const key = () => providerKey(store, id);
+      const scope = new ScopedCodexEngine(root, undefined, undefined, resolve(root, ".data/providers", id, "contexts"), { info, key });
+      route = { scope, engine: info.engine === "claude" ? new ClaudeEngine({ root, provider: info, key })
+        : info.engine === "acp" ? new AcpEngine({ root, provider: info, onModels: models => store.setSetting(`providers.${id}.models`, JSON.stringify(models)) }) : scope };
       this.providers.set(id, route);
     }
     return { info, ...route };
@@ -221,17 +226,18 @@ export class AccountEngines implements CodexEngine {
       if (provider !== "chatgpt") return this.keyed(provider).scope.forContext(context);
       const selected = await selection(); return this.scoped(selected.id, selected.service).forContext(context);
     };
-    return {
-      steer: async (input, options) => runningEngine?.steer?.(input, options) ?? false,
-      run: async (input, options) => {
+    const run: CodexEngine["run"] = async (input, options) => {
         const provider = options?.provider ?? resolveModelSelection(this.accounts.store, agent).provider!;
         const keyed = provider !== "chatgpt" ? this.keyed(provider) : undefined;
+        // A subscription serves its subscriber: the owner's own chats and schedules, never colleagues or groups.
+        if (keyed?.info.engine === "acp" && (options?.groupContext || !(options?.byOwner || options?.scheduled)))
+          throw new ProviderIncident(`Подписка ${keyed.info.name} работает только в чатах владельца. Для коллег и групп выберите модель xAI с ключом API.`, 409, "policy:" + provider);
         const { id, service } = keyed ? { id: "provider-" + provider, service: undefined } : await this.accounts.choose(agent);
         if (service) locked = { id, service };
+        const threadKey = options?.conversationId ? `codex.thread.${id}.${options.conversationId}` : undefined;
+        const saved = threadKey ? this.accounts.store.getSetting(threadKey) : undefined;
         this.accounts.active.set(id, (this.accounts.active.get(id) ?? 0) + 1);
         try {
-          const threadKey = options?.conversationId ? `codex.thread.${id}.${options.conversationId}` : undefined;
-          const saved = threadKey ? this.accounts.store.getSetting(threadKey) : undefined;
           const ownerKey = options?.conversationId ? "codex.threadOwner." + options.conversationId : undefined;
           const owner = ownerKey ? this.accounts.store.getSetting(ownerKey) : null;
           const threadId = saved ?? (id === "default" && (!owner || owner === id) ? options?.threadId : undefined);
@@ -258,30 +264,37 @@ export class AccountEngines implements CodexEngine {
           if (checkpointKey && options?.messageId) this.accounts.store.setSetting(checkpointKey, options.messageId);
           return result;
         } catch (error) {
+          // Grok no longer knows the saved session: a new one starts, seeded with the chat, once.
+          if (error instanceof AcpSessionLost && saved) { this.accounts.store.deleteSetting(threadKey!); return run(input, options); }
+          // A lost sign-in needs the owner; Accounts offers it again.
+          if (error instanceof ProviderSignInError) this.accounts.store.deleteSetting(`providers.${provider}.signedIn`);
           if (keyed) throw providerFailure(keyed.info, error);
           if (isOpenAIAuthenticationError(error)) service!.invalidate(); throw error;
         }
         finally { locked = undefined; runningEngine = undefined; this.accounts.active.set(id, Math.max(0, (this.accounts.active.get(id) ?? 1) - 1)); }
-      },
+    };
+    return {
+      steer: async (input, options) => runningEngine?.steer?.(input, options) ?? false,
+      run,
       get connectionNotice() { return connectionEngine?.connectionNotice; },
       /** Every connected provider's models, so the picker can switch an agent between them. */
       models: async refresh => {
         const chatgpt = chatgptSignedIn(this.accounts.store) ? await selection().then(selected => this.scoped(selected.id, selected.service).forContext(context).models!(refresh))
           .catch(error => { if (error instanceof AccountUnavailableError) return []; throw error; }) : [];
-        const keyed = await Promise.all(providerInfos().filter(p => providerKey(this.accounts.store, p.id))
-          .map(p => p.models.length ? providerModels(p) : this.keyed(p.id).scope.forContext(context).models!(refresh)));
+        const keyed = await Promise.all(providerInfos().filter(p => providerConnected(this.accounts.store, p.id))
+          .map(p => p.engine === "acp" ? subscriptionModels(this.accounts.store, p.id) : p.models.length ? providerModels(p) : this.keyed(p.id).scope.forContext(context).models!(refresh)));
         return [...chatgpt, ...keyed.flat()];
       },
       connections: async refresh => {
         connectionEngine = await current();
         const all = await connectionEngine.connections?.(refresh) ?? [];
-        // Computer Use is a Codex plugin; the Claude engine never loads it.
-        return providerInfo(resolveModelSelection(this.accounts.store, agent).provider!)?.engine === "claude" ? all.filter(c => c.id !== "mcp:cua_repl") : all;
+        // Computer Use is a Codex plugin; the Claude and Grok engines never load it.
+        return [undefined, "codex"].includes(providerInfo(resolveModelSelection(this.accounts.store, agent).provider!)?.engine) ? all : all.filter(c => c.id !== "mcp:cua_repl");
       },
       connect: async name => {
-        // Codex keeps a browser sign-in in its own home, where the Claude engine cannot use it.
+        // Codex keeps a browser sign-in in its own home, where the Claude and Grok engines cannot use it.
         const info = providerInfo(resolveModelSelection(this.accounts.store, agent).provider!);
-        if (info?.engine === "claude") throw new HomeError(`С ${info.name} вход в сервисы через браузер недоступен. Добавьте сервис с ключом доступа в «Сервисы и навыки».`, 409);
+        if (info && info.engine !== "codex") throw new HomeError(`С ${info.name} вход в сервисы через браузер недоступен. Добавьте сервис с ключом доступа в «Сервисы и навыки».`, 409);
         return (await current()).connect!(name);
       },
       isConnected: async name => (await current()).isConnected!(name),

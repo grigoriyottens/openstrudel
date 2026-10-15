@@ -18,7 +18,7 @@ The employee card shows the OpenAI account choice only while the employee runs o
 First run keeps one primary action, "Sign in to OpenAI" (ChatGPT). A quiet second action, "I have an API key", opens the same key sheet. A connected key powers the device with that provider's recommended model, so the user goes straight to chat. An expired ChatGPT sign-in still counts as signed in, and a saved ChatGPT model ignores new keys. In those cases the app sets the device default to the key's recommended model and returns a main chat that is set to a ChatGPT model to "As on device". The user picks no model during onboarding. A key added later in Accounts changes no model, so the ChatGPT sign-in notice also says to choose a model on an API key in the employee's settings.
 
 Not built, on purpose:
-- Claude.ai, SuperGrok or Kimi Code subscription sign-in. Anthropic does not allow third-party products to offer Claude.ai login (code.claude.com/docs/en/legal-and-compliance). xAI and Kimi have no public OAuth client for third-party apps.
+- Claude.ai subscription sign-in. Anthropic does not allow third-party products to offer Claude.ai login (code.claude.com/docs/en/legal-and-compliance). Subscriptions that are allowed are described under [Subscriptions](#subscriptions).
 - Silent fallback to another provider or model. Auth and billing errors stop the turn and say which provider failed and what to do.
 - Base URL fields, fallback chains, per-key toggles, an "Auto" router across providers.
 
@@ -45,6 +45,19 @@ Codex remains the main engine and the only one for ChatGPT. The Claude engine is
 Isolation matches Codex: `settingSources: []`, a private `CLAUDE_CONFIG_DIR` per provider and context, auto-memory and non-essential traffic off, a stripped environment, the same workspace directory as the context. It never reads `~/.claude` or keys from the process environment. Commands run in the CLI sandbox, which cannot read the Home's `.data` folder outside the workspace. A path is checked after links are followed, so a link cannot lead an edit out of the workspace.
 
 Cost: the SDK bundles the Claude Code binary for the platform (236 MB on darwin-arm64), so the Mac app grows by that much. Each Claude turn starts one subprocess and resumes the session by id.
+
+## Subscriptions
+
+A subscription is used only the way its vendor documents for other apps. OpenStrudel never handles a subscription token itself.
+
+- **Kimi Code and GLM Coding Plan** are ordinary API-key providers on the Claude engine, because both vendors document their plan keys for the real Claude Code. The key comes from the vendor's console and goes through the existing key sheet. Kimi Code is its own provider (`https://api.kimi.ai/coding`, `x-api-key`), separate from the pay-as-you-go Kimi platform. Kimi Code answers any client but a coding agent with 403, so its key is saved without a check and a wrong key shows on the first turn. GLM's endpoint already is the Coding Plan route.
+- **Grok (SuperGrok, X Premium)** runs xAI's own agent, Grok Build (`grok --no-auto-update agent stdio`, pinned `@xai-official/grok`), over ACP, the way Zed hosts it. The vendor's agent owns its sign-in, token refresh, permissions, memory and sandbox. OpenStrudel only runs it in the employee's workspace with a private home, never gives it OpenStrudel keys or data, passes the employee tools as MCP, forwards its permission requests to the approval UI with "allow once" or "reject once" only (never "always allow"), and resumes its sessions for continuity. Grok runs only the owner's own chats and schedules; a colleague's or a group's turn is refused with a pointer to an xAI key. The xAI API key provider stays on Codex for pay-as-you-go use.
+
+**What the user sees.** Settings → Accounts has a small «Подписки» section with one row, Grok. «Войти» starts Grok's device-code sign-in on the chosen device and shows the same card as ChatGPT: the code, «Скопировать код», «Открыть страницу входа» and «Отменить вход», polled every 2 seconds. A signed-in row says «Вход выполнен» and offers «Выйти…» with a confirmation. The section is hidden unless `/health` reports `providers` 2 or more. The model picker names the route, e.g. "Grok 4.7 · подписка Grok" beside "Grok 4.7 · xAI". An employee whose Grok sign-in is gone shows «Нужен вход в Grok».
+
+**Personal use.** Moonshot and Z.ai license these plans to one person's own interactive work, and Z.ai also names bots. Schedules, Telegram groups and colleagues can break those rules. OpenStrudel does not block them; the API keys section says once: «Подписки Kimi Code и GLM Coding Plan — только для личного использования: расписания и ответы другим людям могут нарушать правила сервиса.»
+
+**Packaging.** Grok Build 1.0.52 for darwin-arm64 ships as a 48 MB compressed binary that unpacks to 172 MB, and the ACP client adds 6 MB. Kimi Code and GLM add nothing.
 
 ## Behaviour
 
@@ -102,7 +115,13 @@ Rows are in registry order, which decides Automatic and the order in Accounts. `
 - `POST /v1/profiles` accepts `{provider, model}` with the same checks as the model settings: owner only, a connected provider and a model it offers.
 - `GET /v1/extensions` adds a `notice` for an employee on a Claude-engine provider. `POST /v1/connections/connect` answers 409 there, because browser sign-in is not available.
 - `GET /v1/account?agentId` reports the agent's effective route. For a key provider: `{account: {connected, email: null, planType: null, provider, providerName}, accountId: "provider-<id>", loginPending: false, canManage}`.
-- `/health` adds `providers: 1`. The app hides the new controls for an older Home.
+- `/health` adds `providers: 1`. The app hides the new controls for an older Home. `providers: 2` adds the Grok subscription; the app treats any value of at least 1 as having API keys.
+- Grok is listed in `GET /v1/providers` as `{id: "grok", name: "Grok", auth: "signin", keyHint: null, keysUrl: null}`. Its sign-in, owner only and routed by `?deviceId` (a device that does not answer fails with 503, nothing is queued):
+  - `POST /v1/providers/grok/login` → `{type: "device", loginId, verificationUrl, userCode}`.
+  - `GET /v1/providers/grok/login/:loginId` → `{loginId, status: "pending"|"completed"|"failed"|"canceled", error?}`. `error` is shown as is, e.g. a plan that does not include Grok Build.
+  - `DELETE /v1/providers/grok/login/:loginId` cancels it.
+  - `POST /v1/providers/grok/logout` → `{ok: true, reset}`, resetting employees like removing a key.
+  - `GET /v1/account?agentId` for an employee on Grok reports `provider: "grok"`, so the app asks for a sign-in instead of a key.
 
 ## Storage
 

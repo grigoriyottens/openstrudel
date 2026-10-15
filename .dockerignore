@@ -10,3 +10,4 @@ src/migration.ts
 !scripts
 !scripts/container-start.sh
 !scripts/check-sandbox.mjs
+!scripts/extract-grok.mjs

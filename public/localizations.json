@@ -8986,5 +8986,159 @@
     "es": "Este no es un código QR de conexión de OpenStrudel.",
     "he": "זה לא קוד QR לחיבור OpenStrudel.",
     "ru": "Это не QR-код подключения OpenStrudel."
+  },
+  "подписка {0}": {
+    "en": "{0} subscription",
+    "ru": "подписка {0}",
+    "fr": "abonnement {0}",
+    "es": "suscripción de {0}",
+    "he": "מנוי {0}"
+  },
+  "Нужен вход в {0}": {
+    "en": "{0} sign-in needed",
+    "ru": "Нужен вход в {0}",
+    "fr": "Connexion à {0} requise",
+    "es": "Se necesita iniciar sesión en {0}",
+    "he": "נדרשת כניסה אל {0}"
+  },
+  "Войдите в {0} в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены.": {
+    "en": "Sign in to {0} in Accounts or choose another model. Chats and drafts are saved.",
+    "ru": "Войдите в {0} в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены.",
+    "fr": "Connectez-vous à {0} dans Comptes ou choisissez un autre modèle. Conversations et brouillons sont conservés.",
+    "es": "Inicia sesión en {0} en Cuentas o elige otro modelo. Los chats y borradores están guardados.",
+    "he": "יש להיכנס אל {0} בחשבונות או לבחור מודל אחר. השיחות והטיוטות נשמרו."
+  },
+  "Вход в {0} выполняет владелец устройства этого сотрудника. Чаты и черновики сохранены.": {
+    "en": "The owner of this assistant’s device signs in to {0}. Chats and drafts are saved.",
+    "ru": "Вход в {0} выполняет владелец устройства этого сотрудника. Чаты и черновики сохранены.",
+    "fr": "Le propriétaire de l’appareil de cet assistant se connecte à {0}. Conversations et brouillons sont conservés.",
+    "es": "El propietario del dispositivo de este asistente inicia sesión en {0}. Los chats y borradores están guardados.",
+    "he": "בעל המכשיר של העוזר נכנס אל {0}. השיחות והטיוטות נשמרו."
+  },
+  "Сотрудников и настроек на этой подписке: {0}. Их модель станет «Как на устройстве» или «Автоматически».": {
+    "en": "Assistants and settings on this subscription: {0}. Their model will become “Device default” or “Automatic”.",
+    "ru": "Сотрудников и настроек на этой подписке: {0}. Их модель станет «Как на устройстве» или «Автоматически».",
+    "fr": "Assistants et réglages sur cet abonnement : {0}. Leur modèle passera à « Réglage de l’appareil » ou « Automatique ».",
+    "es": "Asistentes y ajustes con esta suscripción: {0}. Su modelo pasará a «Predeterminado del dispositivo» o «Automático».",
+    "he": "עוזרים והגדרות שמשתמשים במנוי: {0}. המודל שלהם יהפוך ל״ברירת המחדל של המכשיר״ או ל״אוטומטי״."
+  },
+  "Выйти из {0}?": {
+    "en": "Sign out of {0}?",
+    "ru": "Выйти из {0}?",
+    "fr": "Se déconnecter de {0} ?",
+    "es": "¿Cerrar sesión en {0}?",
+    "he": "לצאת מ-{0}?"
+  },
+  "Вход в {0} на «{1}» будет удалён.": {
+    "en": "The {0} sign-in will be removed from “{1}”.",
+    "ru": "Вход в {0} на «{1}» будет удалён.",
+    "fr": "La connexion à {0} sera supprimée de « {1} ».",
+    "es": "El inicio de sesión en {0} se eliminará de «{1}».",
+    "he": "הכניסה אל {0} תוסר מ-״{1}״."
+  },
+  "Выйти…": {
+    "en": "Sign out…",
+    "ru": "Выйти…",
+    "fr": "Se déconnecter…",
+    "es": "Cerrar sesión…",
+    "he": "יציאה…"
+  },
+  "Войти": {
+    "en": "Sign in",
+    "ru": "Войти",
+    "fr": "Se connecter",
+    "es": "Iniciar sesión",
+    "he": "כניסה"
+  },
+  "Вход выполнен": {
+    "en": "Signed in",
+    "ru": "Вход выполнен",
+    "fr": "Connecté",
+    "es": "Sesión iniciada",
+    "he": "מחובר"
+  },
+  "Подписки": {
+    "en": "Subscriptions",
+    "ru": "Подписки",
+    "fr": "Abonnements",
+    "es": "Suscripciones",
+    "he": "מנויים"
+  },
+  "Подписка": {
+    "en": "Subscription",
+    "ru": "Подписка",
+    "fr": "Abonnement",
+    "es": "Suscripción",
+    "he": "מנוי"
+  },
+  "Введите этот код на странице входа": {
+    "en": "Enter this code on the sign-in page",
+    "ru": "Введите этот код на странице входа",
+    "fr": "Saisissez ce code sur la page de connexion",
+    "es": "Introduce este código en la página de acceso",
+    "he": "יש להזין את הקוד בעמוד הכניסה"
+  },
+  "Открыть страницу входа": {
+    "en": "Open sign-in page",
+    "ru": "Открыть страницу входа",
+    "fr": "Ouvrir la page de connexion",
+    "es": "Abrir página de acceso",
+    "he": "פתיחת עמוד הכניסה"
+  },
+  "Подписки Kimi Code и GLM Coding Plan — только для личного использования: расписания и ответы другим людям могут нарушать правила сервиса.": {
+    "en": "Kimi Code and GLM Coding Plan subscriptions are for personal use only: scheduled tasks and replies to other people may break the service’s rules.",
+    "ru": "Подписки Kimi Code и GLM Coding Plan — только для личного использования: расписания и ответы другим людям могут нарушать правила сервиса.",
+    "fr": "Les abonnements Kimi Code et GLM Coding Plan sont réservés à un usage personnel : les tâches planifiées et les réponses à d’autres personnes peuvent enfreindre les règles du service.",
+    "es": "Las suscripciones Kimi Code y GLM Coding Plan son solo para uso personal: las tareas programadas y las respuestas a otras personas pueden incumplir las normas del servicio.",
+    "he": "המנויים Kimi Code ו-GLM Coding Plan מיועדים לשימוש אישי בלבד: משימות מתוזמנות ותשובות לאנשים אחרים עלולות להפר את כללי השירות."
+  },
+  "Лимит подписки {0} исчерпан. Повторите позже или выберите другую модель.": {
+    "en": "The {0} subscription has reached its limit. Try again later or choose another model.",
+    "fr": "L’abonnement {0} a atteint sa limite. Réessayez plus tard ou choisissez un autre modèle.",
+    "es": "La suscripción de {0} alcanzó su límite. Vuelve a intentarlo más tarde o elige otro modelo.",
+    "he": "המינוי של {0} הגיע למגבלה. יש לנסות שוב מאוחר יותר או לבחור מודל אחר.",
+    "ru": "Лимит подписки {0} исчерпан. Повторите позже или выберите другую модель."
+  },
+  "Войдите в {0} снова в настройках аккаунтов.": {
+    "en": "Sign in to {0} again in Accounts.",
+    "fr": "Reconnectez-vous à {0} dans Comptes.",
+    "es": "Vuelve a iniciar sesión en {0} en Cuentas.",
+    "he": "יש להתחבר שוב אל {0} בחשבונות.",
+    "ru": "Войдите в {0} снова в настройках аккаунтов."
+  },
+  "Подписка {0} работает только в чатах владельца. Для коллег и групп выберите модель xAI с ключом API.": {
+    "en": "The {0} subscription works only in the owner’s chats. For colleagues and groups, choose an xAI model with an API key.",
+    "fr": "L’abonnement {0} ne fonctionne que dans les discussions du propriétaire. Pour les collègues et les groupes, choisissez un modèle xAI avec une clé API.",
+    "es": "La suscripción de {0} solo funciona en los chats del propietario. Para colegas y grupos, elige un modelo de xAI con una clave de API.",
+    "he": "המינוי של {0} פועל רק בצ׳אטים של הבעלים. לעמיתים ולקבוצות יש לבחור מודל של xAI עם מפתח API.",
+    "ru": "Подписка {0} работает только в чатах владельца. Для коллег и групп выберите модель xAI с ключом API."
+  },
+  "Grok не отвечает. Повторите вход позже.": {
+    "en": "Grok isn’t responding. Try signing in again later.",
+    "fr": "Grok ne répond pas. Réessayez de vous connecter plus tard.",
+    "es": "Grok no responde. Vuelve a iniciar sesión más tarde.",
+    "he": "Grok לא מגיב. יש לנסות להתחבר שוב מאוחר יותר.",
+    "ru": "Grok не отвечает. Повторите вход позже."
+  },
+  "Вход в Grok не завершён: {0}": {
+    "en": "Grok sign-in didn’t finish: {0}",
+    "fr": "La connexion à Grok n’a pas abouti : {0}",
+    "es": "No se completó el inicio de sesión en Grok: {0}",
+    "he": "ההתחברות ל-Grok לא הושלמה: {0}",
+    "ru": "Вход в Grok не завершён: {0}"
+  },
+  "Код входа в Grok истёк. Начните вход снова.": {
+    "en": "The Grok sign-in code expired. Start signing in again.",
+    "fr": "Le code de connexion à Grok a expiré. Recommencez la connexion.",
+    "es": "El código de inicio de sesión de Grok caducó. Vuelve a iniciar sesión.",
+    "he": "קוד ההתחברות ל-Grok פג. יש להתחיל את ההתחברות מחדש.",
+    "ru": "Код входа в Grok истёк. Начните вход снова."
+  },
+  "Устройство не на связи. Войдите в подписку, когда оно подключится.": {
+    "en": "The device is offline. Sign in to the subscription once it’s connected.",
+    "fr": "L’appareil est hors ligne. Connectez-vous à l’abonnement une fois qu’il sera connecté.",
+    "es": "El dispositivo no está en línea. Inicia sesión en la suscripción cuando se conecte.",
+    "he": "המכשיר לא מחובר. יש להתחבר למינוי כשהוא יתחבר.",
+    "ru": "Устройство не на связи. Войдите в подписку, когда оно подключится."
   }
 }

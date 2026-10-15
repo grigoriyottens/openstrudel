@@ -15,8 +15,10 @@ if [[ "$NODE_MAJOR" -lt 22 ]]; then
   exit 1
 fi
 
-npm ci
+# Vendor install scripts never run: Grok Build's would install itself into ~/.grok.
+npm ci --ignore-scripts
 npm run build
+node scripts/extract-grok.mjs .
 mkdir -p .data
 chmod 700 .data
 

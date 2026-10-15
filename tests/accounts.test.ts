@@ -10,13 +10,18 @@ vi.mock("../src/scopes.js", () => ({ ScopedCodexEngine: class {
     isConnected: async (id: string) => id === "mcp:ready", connect: async (id: string) => ({ url: `https://sign-in.invalid/${this.account}/${id}` }) }; }
   close() { engines.closed.push(this.account); }
 } }));
-vi.mock("../src/claude.js", () => ({ ClaudeEngine: class {
+vi.mock("../src/claude.js", async original => ({ ...await original<object>(), ClaudeEngine: class {
   constructor(readonly options: { provider: { id: string }; key: () => string | null }) {}
   forContext(context: string) { return { run: (input: string, options: any) => engines.run("claude-" + this.options.provider.id, context, input, options) }; }
+} }));
+vi.mock("../src/acp.js", async original => ({ ...await original<object>(), AcpEngine: class {
+  constructor(readonly options: { provider: { id: string } }) {}
+  forContext(context: string) { return { run: (input: string, options: any) => engines.run("acp-" + this.options.provider.id, context, input, options) }; }
 } }));
 import { Accounts, AccountEngines } from "../src/accounts.js";
 import { MessageService } from "../src/messages.js";
 import { ProviderKeyError } from "../src/providers.js";
+import { AcpSessionLost, ProviderSignInError } from "../src/acp.js";
 import { saveModelSelection } from "../src/model-settings.js";
 const stores: Store[] = [];
 afterEach(() => { for (const store of stores.splice(0)) store.close(); vi.restoreAllMocks(); engines.run.mockReset(); engines.closed.length = 0; });
@@ -185,5 +190,41 @@ describe("API key providers", () => {
     await pool.run("hi", { provider: "chatgpt", approvalMode: "auto", employees });
     expect(engines.run.mock.calls[1]?.[3]).toMatchObject({ approvalMode: "auto" });
     expect(engines.run.mock.calls[1]?.[3].employees.map((e: any) => e.id)).toEqual(["chat"]);
+  });
+});
+
+describe("Grok subscription", () => {
+  const grokModels = [{ id: "grok-4.7", name: "Grok 4.7", description: "", isDefault: true, speeds: [{ id: "default", name: "Обычная", description: "" }], provider: "grok" }];
+  const signedIn = (store: Store) => { store.setSetting("providers.grok.signedIn", "2026-10-15T10:00:00.000Z"); store.setSetting("providers.grok.models", JSON.stringify(grokModels)); };
+  it("serves only the owner's own chats and schedules; colleagues and groups are told to use an xAI key", async () => {
+    const { store, pool } = fixture(); signedIn(store);
+    saveModelSelection(store, { provider: "grok", model: "grok-4.7", serviceTier: "default" }, "main");
+    engines.run.mockResolvedValue({ threadId: "s-1", response: "ok", events: [] });
+    const messages = new MessageService(store, pool);
+    await messages.handle({ channel: "api", text: "Hi", externalChatId: "home", byOwner: true });
+    expect(engines.run.mock.calls[0]).toEqual(["acp-grok", "personal", "Hi", expect.objectContaining({ provider: "grok", model: "grok-4.7", byOwner: true })]);
+    await messages.handle({ channel: "api", text: "Morning digest", externalChatId: "home", scheduled: true });
+    expect(engines.run.mock.calls[1]?.[3]).toMatchObject({ scheduled: true });
+    const refusal = "Подписка Grok работает только в чатах владельца. Для коллег и групп выберите модель xAI с ключом API.";
+    await expect(messages.handle({ channel: "api", text: "From a colleague", externalChatId: "home" })).rejects.toThrow(refusal);
+    await expect(pool.run("hi", { provider: "grok", byOwner: true, groupContext: true })).rejects.toMatchObject({ status: 409, reason: "policy:grok", message: refusal });
+    expect(engines.run).toHaveBeenCalledTimes(2);
+    await messages.close();
+  });
+  it("lists the agent's own models, starts over once when Grok lost the session, and forgets a lost sign-in", async () => {
+    const { store, accounts, pool } = fixture(), conversation = store.primaryConversation(); signedIn(store);
+    store.addMessage({ channel: "api", conversationId: conversation.id, direction: "outbound", text: "Remember this context" });
+    store.setSetting("codex.thread.provider-grok." + conversation.id, "s-old");
+    expect((await pool.forAgent("main", "personal").models!()).filter(m => m.provider === "grok")).toEqual(grokModels);
+    expect(await accounts.statusFor("main")).toEqual({ account: { connected: true, email: null, planType: null, provider: "grok", providerName: "Grok" }, accountId: "provider-grok", loginPending: false });
+    engines.run.mockImplementation(async (_route, _context, _input, options) => { if (options.threadId) throw new AcpSessionLost("Session not found"); return { threadId: "s-new", response: "ok", events: [] }; });
+    await pool.run("Next", { conversationId: conversation.id, provider: "grok", byOwner: true });
+    expect(engines.run.mock.calls.map(call => call[3].threadId)).toEqual(["s-old", undefined]);
+    expect(engines.run.mock.calls[1]?.[2]).toContain("Remember this context");
+    expect(store.getSetting("codex.thread.provider-grok." + conversation.id)).toBe("s-new");
+    engines.run.mockRejectedValue(new ProviderSignInError({ id: "grok", name: "Grok" } as any));
+    await expect(pool.run("Again", { conversationId: conversation.id, provider: "grok", byOwner: true })).rejects.toThrow("Войдите в Grok снова в настройках аккаунтов.");
+    expect(store.getSetting("providers.grok.signedIn")).toBeNull();
+    await expect(pool.run("Again", { provider: "grok", byOwner: true })).rejects.toThrow("Подключите Grok на этом устройстве или выберите другую модель.");
   });
 });

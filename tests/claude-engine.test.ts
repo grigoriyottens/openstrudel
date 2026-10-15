@@ -188,9 +188,19 @@ it("fails fast on a rejected key and keeps other provider errors short", async (
   const final = fake(() => [init(), { type: "result", subtype: "success", is_error: true, api_error_status: 403, result: "API Error: 403 forbidden", session_id: "s-1" }]);
   await expect(engine("anthropic", final.query).run("Hi")).rejects.toBeInstanceOf(ProviderKeyError);
   const dump = fake(() => [init(), { type: "result", subtype: "success", is_error: true, api_error_status: 400, result: "API Error: 400 model glm-9 does not exist\n" + "x".repeat(600), session_id: "s-1" }]);
-  await expect(engine("zai", dump.query).run("Hi")).rejects.toThrow(/^GLM не завершил ответ: 400 model glm-9 does not exist$/);
+  await expect(engine("zai", dump.query).run("Hi")).rejects.toThrow(/^GLM Coding Plan не завершил ответ: 400 model glm-9 does not exist$/);
   const crash = fake(async function* () { yield init(); throw new Error("Claude Code process exited with code 1"); });
-  await expect(engine("zai", crash.query).run("Hi")).rejects.toThrow("GLM не завершил ответ: Claude Code process exited with code 1");
+  await expect(engine("zai", crash.query).run("Hi")).rejects.toThrow("GLM Coding Plan не завершил ответ: Claude Code process exited with code 1");
+  // Kimi Code refuses an exhausted plan with 403, which Claude Code reports as an authentication failure.
+  const quota = "Failed to authenticate. API Error: 403 You've reached your usage limit for this billing cycle";
+  const exhausted = fake(() => [init(), { type: "assistant", error: "authentication_failed", message: { role: "assistant", content: [{ type: "text", text: quota }] }, session_id: "s-1" },
+    { type: "result", subtype: "success", is_error: true, api_error_status: 403, result: quota, session_id: "s-1" }]);
+  const limited = await engine("kimicode", exhausted.query).run("Hi").catch(e => e);
+  expect(limited).not.toBeInstanceOf(ProviderKeyError);
+  expect(limited.message).toBe("Kimi Code не завершил ответ: " + quota);
+  expect(exhausted.calls[0]!.options.env).toMatchObject({ ANTHROPIC_API_KEY: "sk-test-key", ANTHROPIC_BASE_URL: "https://api.kimi.ai/coding", ANTHROPIC_DEFAULT_HAIKU_MODEL: "k3-256k" });
+  expect(exhausted.calls[0]!.options.env).not.toHaveProperty("API_TIMEOUT_MS");
+  expect(dump.calls[0]!.options.env).toMatchObject({ API_TIMEOUT_MS: "3000000" });
 });
 
 it("sends images only to models that accept them", async () => {
@@ -272,7 +282,7 @@ it("states turn failures and stops as catalog text", async () => {
   const english = context.StrudelLocale.create(JSON.parse(readFileSync("public/localizations.json", "utf8")), "en");
   const failed = fake(() => [init(), { type: "result", subtype: "success", is_error: true, api_error_status: 400, result: "API Error: 400 model glm-9 does not exist", session_id: "s-1" }]);
   const failure = await engine("zai", failed.query).run("Hi").catch(e => e.message);
-  expect(english.error(failure)).toBe("GLM did not finish the reply: 400 model glm-9 does not exist");
+  expect(english.error(failure)).toBe("GLM Coding Plan did not finish the reply: 400 model glm-9 does not exist");
   const stop = new AbortController();
   stop.abort();
   const stopped = fake(async function* (call) { yield init(); await call.interrupted; yield interrupted; });

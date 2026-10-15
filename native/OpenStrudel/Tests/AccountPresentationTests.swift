@@ -129,4 +129,41 @@ import Testing
         #expect(try !list(chatgptUsers: 0).reviewsAutomatically)
         #expect(try list(chatgptUsers: 1).reviewsAutomatically)
     }
+    @Test func grokSignsInApartFromChatGPTAndKeys() throws {
+        let json = #"{"providers":[{"id":"chatgpt","name":"ChatGPT","auth":"signin","connected":true,"keyHint":null,"keysUrl":null,"usedBy":1},{"id":"xai","name":"xAI","auth":"key","connected":false,"keyHint":null,"keysUrl":"https://console.x.ai","usedBy":0},{"id":"grok","name":"Grok","auth":"signin","connected":true,"keyHint":null,"keysUrl":null,"usedBy":2},{"id":"kimicode","name":"Kimi Code","auth":"key","connected":false,"keyHint":null,"keysUrl":"https://www.kimi.com/code/console","usedBy":0}],"canManage":true}"#
+        let list = try JSONDecoder().decode(ProviderList.self, from: Data(json.utf8))
+        #expect(list.providers.filter(\.isSubscription).map(\.id) == ["grok"])
+        // Kimi Code and GLM Coding Plan are keys like any other.
+        #expect(list.providers.filter(\.canAddKey).map(\.id) == ["xai", "kimicode"])
+        #expect(list.providers[2].signOutWarning == L("Сотрудников и настроек на этой подписке: \(2). Их модель станет «Как на устройстве» или «Автоматически»."))
+    }
+    @Test func pickerTellsTheGrokSubscriptionFromAnXAIKey() throws {
+        func model(_ provider: String) -> String {
+            #"{"id":"grok-4.7","name":"Grok 4.7","description":"","isDefault":true,"speeds":[{"id":"default","name":"Обычная","description":""}],"provider":"\#(provider)"}"#
+        }
+        let json = #"""
+        {"models":[\#(model("grok")),\#(model("xai"))],
+         "providers":[{"id":"grok","name":"Grok","auth":"signin","connected":true,"keyHint":null,"keysUrl":null,"usedBy":1},{"id":"xai","name":"xAI","auth":"key","connected":true,"keyHint":"••••7Qa","keysUrl":"https://console.x.ai","usedBy":0}],
+         "recommended":null,"selection":{"provider":null,"model":null,"serviceTier":null},"defaults":{"provider":"grok","model":"grok-4.7","serviceTier":"default"},
+         "effective":{"provider":"grok","model":"grok-4.7","serviceTier":"default"},"canManage":true}
+        """#
+        let settings = try JSONDecoder().decode(ModelSettings.self, from: Data(json.utf8))
+        #expect(settings.models.map(settings.title) == ["Grok 4.7 · " + L("подписка \("Grok")"), "Grok 4.7 · xAI"])
+        #expect(!settings.runsOnChatGPT)
+    }
+    @Test func signedOutGrokNeedsASignInNotAKey() throws {
+        func account(_ provider: String, _ name: String) throws -> OpenAIAccount {
+            try JSONDecoder().decode(OpenAIAccount.self, from: Data(#"{"connected":false,"email":null,"planType":null,"provider":"\#(provider)","providerName":"\#(name)"}"#.utf8))
+        }
+        #expect(try account("grok", "Grok").providerNeed == L("Нужен вход в \("Grok")"))
+        #expect(try account("xai", "xAI").providerNeed == L("Нужен ключ \("xAI")"))
+        #expect(try account("chatgpt", "ChatGPT").providerNeed == nil)
+    }
+    @Test func subscriptionsNeedTheNewerProvidersFlag() throws {
+        func health(_ flag: String) throws -> HomeHealth { try JSONDecoder().decode(HomeHealth.self, from: Data(#"{"ok":true\#(flag)}"#.utf8)) }
+        let older = try health(""), keys = try health(#","providers":1"#), subscriptions = try health(#","providers":2"#)
+        #expect(!older.supportsProviderKeys && !older.supportsSubscriptions)
+        #expect(keys.supportsProviderKeys && !keys.supportsSubscriptions)
+        #expect(subscriptions.supportsProviderKeys && subscriptions.supportsSubscriptions)
+    }
 }

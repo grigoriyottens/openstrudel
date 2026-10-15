@@ -89,6 +89,10 @@ export interface CodexEngine {
       /** Snapshotted when the queued turn starts on its execution device. */
       approvalMode?: import("./approval-mode.js").ApprovalMode;
       groupContext?: boolean;
+      /** Trusted: the device owner sent this turn. Set by the server from the owner's session and by the Telegram adapter, never from a request body. */
+      byOwner?: boolean;
+      /** A schedule started this turn. */
+      scheduled?: boolean;
       /** Verified channel identity, supplied only by the Telegram adapter. */
       telegramActor?: { userId: string; chatId: string; messageId: string };
       tools?: { definitions: DynamicTool[]; call: (name: string, args: Record<string, unknown>) => Promise<unknown> };
@@ -126,6 +130,8 @@ export interface MessageInput {
   contextOnly?: boolean;
   /** Background runs cannot wait forever for an interactive approval. */
   scheduled?: boolean;
+  /** Trusted: the device owner sent this message. Set by the server and the Telegram adapter, never from a request body. */
+  byOwner?: boolean;
   attachments?: string[];
   /** Downloaded channel media; never accepted as arbitrary paths by the API. */
   uploads?: Array<{ id: string; name: string; mimeType?: string; contentBase64: string }>;

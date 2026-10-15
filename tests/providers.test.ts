@@ -33,7 +33,34 @@ it("checks a pasted key with the provider and keeps only a masked hint visible",
   await connectProvider(store, "kimi", "kimi-key");
   expect(compatible.mock.calls[0]![0]).toBe("http://127.0.0.1:9/anthropic/v1/messages");
   expect(compatible.mock.calls[0]![1]!.headers).toMatchObject({ authorization: "Bearer kimi-key" });
-  expect(providerSummaries(store).map(p => [p.id, p.connected])).toEqual([["chatgpt", false], ["openai", false], ["anthropic", true], ["xai", true], ["kimi", true], ["zai", false], ["deepseek", false], ["openrouter", false]]);
+  expect(providerSummaries(store).map(p => [p.id, p.connected])).toEqual([["chatgpt", false], ["openai", false], ["anthropic", true], ["xai", true], ["grok", false], ["kimi", true], ["kimicode", false], ["zai", false], ["deepseek", false], ["openrouter", false]]);
+});
+
+it("runs the Kimi Code and GLM Coding Plan subscriptions on the Claude engine; Kimi Code's key is saved unchecked", async () => {
+  expect(providerInfo("kimicode")).toEqual({ id: "kimicode", name: "Kimi Code", engine: "claude", baseUrl: "https://api.kimi.ai/coding", auth: "x-api-key",
+    keysUrl: "https://www.kimi.com/code/console", webSearch: false, models: [
+      { id: "k3-256k", name: "Kimi K3", recommended: true, contextWindow: 262_144, images: true },
+      { id: "kimi-for-coding", name: "Kimi K2.8 Preview", contextWindow: 1_048_576, images: true },
+    ] });
+  expect(providerInfo("zai")).toMatchObject({ name: "GLM Coding Plan", baseUrl: "https://api.z.ai/api/anthropic", auth: "bearer", env: { API_TIMEOUT_MS: "3000000" } });
+  // Kimi Code answers a plain request with 403 "only available for Coding Agents"; its first turn reports a rejected key.
+  const store = memory(), check = reply(403, { error: { message: "only available for Coding Agents" } }); vi.stubGlobal("fetch", check);
+  expect(await connectProvider(store, "kimicode", "sk-kimi-7Qa")).toMatchObject({ id: "kimicode", auth: "key", connected: true, keyHint: "••••7Qa" });
+  expect(check).not.toHaveBeenCalled();
+  // It refuses an exhausted plan with 403 too.
+  const kimi = providerInfo("kimicode")!;
+  expect(providerFailure(kimi, new Error("Kimi Code не завершил ответ: Failed to authenticate. API Error: 403 You've reached your usage limit for this billing cycle"))).toMatchObject({ status: 429, reason: "limits:kimicode",
+    message: "У ключа Kimi Code закончился лимит или баланс. Проверьте оплату у провайдера или повторите позже." });
+  expect(providerFailure(kimi, new Error("Failed to authenticate. API Error: 403 Invalid API Key"))).toBeInstanceOf(ProviderKeyError);
+});
+
+it("lists the Grok subscription as a sign-in that only the vendor's CLI holds", () => {
+  const store = memory(), grok = () => providerSummaries(store).find(p => p.id === "grok");
+  expect(providerInfo("grok")).toMatchObject({ name: "Grok", engine: "acp", auth: "signin", models: [] });
+  expect(grok()).toEqual({ id: "grok", name: "Grok", auth: "signin", connected: false, keyHint: null, keysUrl: null, usedBy: 0 });
+  store.setSetting("providers.grok.signedIn", "2026-10-15T10:00:00.000Z");
+  expect(grok()).toMatchObject({ connected: true, keyHint: null });
+  return expect(connectProvider(store, "grok", "token")).rejects.toMatchObject({ status: 404 });
 });
 
 it("saves nothing when the key is rejected or cannot be checked", async () => {
@@ -86,6 +113,10 @@ it("attributes key route failures to their provider, never to an OpenAI sign-in"
   expect((providerFailure(xai, new Error("unexpected status 402 Payment Required")) as Error).message).toBe(limited.message);
   const conflict = new Error("unexpected status 409 Conflict: conversation busy");
   expect(providerFailure(xai, conflict)).toBe(conflict);
+  // A subscription has no key to reject; its engine reports a lost sign-in itself.
+  const grok = providerInfo("grok")!, forbidden = new Error("Grok не завершил ответ: 403 Forbidden");
+  expect(providerFailure(grok, forbidden)).toBe(forbidden);
+  expect((providerFailure(grok, new Error("Grok не завершил ответ: rate limit exceeded")) as Error).message).toBe("Лимит подписки Grok исчерпан. Повторите позже или выберите другую модель.");
 });
 
 it("a replaced or removed key ends its route's native threads; the same key keeps them", async () => {
@@ -130,17 +161,19 @@ it("serves providers per device with owner-only writes, a provider-aware catalog
     runtime.store.setSetting("codex.auth.mode", "managed");
     runtime.account.read = async () => ({ connected: true, email: "owner@example.invalid", planType: "plus", managed: true });
     const employee = runtime.store.createProfile({ name: "Researcher" });
-    expect((await (await call("/health")).json()).providers).toBe(1);
+    expect((await (await call("/health")).json()).providers).toBe(2);
     const initial = await (await call("/v1/providers")).json();
     expect(initial.canManage).toBe(true);
     expect(initial.providers[0]).toEqual({ id: "chatgpt", name: "ChatGPT", auth: "signin", connected: true, keyHint: null, keysUrl: null, usedBy: 3 });
-    expect(initial.providers.map((p: any) => p.id)).toEqual(["chatgpt", "openai", "anthropic", "xai", "kimi", "zai", "deepseek", "openrouter"]);
+    expect(initial.providers.map((p: any) => p.id)).toEqual(["chatgpt", "openai", "anthropic", "xai", "grok", "kimi", "kimicode", "zai", "deepseek", "openrouter"]);
 
     const session = await call("/auth/session", "POST", { key: runtime.api.web.invite(false).key });
     const member = { cookie: session.headers.get("set-cookie")!.split(";")[0]!, "x-openstrudel-csrf": (await session.json()).csrf };
     expect((await (await call("/v1/providers", "GET", undefined, member)).json()).canManage).toBe(false);
     expect((await call("/v1/providers/xai", "PUT", { key: "xai-good" }, member)).status).toBe(403);
     expect((await call("/v1/providers/xai", "DELETE", undefined, member)).status).toBe(403);
+    for (const [path, method] of [["/v1/providers/grok/login", "POST"], ["/v1/providers/grok/login/x", "GET"], ["/v1/providers/grok/login/x", "DELETE"], ["/v1/providers/grok/logout", "POST"]])
+      expect((await call(path, method, undefined, member)).status, path).toBe(403);
     expect(checks).toEqual([]);
 
     const rejected = await call("/v1/providers/xai", "PUT", { key: "xai-bad" });
@@ -184,6 +217,9 @@ it("serves providers per device with owner-only writes, a provider-aware catalog
     expect(runtime.store.getProfile(employee.id)).toMatchObject({ provider: null, model: null });
     expect((await (await call("/v1/account?agentId=" + employee.id)).json()).accountId).not.toBe("provider-xai");
     expect((await call("/v1/providers/chatgpt", "PUT", { key: "x" })).status).toBe(404);
+    // A subscription signs out through its CLI, which removes the token; forgetting it here would leave the token behind.
+    expect((await call("/v1/providers/grok", "DELETE")).status).toBe(404);
+    expect((await call("/v1/providers/xai/login", "POST")).status).toBe(404);
   } finally { await runtime.stop(); provider.close(); }
 });
 
@@ -233,6 +269,9 @@ it("says on Services and skills what a key provider uses: plugins only with Chat
     runtime.store.setSetting("providers.xai.key", "xai-key");
     saveModelSelection(runtime.store, { provider: "xai", model: "grok-4.7", serviceTier: "default" }, "main");
     expect((await list()).notice).toBe("С xAI сотрудник не использует плагины: они работают только с ChatGPT.");
+    runtime.store.setSetting("providers.grok.signedIn", "2026-10-15T10:00:00.000Z");
+    saveModelSelection(runtime.store, { provider: "grok", model: "grok-4.7", serviceTier: "default" }, "main");
+    expect((await list()).notice).toBe("С Grok сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.");
     saveModelSelection(runtime.store, { provider: "chatgpt", model: "gpt-6-sol", serviceTier: "default" }, "main");
     expect((await list()).notice).toBeUndefined();
   } finally { await runtime.stop(); }

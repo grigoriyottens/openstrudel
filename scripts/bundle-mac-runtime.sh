@@ -40,7 +40,18 @@ done < <(git -C "$ROOT" ls-files -z -- src public package.json package-lock.json
 npm ci --prefix "$WORK/source" --ignore-scripts
 npm run --prefix "$WORK/source" build
 cp "$WORK/source/package.json" "$WORK/source/package-lock.json" "$RUNTIME/"
-npm ci --prefix "$RUNTIME" --omit=dev --ignore-scripts
+# Native packages for the app's architecture rather than the build machine's.
+npm ci --prefix "$RUNTIME" --omit=dev --ignore-scripts --os=darwin --cpu="$NODE_ARCH"
+# The Grok subscription runs xAI's pinned Grok Build. Its native binary goes to bin/grok with its Apache-2.0
+# license and notices; the compressed npm copy is not shipped twice.
+"$RUNTIME/bin/node" "$ROOT/scripts/extract-grok.mjs" "$RUNTIME" "darwin-$NODE_ARCH"
+cp "$RUNTIME/node_modules/@xai-official/grok-darwin-$NODE_ARCH/THIRD_PARTY_NOTICES.md" "$RUNTIME/Grok-THIRD_PARTY_NOTICES.md"
+rm -rf "$RUNTIME/node_modules/@xai-official"
+curl --fail --silent --show-error --location --retry 2 --connect-timeout 15 --max-time 60 \
+  "https://raw.githubusercontent.com/xai-org/grok-build/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/LICENSE" -o "$RUNTIME/Grok-LICENSE.txt"
+printf '%s  %s\n' "116f7778b9802e569b7fa3a532b17bd80eb13c67837def01eed093d4ea472f28" "$RUNTIME/Grok-LICENSE.txt" | shasum -a 256 -c -
+mkdir -p "$WORK/grok-home"
+env -i PATH=/usr/bin:/bin HOME="$WORK/grok-home" GROK_HOME="$WORK/grok-home" GROK_DISABLE_AUTOUPDATER=1 "$RUNTIME/bin/grok" --no-auto-update --version
 ditto "$WORK/source/dist" "$RUNTIME/dist"
 ditto "$WORK/source/public" "$RUNTIME/public"
 cp "$ROOT/scripts/install-prebuilt-mac.sh" "$RUNTIME/scripts/"
@@ -58,4 +69,4 @@ if ! ditto "$RUNTIME" "$APP/Contents/Resources/Runtime"; then
   if [[ -e "$WORK/previous-runtime" ]]; then mv "$WORK/previous-runtime" "$APP/Contents/Resources/Runtime"; fi
   exit 1
 fi
-echo "Codex and its runtime are bundled. No Node or terminal setup is needed."
+echo "Codex, Grok Build and their runtime are bundled. No Node or terminal setup is needed."

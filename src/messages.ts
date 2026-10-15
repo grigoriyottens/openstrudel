@@ -145,7 +145,7 @@ export class MessageService {
             threadId: current.codexThreadId, conversationId: current.id, messageId: inbound.id, ...resolveModelSelection(this.store, currentProfile?.id ?? "main"), signal: running.abort.signal,
             employees: this.store.listProfiles().filter(p => p.id !== currentProfile?.id && !agentTransfer(this.store, p.id) && !this.store.getSetting("employee.deleted." + p.id))
               .map(p => ({...p,...resolveModelSelection(this.store,p.id)})),
-            approvalMode: readApprovalMode(this.store.getSetting(approvalSetting)), groupContext,
+            approvalMode: readApprovalMode(this.store.getSetting(approvalSetting)), groupContext, byOwner: input.byOwner === true, scheduled: input.scheduled === true,
             telegramActor: input.channel === "telegram" && input.telegramSenderId && input.externalChatId && input.externalId
               ? {userId:input.telegramSenderId,chatId:input.externalChatId,messageId:input.externalId} : undefined,
             images: files.filter(f=>["image/png","image/jpeg","image/webp","image/gif"].includes(f.mimeType)).map(f=>f.path),

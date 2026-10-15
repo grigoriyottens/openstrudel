@@ -39,5 +39,9 @@ it.skipIf(process.platform !== "darwin" || !app)("runs the packaged Home without
     expect(execFileSync(claude, ["--version"], { env, encoding: "utf8", timeout: 20_000 })).toMatch(/Claude Code/);
     const entitlements = execFileSync("/usr/bin/codesign", ["-d", "--entitlements", "-", "--xml", claude], { encoding: "utf8" });
     expect(entitlements).toContain("com.apple.security.cs.allow-jit");
+    // Grok Build runs from the bundle with its license and notices, offline and with its own home.
+    const grok = join(runtime, "bin/grok"), pinned = JSON.parse(readFileSync(join(runtime, "package.json"), "utf8")).dependencies["@xai-official/grok"];
+    expect(execFileSync(grok, ["--no-auto-update", "--version"], { env: { ...env, GROK_HOME: join(fixture, "grok"), GROK_DISABLE_AUTOUPDATER: "1" }, encoding: "utf8", timeout: 20_000 })).toContain(`grok ${pinned} `);
+    for (const file of ["Grok-LICENSE.txt", "Grok-THIRD_PARTY_NOTICES.md"]) expect(readFileSync(join(runtime, file), "utf8").length).toBeGreaterThan(0);
   } finally { rmSync(fixture, { recursive: true, force: true }); }
 });
