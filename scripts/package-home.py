@@ -26,7 +26,7 @@ def main():
         # Only committed release inputs, never the working tree or local state.
         subprocess.run([
             "git", "archive", "--format=tar.gz", "--prefix=OpenStrudel-Home/", "--output=" + str(archive.resolve()), revision, "--",
-            ".dockerignore", ".env.example", "AGENTS.md", "Dockerfile", "README.md", "deploy", "docs",
+            ".dockerignore", ".env.example", "AGENTS.md", "Dockerfile", "README.md", "deploy", "docs", "licenses",
             "package-lock.json", "package.json", "public", "scripts", "src", "tsconfig.json",
         ], cwd=repo, check=True)
         with tarfile.open(archive) as contents:
@@ -41,7 +41,8 @@ def main():
                     raise ValueError("Unsafe release archive entry")
             for required in ("Dockerfile", "package.json", "package-lock.json", "tsconfig.json", "src/cloud-bootstrap.ts",
                              "deploy/compose.yaml", "deploy/docker/openstrudel.apparmor", "deploy/docker/seccomp.json",
-                             "scripts/container-start.sh", "scripts/check-sandbox.mjs"):
+                             "scripts/container-start.sh", "scripts/check-sandbox.mjs", "licenses/Grok-LICENSE.txt",
+                             "licenses/Grok-THIRD_PARTY_NOTICES.md"):
                 if not contents.getmember("OpenStrudel-Home/" + required).isfile():
                     raise ValueError("Missing release input: " + required)
         # Atomic publication of the completed local artifact, refusing collisions.
