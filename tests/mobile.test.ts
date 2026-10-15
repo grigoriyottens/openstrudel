@@ -70,7 +70,7 @@ describe("iPhone pairing", () => {
       const revoked = await send(port, "/v1/mobile/clients/" + colleague.id, { token: owner, method: "DELETE" });
       expect(revoked.status).toBe(200);
       expect(revoked.body.clients.map((c: any) => c.label)).toEqual(["Mik's iPhone", "iPhone Даши"]);
-      expect((await send(port, "/health", { token: yulia })).status).toBe(401);
+      expect(await send(port, "/health", { token: yulia })).toEqual({ status: 401, body: { error: "Это устройство отключено. Подключитесь заново по новой ссылке." } });
       expect((await send(port, "/health", { token: owner })).status).toBe(200);
       expect((await send(port, "/health", { token: dasha })).status).toBe(200);
       // Another owner device, such as a lost phone, can be cut off from an owner device or from the Mac itself.
@@ -96,7 +96,7 @@ describe("iPhone pairing", () => {
       expect((await call(mobile.port!, "/pair", key(owner))).status).toBe(401);
       expect(mobile.status().invitations.map(i => i.label)).toEqual(["Юля", null, null]);
       mobile.cancelInvite(dasha.id);
-      expect((await call(mobile.port!, "/pair", key(dasha))).status).toBe(401);
+      expect(await call(mobile.port!, "/pair", key(dasha))).toEqual({ status: 401, body: { error: "Ссылка устарела или уже использована. Попросите новую." } });
       offset += 23 * 3_600_000;
       await mobile.close(); await mobile.restore();
       expect((await call(mobile.port!, "/pair", key(yulia))).status).toBe(200);
@@ -238,7 +238,7 @@ describe("iPhone pairing", () => {
     try {
       await mobile.invite();
       const result = await promisify(execFile)("/usr/bin/curl", ["-ksSv", "--max-time", "10", `https://127.0.0.1:${mobile.port}/health`]);
-      expect(JSON.parse(result.stdout).error).toContain("Подключите iPhone");
+      expect(JSON.parse(result.stdout).error).toContain("Подключитесь заново");
       expect(result.stderr).toContain("SSL connection using TLSv1.3");
     } finally { vi.unstubAllEnvs(); await mobile.close(); store.close(); await rm(directory, { recursive: true, force: true }); }
   });

@@ -20,13 +20,13 @@ afterEach(async () => { for (const f of fixtures.splice(0)) { await f.runtime.st
 
 function populated() {
   const f = fixture(), s = f.store;
-  const employee = s.createProfile({ name: "Редактор", instructions: "Сохраняй мой голос.", capabilities: ["research"], model: "gpt-5", tokenLimit: 12345, domain: "work", purpose: "Мой журнал" });
+  const employee = s.createProfile({ name: "Редактор", instructions: "Сохраняй мой голос.", capabilities: ["research"], provider: "openai", model: "gpt-5", tokenLimit: 12345, domain: "work", purpose: "Мой журнал" });
   const colleague = s.createProfile({ name: "Коллега", domain: "work" });
   // This fixture represents a team created before individual agent workspaces.
   s.deleteSetting("employee.context." + employee.id);
   s.deleteSetting("employee.context." + colleague.id);
   s.setSetting("main.soul", "Главный помощник");
-  for (const name of ["api.local_token", "telegram.bot_token", "codex.auth.mode"]) s.setSetting(name, "DO_NOT_EXPORT_SECRET");
+  for (const name of ["api.local_token", "telegram.bot_token", "codex.auth.mode", "providers.openai.key"]) s.setSetting(name, "DO_NOT_EXPORT_SECRET");
   s.setSetting("mobile.tokens", '["DO_NOT_EXPORT_SECRET"]');
   const chat = s.profileConversation(employee.id);
   s.setConversationThread(chat.id, "DO_NOT_EXPORT_THREAD");
@@ -144,7 +144,7 @@ describe("additive team transfer", () => {
     expect(destination.store.getSetting("main.soul")).toBe("My existing main assistant");
     expect(readFileSync(resolve(workspace, "MEMORY.md"), "utf8")).toBe("Existing memory");
     const editor = destination.store.getProfile("Редактор (2)")!;
-    expect(editor).toMatchObject({ instructions: source.employee.instructions, capabilities: ["research"], model: "gpt-5", tokenLimit: 12345, purpose: "Мой журнал", domain: "work" });
+    expect(editor).toMatchObject({ instructions: source.employee.instructions, capabilities: ["research"], provider: "openai", model: "gpt-5", tokenLimit: 12345, purpose: "Мой журнал", domain: "work" });
     expect(editor.id).not.toBe(source.employee.id);
     const chat = destination.store.profileConversation(editor.id), context = destination.messages.contextFor(chat.id);
     expect(context).toMatch(/^import-[a-f0-9]{32}$/);

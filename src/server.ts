@@ -1,4 +1,5 @@
-import { parseModelSelection, readModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, validateModelSelection } from "./model-settings.js";
+import { automaticProvider, checkModelSelection, parseModelSelection, readModelSelection, recommendedModel, resolveModelSelection, saveModelSelection } from "./model-settings.js";
+import { connectProvider, disconnectProvider, providerInfo, providerSummaries } from "./providers.js";
 import { deleteEmployee } from "./employee-delete.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -122,7 +123,7 @@ export class HttpApi {
     }
     if (origin) response.setHeader("access-control-allow-origin", origin);
     response.setHeader("access-control-allow-headers", "authorization, content-type");
-    response.setHeader("access-control-allow-methods", "GET, POST, PATCH, DELETE, OPTIONS");
+    response.setHeader("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
     if (request.method === "OPTIONS") {
       response.writeHead(204).end();
       return;
@@ -220,13 +221,25 @@ export class HttpApi {
         const engine = this.engine?.forAgent?.(agent ?? "main",context) ?? this.engine?.forContext?.(context) ?? this.engine;
         if (!engine?.models) throw new HomeError("Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.",501);
         const models = await engine.models(url.searchParams.get("refresh") === "true");
+        const automatic = automaticProvider(this.store);
         if (request.method === "POST") {
           const selection = parseModelSelection(await this.body(request),Boolean(agent));
           if (agent) assertAgentWritable(this.store,agent);
-          validateModelSelection(agent && !selection.model ? readModelSelection(this.store) : selection,models);
+          // Inheriting checks the device default as it runs: a registry provider has only the default speed.
+          checkModelSelection(this.store,agent && !selection.model ? resolveModelSelection(this.store) : selection,models);
           saveModelSelection(this.store,selection,agent);
         }
-        this.send(response,200,{models,recommended:recommendedModel(models),selection:readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,undefined,models),effective:resolveModelSelection(this.store,agent,models),canManage:canManageAccount}); return;
+        this.send(response,200,{models,providers:providerSummaries(this.store).filter(p=>p.connected),recommended:{...recommendedModel(models.filter(m=>m.provider === automatic)),provider:automatic},
+          selection:readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,undefined,models),effective:resolveModelSelection(this.store,agent,models),canManage:canManageAccount}); return;
+      }
+      if (path === "/v1/providers" && request.method === "GET") { this.send(response, 200, { providers: providerSummaries(this.store), canManage: canManageAccount }); return; }
+      const providerAction = path.match(/^\/v1\/providers\/([^/]+)$/);
+      if (providerAction && ["PUT", "DELETE"].includes(request.method ?? "")) {
+        if (!canManageAccount) throw new HomeError("Подключать аккаунты может владелец устройства.", 403);
+        const id = decodeURIComponent(providerAction[1]!);
+        if (request.method === "PUT") this.send(response, 200, { provider: await connectProvider(this.store, id, (await this.body(request)).key) });
+        else this.send(response, 200, { ok: true, reset: disconnectProvider(this.store, id) });
+        return;
       }
       if (path === "/v1/accounts" && request.method === "GET") {
         this.send(response, 200, { accounts: await this.accounts?.list(url.searchParams.get("refresh") === "true") ?? [], canManage: canManageAccount }); return;
@@ -311,7 +324,7 @@ export class HttpApi {
         }
       }
       if (request.method === "GET" && path === "/health") {
-        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
+        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
         return;
       }
       if (request.method === "GET" && path === "/v1/integrations") {
@@ -409,6 +422,13 @@ export class HttpApi {
 
         const tokenLimit = body.tokenLimit == null ? undefined : Number(body.tokenLimit);
         if (tokenLimit !== undefined && (!Number.isFinite(tokenLimit) || tokenLimit <= 0)) throw new Error("tokenLimit must be a positive number");
+        // A model chosen at creation is the same owner-only choice as in the model settings.
+        const choice = body.provider == null && body.model == null ? null : parseModelSelection({ provider: body.provider, model: body.model ?? null, serviceTier: body.serviceTier ?? "default" }, true);
+        if (choice) {
+          if (!canManageAccount) throw new HomeError("Настройки меняет владелец устройства.", 403);
+          const engine = this.engine?.forAgent?.("main", "personal") ?? this.engine?.forContext?.("personal") ?? this.engine;
+          checkModelSelection(this.store, choice, await engine?.models?.() ?? []);
+        }
         this.store.db.exec("SAVEPOINT create_profile");
         let profile;
         try {
@@ -417,7 +437,9 @@ export class HttpApi {
             defaultName: typeof body.defaultName === "string" ? body.defaultName : undefined,
             instructions,
             capabilities: Array.isArray(body.capabilities) ? body.capabilities.filter((item): item is string => typeof item === "string") : [],
-            model: body.model == null ? undefined : String(body.model),
+            provider: choice?.provider ?? undefined,
+            model: choice?.model ?? undefined,
+            serviceTier: choice?.serviceTier ?? undefined,
             tokenLimit,
             domain: body.domain == null ? undefined : body.domain as import("./types.js").EmployeeProfile["domain"],
             purpose: body.purpose == null ? undefined : String(body.purpose),
@@ -532,7 +554,14 @@ export class HttpApi {
         else if (request.method === "GET" && path === "/v1/extensions/computer") this.send(response,200,extensions.computerUse());
         else if (request.method === "POST" && path === "/v1/extensions/computer") this.send(response,200,await extensions.connectComputerUse());
         else if (request.method === "DELETE" && path === "/v1/extensions/computer") this.send(response,200,await extensions.removeMcp("cua_repl"));
-        else if (request.method === "GET" && path === "/v1/extensions") this.send(response,200,await extensions.list());
+        else if (request.method === "GET" && path === "/v1/extensions") {
+          // A context's skills and plugins stay listed for every route, but the Claude engine loads only its MCP services
+          // and a key provider's Codex loads no plugins.
+          const provider = providerInfo(resolveModelSelection(this.store,conversation.profileId ?? "main").provider ?? "");
+          const state = await extensions.list();
+          this.send(response,200,!provider ? state : {...state,notice:provider.engine === "claude" ? `С ${provider.name} сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.`
+            : `С ${provider.name} сотрудник не использует плагины: они работают только с ChatGPT.`});
+        }
         else if (request.method === "POST" && path === "/v1/extensions/install") this.send(response,200,await extensions.install(body.files,String(body.digest ?? ""),body.replaces == null ? undefined : String(body.replaces)));
         else if (request.method === "POST" && path === "/v1/extensions/mcp") this.send(response,200,await extensions.addMcp(body));
         else if (request.method === "POST" && path === "/v1/extensions/mcp/remove") this.send(response,200,await extensions.removeMcp(String(body.name ?? "")));

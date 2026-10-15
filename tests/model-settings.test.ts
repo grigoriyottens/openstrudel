@@ -15,12 +15,12 @@ it('follows the account recommendation and falls back to GPT-6.1 Sol with Medium
  expect(recommendedModel([])).toMatchObject({id:'gpt-6.1-sol',defaultReasoningEffort:'medium'});
  const store=new Store(':memory:');
  try {
-  expect(readModelSelection(store)).toEqual({model:null,serviceTier:'default'});
-  expect(resolveModelSelection(store,undefined,recommended)).toEqual({model:'preferred',serviceTier:'default'});
-  saveModelSelection(store,{model:'chosen',serviceTier:'default'});
+  expect(readModelSelection(store)).toEqual({provider:null,model:null,serviceTier:'default'});
+  expect(resolveModelSelection(store,undefined,recommended)).toEqual({provider:'chatgpt',model:'preferred',serviceTier:'default'});
+  saveModelSelection(store,{provider:'chatgpt',model:'chosen',serviceTier:'default'});
   expect(resolveModelSelection(store,undefined,recommended).model).toBe('chosen');
-  expect(parseModelSelection({model:null,serviceTier:'default'},false)).toEqual({model:null,serviceTier:'default'});
-  saveModelSelection(store,{model:null,serviceTier:'default'});
+  expect(parseModelSelection({model:null,serviceTier:'default'},false)).toEqual({provider:null,model:null,serviceTier:'default'});
+  saveModelSelection(store,{provider:null,model:null,serviceTier:'default'});
   expect(resolveModelSelection(store,undefined,[]).model).toBe('gpt-6.1-sol');
  } finally {store.close();}
 });
@@ -31,30 +31,54 @@ it('uses the live catalog and managed speed restrictions, without inventing Ultr
  expect(()=>validateModelSelection({model:'m1',serviceTier:'ultra'},catalog)).toThrow('скорость');
  expect(()=>validateModelSelection({model:'missing',serviceTier:'default'},catalog)).toThrow('модель');
 });
+it('reads a stored model without a provider as ChatGPT and resolves automatic to who is connected',()=>{
+ const store=new Store(':memory:');
+ try {
+ store.setSetting('models.defaults',JSON.stringify({model:'gpt-6-sol',serviceTier:'priority'}));
+ const legacy=store.createProfile({name:'Legacy',model:'gpt-6-luna'});
+ expect(readModelSelection(store)).toEqual({provider:'chatgpt',model:'gpt-6-sol',serviceTier:'priority'});
+ expect(readModelSelection(store,legacy.id)).toEqual({provider:'chatgpt',model:'gpt-6-luna',serviceTier:'default'});
+ expect(resolveModelSelection(store,'main')).toEqual({provider:'chatgpt',model:'gpt-6-sol',serviceTier:'priority'});
+ saveModelSelection(store,{provider:null,model:null,serviceTier:'priority'});
+ expect(resolveModelSelection(store,'main')).toEqual({provider:'chatgpt',model:null,serviceTier:'priority'});
+ store.setSetting('providers.kimi.key','kimi-key');store.setSetting('providers.xai.key','xai-key');
+ expect(resolveModelSelection(store,'main')).toEqual({provider:'xai',model:'grok-4.7',serviceTier:'default'});
+ store.setSetting('codex.auth.mode','managed');
+ expect(resolveModelSelection(store,'main',catalog)).toEqual({provider:'chatgpt',model:'m1',serviceTier:'priority'});
+ saveModelSelection(store,{provider:'kimi',model:'kimi-k2.7-code',serviceTier:'default'},legacy.id);
+ expect(store.getProfile(legacy.id)).toMatchObject({provider:'kimi',model:'kimi-k2.7-code'});
+ expect(resolveModelSelection(store,legacy.id)).toEqual({provider:'kimi',model:'kimi-k2.7-code',serviceTier:'default'});
+ expect(parseModelSelection({provider:'xai',model:'grok-4.5',serviceTier:'default'},true)).toEqual({provider:'xai',model:'grok-4.5',serviceTier:'default'});
+ expect(parseModelSelection({model:'gpt-6-sol',serviceTier:'default'},true)).toEqual({provider:'chatgpt',model:'gpt-6-sol',serviceTier:'default'});
+ expect(parseModelSelection({provider:null,model:null,serviceTier:null},true)).toEqual({provider:null,model:null,serviceTier:null});
+ expect(()=>parseModelSelection({provider:'elsewhere',model:'x',serviceTier:'default'},true)).toThrow();
+ expect(()=>parseModelSelection({provider:'xai',model:null,serviceTier:'default'},false)).toThrow();
+ }finally{store.close();}
+});
 it('inherits device defaults, keeps employee overrides and restores inheritance',()=>{
  const store=new Store(':memory:');
  try {
  const employee=store.createProfile({name:'Editor'});
- saveModelSelection(store,{model:'m1',serviceTier:'priority'});
- expect(resolveModelSelection(store,employee.id)).toEqual({model:'m1',serviceTier:'priority'});
- saveModelSelection(store,{model:'m2',serviceTier:'ultra'},employee.id);
- saveModelSelection(store,{model:'m1',serviceTier:'default'});
- expect(resolveModelSelection(store,employee.id)).toEqual({model:'m2',serviceTier:'ultra'});
+ saveModelSelection(store,{provider:'chatgpt',model:'m1',serviceTier:'priority'});
+ expect(resolveModelSelection(store,employee.id)).toEqual({provider:'chatgpt',model:'m1',serviceTier:'priority'});
+ saveModelSelection(store,{provider:'chatgpt',model:'m2',serviceTier:'ultra'},employee.id);
+ saveModelSelection(store,{provider:'chatgpt',model:'m1',serviceTier:'default'});
+ expect(resolveModelSelection(store,employee.id)).toEqual({provider:'chatgpt',model:'m2',serviceTier:'ultra'});
  expect(store.getProfile(employee.id)).toMatchObject({model:'m2',serviceTier:'ultra'});
- saveModelSelection(store,{model:null,serviceTier:null},employee.id);
- expect(readModelSelection(store,employee.id)).toEqual({model:null,serviceTier:null});
- expect(resolveModelSelection(store,employee.id)).toEqual({model:'m1',serviceTier:'default'});
- expect(()=>saveModelSelection(store,{model:'m2',serviceTier:'default'},'missing')).toThrow();
+ saveModelSelection(store,{provider:null,model:null,serviceTier:null},employee.id);
+ expect(readModelSelection(store,employee.id)).toEqual({provider:null,model:null,serviceTier:null});
+ expect(resolveModelSelection(store,employee.id)).toEqual({provider:'chatgpt',model:'m1',serviceTier:'default'});
+ expect(()=>saveModelSelection(store,{provider:'chatgpt',model:'m2',serviceTier:'default'},'missing')).toThrow();
  }finally{store.close();}
 });
 it('applies the choice to the next queued turn, preserves the thread and covers Telegram',async()=>{
  const store=new Store(':memory:');let finish!:()=>void;const seen:any[]=[];
  const messages=new MessageService(store,{run:async(_input,options)=>{seen.push(options);if(seen.length===1)await new Promise<void>(r=>finish=r);return {threadId:'same-thread',response:'OK',events:[]};}});
  try {
- saveModelSelection(store,{model:'m1',serviceTier:'priority'});
+ saveModelSelection(store,{provider:'chatgpt',model:'m1',serviceTier:'priority'});
  const first=await messages.submit({channel:'api',text:'First',externalChatId:'home'});
  await vi.waitFor(()=>expect(seen).toHaveLength(1));
- saveModelSelection(store,{model:'m2',serviceTier:'default'});
+ saveModelSelection(store,{provider:'chatgpt',model:'m2',serviceTier:'default'});
  const next=await messages.submit({channel:'api',text:'Next',externalChatId:'home'});
  finish();await Promise.all([first.completion,next.completion]);
  expect(seen[0]).toMatchObject({model:'m1',serviceTier:'priority'});
@@ -69,8 +93,8 @@ it('delegated employees use their device defaults even when the main assistant h
  const messages=new MessageService(store,{run:async(_input,options)=>{seen=options;return {threadId:'t',response:'OK',events:[]};}});
  try {
  const employee=store.createProfile({name:'Editor'});
- saveModelSelection(store,{model:'m1',serviceTier:'priority'});
- saveModelSelection(store,{model:'m2',serviceTier:'default'},'main');
+ saveModelSelection(store,{provider:'chatgpt',model:'m1',serviceTier:'priority'});
+ saveModelSelection(store,{provider:'chatgpt',model:'m2',serviceTier:'default'},'main');
  await messages.handle({channel:'api',text:'Ask Editor',externalChatId:'home'});
  expect(seen).toMatchObject({model:'m2',serviceTier:'default'});
  expect(seen.employees.find((p:any)=>p.id===employee.id)).toMatchObject({model:'m1',serviceTier:'priority'});
@@ -87,21 +111,39 @@ it('serves account capabilities, validates writes and denies members before chan
  const defaults='/v1/settings/models',override=defaults+'?agentId='+employee.id;
  const initial=await (await call(defaults)).json();
  expect(initial.models).toEqual(catalog);
- expect(initial.selection).toEqual({model:null,serviceTier:'default'});
- expect(initial.effective).toEqual({model:'m1',serviceTier:'default'});
+ expect(initial.selection).toEqual({provider:null,model:null,serviceTier:'default'});
+ expect(initial.effective).toEqual({provider:'chatgpt',model:'m1',serviceTier:'default'});
  expect((await call(defaults,'POST',{model:'m1',serviceTier:'ultra'})).status).toBe(409);
  expect((await call(defaults,'POST',{model:'m1',serviceTier:'priority'})).status).toBe(200);
- expect((await (await call(override)).json()).effective).toEqual({model:'m1',serviceTier:'priority'});
+ expect((await (await call(override)).json()).effective).toEqual({provider:'chatgpt',model:'m1',serviceTier:'priority'});
  expect((await call(override,'POST',{model:'m2',serviceTier:'ultra'})).status).toBe(200);
  const session=await call('/auth/session','POST',{key:runtime.api.web.invite(false).key});const {csrf}=await session.json();
  const headers={cookie:session.headers.get('set-cookie')!.split(';')[0],'x-openstrudel-csrf':csrf};
  expect((await (await call(override,'GET',undefined,headers)).json()).canManage).toBe(false);
  expect((await call(override,'POST',{model:null,serviceTier:null},headers)).status).toBe(403);
  expect((await call(override,'POST',{model:null,serviceTier:null})).status).toBe(200);
- expect((await (await call(override)).json()).effective).toEqual({model:'m1',serviceTier:'priority'});
+ expect((await (await call(override)).json()).effective).toEqual({provider:'chatgpt',model:'m1',serviceTier:'priority'});
  expect((await call(defaults+'?agentId=missing')).status).toBe(404);
  expect((await call(defaults,'POST',{model:null,serviceTier:'priority'})).status).toBe(200);
- expect((await (await call(override)).json()).effective).toEqual({model:'m1',serviceTier:'priority'});
+ expect((await (await call(override)).json()).effective).toEqual({provider:'chatgpt',model:'m1',serviceTier:'priority'});
  expect((await call(defaults,'POST',{model:null,serviceTier:'ultra'})).status).toBe(409);
+ }finally{await runtime.stop();}
+});
+
+it('lets an employee follow an automatic device default saved with a speed the automatic key provider lacks',async()=>{
+ const {OpenStrudelRuntime}=await import('../src/runtime.js');
+ const {providerInfo,providerModels}=await import('../src/providers.js');
+ const runtime=new OpenStrudelRuntime({dbPath:':memory:',startTelegram:false,apiToken:'owner',engine:{models:async()=>[...catalog,...providerModels(providerInfo('anthropic')!)],run:async()=>({threadId:'t',response:'OK',events:[]})}});
+ const addr=await runtime.api.listen('127.0.0.1',0);
+ const call=(path:string,method='GET',body?:any)=>fetch(`http://127.0.0.1:${addr.port}${path}`,{method,headers:{'content-type':'application/json',authorization:'Bearer owner'},body:body===undefined?undefined:JSON.stringify(body)});
+ try{
+  // Saved as Automatic + Fast while ChatGPT was automatic; ChatGPT is gone and Anthropic is automatic now.
+  saveModelSelection(runtime.store,{provider:null,model:null,serviceTier:'priority'});
+  runtime.store.setSetting('providers.anthropic.key','ant-key');
+  const employee=runtime.store.createProfile({name:'QA'}),override='/v1/settings/models?agentId='+employee.id;
+  const inherited=await call(override,'POST',{provider:null,model:null,serviceTier:null});
+  expect(inherited.status).toBe(200);
+  expect((await inherited.json()).effective).toEqual({provider:'anthropic',model:'claude-fable-5-1',serviceTier:'default'});
+  expect((await call('/v1/settings/models?agentId=main','POST',{provider:null,model:null,serviceTier:null})).status).toBe(200);
  }finally{await runtime.stop();}
 });

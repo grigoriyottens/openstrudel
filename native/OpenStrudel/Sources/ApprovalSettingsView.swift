@@ -33,13 +33,18 @@ struct ApprovalSettingsView: View {
     @State private var saving = false
     @State private var error: (any Error)?
     @State private var confirmAll = false
+    /// With every model on an API key the device asks instead, so Automatic is not offered and reads as Ask.
+    @State private var reviews = true
+    private func shown(_ mode: EmployeeApprovalMode) -> EmployeeApprovalMode { mode == .auto && !reviews ? .ask : mode }
 
     var body: some View {
         Section { rows } header: {
             Text(L("Действия сотрудников"))
         } footer: {
             if let settings {
-                Text((choice ?? settings.mode).explanation + "\n"
+                let mode = shown(choice ?? settings.mode)
+                // Codex's reviewer exists only for ChatGPT, so the Home asks on API-key providers.
+                Text(mode.explanation + (mode == .auto && client.health?.providers == 1 ? " " + L("Для моделей по API-ключу спрашивает вас.") : "") + "\n"
                      + (settings.canManage ? L("Режим меняется со следующего поручения. Доступ к сервисам и правила сотрудника сохраняются.") : L("Режим меняет владелец этого устройства.")))
             }
         }
@@ -48,9 +53,9 @@ struct ApprovalSettingsView: View {
     private var rows: some View {
         Group {
             if let settings {
-                let mode = choice ?? settings.mode
+                let mode = shown(choice ?? settings.mode)
                 Picker(selection: Binding(get: { mode }, set: choose)) {
-                    ForEach(EmployeeApprovalMode.allCases) { option in
+                    ForEach(EmployeeApprovalMode.allCases.filter { reviews || $0 != .auto }) { option in
                         Text(option.title).tag(option)
                             .accessibilityIdentifier("approvalMode-" + option.rawValue)
                     }
@@ -75,7 +80,8 @@ struct ApprovalSettingsView: View {
                 }
             }
         }
-        .task { await load() }
+        // A model change above can move the last model off ChatGPT or back.
+        .task(id: client.openAIAccount) { await load() }
         .alert(L("Выполнять без подтверждений?"), isPresented: $confirmAll) {
             Button(L("Включить для этого устройства"), role: .destructive) { Task { await save(.approveAll) } }
             Button(L("Отмена"), role: .cancel) { }
@@ -85,15 +91,17 @@ struct ApprovalSettingsView: View {
     }
 
     private func choose(_ mode: EmployeeApprovalMode) {
-        guard let settings, mode != (choice ?? settings.mode) else { return }
+        guard let settings, mode != shown(choice ?? settings.mode) else { return }
         if mode == .approveAll { confirmAll = true }
         else { Task { await save(mode) } }
     }
     private func load() async {
         loading = true; error = nil
         defer { loading = false }
-        do { settings = try await client.management("/v1/settings/approvals") }
-        catch is CancellationError { }
+        do {
+            if client.health?.providers == 1, let list = try? await client.providers() { reviews = list.reviewsAutomatically }
+            settings = try await client.management("/v1/settings/approvals")
+        } catch is CancellationError { }
         catch { self.error = error }
     }
     private func save(_ mode: EmployeeApprovalMode) async {

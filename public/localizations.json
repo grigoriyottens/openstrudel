@@ -6964,13 +6964,6 @@
     "es": "Conectando al servidor",
     "he": "מתחברים לשרת"
   },
-  "Reconnecting to the server": {
-    "en": "Reconnecting to the server",
-    "ru": "Восстанавливаем связь с сервером",
-    "fr": "Rétablissement de la connexion au serveur",
-    "es": "Restableciendo la conexión con el servidor",
-    "he": "מחדשים את החיבור לשרת"
-  },
   "Continue server setup": {
     "en": "Continue server setup",
     "ru": "Продолжить настройку сервера",
@@ -8273,6 +8266,272 @@
     "es": "El precio ha cambiado. Revisa el nuevo importe antes de pagar.",
     "he": "המחיר השתנה. יש לבדוק את הסכום החדש לפני התשלום."
   },
+  "{0} не принял ключ. Замените его в настройках аккаунтов.": {
+    "en": "{0} did not accept the key. Replace it in Accounts.",
+    "ru": "{0} не принял ключ. Замените его в настройках аккаунтов.",
+    "fr": "{0} n’a pas accepté la clé. Remplacez-la dans Comptes.",
+    "es": "{0} no aceptó la clave. Sustitúyela en Cuentas.",
+    "he": "{0} לא קיבל את המפתח. יש להחליף אותו בחשבונות."
+  },
+  "{0} не принял ключ. Проверьте его и вставьте снова.": {
+    "en": "{0} did not accept the key. Check it and paste it again.",
+    "ru": "{0} не принял ключ. Проверьте его и вставьте снова.",
+    "fr": "{0} n’a pas accepté la clé. Vérifiez-la et collez-la à nouveau.",
+    "es": "{0} no aceptó la clave. Revísala y pégala de nuevo.",
+    "he": "{0} לא קיבל את המפתח. יש לבדוק אותו ולהדביק שוב."
+  },
+  "{0} не подтвердил ключ: {1}": {
+    "en": "{0} could not confirm the key: {1}",
+    "ru": "{0} не подтвердил ключ: {1}",
+    "fr": "{0} n’a pas pu confirmer la clé : {1}",
+    "es": "{0} no pudo confirmar la clave: {1}",
+    "he": "{0} לא אישר את המפתח: {1}"
+  },
+  "{0} не завершил ответ: {1}": {
+    "en": "{0} did not finish the reply: {1}",
+    "ru": "{0} не завершил ответ: {1}",
+    "fr": "{0} n’a pas terminé la réponse : {1}",
+    "es": "{0} no terminó la respuesta: {1}",
+    "he": "{0} לא סיים את התשובה: {1}"
+  },
+  "Ответ остановлен": {
+    "en": "Reply stopped",
+    "ru": "Ответ остановлен",
+    "fr": "Réponse arrêtée",
+    "es": "Respuesta detenida",
+    "he": "התשובה הופסקה"
+  },
+  "Не удалось связаться с {0}. Проверьте подключение к интернету и попробуйте ещё раз.": {
+    "en": "Couldn’t reach {0}. Check your internet connection and try again.",
+    "ru": "Не удалось связаться с {0}. Проверьте подключение к интернету и попробуйте ещё раз.",
+    "fr": "Impossible de joindre {0}. Vérifiez votre connexion Internet et réessayez.",
+    "es": "No se pudo conectar con {0}. Comprueba tu conexión a internet e inténtalo de nuevo.",
+    "he": "לא ניתן להתחבר אל {0}. יש לבדוק את החיבור לאינטרנט ולנסות שוב."
+  },
+  "Вставьте ключ.": {
+    "en": "Paste a key.",
+    "ru": "Вставьте ключ.",
+    "fr": "Collez une clé.",
+    "es": "Pega una clave.",
+    "he": "יש להדביק מפתח."
+  },
+  "Провайдер не найден.": {
+    "en": "Provider not found.",
+    "ru": "Провайдер не найден.",
+    "fr": "Fournisseur introuvable.",
+    "es": "No se encontró el proveedor.",
+    "he": "הספק לא נמצא."
+  },
+  "Подключите {0} на этом устройстве или выберите другую модель.": {
+    "en": "Connect {0} on this device or choose another model.",
+    "ru": "Подключите {0} на этом устройстве или выберите другую модель.",
+    "fr": "Connectez {0} sur cet appareil ou choisissez un autre modèle.",
+    "es": "Conecta {0} en este dispositivo o elige otro modelo.",
+    "he": "יש לחבר את {0} במכשיר הזה או לבחור מודל אחר."
+  },
+  "С {0} вход в сервисы через браузер недоступен. Добавьте сервис с ключом доступа в «Сервисы и навыки».": {
+    "en": "Browser sign-in to services isn’t available with {0}. Add the service with an access key in “Services and skills”.",
+    "ru": "С {0} вход в сервисы через браузер недоступен. Добавьте сервис с ключом доступа в «Сервисы и навыки».",
+    "fr": "La connexion aux services par le navigateur n’est pas disponible avec {0}. Ajoutez le service avec une clé d’accès dans « Services et compétences ».",
+    "es": "El inicio de sesión en servicios desde el navegador no está disponible con {0}. Añade el servicio con una clave de acceso en «Servicios y habilidades».",
+    "he": "התחברות לשירותים דרך הדפדפן אינה זמינה עם {0}. הוסיפו את השירות עם מפתח גישה ב״שירותים ומיומנויות״."
+  },
+  "С {0} сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.": {
+    "en": "With {0}, the assistant uses only MCP services. Skills work with ChatGPT, OpenAI API and xAI; plugins only with ChatGPT.",
+    "ru": "С {0} сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.",
+    "fr": "Avec {0}, l’assistant utilise uniquement les services MCP. Les compétences fonctionnent avec ChatGPT, OpenAI API et xAI ; les plugins uniquement avec ChatGPT.",
+    "es": "Con {0}, el asistente usa solo servicios MCP. Las habilidades funcionan con ChatGPT, OpenAI API y xAI; los plugins, solo con ChatGPT.",
+    "he": "עם {0} העוזר משתמש רק בשירותי MCP. מיומנויות עובדות עם ChatGPT, ‏OpenAI API ו־xAI, ותוספים רק עם ChatGPT."
+  },
+  "С {0} сотрудник не использует плагины: они работают только с ChatGPT.": {
+    "en": "With {0}, the assistant doesn’t use plugins: they work only with ChatGPT.",
+    "ru": "С {0} сотрудник не использует плагины: они работают только с ChatGPT.",
+    "fr": "Avec {0}, l’assistant n’utilise pas les plugins : ils fonctionnent uniquement avec ChatGPT.",
+    "es": "Con {0}, el asistente no usa plugins: solo funcionan con ChatGPT.",
+    "he": "עם {0} העוזר לא משתמש בתוספים: הם עובדים רק עם ChatGPT."
+  },
+  "У ключа {0} закончился лимит или баланс. Проверьте оплату у провайдера или повторите позже.": {
+    "en": "The {0} key has run out of quota or credit. Check billing with the provider or try again later.",
+    "ru": "У ключа {0} закончился лимит или баланс. Проверьте оплату у провайдера или повторите позже.",
+    "fr": "La clé {0} a épuisé sa limite ou son crédit. Vérifiez la facturation auprès du fournisseur ou réessayez plus tard.",
+    "es": "La clave de {0} se quedó sin límite o saldo. Revisa la facturación con el proveedor o vuelve a intentarlo más tarde.",
+    "he": "למפתח של {0} נגמרו המכסה או היתרה. יש לבדוק את החיוב אצל הספק או לנסות שוב מאוחר יותר."
+  },
+  "API-ключ": {
+    "en": "API key",
+    "ru": "API-ключ",
+    "fr": "Clé API",
+    "es": "Clave de API",
+    "he": "מפתח API"
+  },
+  "API-ключ {0}": {
+    "en": "API key {0}",
+    "ru": "API-ключ {0}",
+    "fr": "Clé API {0}",
+    "es": "Clave de API {0}",
+    "he": "מפתח API {0}"
+  },
+  "API-ключи": {
+    "en": "API keys",
+    "ru": "API-ключи",
+    "fr": "Clés API",
+    "es": "Claves de API",
+    "he": "מפתחות API"
+  },
+  "Добавить ключ…": {
+    "en": "Add key…",
+    "ru": "Добавить ключ…",
+    "fr": "Ajouter une clé…",
+    "es": "Añadir clave…",
+    "he": "הוספת מפתח…"
+  },
+  "Заменить ключ…": {
+    "en": "Replace key…",
+    "ru": "Заменить ключ…",
+    "fr": "Remplacer la clé…",
+    "es": "Sustituir clave…",
+    "he": "החלפת מפתח…"
+  },
+  "Удалить ключ {0}?": {
+    "en": "Remove the {0} key?",
+    "ru": "Удалить ключ {0}?",
+    "fr": "Supprimer la clé {0} ?",
+    "es": "¿Eliminar la clave de {0}?",
+    "he": "להסיר את המפתח של {0}?"
+  },
+  "Удалить ключ": {
+    "en": "Remove key",
+    "ru": "Удалить ключ",
+    "fr": "Supprimer la clé",
+    "es": "Eliminar clave",
+    "he": "הסרת המפתח"
+  },
+  "Сотрудников и настроек на этом ключе: {0}. Их модель станет «Как на устройстве» или «Автоматически».": {
+    "en": "Assistants and settings on this key: {0}. Their model will become “Device default” or “Automatic”.",
+    "ru": "Сотрудников и настроек на этом ключе: {0}. Их модель станет «Как на устройстве» или «Автоматически».",
+    "fr": "Assistants et réglages sur cette clé : {0}. Leur modèle passera à « Réglage de l’appareil » ou « Automatique ».",
+    "es": "Asistentes y ajustes con esta clave: {0}. Su modelo pasará a «Predeterminado del dispositivo» o «Automático».",
+    "he": "עוזרים והגדרות שמשתמשים במפתח: {0}. המודל שלהם יהפוך ל״ברירת המחדל של המכשיר״ או ל״אוטומטי״."
+  },
+  "Ключ будет удалён с «{0}».": {
+    "en": "The key will be removed from “{0}”.",
+    "ru": "Ключ будет удалён с «{0}».",
+    "fr": "La clé sera supprimée de « {0} ».",
+    "es": "La clave se eliminará de «{0}».",
+    "he": "המפתח יוסר מ-״{0}״."
+  },
+  "Вставьте ключ": {
+    "en": "Paste the key",
+    "ru": "Вставьте ключ",
+    "fr": "Collez la clé",
+    "es": "Pega la clave",
+    "he": "יש להדביק את המפתח"
+  },
+  "Получить ключ": {
+    "en": "Get a key",
+    "ru": "Получить ключ",
+    "fr": "Obtenir une clé",
+    "es": "Obtener una clave",
+    "he": "קבלת מפתח"
+  },
+  "Проверяем ключ в {0}…": {
+    "en": "Checking the key with {0}…",
+    "ru": "Проверяем ключ в {0}…",
+    "fr": "Vérification de la clé auprès de {0}…",
+    "es": "Comprobando la clave con {0}…",
+    "he": "בודקים את המפתח מול {0}…"
+  },
+  "Ключ хранится только на «{0}». Сообщения сотрудников, которые его используют, отправляются в {1}. Показать ключ снова нельзя.": {
+    "en": "The key is stored only on “{0}”. Messages of assistants that use it are sent to {1}. The key cannot be shown again.",
+    "ru": "Ключ хранится только на «{0}». Сообщения сотрудников, которые его используют, отправляются в {1}. Показать ключ снова нельзя.",
+    "fr": "La clé est stockée uniquement sur « {0} ». Les messages des assistants qui l’utilisent sont envoyés à {1}. La clé ne pourra plus être affichée.",
+    "es": "La clave se guarda solo en «{0}». Los mensajes de los asistentes que la usan se envían a {1}. La clave no se podrá volver a mostrar.",
+    "he": "המפתח נשמר רק ב-״{0}״. ההודעות של העוזרים שמשתמשים בו נשלחות אל {1}. לא ניתן להציג את המפתח שוב."
+  },
+  "У меня есть API-ключ": {
+    "en": "I have an API key",
+    "ru": "У меня есть API-ключ",
+    "fr": "J’ai une clé API",
+    "es": "Tengo una clave de API",
+    "he": "יש לי מפתח API"
+  },
+  "Рекомендуем": {
+    "en": "Recommended",
+    "ru": "Рекомендуем",
+    "fr": "Recommandé",
+    "es": "Recomendado",
+    "he": "מומלץ"
+  },
+  "Нужен ключ {0}": {
+    "en": "{0} key needed",
+    "ru": "Нужен ключ {0}",
+    "fr": "Clé {0} requise",
+    "es": "Se necesita la clave de {0}",
+    "he": "נדרש מפתח {0}"
+  },
+  "Подключить {0}": {
+    "en": "Connect {0}",
+    "ru": "Подключить {0}",
+    "fr": "Connecter {0}",
+    "es": "Conectar {0}",
+    "he": "חיבור {0}"
+  },
+  "Подключите {0}, чтобы помощник мог отвечать.": {
+    "en": "Connect {0} so your assistant can reply.",
+    "ru": "Подключите {0}, чтобы помощник мог отвечать.",
+    "fr": "Connectez {0} pour que votre assistant puisse répondre.",
+    "es": "Conecta {0} para que tu asistente pueda responder.",
+    "he": "יש לחבר את {0} כדי שהעוזר יוכל להשיב."
+  },
+  "Добавьте ключ {0} в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены.": {
+    "en": "Add the {0} key in Accounts or choose another model. Chats and drafts are saved.",
+    "ru": "Добавьте ключ {0} в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены.",
+    "fr": "Ajoutez la clé {0} dans Comptes ou choisissez un autre modèle. Conversations et brouillons sont conservés.",
+    "es": "Añade la clave de {0} en Cuentas o elige otro modelo. Los chats y borradores están guardados.",
+    "he": "יש להוסיף את המפתח של {0} בחשבונות או לבחור מודל אחר. השיחות והטיוטות נשמרו."
+  },
+  "Ключ {0} добавляет владелец устройства этого сотрудника. Чаты и черновики сохранены.": {
+    "en": "The owner of this assistant’s device adds the {0} key. Chats and drafts are saved.",
+    "ru": "Ключ {0} добавляет владелец устройства этого сотрудника. Чаты и черновики сохранены.",
+    "fr": "Le propriétaire de l’appareil de cet assistant ajoute la clé {0}. Conversations et brouillons sont conservés.",
+    "es": "El propietario del dispositivo de este asistente añade la clave de {0}. Los chats y borradores están guardados.",
+    "he": "בעל המכשיר של העוזר מוסיף את המפתח של {0}. השיחות והטיוטות נשמרו."
+  },
+  "Для моделей по API-ключу спрашивает вас.": {
+    "en": "For models on an API key, it asks you instead.",
+    "ru": "Для моделей по API-ключу спрашивает вас.",
+    "fr": "Pour les modèles avec une clé API, il vous demande à la place.",
+    "es": "Para los modelos con clave de API, te pregunta a ti.",
+    "he": "במודלים עם מפתח API, תתבקשו לאשר בעצמכם."
+  },
+  "Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI или другой выбранный вами провайдер получает сообщения, нужную часть переписки и выбранные файлы.": {
+    "en": "Chats are stored on your Mac or server. To respond, OpenAI or another provider you choose receives your messages, relevant conversation history and selected files.",
+    "ru": "Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI или другой выбранный вами провайдер получает сообщения, нужную часть переписки и выбранные файлы.",
+    "fr": "Les conversations sont stockées sur votre Mac ou serveur. Pour répondre, OpenAI ou un autre fournisseur de votre choix reçoit vos messages, l’historique pertinent et les fichiers sélectionnés.",
+    "es": "Los chats se guardan en tu Mac o servidor. Para responder, OpenAI u otro proveedor que elijas recibe tus mensajes, el historial relevante y los archivos seleccionados.",
+    "he": "השיחות נשמרות ב-Mac או בשרת שלך. כדי להשיב, OpenAI או ספק אחר שבחרת מקבל את ההודעות, את היסטוריית השיחה הרלוונטית ואת הקבצים שנבחרו."
+  },
+  "Войдите в OpenAI снова или выберите в настройках сотрудника модель с API-ключом. Чаты и черновики сохранены.": {
+    "en": "Sign in to OpenAI again, or choose a model on an API key in Assistant settings. Chats and drafts are saved.",
+    "ru": "Войдите в OpenAI снова или выберите в настройках сотрудника модель с API-ключом. Чаты и черновики сохранены.",
+    "fr": "Reconnectez-vous à OpenAI ou choisissez un modèle avec une clé API dans les réglages de l’assistant. Conversations et brouillons sont conservés.",
+    "es": "Vuelve a iniciar sesión en OpenAI o elige un modelo con clave de API en los ajustes del asistente. Los chats y borradores están guardados.",
+    "he": "יש להיכנס שוב ל-OpenAI או לבחור בהגדרות העוזר מודל עם מפתח API. השיחות והטיוטות נשמרו."
+  },
+  "Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз.": {
+    "en": "The device didn’t confirm the key. Check that it’s online and add the key again.",
+    "ru": "Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз.",
+    "fr": "L’appareil n’a pas confirmé la clé. Vérifiez qu’il est en ligne et ajoutez la clé à nouveau.",
+    "es": "El dispositivo no confirmó la clave. Comprueba que esté en línea y vuelve a añadir la clave.",
+    "he": "המכשיר לא אישר את המפתח. יש לוודא שהוא מחובר ולהוסיף את המפתח שוב."
+  },
+  "Reconnecting to the server": {
+    "en": "Reconnecting to the server",
+    "ru": "Восстанавливаем связь с сервером",
+    "fr": "Rétablissement de la connexion au serveur",
+    "es": "Restableciendo la conexión con el servidor",
+    "he": "מחדשים את החיבור לשרת"
+  },
   "Название устройства": {
     "en": "Device name",
     "ru": "Название устройства",
@@ -8427,13 +8686,6 @@
     "he": "התשובה תפורסם בקבוצה הזו בשם הבוט.",
     "ru": "Ответ будет опубликован в этой группе от имени бота."
   },
-  "Отправить в {0}": {
-    "en": "Send to {0}",
-    "fr": "Envoyer à {0}",
-    "es": "Enviar a {0}",
-    "he": "שליחה אל {0}",
-    "ru": "Отправить в {0}"
-  },
   "Подключение этой группы изменилось. Откройте её в Telegram.": {
     "en": "This group’s connection changed. Open it in Telegram.",
     "fr": "La connexion de ce groupe a changé. Ouvrez-le dans Telegram.",
@@ -8566,6 +8818,20 @@
     "fr": "Connexion introuvable.",
     "es": "No se encontró la conexión.",
     "he": "החיבור לא נמצא."
+  },
+  "Ссылка устарела или уже использована. Попросите новую.": {
+    "en": "This link has expired or was already used. Ask for a new one.",
+    "ru": "Ссылка устарела или уже использована. Попросите новую.",
+    "fr": "Ce lien a expiré ou a déjà été utilisé. Demandez-en un nouveau.",
+    "es": "Este enlace ha caducado o ya se ha usado. Pide uno nuevo.",
+    "he": "תוקף הקישור פג או שהוא כבר נוצל. יש לבקש קישור חדש."
+  },
+  "Это устройство отключено. Подключитесь заново по новой ссылке.": {
+    "en": "This device was disconnected. Connect again with a new link.",
+    "ru": "Это устройство отключено. Подключитесь заново по новой ссылке.",
+    "fr": "Cet appareil a été déconnecté. Reconnectez-le avec un nouveau lien.",
+    "es": "Este dispositivo se ha desconectado. Vuelve a conectarlo con un enlace nuevo.",
+    "he": "המכשיר הזה נותק. יש להתחבר מחדש עם קישור חדש."
   },
   "Отключайте подключения по одному, чтобы не потерять доступ к этому устройству.": {
     "en": "Disconnect devices one at a time so you keep access to this device.",

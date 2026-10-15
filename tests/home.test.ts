@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -162,7 +163,7 @@ describe("user-owned primary Home", () => {
   });
   it("routes employee models to their device and keeps device defaults independent",async()=>{
     const laptop=await node("Laptop"),mini=await node("Mini");
-    const models=[{id:"model",name:"Model",description:"",isDefault:true,speeds:[{id:"default",name:"Обычная",description:""},{id:"priority",name:"Fast",description:""}]}];
+    const models=[{id:"model",name:"Model",description:"",isDefault:true,speeds:[{id:"default",name:"Обычная",description:""},{id:"priority",name:"Fast",description:""}],provider:"chatgpt"}];
     laptop.runtime.engine.models=async()=>models; mini.runtime.engine.models=async()=>models;
     const profile=mini.runtime.store.createProfile({name:"Remote editor"});
     await connect(laptop,mini);
@@ -174,7 +175,46 @@ describe("user-owned primary Home", () => {
     expect((await laptop.api("/v1/settings/models?deviceId="+mini.home.state.nodeId,"POST",{model:"model",serviceTier:"default"})).status).toBe(200);
     expect(mini.runtime.store.getSetting("models.defaults")).toContain("model");
     expect(laptop.runtime.store.getSetting("models.defaults")).toBeNull();
-    expect((await laptop.api(remote)).value.effective).toEqual({model:"model",serviceTier:"priority"});
+    expect((await laptop.api(remote)).value.effective).toEqual({provider:"chatgpt",model:"model",serviceTier:"priority"});
+  });
+  it("keeps an API key on the device it is added to, with owner-only writes", async () => {
+    const provider = createServer((request, response) => response.writeHead(request.headers.authorization === "Bearer xai-remote" ? 200 : 401).end("{}"));
+    await new Promise<void>(done => provider.listen(0, "127.0.0.1", done));
+    process.env.OPENSTRUDEL_PROVIDER_XAI_BASE_URL = `http://127.0.0.1:${(provider.address() as any).port}/v1`;
+    try {
+      const laptop = await node("Laptop"), mini = await node("Mini");
+      await connect(laptop, mini);
+      // The primary's command log, its backups and transfers never hold a key, not even while it is delivered.
+      const logged: string[] = [], enqueue = laptop.home.enqueue.bind(laptop.home);
+      laptop.home.enqueue = (nodeId, request, id) => { logged.push(Buffer.from(request.body ?? "", "base64").toString()); return enqueue(nodeId, request, id); };
+      const stored = () => [...logged, ...laptop.home.snapshot().commands.map((c: any) => JSON.stringify(c) + Buffer.from(JSON.parse(c.request).body ?? "", "base64").toString())].join("\n");
+      const remote = "/v1/providers/xai?deviceId=" + mini.home.state.nodeId;
+      expect((await laptop.api(remote, "PUT", { key: "xai-remote" })).value.provider).toMatchObject({ id: "xai", connected: true, keyHint: "••••ote" });
+      expect(mini.runtime.store.getSetting("providers.xai.key")).toBe("xai-remote");
+      expect(laptop.runtime.store.getSetting("providers.xai.key")).toBeNull();
+      expect((await laptop.api("/v1/providers?deviceId=" + mini.home.state.nodeId)).value.providers.find((p: any) => p.id === "xai").connected).toBe(true);
+      expect((await laptop.api("/v1/providers")).value.providers.find((p: any) => p.id === "xai").connected).toBe(false);
+      expect(logged.length).toBeGreaterThan(0);
+      expect(stored()).not.toContain("xai-remote");
+      // A device that stops answering gets nothing queued: the request fails and nothing waits for it.
+      await mini.runtime.api.homeLink.stop();
+      const late = { method: "PUT", path: "/v1/providers/xai", owner: true, contentType: "application/json", body: Buffer.from(JSON.stringify({ key: "xai-late" })).toString("base64") };
+      await expect(laptop.runtime.api.homeLink.call(mini.home.state.nodeId, late, undefined, 200)).rejects.toMatchObject({ status: 503, message: "Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз." });
+      expect(laptop.home.pending(mini.home.state.nodeId)).toEqual([]);
+      laptop.runtime.store.db.prepare("UPDATE home_nodes SET info=json_set(info,'$.seenAt',0) WHERE id=?").run(mini.home.state.nodeId);
+      const offline = await laptop.api(remote, "PUT", { key: "xai-offline" });
+      expect(offline).toEqual({ status: 503, value: { error: "Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз." } });
+      expect(laptop.home.pending(mini.home.state.nodeId)).toEqual([]);
+      expect(stored()).not.toMatch(/xai-(remote|late|offline)/);
+      // A primary that restarts while relaying a key has lost it, so that command is never delivered.
+      laptop.home.enqueue(mini.home.state.nodeId, { method: "PUT", path: "/v1/providers/xai", owner: true });
+      const restarted = new HomeLink(laptop.home, async () => wireJSON({}));
+      restarted.start(); await restarted.stop();
+      expect(laptop.home.pending(mini.home.state.nodeId)).toEqual([]);
+      const member = await mini.runtime.api.homeLink.execute({ id: randomUUID(), request: { method: "DELETE", path: "/v1/providers/xai", owner: false } });
+      expect(member.status).toBe(403);
+      expect(mini.runtime.store.getSetting("providers.xai.key")).toBe("xai-remote");
+    } finally { delete process.env.OPENSTRUDEL_PROVIDER_XAI_BASE_URL; provider.close(); }
   });
   it("routes extension reads and writes to the employee's device and reports legacy shared workspaces", async () => {
     const primary = await node("Laptop"), worker = await node("Mac mini");
@@ -207,9 +247,11 @@ describe("user-owned primary Home", () => {
     worker.runtime.store.setSetting("main.soul", "Помни мои планы");
     worker.runtime.store.setSetting("agent.accounts.main", '["default"]');
     const before = await worker.runtime.messages.handle({ channel: "api", text: "Мои старые планы", externalChatId: "home" });
+    worker.runtime.store.setSetting("models.main", JSON.stringify({ provider: "anthropic", model: "claude-opus-5-5", serviceTier: "default" }));
     await connect(primary, worker);
     const saved = worker.runtime.store.listProfiles().find(p => p.name === "Помощник · Personal Mac")!;
     expect(saved.instructions).toBe("Помни мои планы");
+    expect(saved).toMatchObject({ provider: "anthropic", model: "claude-opus-5-5", serviceTier: "default" });
     expect(worker.runtime.store.getSetting("employee.context." + saved.id)).toBe("personal");
     expect(worker.runtime.store.getSetting("agent.accounts." + saved.id)).toBe('["default"]');
     expect(worker.runtime.store.profileConversation(saved.id).id).toBe(before.conversationId);

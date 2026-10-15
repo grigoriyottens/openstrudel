@@ -69,6 +69,20 @@ extension View {
         navigationTitle(title).navigationBarTitleDisplayMode(.inline)
         #endif
     }
+
+    /// Names a single-page form sheet that stays as tall as its rows when a row such as an error comes or goes.
+    /// On the Mac the title is in the content, so the bar keeps no empty title band, and the form stops
+    /// scrolling, so the sheet follows its height. Its sizing stays automatic: a `.fitted` sheet keeps its first
+    /// height and pushes a new row's neighbours out. An iPhone sheet cannot fit its content: half height, and
+    /// the form scrolls when large text needs more.
+    func fittedSheetPage(_ title: String) -> some View {
+        #if os(macOS)
+        navigationTitle(title).toolbar(removing: .title)
+            .scrollDisabled(true).fixedSize(horizontal: false, vertical: true)
+        #else
+        navigationTitle(title).navigationBarTitleDisplayMode(.inline).presentationDetents([.medium])
+        #endif
+    }
 }
 
 /// Pages a details sheet pushes. The sheet's stack owns them, so a push never resizes the sheet.
@@ -148,6 +162,8 @@ struct BotDetailsView: View {
     @State private var confirmDiscard = false
     @State private var confirmDeletion = false
     @State private var saveError: String?
+    /// Nil until the model settings answer; an employee on an API key has no OpenAI account to choose.
+    @State private var runsOnChatGPT: Bool?
     private var hasChanges: Bool { name != profile.name || instructions != profile.instructions || appearance != profile.resolvedAppearance }
     private var telegramChats: String {
         (client.telegram?.chats ?? []).filter { $0.profileId == profile.id }.map(\.title).joined(separator: ", ")
@@ -218,8 +234,8 @@ struct BotDetailsView: View {
                     NavigationLink(value: DetailsPage.services) { DetailsRow(title: L("Сервисы и навыки"), symbol: "link") }
                     NavigationLink(value: DetailsPage.telegram) { DetailsRow(title: "Telegram", symbol: "paperplane", value: telegramChats) }
                 }
-                Section(L("Модель и скорость")) { ModelSettingsView(agentID: profile.id) }
-                if client.health?.homeProtocol == 1 { AgentAccountPreference(profile: profile) }
+                Section(L("Модель и скорость")) { ModelSettingsView(agentID: profile.id) { runsOnChatGPT = $0.runsOnChatGPT } }
+                if client.health?.homeProtocol == 1 && (client.health?.providers != 1 || runsOnChatGPT == true) { AgentAccountPreference(profile: profile) }
                 if !client.schedules.isEmpty || client.scheduleRuns.contains(where: { $0.error != nil }) {
                     Section(L("Расписание")) { schedules }
                 }
@@ -424,8 +440,9 @@ struct TelegramChatsView: View {
                 Section {
                     Text(client.openAIAccount?.isUnavailable == true
                          ? L("Не удалось проверить OpenAI. Подключение Telegram сохранено.")
-                         : L("Войдите в OpenAI, чтобы помощник мог отвечать."))
-                    Button(L("Аккаунты OpenAI")) { showAccounts = true }
+                         : client.openAIAccount?.keyProviderName.map { L("Подключите \($0), чтобы помощник мог отвечать.") }
+                         ?? L("Войдите в OpenAI, чтобы помощник мог отвечать."))
+                    Button(L("Аккаунты")) { showAccounts = true }
                         .accessibilityIdentifier("telegramOpenAIAccounts")
                 }
             }
@@ -449,10 +466,10 @@ struct TelegramChatsView: View {
         .sheetPageTitle(title)
         .navigationDestination(isPresented: $showAccounts) {
             Form {
-                SheetTitleSection(title: L("Аккаунты OpenAI"), beforeHeader: true)
+                SheetTitleSection(title: L("Аккаунты"), beforeHeader: true)
                 DeviceAccountsView()
             }
-            .formStyle(.grouped).sheetPageTitle(L("Аккаунты OpenAI"))
+            .formStyle(.grouped).sheetPageTitle(L("Аккаунты"))
         }
     }
 

@@ -27,15 +27,26 @@ final class AccountRecoveryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Чаты"].isHittable)
         capture("largest-type-recovery-controls", app)
         recover.tap()
+        // Each actions button names its account, so VoiceOver can tell them apart.
+        let actions = app.buttons["accountActions-default"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 15))
+        XCTAssertEqual(actions.label, "Действия: ChatGPT")
         let signIn = app.buttons["signInOpenAI"]
         for _ in 0..<12 where !signIn.isHittable { scrollPresentedContent(app) }
         XCTAssertTrue(signIn.isHittable)
         capture("largest-type-sign-in", app)
         signIn.tap(); app.activate()
-        XCTAssertTrue(app.staticTexts["openAIDeviceCode"].waitForExistence(timeout: 15))
+        // The code replaces Sign in, so it is on screen where the person tapped.
+        let code = app.staticTexts["openAIDeviceCode"]
+        XCTAssertTrue(code.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(code.isHittable, app.debugDescription)
+        capture("largest-type-device-code", app)
         let cancel = app.buttons["cancelOpenAILogin"]
         for _ in 0..<12 where !cancel.isHittable { scrollPresentedContent(app) }
         XCTAssertTrue(cancel.isHittable); cancel.tap()
+        // Sign in returns where the code was, above the rows scrolled to.
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 15))
+        for _ in 0..<12 where !signIn.exists { scrollPresentedContent(app, back: true) }
         XCTAssertTrue(signIn.waitForExistence(timeout: 15))
     }
 
@@ -133,10 +144,10 @@ final class AccountRecoveryUITests: XCTestCase {
         let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); shot.name = name; shot.lifetime = .keepAlways; add(shot)
     }
 
-    @MainActor private func scrollPresentedContent(_ app: XCUIApplication) {
+    @MainActor private func scrollPresentedContent(_ app: XCUIApplication, back: Bool = false) {
         // iPad sheets leave the underlying conversation in the AX hierarchy.
         let scroller = app.scrollViews.allElementsBoundByIndex.last(where: \.isHittable) ?? app
-        scroller.swipeUp()
+        if back { scroller.swipeDown() } else { scroller.swipeUp() }
     }
 }
 

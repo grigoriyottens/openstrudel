@@ -37,6 +37,14 @@ final class ReleaseScenariosUITests: XCTestCase {
         XCTAssertFalse(hidden.exists)
         app.buttons["teamSettings"].tap()
         XCTAssertTrue(app.buttons["signOutThisDevice"].waitForExistence(timeout: 10))
+        // Each device sheet hangs on one row: duplicates closed the sheet and Settings with it.
+        app.openFirstDeviceDetails()
+        // The details' rows share the group's identifier, so the row is found by its title.
+        let rename = app.buttons["Переименовать…"]
+        try reveal(rename, in: app); rename.tap()
+        XCTAssertTrue(app.textFields["renameName"].waitForExistence(timeout: 5))
+        app.buttons["Отмена"].tap()
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
         _ = try await read(fixture + "/offline?value=1")
         let leave = app.buttons["signOutThisDevice"].firstMatch
         try reveal(leave, in: app); leave.tap()

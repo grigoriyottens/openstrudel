@@ -314,7 +314,8 @@ private struct TelegramReplySheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(L("Отправить в \(title)")) { send() }
+                    // The sheet names the group; a long title would hide the action in the overflow menu.
+                    Button(L("Отправить")) { send() }
                         .disabled(importing || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 32_000)
                         .accessibilityIdentifier("sendTelegramReply")
                 }

@@ -331,6 +331,10 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     var openAIRecoveryMessage: String {
+        if let provider = openAIAccount?.keyProviderName {
+            return canManageOpenAI ? L("Добавьте ключ \(provider) в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены.")
+                : L("Ключ \(provider) добавляет владелец устройства этого сотрудника. Чаты и черновики сохранены.")
+        }
         if openAIAccount?.isUnavailable == true {
             return L("Связь с вашим Mac или сервером сохранена. Проверим OpenAI снова автоматически. Чаты и черновики остаются на месте.")
         }
@@ -339,6 +343,10 @@ final class HomeClient: ObservableObject, Identifiable {
         }
         if !canManageOpenAI {
             return L("Войдите в OpenAI на устройстве этого сотрудника. Здесь подключение восстановится автоматически; отдельный вход не нужен.")
+        }
+        // A new key never moves a chat off ChatGPT, so the owner learns the other way out.
+        if health?.providers == 1 {
+            return L("Войдите в OpenAI снова или выберите в настройках сотрудника модель с API-ключом. Чаты и черновики сохранены.")
         }
         return L("Войдите в OpenAI один раз для устройства этого сотрудника. Подключённые устройства продолжат работу автоматически. Чаты и черновики сохранены.")
     }
@@ -1535,6 +1543,41 @@ final class HomeClient: ObservableObject, Identifiable {
         // A lost response is safe to retry: the Home remembers this archive.
         await load(quiet: true)
         return result
+    }
+
+    /// API keys live on the device that runs the employees, routed like `/v1/accounts`.
+    func providers(deviceID: String? = nil) async throws -> ProviderList {
+        try await management("/v1/providers" + (deviceID.map { "?deviceId=" + $0 } ?? ""))
+    }
+
+    /// The device checks the key with the provider before saving it; a rejected key fails with the server's message.
+    func connectProvider(_ id: String, key: String, deviceID: String? = nil) async throws {
+        let _: HomeActionResult = try await management("/v1/providers/" + id + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: "PUT", payload: ["key": key])
+    }
+
+    /// The welcome's key must open the chat. Automatic still prefers a ChatGPT sign-in that can no longer answer,
+    /// and a saved ChatGPT model ignores new keys, so then the device default moves to the key's recommended model.
+    func connectFirstProvider(_ id: String, key: String) async throws {
+        try await connectProvider(id, key: key)
+        try await reloadOpenAIAccount()
+        guard openAIAccount?.connected == false, openAIAccount?.keyProviderName == nil else { return }
+        let main: ModelSettings = try await management("/v1/settings/models?agentId=main")
+        guard let model = main.models.first(where: { $0.provider == id && $0.isDefault }) ?? main.models.first(where: { $0.provider == id }) else { return }
+        let _: ModelSettings = try await management("/v1/settings/models", method: "POST", payload: ["provider": id, "model": model.id, "serviceTier": "default"])
+        if main.selection.model != nil {
+            let _: ModelSettings = try await management("/v1/settings/models?agentId=main", method: "POST", payload: ["provider": NSNull(), "model": NSNull(), "serviceTier": NSNull()])
+        }
+        try await reloadOpenAIAccount()
+    }
+    /// Unlike a refresh, never skipped while another check runs: the welcome waits for this answer.
+    private func reloadOpenAIAccount() async throws {
+        let generation = connectionGeneration, account = try await loadOpenAIAccount(force: true)
+        guard generation == connectionGeneration else { throw CancellationError() }
+        applyOpenAIAccount(account)
+    }
+
+    func removeProvider(_ id: String, deviceID: String? = nil) async throws {
+        let _: HomeActionResult = try await management("/v1/providers/" + id + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: "DELETE")
     }
 
     func management<T: Decodable>(_ path: String, method: String = "GET", payload: [String: Any]? = nil) async throws -> T {

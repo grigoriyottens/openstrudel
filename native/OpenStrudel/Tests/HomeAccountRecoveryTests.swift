@@ -321,6 +321,152 @@ import Testing
         #expect(state.loginStarts == 1)
     }
 
+    @Test func keyProviderEmployeeAsksForItsKeyAndOpensTheChatOnceConnected() async throws {
+        let state = AccountFixtureState()
+        state.accountBody = #"{"account":{"connected":false,"email":null,"planType":null,"provider":"kimi","providerName":"Kimi"},"accountId":"provider-kimi","loginPending":false,"canManage":true}"#
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        await client.load()
+        #expect(client.openAIAccount?.connected == false)
+        #expect(client.openAIRecoveryMessage == L("Добавьте ключ \("Kimi") в настройках аккаунтов или выберите другую модель. Чаты и черновики сохранены."))
+        state.accountBody = #"{"account":{"connected":false,"email":null,"planType":null,"provider":"kimi","providerName":"Kimi"},"accountId":"provider-kimi","loginPending":false,"canManage":false}"#
+        await client.refreshOpenAIAccount()
+        #expect(client.openAIRecoveryMessage == L("Ключ \("Kimi") добавляет владелец устройства этого сотрудника. Чаты и черновики сохранены."))
+        state.accountBody = #"{"account":{"connected":true,"email":null,"planType":null,"provider":"kimi","providerName":"Kimi"},"accountId":"provider-kimi","loginPending":false,"canManage":true}"#
+        await client.refreshOpenAIAccount()
+        #expect(client.openAIAccount?.connected == true)
+        #expect(client.hasOpenedConversation)
+    }
+
+    @Test(arguments: [false, true]) func anExpiredChatGPTSignInSaysAModelWithAnAPIKeyAlsoWorks(homeHasKeys: Bool) async throws {
+        let state = AccountFixtureState()
+        state.accountBody = #"{"account":{"connected":false,"email":null,"planType":null,"managed":true,"issue":"sign_in_required"},"canManage":true,"loginPending":false}"#
+        state.customResponse = { request in
+            guard homeHasKeys, request.url!.path == "/health" else { return nil }
+            return (200, Data(#"{"ok":true,"service":"openstrudel","agentArchiveVersion":1,"providers":1}"#.utf8))
+        }
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        await client.load()
+        // A key added in Accounts does not move a chat off ChatGPT, so the notice also names the other way out.
+        let key = homeHasKeys ? "Войдите в OpenAI снова или выберите в настройках сотрудника модель с API-ключом. Чаты и черновики сохранены."
+            : "Войдите в OpenAI один раз для устройства этого сотрудника. Подключённые устройства продолжат работу автоматически. Чаты и черновики сохранены."
+        #expect(client.openAIRecoveryMessage == L10n.text(key))
+        #expect(AppLanguage.allCases.allSatisfy { L10n.catalog[key]?[$0.rawValue] != nil })
+    }
+
+    @Test func apiKeysGoToTheChosenDeviceAndARejectedKeyKeepsTheProvidersWords() async throws {
+        let state = AccountFixtureState()
+        var calls: [String] = []
+        var keys: [String] = []
+        state.customResponse = { request in
+            guard request.url!.path.hasPrefix("/v1/providers") else { return nil }
+            calls.append((request.httpMethod ?? "") + " " + request.url!.path + "?" + (request.url!.query ?? ""))
+            var data = request.httpBody ?? Data()
+            if data.isEmpty, let stream = request.httpBodyStream {
+                stream.open(); defer { stream.close() }
+                var buffer = [UInt8](repeating: 0, count: 1024)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    guard count > 0 else { break }; data.append(contentsOf: buffer.prefix(count))
+                }
+            }
+            if let key = (try? JSONSerialization.jsonObject(with: data) as? [String: String])?["key"] { keys.append(key) }
+            switch request.httpMethod {
+            case "PUT": return (400, Data(#"{"error":"Kimi не принял ключ. Проверьте его и вставьте снова."}"#.utf8))
+            case "DELETE": return (200, Data(#"{"ok":true,"reset":2}"#.utf8))
+            default: return (200, Data(#"{"providers":[{"id":"kimi","name":"Kimi","auth":"key","connected":true,"keyHint":"••••7Qa","keysUrl":"https://platform.moonshot.ai/console/api-keys","usedBy":2}],"canManage":true}"#.utf8))
+            }
+        }
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        let list = try await client.providers(deviceID: "mac-mini")
+        #expect(list.providers.first?.keyHint == "••••7Qa")
+        do {
+            try await client.connectProvider("kimi", key: "sk-rejected", deviceID: "mac-mini")
+            Issue.record("A rejected key must not look connected")
+        } catch { #expect(error.localizedDescription == L("\("Kimi") не принял ключ. Проверьте его и вставьте снова.")) }
+        try await client.removeProvider("kimi")
+        #expect(calls == ["GET /v1/providers?deviceId=mac-mini", "PUT /v1/providers/kimi?deviceId=mac-mini", "DELETE /v1/providers/kimi?"])
+        #expect(keys == ["sk-rejected"])
+    }
+
+    @Test(arguments: [false, true]) func anAPIKeyOnTheWelcomeOpensTheChatWhenTheChatGPTSignInCannotRun(mainHasItsOwnModel: Bool) async throws {
+        let state = AccountFixtureState()
+        // An expired sign-in still counts as signed in, so automatic stays on a ChatGPT that cannot answer.
+        state.accountBody = #"{"account":{"connected":false,"email":null,"planType":null,"managed":true,"issue":"sign_in_required"},"canManage":true,"loginPending":false}"#
+        var writes: [String] = [], deviceOnKey = false, mainOwnModel = mainHasItsOwnModel
+        state.customResponse = { request in
+            let path = request.url!.path
+            if path == "/v1/providers/anthropic" { return (200, Data(#"{"provider":{"id":"anthropic","name":"Anthropic","auth":"key","connected":true,"keyHint":"••••7Qa","keysUrl":null,"usedBy":0}}"#.utf8)) }
+            guard path == "/v1/settings/models" else { return nil }
+            if request.httpMethod == "POST" {
+                let target = request.url!.query ?? "device"
+                writes.append(target + " " + sortedJSON(requestBody(request)))
+                if target == "device" { deviceOnKey = true } else { mainOwnModel = false }
+                if deviceOnKey && !mainOwnModel {
+                    state.accountBody = #"{"account":{"connected":true,"email":null,"planType":null,"provider":"anthropic","providerName":"Anthropic"},"accountId":"provider-anthropic","loginPending":false,"canManage":true}"#
+                }
+            }
+            let fable = #"{"id":"claude-fable-5-1","name":"Claude Fable 5.1","description":"","isDefault":true,"speeds":[{"id":"default","name":"Обычная","description":""}],"provider":"anthropic"}"#
+            let opus = #"{"id":"claude-opus-5-5","name":"Claude Opus 5.5","description":"","isDefault":false,"speeds":[{"id":"default","name":"Обычная","description":""}],"provider":"anthropic"}"#
+            let main = mainOwnModel ? #"{"provider":"chatgpt","model":"gpt-6.1-sol","serviceTier":"default"}"# : #"{"provider":null,"model":null,"serviceTier":null}"#
+            return (200, Data(#"{"models":[\#(opus),\#(fable)],"recommended":{"id":"gpt-6.1-sol","name":"GPT-6.1 Sol","description":"","isDefault":false,"speeds":[],"provider":"chatgpt"},"selection":\#(main),"defaults":{"provider":"chatgpt","model":"gpt-6.1-sol","serviceTier":"default"},"effective":{"provider":"chatgpt","model":"gpt-6.1-sol","serviceTier":"default"},"canManage":true}"#.utf8))
+        }
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        await client.load()
+        #expect(client.openAIAccount?.needsSignInAgain == true)
+        try await client.connectFirstProvider("anthropic", key: "sk-ant")
+        #expect(client.openAIAccount?.connected == true)
+        #expect(client.hasOpenedConversation)
+        // The device default moves to the key's recommended model; a main chat pinned to ChatGPT follows the device.
+        #expect(writes == [#"device {"model":"claude-fable-5-1","provider":"anthropic","serviceTier":"default"}"#]
+                + (mainHasItsOwnModel ? [#"agentId=main {"model":null,"provider":null,"serviceTier":null}"#] : []))
+    }
+
+    @Test func anAPIKeyThatAlreadyPowersTheChatChangesNoModel() async throws {
+        let state = AccountFixtureState()
+        state.accountBody = #"{"account":{"connected":false,"email":null,"planType":null,"managed":false},"canManage":true,"loginPending":false}"#
+        var settingsRequests = 0
+        state.customResponse = { request in
+            if request.url!.path == "/v1/settings/models" { settingsRequests += 1 }
+            guard request.url!.path == "/v1/providers/xai" else { return nil }
+            state.accountBody = #"{"account":{"connected":true,"email":null,"planType":null,"provider":"xai","providerName":"xAI"},"accountId":"provider-xai","loginPending":false,"canManage":true}"#
+            return (200, Data(#"{"provider":{"id":"xai","name":"xAI","auth":"key","connected":true,"keyHint":"••••7Qa","keysUrl":null,"usedBy":2}}"#.utf8))
+        }
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        await client.load()
+        try await client.connectFirstProvider("xai", key: "xai-key")
+        #expect(client.openAIAccount?.connected == true)
+        #expect(settingsRequests == 0)
+    }
+
+    @Test func aKeyForADeviceThatWentOfflineFailsWithTheServersWordsAndIsNeverAccepted() async throws {
+        let state = AccountFixtureState()
+        var paths: [String] = []
+        state.customResponse = { request in
+            guard request.url!.path.hasPrefix("/v1/providers") || request.url!.path.hasPrefix("/v1/home/requests") else { return nil }
+            paths.append(request.url!.path)
+            return (503, Data(#"{"error":"Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз."}"#.utf8))
+        }
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        do {
+            try await client.connectProvider("anthropic", key: "sk-ant", deviceID: "mac-mini")
+            Issue.record("A key for an offline device must not look connected")
+        } catch { #expect(error.localizedDescription == L10n.text("Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз.")) }
+        // Nothing waits in a queue: no pending action to check later.
+        #expect(paths == ["/v1/providers/anthropic"])
+        #expect(client.savedActionIDs.isEmpty)
+        // The key sheet shows the server's words in every language, never the generic failure.
+        for language in AppLanguage.allCases where language != .russian {
+            let shown = L10n.serviceText("Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз.", language: language)
+            #expect(shown != L10n.text("Не удалось получить ответ. Попробуйте ещё раз.", language: language), "\(language)")
+        }
+    }
+
     @Test func revokedHomePairingStillRequiresReconnection() async throws {
         let state = AccountFixtureState()
         state.accountStatus = 401
@@ -516,6 +662,23 @@ import Testing
     }
 }
 
+private func requestBody(_ request: URLRequest) -> Data {
+    var data = request.httpBody ?? Data()
+    if data.isEmpty, let stream = request.httpBodyStream {
+        stream.open(); defer { stream.close() }
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            guard count > 0 else { break }
+            data.append(contentsOf: buffer.prefix(count))
+        }
+    }
+    return data
+}
+private func sortedJSON(_ data: Data) -> String {
+    (try? JSONSerialization.jsonObject(with: data)).flatMap { try? JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys, .withoutEscapingSlashes]) }
+        .map { String(decoding: $0, as: UTF8.self) } ?? ""
+}
 private func historyMessage(_ index: Int, running: Bool = false) -> [String: Any] {
     ["id": "m\(index)", "conversationId": "chat", "channel": "api", "direction": "inbound", "text": "Message \(index)", "createdAt": "2026-10-07T12:00:00.000Z", "status": running ? "running" : "completed"]
 }

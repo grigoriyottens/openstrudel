@@ -34,7 +34,8 @@ const control = createServer(async (req,res) => {
   if(route.pathname === '/invite') {
     offset = 0;
     const invite = await mobile.invite();
-    if(route.searchParams.has('expired')) offset = 301000;
+    // A link to share lasts a day (MobileAccess.invite).
+    if(route.searchParams.has('expired')) offset = 86_401_000;
     unavailableUntil = 0; pendingOutage = route.searchParams.has('delay');
     const url = new URL(invite.url);url.searchParams.set('name','Mac mini · Проверка');
     res.end(JSON.stringify({...invite,url:url.toString()}));return;

@@ -40,6 +40,12 @@ type LoginSession = {
   previousAccountID: string | undefined;
 };
 
+export type AccountEntry = { id: string; name: string; customName?: boolean };
+export const accountEntries = (store: Store): AccountEntry[] => JSON.parse(store.getSetting("codex.accounts") ?? '[{"id":"default","name":"Основной"}]');
+const accountModeKey = (id: string) => id === "default" ? "codex.auth.mode" : `codex.account.${id}.mode`;
+/** Store-only: a slot whose own sign-in completed and was not signed out. */
+export const chatgptSignedIn = (store: Store) => accountEntries(store).some(entry => store.getSetting(accountModeKey(entry.id)) === "managed");
+
 export class CodexAccountService {
   private readonly codexHome: string;
   private readonly sessions = new Map<string, LoginSession>();
@@ -57,7 +63,7 @@ export class CodexAccountService {
 
   constructor(private readonly store: Store, rootDirectory = resolve(".data"), accountId = "default") {
     this.codexHome = accountId === "default" ? process.env.OPENSTRUDEL_CODEX_HOME ?? resolve(rootDirectory, "codex") : resolve(rootDirectory, "accounts", accountId, "codex");
-    this.modeKey = accountId === "default" ? "codex.auth.mode" : `codex.account.${accountId}.mode`;
+    this.modeKey = accountModeKey(accountId);
   }
 
   setOnChange(handler: (identityChanged: boolean) => void): void {

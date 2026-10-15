@@ -516,6 +516,7 @@ private struct QRScanner: UIViewControllerRepresentable {
 struct ConnectionInvitationView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var textSize
     let onConfirm: (MacPairing) -> Void
     @State private var invitation = ""
     @State private var error: String?
@@ -537,25 +538,34 @@ struct ConnectionInvitationView: View {
         !openingPage && !invitation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var help: String {
+        L("На другом Mac или сервере откройте OpenStrudel → Настройки → Устройства → Получить ссылку подключения. Отсканируйте QR-код или вставьте ссылку сюда.")
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     ScanInvitationButton(error: $error) { onConfirm($0); dismiss() }
                         .accessibilityIdentifier("scanAdditionalInvitation")
-                    HStack(spacing: 8) {
+                    // The largest text gives the field the full width, with Paste below it.
+                    let row = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+                    row {
                         SecureField(L("Ссылка подключения"), text: $invitation, prompt: Text(L("Ссылка подключения")))
                             .labelsHidden()
                             .focused($focused).accessibilityIdentifier("connectionInvitation")
                             .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.continue)
+                            // The field is only as tall as its line; the rest of the 44-pt target focuses it too.
                             .frame(minHeight: controlTarget)
+                            .background { Color.clear.contentShape(Rectangle()).onTapGesture { focused = true } }
                             .onSubmit(confirm)
                         PasteButton(payloadType: String.self) { values in
                             if let value = values.first { invitation = value; error = nil }
                         }.labelStyle(.titleOnly)
                     }
                 } header: {
-                    SetupHeader(title: L("Подключить устройство"), paragraphs: [L("На другом Mac или сервере откройте OpenStrudel → Настройки → Устройства → Получить ссылку подключения. Отсканируйте QR-код или вставьте ссылку сюда.")])
+                    // The largest text keeps the field on the first screen: the explanation follows it.
+                    SetupHeader(title: L("Подключить устройство"), paragraphs: textSize.isAccessibilitySize ? [] : [help])
                 } footer: {
                     if let error {
                         Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)
@@ -564,17 +574,20 @@ struct ConnectionInvitationView: View {
                     } else if let page = connectionPage {
                         Text(L("Откроется \(page.host ?? L("страница подключения")) в браузере. На странице нажмите «Открыть OpenStrudel»."))
                             .fixedSize(horizontal: false, vertical: true)
+                    } else if textSize.isAccessibilitySize {
+                        Text(help).fixedSize(horizontal: false, vertical: true)
                     }
+                }
+                // Pinned, the action would cover the long text scrolling under it.
+                if textSize.isAccessibilitySize {
+                    Section { continueButton }.listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
                 }
             }
             .formStyle(.grouped)
             .safeAreaInset(edge: .bottom) {
-                Button(action: confirm) { SetupActionLabel(title: continueTitle) }
-                    .primaryAction()
-                    .disabled(!canContinue)
-                    .accessibilityIdentifier("continueConnection")
-                    .keyboardShortcut(.defaultAction)
-                    .padding(.horizontal, OnboardingLayout.margin).padding(.bottom, 8)
+                if !textSize.isAccessibilitySize {
+                    continueButton.padding(.horizontal, OnboardingLayout.margin).padding(.bottom, 8)
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -587,6 +600,14 @@ struct ConnectionInvitationView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .onChange(of: invitation) { _, _ in error = nil }
+    }
+
+    private var continueButton: some View {
+        Button(action: confirm) { SetupActionLabel(title: continueTitle) }
+            .primaryAction()
+            .disabled(!canContinue)
+            .accessibilityIdentifier("continueConnection")
+            .keyboardShortcut(.defaultAction)
     }
 
     private func confirm() {

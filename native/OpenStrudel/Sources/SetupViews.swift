@@ -343,7 +343,9 @@ struct ServerAccountSetupView: View {
             Form {
                 Section {
                     LabeledContent(L("Server"), value: client.displayName)
-                    if connected, let account = client.openAIAccount {
+                    if connected, let provider = client.openAIAccount?.keyProviderName {
+                        LabeledContent { Text(L("API-ключ")) } label: { Text(verbatim: provider) }
+                    } else if connected, let account = client.openAIAccount {
                         LabeledContent {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text(account.email ?? "ChatGPT").textSelection(.enabled)
@@ -429,7 +431,7 @@ struct AIDataConsentView: View {
     var body: some View {
         WelcomePage {
             WelcomeHeader(title: L("Ваши данные"))
-            WelcomeText(L("Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI получает сообщения, нужную часть переписки и выбранные файлы."),
+            WelcomeText(L("Чаты хранятся на вашем Mac или сервере. Для ответов OpenAI или другой выбранный вами провайдер получает сообщения, нужную часть переписки и выбранные файлы."),
                         L("Другие сервисы получают данные только при обращении к ним."))
                 .padding(.top, 12)
             InkLink(L("Подробнее о данных"), destination: URL(string: "https://waiwai.is/openstrudel/privacy")!)
