@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { parse } from "smol-toml";
 import { AcpEngine, AcpSessionLost, ProviderSignInError, grokCommand } from "../src/acp.js";
 import { providerInfo } from "../src/providers.js";
 
@@ -41,11 +42,14 @@ it("runs the pinned agent in the workspace with a private home, the employee too
     expect(events).toEqual([{ type: "thread.started", payload: { threadId: "s-new" } }]);
     const workspace = realpathSync(join(root, ".data/workspace/work")), home = realpathSync(join(root, ".data/providers/grok/home"));
     const [{ start }] = g.messages();
-    expect(start.args).toEqual(["agent", "stdio"]);
+    expect(start.args).toEqual(["--sandbox", "openstrudel", "agent", "stdio"]);
     expect(start.cwd).toBe(workspace);
     // Grok's own home is private, so it reads no ~/.grok, ~/.claude or ~/.codex of the owner.
     expect(start.env).toMatchObject({ HOME: home, GROK_HOME: home, GROK_DISABLE_AUTOUPDATER: "1" });
     expect(statSync(home).mode & 0o777).toBe(0o700);
+    // Grok's own sandbox: the workspace, system paths, installed tools and its home; never the Home's data or the owner's files.
+    expect(parse(readFileSync(join(home, "sandbox.toml"), "utf8"))).toEqual({ profiles: { openstrudel: {
+      extends: "strict", restrict_network: false, read_write: [home], read_only: ["/opt/homebrew", "/usr/local"].filter(path => existsSync(path)) } } });
     expect(start.env).not.toHaveProperty("XAI_API_KEY");
     expect(JSON.stringify(start.env)).not.toMatch(/xai-host-leak|host-only/);
     expect(g.calls("authenticate")).toEqual([{ methodId: "cached_token" }]);
@@ -79,14 +83,17 @@ it("resumes the saved session, keeps only the new reply, and reports a session t
 
 it("forwards each permission request by kind and answers only once", async () => {
   const permission = (toolCallId: string, kind: string | undefined, title: string, rawInput: unknown = {}, locations: unknown[] = []) => ({ permission: { toolCall: { toolCallId, kind, title, rawInput, locations } } });
+  const cwd = join(realpathSync(root), ".data/workspace/personal"), data = join(root, ".data/openstrudel.sqlite");
   const turn = [permission("c1", "execute", "Run tests", { command: "npm test" }), permission("e1", "edit", "Edit notes.md", {}, [{ path: "/w/notes.md" }]),
     permission("r1", "read", "Read notes.md"), permission("m1", undefined, "linear__save_issue", { title: "Bug" }), permission("o1", undefined, "openstrudel__save_schedule"),
-    permission("x1", "switch_mode", "Leave plan mode")];
+    permission("x1", "switch_mode", "Leave plan mode"),
+    // Reads stay in the workspace, as with the Claude engine: Grok never reads the Home's keys, even when it asks.
+    permission("r2", "read", "Read notes.md", {}, [{ path: join(cwd, "notes.md") }]), permission("r3", "read", "Read keys", {}, [{ path: data }]),
+    permission("r4", "search", "Search the Home", {}, [{ path: "notes.md" }, { path: join(cwd, "../..") }])];
   const g = mock({ turn });
   const onRequest = vi.fn(async (method: string, params: Record<string, any>) =>
     method === "mcpServer/elicitation/request" ? { action: "accept" } : { decision: params.command === "npm test" ? "accept" : "decline" });
   await g.engine.run("Работай", { onRequest });
-  const cwd = realpathSync(join(root, ".data/workspace/personal"));
   expect(onRequest.mock.calls).toEqual([
     ["item/commandExecution/requestApproval", { command: "npm test", cwd, reason: "Run tests" }],
     ["item/fileChange/requestApproval", { reason: "Edit notes.md /w/notes.md" }],
@@ -94,11 +101,11 @@ it("forwards each permission request by kind and answers only once", async () =>
       _meta: { codex_approval_kind: "mcp_tool_call", tool_params: { title: "Bug" } } }],
   ]);
   // Never "allow always": a later request asks again.
-  expect(g.chosen()).toEqual(["once", "no", "once", "once", "once", "no"]);
+  expect(g.chosen()).toEqual(["once", "no", "once", "once", "once", "no", "once", "no", "no"]);
   const all = mock({ turn });
   await all.engine.run("Работай", { approvalMode: "approve_all", onRequest });
   expect(onRequest).toHaveBeenCalledTimes(3);
-  expect(all.chosen()).toEqual(["once", "once", "once", "once", "once", "once"]);
+  expect(all.chosen()).toEqual(["once", "once", "once", "once", "once", "once", "once", "no", "no"]);
   // A schedule has nobody to ask.
   const scheduled = mock({ turn: [permission("c1", "execute", "Run tests", { command: "npm test" })] });
   await scheduled.engine.run("Выпуск", { onRequest: () => { throw new Error("Выпуск остановлен: нужно разрешение пользователя. Продолжите в чате."); } });

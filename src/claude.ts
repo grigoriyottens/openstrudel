@@ -62,7 +62,6 @@ export class ClaudeEngine implements CodexEngine {
     if (provider.id !== "anthropic") for (const name of aliases) env[name] = model;
 
     const mode = options.approvalMode ?? "ask", group = options.groupContext === true, ask = options.onRequest;
-    const inside = (path: unknown) => typeof path === "string" && (physical(resolve(cwd, path)) + sep).startsWith(workspace + sep);
     const canUseTool: CanUseTool = async (name, input, { mcpServer }) => {
       const allow: PermissionResult = { behavior: "allow", updatedInput: input }, deny = (message: string): PermissionResult => ({ behavior: "deny", message });
       const path = input.file_path ?? input.notebook_path, edit = edits.includes(name);
@@ -78,7 +77,7 @@ export class ClaudeEngine implements CodexEngine {
         if (group && (name === "Bash" || edit)) return deny("Commands and file changes are not available in a group chat.");
         // Codex's profile: the workspace is readable and writable without asking, and nothing beyond it is readable.
         // Changes beyond it need the owner. Approve-all runs only sandboxed commands and services by itself.
-        if ((edit || name === "Read") && inside(path)) return allow;
+        if ((edit || name === "Read") && insideWorkspace(workspace, path)) return allow;
         if (mode === "approve_all") return name === "Bash" || name.startsWith("mcp__") ? allow : deny(edit ? "Only files inside the workspace can be changed." : "This action is not available.");
         if (!ask) return deny("No user is available to approve this action.");
         if (name === "Bash") return accepted(await ask("item/commandExecution/requestApproval", { command: input.command, cwd, reason: input.description }));
@@ -165,6 +164,9 @@ function extensionServers(table: Record<string, unknown>): Record<string, McpSer
     s.enabled === false || name === "cua_repl" ? [] : s.url ? [[name, { type: "http", url: s.url, headers: s.http_headers }]]
       : s.command ? [[name, { type: "stdio", command: s.command, args: s.args ?? [], env: s.env }]] : []));
 }
+
+/** Whether a tool's path, absolute or relative to the workspace (a real path), stays inside it once links are followed. */
+export const insideWorkspace = (workspace: string, path: unknown) => typeof path === "string" && (physical(resolve(workspace, path)) + sep).startsWith(workspace + sep);
 
 /** The path a tool touches once links are followed, also when the file or a link's target does not exist yet. */
 function physical(path: string, hops = 0): string {

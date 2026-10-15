@@ -1,11 +1,12 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
+import { stringify } from "smol-toml";
 import { toolBridge } from "./acp-mcp.js";
-import { agentInstructions, contextServers, imageType } from "./claude.js";
+import { agentInstructions, contextServers, imageType, insideWorkspace } from "./claude.js";
 import type { ModelChoice } from "./model-settings.js";
 import { ProviderIncident, type ProviderInfo } from "./providers.js";
 import { contextPattern } from "./scopes.js";
@@ -30,11 +31,17 @@ const runtime = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const grokCommand = (): GrokCommand => ({ bin: resolve(runtime, "bin/grok"), args: ["--no-auto-update"] });
 
 /** Grok's own home on this Home device: it signs in, keeps its token, sessions and memory there,
- * and reads no ~/.grok, ~/.claude or ~/.codex of the owner. */
+ * and reads no ~/.grok, ~/.claude or ~/.codex of the owner. Its `sandbox.toml` holds the profile every turn runs under. */
 export function grokHome(root: string): string {
-  const home = resolve(root, ".data/providers/grok/home");
-  mkdirSync(home, { recursive: true, mode: 0o700 });
-  return realpathSync(home);
+  const dir = resolve(root, ".data/providers/grok/home");
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const home = realpathSync(dir);
+  // Grok's own kernel sandbox, as the Claude engine's: the workspace, system paths and installed tools are readable, never the
+  // Home's keys and data, other workspaces or the owner's files. Its home stays writable for its sign-in, sessions and memory,
+  // and Grok keeps this file read-only. A custom profile Grok cannot apply stops it instead of running unprotected.
+  writeFileSync(resolve(home, "sandbox.toml"), stringify({ profiles: { openstrudel: { extends: "strict", restrict_network: false, read_write: [home],
+    read_only: ["/opt/homebrew", "/usr/local"].filter(tools => existsSync(tools)) } } }), { mode: 0o600 });
+  return home;
 }
 
 /** One `grok` process in its own process group, so nothing it starts outlives it. Its environment is an allowlist:
@@ -65,8 +72,8 @@ const stopped = () => new Error("Ответ остановлен");
 const signedOut = (error: unknown) => error instanceof acp.RequestError && error.code === -32000 && !/error sending request|timed out/i.test(error.message);
 const defined = <T extends object>(value: T) => Object.fromEntries(Object.entries(value).filter(([, v]) => v != null)) as Partial<T>;
 
-/** Grok Build over ACP, as Zed runs it: the agent owns its sign-in, permissions, memory and sandbox. OpenStrudel runs it
- * in the employee's workspace, passes the employee tools and services as MCP, answers its permission requests once at a
+/** Grok Build over ACP, as Zed runs it: the agent owns its sign-in, permissions and memory. OpenStrudel runs it
+ * under Grok's own sandbox in the employee's workspace, passes the employee tools and services as MCP, answers its permission requests once at a
  * time from its own approvals, and resumes its session. One process per turn. */
 export class AcpEngine implements CodexEngine {
   private readonly running = new Set<() => void>();
@@ -91,7 +98,7 @@ export class AcpEngine implements CodexEngine {
 
   private launch(workspace: string) {
     mkdirSync(workspace, { recursive: true, mode: 0o700 });
-    const cwd = realpathSync(workspace), agent = launchGrok((this.options.command ?? grokCommand)(), ["agent", "stdio"], cwd, grokHome(this.options.root));
+    const cwd = realpathSync(workspace), agent = launchGrok((this.options.command ?? grokCommand)(), ["--sandbox", "openstrudel", "agent", "stdio"], cwd, grokHome(this.options.root));
     return { ...agent, cwd, stream: acp.ndJsonStream(Writable.toWeb(agent.child.stdin!), Readable.toWeb(agent.child.stdout!) as ReadableStream<Uint8Array>) };
   }
 
@@ -112,10 +119,11 @@ export class AcpEngine implements CodexEngine {
     this.running.add(end);
     options.signal?.addEventListener("abort", stop, { once: true });
 
-    /** Reads, searches and fetches stay with Grok and its sandbox. Commands, changes and services follow the approval mode. */
+    /** Reads and searches stay in the workspace; fetches stay with Grok. Commands, changes and services follow the approval mode. */
     const allowed = async (update: acp.ToolCallUpdate): Promise<boolean> => {
       const call = { ...calls.get(update.toolCallId), ...defined(update) }, title = call.title ?? "", input = (call.rawInput ?? {}) as Record<string, any>;
-      if (call.kind === "read" || call.kind === "search" || call.kind === "fetch" || call.kind === "think") return true;
+      if (call.kind === "read" || call.kind === "search") return (call.locations ?? []).every(l => insideWorkspace(cwd, l.path));
+      if (call.kind === "fetch" || call.kind === "think") return true;
       const change = call.kind === "edit" || call.kind === "delete" || call.kind === "move";
       // Grok names an MCP tool `<server>__<tool>`; the kind decides first, so a command named like one is still a command.
       const service = call.kind === "execute" || change ? null : /^(?:mcp__)?([\w-]+?)__(\S+)$/.exec(call.name ?? title);
