@@ -1,5 +1,6 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Readable, Writable } from "node:stream";
@@ -63,7 +64,7 @@ export function launchGrok(command: GrokCommand, args: string[], cwd: string, ho
 export class ProviderSignInError extends ProviderIncident {
   constructor(readonly provider: ProviderInfo) { super(`Войдите в ${provider.name} снова в настройках аккаунтов.`, 409, "auth:" + provider.id); }
 }
-/** Grok no longer knows the saved session; the route starts a new one seeded with the chat. */
+/** Grok no longer knows the saved session, or it started with other rules; the route starts a new one seeded with the chat. */
 export class AcpSessionLost extends Error {}
 
 const instructions = agentInstructions("ask_user_question");
@@ -104,10 +105,13 @@ export class AcpEngine implements CodexEngine {
 
   private async turn(context: string, input: string, options: RunOptions = {}): Promise<CodexRunResult> {
     if (options.signal?.aborted) throw stopped();
+    // Grok applies the rules only when a session starts, so the saved thread is the session with a hash of its rules.
+    const rules = instructions + (options.profile ? `\n\nCurrent employee SOUL (authoritative):\n${options.profile}` : "");
+    const signed = "#" + createHash("sha256").update(rules).digest("hex").slice(0, 16);
+    if (options.threadId && !options.threadId.endsWith(signed)) throw new AcpSessionLost("The employee's rules changed.");
     const { root, provider } = this.options, approveAll = options.approvalMode === "approve_all";
     const agent = this.launch(resolve(root, ".data/workspace", context)), cwd = agent.cwd, calls = new Map<string, acp.ToolCallUpdate>();
-    const rules = instructions + (options.profile ? `\n\nCurrent employee SOUL (authoritative):\n${options.profile}` : "");
-    let sessionId = options.threadId ?? "", response = "", afterTool = false, prompting = false, halted = false, timer: NodeJS.Timeout | undefined;
+    let sessionId = options.threadId?.slice(0, -signed.length) ?? "", response = "", afterTool = false, prompting = false, halted = false, timer: NodeJS.Timeout | undefined;
     let ctx: acp.ClientContext | undefined, bridge: Awaited<ReturnType<typeof toolBridge>> | undefined;
     // Grok gets session/cancel and its pending questions answer "cancelled"; one that ignores it is killed after 5 s.
     let halt!: (error: Error) => void;
@@ -172,11 +176,11 @@ export class AcpEngine implements CodexEngine {
           const mcpServers = [...bridge ? [http("openstrudel", bridge.url, { Authorization: "Bearer " + bridge.token })] : [], ...services(root, context, options)];
           let configOptions: acp.SessionConfigOption[] | null | undefined;
           if (sessionId) {
-            try { ({ configOptions } = await client.request("session/load", { sessionId, cwd, mcpServers, _meta: { rules } })); }
+            try { ({ configOptions } = await client.request("session/load", { sessionId, cwd, mcpServers })); }
             catch (error) { throw error instanceof acp.RequestError && error.code === -32000 ? error : new AcpSessionLost(error instanceof Error ? error.message : String(error)); }
           } else {
             ({ sessionId, configOptions } = await client.request("session/new", { cwd, mcpServers, _meta: { rules } }));
-            options.onEvent?.({ type: "thread.started", payload: { threadId: sessionId } });
+            options.onEvent?.({ type: "thread.started", payload: { threadId: sessionId + signed } });
           }
           const models = catalog(provider, configOptions), model = configOptions?.find(o => o.category === "model");
           if (models.length) this.options.onModels?.(models);
@@ -201,7 +205,7 @@ export class AcpEngine implements CodexEngine {
     }
     if (failure instanceof AcpSessionLost) throw failure;
     if (signedOut(failure)) throw new ProviderSignInError(provider);
-    if (result?.stopReason === "end_turn") return { threadId: sessionId, response: response || "Готово.", events: [] };
+    if (result?.stopReason === "end_turn") return { threadId: sessionId + signed, response: response || "Готово.", events: [] };
     if (halted || result?.stopReason === "cancelled") throw stopped();
     const detail = failure instanceof acp.RequestError ? failure.message : agent.stderr() || (failure instanceof Error ? failure.message : result?.stopReason) || "no reply";
     throw new Error(`${provider.name} не завершил ответ: ${detail.split("\n")[0]!.slice(0, 300)}`);

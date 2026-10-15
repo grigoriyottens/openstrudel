@@ -38,8 +38,11 @@ it("runs the pinned agent in the workspace with a private home, the employee too
     const events: unknown[] = [], tools = { definitions: [], call: vi.fn() };
     const result = await g.engine.forContext("work").run("Привет", { profile: "Имя: Ада", model: "grok-4.6", onEvent: event => events.push(event), tools });
     // The reply is the agent's last stretch of text; commentary before its tool calls and its thoughts are dropped.
-    expect(result).toEqual({ threadId: "s-new", response: "Ответ: 42", events: [] });
-    expect(events).toEqual([{ type: "thread.started", payload: { threadId: "s-new" } }]);
+    // The saved thread is Grok's session with a hash of the rules it started with.
+    const threadId = result.threadId;
+    expect(threadId).toMatch(/^s-new#[0-9a-f]{16}$/);
+    expect(result).toEqual({ threadId, response: "Ответ: 42", events: [] });
+    expect(events).toEqual([{ type: "thread.started", payload: { threadId } }]);
     const workspace = realpathSync(join(root, ".data/workspace/work")), home = realpathSync(join(root, ".data/providers/grok/home"));
     const [{ start }] = g.messages();
     expect(start.args).toEqual(["--sandbox", "openstrudel", "agent", "stdio"]);
@@ -70,14 +73,20 @@ it("runs the pinned agent in the workspace with a private home, the employee too
   } finally { delete process.env.XAI_API_KEY; delete process.env.OPENSTRUDEL_SECRET_FIXTURE; }
 });
 
-it("resumes the saved session, keeps only the new reply, and reports a session the agent lost", async () => {
+it("resumes the saved session while the employee's rules are unchanged, keeps only the new reply, and reports a session the agent lost", async () => {
   const g = mock({ turn: [{ text: "Продолжаем" }] });
-  expect(await g.engine.run("Дальше", { threadId: "s-old", model: "grok-4.7", profile: "Имя: Ада" })).toEqual({ threadId: "s-old", response: "Продолжаем", events: [] });
-  expect(g.calls("session/new")).toEqual([]);
-  expect(g.calls("session/load")).toEqual([expect.objectContaining({ sessionId: "s-old", cwd: realpathSync(join(root, ".data/workspace/personal")), _meta: { rules: expect.stringContaining("Имя: Ада") } })]);
+  const { threadId } = await g.engine.run("Привет", { profile: "Имя: Ада" });
+  expect(await g.engine.run("Дальше", { threadId, model: "grok-4.7", profile: "Имя: Ада" })).toEqual({ threadId, response: "Продолжаем", events: [] });
+  expect(g.calls("session/new")).toHaveLength(1);
+  expect(g.calls("session/load")).toEqual([{ sessionId: "s-new", cwd: realpathSync(join(root, ".data/workspace/personal")), mcpServers: [] }]);
   expect(g.calls("session/set_config_option")).toEqual([]);
+  // Grok keeps the rules a session started with, so an edited SOUL, or a thread saved without its rules, starts a new session.
+  await expect(g.engine.run("Дальше", { threadId, profile: "Имя: Ева" })).rejects.toBeInstanceOf(AcpSessionLost);
+  await expect(g.engine.run("Дальше", { threadId: "s-new", profile: "Имя: Ада" })).rejects.toBeInstanceOf(AcpSessionLost);
+  expect(g.calls("session/load")).toHaveLength(1);
   const lost = mock({ load: { code: -32002, message: "Session not found" } });
-  await expect(lost.engine.run("Дальше", { threadId: "s-gone" })).rejects.toBeInstanceOf(AcpSessionLost);
+  await expect(lost.engine.run("Дальше", { threadId, profile: "Имя: Ада" })).rejects.toBeInstanceOf(AcpSessionLost);
+  expect(lost.calls("session/load")).toHaveLength(1);
   expect(lost.calls("session/prompt")).toEqual([]);
 });
 
