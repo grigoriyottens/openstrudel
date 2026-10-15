@@ -11,7 +11,8 @@ const hosts = await Promise.all(["MacBook · Проверка", "Mac mini · П�
   const runtime = new OpenStrudelRuntime({ rootDirectory: directory, dbPath: ":memory:", startTelegram: false, mobilePort: 0,
     engine: { async run() { return { threadId: "qa-creation", response: "Готов помогать на «" + name + "».", events: [] }; } },
   });
-  runtime.api.home.save({ ...runtime.api.home.state, name });
+  // As in the app: rename() also registers the node, so the device list reports this name.
+  runtime.api.home.rename(name);
   runtime.account.read = async () => ({ connected: true, managed: true, email: "preview@example.invalid", planType: "plus" });
   Object.assign((runtime.api.mobile as any).options, { hostname: "127.0.0.1", host: "127.0.0.1", directory: join(directory, "mobile") });
   let offline = false;

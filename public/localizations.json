@@ -8686,13 +8686,6 @@
     "he": "התשובה תפורסם בקבוצה הזו בשם הבוט.",
     "ru": "Ответ будет опубликован в этой группе от имени бота."
   },
-  "Отправить в {0}": {
-    "en": "Send to {0}",
-    "fr": "Envoyer à {0}",
-    "es": "Enviar a {0}",
-    "he": "שליחה אל {0}",
-    "ru": "Отправить в {0}"
-  },
   "Подключение этой группы изменилось. Откройте её в Telegram.": {
     "en": "This group’s connection changed. Open it in Telegram.",
     "fr": "La connexion de ce groupe a changé. Ouvrez-le dans Telegram.",

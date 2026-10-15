@@ -26,8 +26,11 @@ final class MobilePairingUITests: XCTestCase {
         let input = app.textFields["telegramReplyText"]
         XCTAssertTrue(input.waitForExistence(timeout: 5), app.debugDescription)
         input.tap(); input.typeText("Reply from the iPhone fixture")
+        // The sheet names the destination, so the action stays a short, visible Send.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "WAI Core Team")).firstMatch.exists, app.debugDescription)
         let send = app.buttons["sendTelegramReply"]
-        XCTAssertTrue(send.label.contains("WAI Core Team"), app.debugDescription)
+        XCTAssertTrue(send.isHittable, app.debugDescription)
+        XCTAssertEqual(send.label, "Отправить")
         capture("phone-explicit-telegram-destination", app)
         send.tap()
         XCTAssertTrue(send.waitForNonExistence(timeout: 10))
@@ -77,10 +80,11 @@ final class MobilePairingUITests: XCTestCase {
         continueAfterFailure = false
         let env = ProcessInfo.processInfo.environment
         guard let invitation = env["OPENSTRUDEL_DEVICE_INVITATION"],
-              let profileID = env["OPENSTRUDEL_DEVICE_PROFILE"],
-              let deviceName = env["OPENSTRUDEL_DEVICE_NAME"] else {
+              let profileID = env["OPENSTRUDEL_DEVICE_PROFILE"] else {
             throw XCTSkip("Requires the isolated primary-home fixture; never rename a real device.")
         }
+        // primary-home.ts: the iPhone connects to «Главное», which lists the employee of its second Mac.
+        let deviceName = "Главное"
         let app = XCUIApplication()
         app.launch()
         app.open(try XCTUnwrap(URL(string: invitation)))
@@ -183,7 +187,7 @@ final class MobilePairingUITests: XCTestCase {
         app.launch()
         let help = app.buttons["invitationHelp"]
         XCTAssertTrue(help.waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["Ваши AI-помощники"].exists)
+        XCTAssertTrue(app.staticTexts["Ваши помощники"].exists)
         XCTAssertFalse(app.buttons["setupCloud"].exists)
         XCTAssertFalse(app.buttons["cloudSignIn"].exists)
         XCTAssertFalse(app.buttons["cloudConfirmCost"].exists)
@@ -218,18 +222,22 @@ final class MobilePairingUITests: XCTestCase {
         XCTAssertTrue(invitation.waitForExistence(timeout: 15))
         for _ in 0..<4 where !invitation.isHittable { app.swipeUp() }
         capture("10-onboarding-actions", app)
-        XCTAssertGreaterThanOrEqual(qr.frame.height, 50)
-        XCTAssertGreaterThanOrEqual(invitation.frame.height, 50)
+        // Layout rounding can report 49.99… for a 50-pt capsule.
+        XCTAssertGreaterThanOrEqual(qr.frame.height, 49.5)
+        XCTAssertGreaterThanOrEqual(invitation.frame.height, 49.5)
         XCTAssertEqual(qr.frame.width, invitation.frame.width, accuracy: 1)
         invitation.tap()
         let input = app.secureTextFields["connectionInvitation"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
-        XCTAssertGreaterThanOrEqual(input.frame.height, 44)
-        let next = app.buttons["Продолжить"]
+        let next = app.buttons["continueConnection"]
         XCTAssertGreaterThanOrEqual(next.frame.height, 50)
         // iPad presents this form in a sheet narrower than the app window.
         XCTAssertGreaterThanOrEqual(next.frame.width, input.frame.width * 0.9)
         capture("11-invitation-actions", app)
+        // A secure field is only as tall as its 21-pt line; the 44-pt row around it must focus it too.
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        input.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 0, dy: -20)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "The link field needs a 44-pt target")
     }
 
     @MainActor
@@ -268,7 +276,8 @@ final class MobilePairingUITests: XCTestCase {
         let input = app.secureTextFields["connectionInvitation"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         input.tap(); input.typeText("not-an-invitation")
-        app.buttons["Продолжить"].tap()
+        // The keyboard's return key is also «Продолжить».
+        app.buttons["continueConnection"].tap()
         XCTAssertTrue(app.staticTexts["invitationError"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.alerts["OpenStrudel"].exists)
         capture("02-invalid-link", app)
@@ -291,9 +300,15 @@ final class MobilePairingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["pasteInvitation"].waitForExistence(timeout: 5))
         app.buttons["pasteInvitation"].tap()
         XCTAssertTrue(input.waitForExistence(timeout: 5))
-        input.tap(); input.typeText(valid.absoluteString)
-        app.buttons["Продолжить"].tap()
+        // The sheet's Paste control: typing follows the simulator's last keyboard, and a Russian one drops Latin letters.
+        UIPasteboard.general.string = valid.absoluteString
+        app.buttons["Вставить"].tap()
+        app.buttons["continueConnection"].tap()
         XCTAssertTrue(confirm.waitForExistence(timeout: 10), app.debugDescription)
+        // The system's “pasted from” banner covers the confirm button for a moment.
+        let pasted = XCUIApplication(bundleIdentifier: "com.apple.springboard").descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@", "Tests-Runner")).firstMatch
+        XCTAssertTrue(pasted.waitForNonExistence(timeout: 10))
         capture("04-confirm", app)
         confirm.tap()
         app.finishDevicePairing()
@@ -356,8 +371,14 @@ final class MobilePairingUITests: XCTestCase {
         XCTAssertTrue(button.isHittable, app.debugDescription)
         capture("08-accessibility-welcome", app)
         button.tap()
-        XCTAssertTrue(app.secureTextFields["connectionInvitation"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["scanAdditionalInvitation"].waitForExistence(timeout: 5))
+        let input = app.secureTextFields["connectionInvitation"]
+        for _ in 0..<4 where !input.isHittable { app.swipeUp() }
+        XCTAssertTrue(input.isHittable, app.debugDescription)
         capture("09-accessibility-invitation", app)
+        let next = app.buttons["continueConnection"]
+        for _ in 0..<6 where !next.isHittable { app.swipeUp() }
+        XCTAssertTrue(next.isHittable, app.debugDescription)
     }
 
     @MainActor private func read(_ value: String) async throws -> [String: Any] {

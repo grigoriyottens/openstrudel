@@ -247,97 +247,99 @@ private struct DevicesPane: View {
     @State private var removing: HomeClient?
     @State private var renaming: RenameTarget?
 
+    // A Form gives a modifier on several rows to each row, and duplicate presenters of one sheet
+    // dismiss it and Settings with it. So each sheet hangs on exactly one row.
     var body: some View {
-        Group {
-            #if os(macOS)
-            if let pending = serverSetup.installation {
-                Section {
-                    Button {
-                        adding = .server
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(pending.target.host)
-                                Text(L("Continue server setup")).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
-                            }
-                        } icon: { Image(systemName: "server.rack") }
-                    }
-                    .accessibilityIdentifier("continuePendingServer")
-                }
-            }
-            #endif
-            ForEach(library.visibleClients) { device in
-                Section {
-                    DisclosureGroup(isExpanded: Binding(
-                        get: { expandedDeviceID == device.id },
-                        set: { expandedDeviceID = $0 ? device.id : nil }
-                    )) {
-                        Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
-                            .disabled(!device.canRenameDevice)
-                            .accessibilityIdentifier("renameDevice")
-                        if device.health != nil, device.health?.deviceRenameVersion != 1, device.canManageOpenAI || device.canManageConnections {
-                            Text(L("Обновите OpenStrudel на этом устройстве, чтобы переименовать его."))
-                                .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
-                        }
-                        if device.connectionNeedsUnlock {
-                            LabeledContent {
-                                SavedConnectionUnlockButton(client: device)
-                            } label: {
-                                Text(L("Unlock the saved connection to continue. Your chats and drafts are safe."))
-                            }
-                        } else {
-                            MobilePairingSettings().environmentObject(device)
-                        }
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(device.displayName)
-                                Text(status(device)).font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
-                            }
-                        } icon: {
-                            Image(systemName: device.deviceSymbol)
-                        }
-                    }
-                    .accessibilityIdentifier("deviceDetails")
-                    .contextMenu {
-                        Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
-                            .disabled(!device.canRenameDevice)
-                    }
-                    Button(L("Убрать подключение…"), role: .destructive) { removing = device }
-                        .foregroundStyle(AppTheme.destructive)
-                        .accessibilityIdentifier("signOutThisDevice")
-                        .accessibilityLabel(L("Убрать подключение к «\(device.displayName)»"))
-                }
-            }
+        #if os(macOS)
+        if let pending = serverSetup.installation {
             Section {
-                Button(L("Подключить устройство…")) { adding = .device }
-                    .accessibilityIdentifier("addDevice")
-                HiddenEmployeesButton(prominent: true)
-                #if os(macOS)
-                if !library.visibleClients.contains(where: \.isLocalConnection), LocalHome.isAvailable {
-                    Button(localStarting ? L("Запускаем этот Mac…") : L("Работать также на этом Mac")) {
-                        localStarting = true
-                        Task { await library.openLocal(); localStarting = false }
-                    }.disabled(localStarting)
+                Button {
+                    adding = .server
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(pending.target.host)
+                            Text(L("Continue server setup")).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                        }
+                    } icon: { Image(systemName: "server.rack") }
                 }
-                #endif
-            } footer: {
-                Text(L("Сотрудники работают там, где вы их создали. Здесь можно подключить ещё один Mac или сервер."))
+                .accessibilityIdentifier("continuePendingServer")
             }
         }
-        .sheet(item: $adding, onDismiss: {
-            if let pairing { confirmingPairing = pairing; self.pairing = nil }
-        }) { route in
-            #if os(macOS)
-            ConnectDeviceView(continueServerSetup: route == .server) { pairing = $0 }
-            #else
-            ConnectionInvitationView { pairing = $0 }
-            #endif
+        #endif
+        ForEach(library.visibleClients) { device in
+            Section {
+                DisclosureGroup(isExpanded: Binding(
+                    get: { expandedDeviceID == device.id },
+                    set: { expandedDeviceID = $0 ? device.id : nil }
+                )) {
+                    // An action that cannot run would look tappable in this list, so it appears only when it can.
+                    if device.canRenameDevice {
+                        Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
+                            .accessibilityIdentifier("renameDevice")
+                    }
+                    if device.health != nil, device.health?.deviceRenameVersion != 1, device.canManageOpenAI || device.canManageConnections {
+                        Text(L("Обновите OpenStrudel на этом устройстве, чтобы переименовать его."))
+                            .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                    }
+                    if device.connectionNeedsUnlock {
+                        LabeledContent {
+                            SavedConnectionUnlockButton(client: device)
+                        } label: {
+                            Text(L("Unlock the saved connection to continue. Your chats and drafts are safe."))
+                        }
+                    } else {
+                        MobilePairingSettings().environmentObject(device)
+                    }
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(device.displayName)
+                            Text(status(device)).font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
+                        }
+                    } icon: {
+                        Image(systemName: device.deviceSymbol)
+                    }
+                    .sheet(item: Binding(get: { renaming?.client === device ? renaming : nil }, set: { renaming = $0 })) { NameEditor(target: $0) }
+                }
+                .accessibilityIdentifier("deviceDetails")
+                .contextMenu {
+                    Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
+                        .disabled(!device.canRenameDevice)
+                }
+                Button(L("Убрать подключение…"), role: .destructive) { removing = device }
+                    .foregroundStyle(AppTheme.destructive)
+                    .accessibilityIdentifier("signOutThisDevice")
+                    .accessibilityLabel(L("Убрать подключение к «\(device.displayName)»"))
+                    .sheet(item: Binding(get: { removing === device ? removing : nil }, set: { removing = $0 })) { device in
+                        DeviceSignOutView { removing = nil }.environmentObject(device).environmentObject(library)
+                    }
+            }
         }
-        .sheet(item: $confirmingPairing) { AddDeviceConfirmation(pairing: $0).environmentObject(library) }
-        .sheet(item: $renaming) { NameEditor(target: $0) }
-        .sheet(item: $removing) { device in
-            DeviceSignOutView { removing = nil }.environmentObject(device).environmentObject(library)
+        Section {
+            Button(L("Подключить устройство…")) { adding = .device }
+                .accessibilityIdentifier("addDevice")
+                .sheet(item: $adding, onDismiss: {
+                    if let pairing { confirmingPairing = pairing; self.pairing = nil }
+                }) { route in
+                    #if os(macOS)
+                    ConnectDeviceView(continueServerSetup: route == .server) { pairing = $0 }
+                    #else
+                    ConnectionInvitationView { pairing = $0 }
+                    #endif
+                }
+                .sheet(item: $confirmingPairing) { AddDeviceConfirmation(pairing: $0).environmentObject(library) }
+            HiddenEmployeesButton(prominent: true)
+            #if os(macOS)
+            if !library.visibleClients.contains(where: \.isLocalConnection), LocalHome.isAvailable {
+                Button(localStarting ? L("Запускаем этот Mac…") : L("Работать также на этом Mac")) {
+                    localStarting = true
+                    Task { await library.openLocal(); localStarting = false }
+                }.disabled(localStarting)
+            }
+            #endif
+        } footer: {
+            Text(L("Сотрудники работают там, где вы их создали. Здесь можно подключить ещё один Mac или сервер."))
         }
     }
 
@@ -537,6 +539,7 @@ struct AddDeviceConfirmation: View {
 struct DeviceAccountsView: View {
     @EnvironmentObject private var client: HomeClient
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var textSize
     @State private var deviceID = ""
     @State private var loadedDeviceID: String?
     @State private var accounts: [ManagedCodexAccount] = []
@@ -581,29 +584,9 @@ struct DeviceAccountsView: View {
             ForEach(Array(accounts.enumerated()).dropFirst(), id: \.element.id) { index, account in
                 Section { accountRows(account, index: index) }
             }
-            if let login {
-                Section {
-                    if let code = login.userCode {
-                        HStack {
-                            Text(code).font(AppTypography.title.monospaced()).textSelection(.enabled)
-                                .accessibilityIdentifier("openAIDeviceCode")
-                            Spacer()
-                            Button(copiedCode ? L("Код скопирован") : L("Скопировать код")) { copy(code) }
-                                .accessibilityIdentifier("copyOpenAICode")
-                        }
-                    }
-                    if let url = login.url {
-                        InkLink(title: L("Открыть OpenAI"), destination: url)
-                    }
-                    Button(L("Отменить вход")) { perform {
-                        let _: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + login.loginId), method: "DELETE")
-                        self.login = nil
-                    } }.accessibilityIdentifier("cancelOpenAILogin")
-                } header: {
-                    Text(L("Завершите вход на сайте OpenAI"))
-                } footer: {
-                    if login.userCode != nil { Text(L("Введите этот код на сайте OpenAI")) }
-                }
+            // A new account is listed once its sign-in completes; until then the code has its own section.
+            if let login, !accounts.contains(where: { $0.id == loginAccount }) {
+                Section { loginRows(login) } header: { Text(L("Завершите вход на сайте OpenAI")) }
             }
             Section {
                 if let notice { Text(notice).foregroundStyle(AppTheme.secondaryText) }
@@ -715,7 +698,7 @@ struct DeviceAccountsView: View {
                     }
                     .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                     .disabled(busy)
-                    .accessibilityLabel(L("Действия с аккаунтом"))
+                    .accessibilityLabel(L("Действия: \(provider.name)"))
                     .accessibilityIdentifier("providerActions-" + provider.id)
                 } label: {
                     Text(verbatim: provider.name)
@@ -744,11 +727,37 @@ struct DeviceAccountsView: View {
         }
         if account.account.connected {
             UsageSummary(usage: account.usage)
+        } else if let login, loginAccount == account.id {
+            loginRows(login)
         } else if canManage && !account.account.isUnavailable {
             Button(L("Войти в OpenAI")) { perform { try await signIn(account.id) } }
                 .disabled(login != nil || busy)
                 .accessibilityIdentifier("signInOpenAI")
         }
+    }
+
+    /// The code takes the place of Sign in, so it appears where the person tapped, even with the largest text.
+    @ViewBuilder private func loginRows(_ login: OpenAILogin) -> some View {
+        if let code = login.userCode {
+            // The largest text gives the code a line of its own; it never breaks.
+            let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout())
+            layout {
+                Text(code).font(AppTypography.title.monospaced()).textSelection(.enabled)
+                    .lineLimit(1).minimumScaleFactor(0.5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("openAIDeviceCode")
+                Button(copiedCode ? L("Код скопирован") : L("Скопировать код")) { copy(code) }
+                    .accessibilityIdentifier("copyOpenAICode")
+            }
+            Text(L("Введите этот код на сайте OpenAI")).foregroundStyle(AppTheme.secondaryText)
+        }
+        if let url = login.url {
+            InkLink(title: L("Открыть OpenAI"), destination: url)
+        }
+        Button(L("Отменить вход")) { perform {
+            let _: OpenAILoginStatus = try await client.management(path(loginAccount, "login/" + login.loginId), method: "DELETE")
+            self.login = nil
+        } }.accessibilityIdentifier("cancelOpenAILogin")
     }
 
     private func accountDetail(_ account: ManagedCodexAccount) -> String {
@@ -784,7 +793,7 @@ struct DeviceAccountsView: View {
         }
         // Plain, so the glyph ends on the values' trailing edge; borderless adds an inset.
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-        .accessibilityLabel(L("Действия с аккаунтом"))
+        .accessibilityLabel(L("Действия: \(account.title)"))
         .accessibilityIdentifier("accountActions-" + account.id)
     }
 
