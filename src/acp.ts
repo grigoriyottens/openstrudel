@@ -119,15 +119,19 @@ export class AcpEngine implements CodexEngine {
     this.running.add(end);
     options.signal?.addEventListener("abort", stop, { once: true });
 
-    /** Reads and searches stay in the workspace; fetches stay with Grok. Commands, changes and services follow the approval mode. */
+    /** As with the Claude engine, the workspace is readable and writable without asking and nothing beyond it is readable.
+     * Changes beyond it need the owner. Approve-all runs sandboxed commands and services by itself. Fetches stay with Grok. */
     const allowed = async (update: acp.ToolCallUpdate): Promise<boolean> => {
       const call = { ...calls.get(update.toolCallId), ...defined(update) }, title = call.title ?? "", input = (call.rawInput ?? {}) as Record<string, any>;
-      if (call.kind === "read" || call.kind === "search") return (call.locations ?? []).every(l => insideWorkspace(cwd, l.path));
+      const locations = call.locations ?? [], inside = locations.every(l => insideWorkspace(cwd, l.path));
+      if (call.kind === "read" || call.kind === "search") return inside;
       if (call.kind === "fetch" || call.kind === "think") return true;
       const change = call.kind === "edit" || call.kind === "delete" || call.kind === "move";
+      if (change && locations.length && inside) return true;
       // Grok names an MCP tool `<server>__<tool>`; the kind decides first, so a command named like one is still a command.
       const service = call.kind === "execute" || change ? null : /^(?:mcp__)?([\w-]+?)__(\S+)$/.exec(call.name ?? title);
-      if (service?.[1] === "openstrudel" || approveAll) return true;
+      if (service?.[1] === "openstrudel") return true;
+      if (approveAll) return !change;
       if (!ask) return false;
       if (call.kind === "execute") return (await ask("item/commandExecution/requestApproval", { command: input.command ?? title, cwd, reason: title }))?.decision === "accept";
       if (change) return (await ask("item/fileChange/requestApproval", { reason: [title, ...(call.locations ?? []).map(l => l.path)].join(" ") }))?.decision === "accept";

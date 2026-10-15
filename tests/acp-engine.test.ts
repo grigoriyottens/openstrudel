@@ -89,7 +89,9 @@ it("forwards each permission request by kind and answers only once", async () =>
     permission("x1", "switch_mode", "Leave plan mode"),
     // Reads stay in the workspace, as with the Claude engine: Grok never reads the Home's keys, even when it asks.
     permission("r2", "read", "Read notes.md", {}, [{ path: join(cwd, "notes.md") }]), permission("r3", "read", "Read keys", {}, [{ path: data }]),
-    permission("r4", "search", "Search the Home", {}, [{ path: "notes.md" }, { path: join(cwd, "../..") }])];
+    permission("r4", "search", "Search the Home", {}, [{ path: "notes.md" }, { path: join(cwd, "../..") }]),
+    // Changes inside the workspace need nobody, as with the Claude engine; one that also reaches beyond it needs the owner.
+    permission("e2", "edit", "Edit notes.md", {}, [{ path: join(cwd, "notes.md") }]), permission("d1", "move", "Move notes.md", {}, [{ path: "notes.md" }, { path: data }])];
   const g = mock({ turn });
   const onRequest = vi.fn(async (method: string, params: Record<string, any>) =>
     method === "mcpServer/elicitation/request" ? { action: "accept" } : { decision: params.command === "npm test" ? "accept" : "decline" });
@@ -99,17 +101,19 @@ it("forwards each permission request by kind and answers only once", async () =>
     ["item/fileChange/requestApproval", { reason: "Edit notes.md /w/notes.md" }],
     ["mcpServer/elicitation/request", { mode: "form", serverName: "linear", message: 'Allow the linear MCP server to run tool "save_issue"?', requestedSchema: { type: "object", properties: {} },
       _meta: { codex_approval_kind: "mcp_tool_call", tool_params: { title: "Bug" } } }],
+    ["item/fileChange/requestApproval", { reason: `Move notes.md notes.md ${data}` }],
   ]);
   // Never "allow always": a later request asks again.
-  expect(g.chosen()).toEqual(["once", "no", "once", "once", "once", "no", "once", "no", "no"]);
+  expect(g.chosen()).toEqual(["once", "no", "once", "once", "once", "no", "once", "no", "no", "once", "no"]);
+  // Approve-all runs commands in the sandbox and services by itself, but never changes beyond the workspace.
   const all = mock({ turn });
   await all.engine.run("Работай", { approvalMode: "approve_all", onRequest });
-  expect(onRequest).toHaveBeenCalledTimes(3);
-  expect(all.chosen()).toEqual(["once", "once", "once", "once", "once", "once", "once", "no", "no"]);
-  // A schedule has nobody to ask.
-  const scheduled = mock({ turn: [permission("c1", "execute", "Run tests", { command: "npm test" })] });
+  expect(onRequest).toHaveBeenCalledTimes(4);
+  expect(all.chosen()).toEqual(["once", "no", "once", "once", "once", "once", "once", "no", "no", "once", "no"]);
+  // A schedule has nobody to ask, and still writes its report into the workspace.
+  const scheduled = mock({ turn: [permission("c1", "execute", "Run tests", { command: "npm test" }), permission("e3", "edit", "Write report.md", {}, [{ path: join(cwd, "report.md") }])] });
   await scheduled.engine.run("Выпуск", { onRequest: () => { throw new Error("Выпуск остановлен: нужно разрешение пользователя. Продолжите в чате."); } });
-  expect(scheduled.chosen()).toEqual(["no"]);
+  expect(scheduled.chosen()).toEqual(["no", "once"]);
 });
 
 it("asks Grok's questions in OpenStrudel and serves the employee tools", async () => {
