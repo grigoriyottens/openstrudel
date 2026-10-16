@@ -147,6 +147,8 @@ final class HomeClient: ObservableObject, Identifiable {
         // An offline launch keeps the screens this Home served last time.
         didSet {
             guard let health else { return }
+            // The owner's lists follow what this Home supports, so a change asks the owner check again.
+            if health.colleagueInvitesVersion != oldValue?.colleagueInvitesVersion { managementChecked = -1 }
             servedTimeline = health.employeeTimelineVersion == 1; defaults.set(servedTimeline, forKey: "openstrudel.employeeTimeline")
             // However the feed is found, a group opened before it closes, so the composer stays private.
             if usesEmployeeTimeline && selectedChatID != nil { selectedChatID = nil; conversationID = nil; resetHistory() }
@@ -665,9 +667,12 @@ final class HomeClient: ObservableObject, Identifiable {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func refreshMobileStatus() async {
+    /// Whether the Home answered. Only its refusal or an expired credential takes owner rights away.
+    @discardableResult func refreshMobileStatus() async -> Bool {
         struct Status: Decodable { let connections: Int; let clients: [MobileClient]?; let invitations: [WaitingInvitation]? }
-        if let status: Status = try? await request("/v1/mobile") {
+        var refusal: Int?
+        do {
+            let status = try decoder.decode(Status.self, from: try await requestData("/v1/mobile", refused: { refusal = $0 }))
             mobileConnections = status.connections
             let clients = supportsColleagueInvites ? status.clients ?? [] : []
             if mobileClients != clients { mobileClients = clients }
@@ -675,7 +680,15 @@ final class HomeClient: ObservableObject, Identifiable {
             if waitingInvitations != invitations { waitingInvitations = invitations }
             canManageConnections = true
             if openAIAccount != nil { canManageOpenAI = true }
-        } else { canManageConnections = false; mobileClients = []; waitingInvitations = [] }
+            return true
+        } catch HomeClientError.authenticationExpired {
+            // A revoked credential answers as clearly as a refusal.
+        } catch {
+            // A timeout or failure is no answer: the last one stands and the next load asks again.
+            guard refusal == 403 else { return false }
+        }
+        canManageConnections = false; mobileClients = []; waitingInvitations = []
+        return true
     }
 
     /// Several colleague links can wait for 24 hours, and the owner sees each paired device.
@@ -736,7 +749,7 @@ final class HomeClient: ObservableObject, Identifiable {
             if let homeId = loadedHealth.homeId { defaults.set(homeId, forKey: "openstrudel.catalogueIdentity") }
             await refreshDevicePresence(generation: generation)
             // Owning the device decides who manages and renames it; its ChatGPT account may be unavailable.
-            if loadedHealth.homeProtocol == 1, managementChecked != generation { managementChecked = generation; await refreshMobileStatus() }
+            if loadedHealth.homeProtocol == 1, managementChecked != generation, await refreshMobileStatus() { managementChecked = generation }
             guard generation == connectionGeneration else { return }
             if catalogueLoaded == true, reachability >= latestReachabilityCheck { connectionState = .connected; homeUnreachable = false; connectionNeedsPairing = false }
             // Publish employees before waiting for provider state.
@@ -807,10 +820,11 @@ final class HomeClient: ObservableObject, Identifiable {
             catalogueETag = etag
             guard reachability >= latestReachabilityCheck else { return nil }
             latestReachabilityCheck = reachability
+            let returned = homeUnreachable
             if connectionState != .connected { connectionState = .connected }
             if homeUnreachable { homeUnreachable = false }
             if connectionNeedsPairing { connectionNeedsPairing = false }
-            if refreshPresence { await refreshDevicePresence(generation: generation) }
+            if refreshPresence { await refreshDevicePresence(generation: generation, reloadHealth: returned) }
             return true
         } catch {
             guard generation == connectionGeneration else { return nil }
@@ -830,10 +844,11 @@ final class HomeClient: ObservableObject, Identifiable {
         return reachabilitySequence
     }
 
-    private func refreshDevicePresence(generation: Int) async {
+    private func refreshDevicePresence(generation: Int, reloadHealth: Bool = false) async {
         // Presence changes independently of the employee catalogue's ETag.
-        // Recover health here too when this device was offline at app launch.
-        if health == nil, let loaded: HomeHealth = try? await request("/health"),
+        // Recover health here too when this device was offline at app launch,
+        // and after it returns: an update may have changed what it supports.
+        if health == nil || reloadHealth, let loaded: HomeHealth = try? await request("/health"),
            generation == connectionGeneration, !connectionNeedsPairing {
             health = loaded
             if let homeId = loaded.homeId { defaults.set(homeId, forKey: "openstrudel.catalogueIdentity") }
@@ -1695,7 +1710,7 @@ final class HomeClient: ObservableObject, Identifiable {
                     let pending = relocation!
                     defer { relocation = nil }
                     try await pending.value
-                    if method == "GET" { return try await requestData(path, mayRelocate: false, responseETag: responseETag) }
+                    if method == "GET" { return try await requestData(path, mayRelocate: false, responseETag: responseETag, refused: refused) }
                     throw HomeClientError.server(L("Адрес устройства изменился. Действие не отправлено: повторите его на новом подключении."))
                 }
                 // The Home's own answer, with the status that tells a refusal from a failure.

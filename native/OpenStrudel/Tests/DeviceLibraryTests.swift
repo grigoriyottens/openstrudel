@@ -306,6 +306,99 @@ private final class CredentialReadGate: @unchecked Sendable {
         #expect(client.canRenameDevice)
     }
 
+    @Test func aDeviceThatComesBackUpdatedOffersRenameWithoutWaitingForTheNextLoad() async throws {
+        let fixture = DevicesFixture()
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        #expect(client.ownsDevice && !client.canRenameDevice)
+        let checks = fixture.healthChecks
+        await client.refreshCatalogue()
+        #expect(fixture.healthChecks == checks, "A device that stays online is not asked for its health on every poll")
+        fixture.offline = true
+        await client.refreshCatalogue()
+        #expect(client.homeUnreachable)
+        fixture.offline = false; fixture.flags["deviceRenameVersion"] = 1
+        await client.refreshCatalogue()
+        #expect(!client.homeUnreachable)
+        #expect(client.canRenameDevice, "The returning Home's abilities, not the ones from before its update")
+    }
+
+    @Test func aDeviceThatComesBackWithColleagueInvitesListsTheOwnersDevicesOnTheNextLoad() async throws {
+        let fixture = DevicesFixture()
+        let (client, cleanup) = makeClient(fixture, saved: ["openstrudel.homeURL": "https://server.test:7789"])
+        defer { cleanup() }
+        await client.load()
+        #expect(client.canManageConnections && client.mobileClients.isEmpty)
+        fixture.offline = true
+        await client.refreshCatalogue()
+        fixture.offline = false; fixture.flags["colleagueInvitesVersion"] = 1
+        await client.refreshCatalogue()
+        #expect(client.supportsColleagueInvites)
+        await client.load()
+        #expect(client.mobileClients.count == 2, "The owner's lists follow the returning Home's abilities")
+    }
+
+    @Test func anUpdateFoundByALoadListsTheOwnersDevicesInThatLoad() async throws {
+        let fixture = DevicesFixture()
+        let (client, cleanup) = makeClient(fixture, saved: ["openstrudel.homeURL": "https://server.test:7789"])
+        defer { cleanup() }
+        await client.load()
+        #expect(client.canManageConnections && client.mobileClients.isEmpty)
+        // The Home restarted between two polls, so only the next load sees what it supports now.
+        fixture.flags["colleagueInvitesVersion"] = 1
+        await client.load()
+        #expect(client.mobileClients.count == 2, "The owner's lists follow the Home's abilities however they arrive")
+        let asked = fixture.mobileChecks
+        await client.load()
+        #expect(fixture.mobileChecks == asked, "Unchanged abilities keep the check once per connection")
+    }
+
+    @Test func anOwnerCheckTheHomeNeverAnsweredIsAskedAgainOnTheNextLoad() async throws {
+        let fixture = DevicesFixture()
+        fixture.mobileTimesOut = true; fixture.flags["colleagueInvitesVersion"] = 1
+        let (client, cleanup) = makeClient(fixture, saved: ["openstrudel.homeURL": "https://server.test:7789"])
+        defer { cleanup() }
+        await client.load()
+        #expect(!client.canManageConnections)
+        fixture.mobileTimesOut = false
+        await client.load()
+        #expect(client.canManageConnections, "A timeout is not a refusal, so the owner keeps the invite buttons")
+        let asked = fixture.mobileChecks
+        await client.load()
+        #expect(fixture.mobileChecks == asked, "An answered check runs once per connection")
+        fixture.mobileTimesOut = true
+        await client.refreshMobileStatus()
+        #expect(client.canManageConnections && client.mobileClients.count == 2, "Only the Home's refusal takes owner rights away")
+    }
+
+    @Test func theHomesRefusalOrARevokedCredentialTakesOwnerRightsAway() async throws {
+        let fixture = DevicesFixture()
+        fixture.flags["colleagueInvitesVersion"] = 1; fixture.invitations = [("link", false)]
+        let server = ["openstrudel.homeURL": "https://server.test:7789"]
+        let (client, cleanup) = makeClient(fixture, saved: server)
+        defer { cleanup() }
+        await client.load()
+        #expect(client.canManageConnections && client.mobileClients.count == 2 && client.waitingInvitations.count == 1)
+        fixture.colleague = true
+        await client.refreshMobileStatus()
+        #expect(!client.canManageConnections && client.mobileClients.isEmpty && client.waitingInvitations.isEmpty)
+        fixture.colleague = false
+        await client.refreshMobileStatus()
+        #expect(client.canManageConnections)
+        fixture.revoked = true
+        await client.refreshMobileStatus()
+        #expect(!client.canManageConnections, "A revoked credential answers as clearly as a refusal")
+
+        let other = DevicesFixture()
+        other.colleague = true
+        let (colleague, cleanupColleague) = makeClient(other, saved: server)
+        defer { cleanupColleague() }
+        await colleague.load()
+        await colleague.load()
+        #expect(other.mobileChecks == 1, "A refusal is an answer, so this connection does not ask again")
+    }
+
     @Test func theOwnerCanRenameAServerWhoseChatGPTAccountIsUnavailable() async throws {
         let fixture = DevicesFixture()
         fixture.flags["deviceRenameVersion"] = 1
@@ -673,6 +766,14 @@ private final class KeychainLog: @unchecked Sendable {
     var holdAccount = false
     /// This client was invited as a colleague, so device management answers 403.
     var colleague = false
+    /// The device is down, for example while it updates.
+    var offline = false
+    /// The owner check never gets an answer.
+    var mobileTimesOut = false
+    /// This client's credential was revoked.
+    var revoked = false
+    var healthChecks = 0
+    var mobileChecks = 0
     var deviceName = "Mini"
     var instructions = "Пиши кратко"
     var profileName = "Тест"
@@ -703,11 +804,15 @@ private final class KeychainLog: @unchecked Sendable {
         return seen
     }
     func respond(_ request: URLRequest) async -> (Int, Data) {
+        if offline { return (503, Data()) }
+        if revoked { return (401, Data()) }
         let path = request.url!.path, method = request.httpMethod ?? "GET"
         func json(_ value: Any) -> (Int, Data) { (200, try! JSONSerialization.data(withJSONObject: value)) }
         let profile: () -> [String: Any] = { ["id": "employee", "name": self.profileName, "instructions": self.instructions, "capabilities": [], "createdAt": "2026-10-09T00:00:00Z", "deviceId": self.profileDevice ?? NSNull()] }
+        if method == "GET", path == "/v1/mobile" { mobileChecks += 1 }
         switch (method, path) {
         case ("GET", "/health"):
+            healthChecks += 1
             return json((["ok": true, "homeId": "home-fixture", "homeProtocol": 1, "nodeId": "node"] as [String: Any]).merging(flags) { _, new in new })
         case ("GET", "/v1/profiles") where bot: return json(["profiles": [profile()], "telegram": await readTelegram()])
         case ("GET", "/v1/profiles"): return json(["profiles": [profile()]])
@@ -724,6 +829,7 @@ private final class KeychainLog: @unchecked Sendable {
             while holdAccount { try? await Task.sleep(for: .milliseconds(10)) }
             if accountUnavailable { return (503, Data(#"{"error":"Лимит ChatGPT исчерпан"}"#.utf8)) }
             return json(["account": ["connected": true, "managed": true], "canManage": true])
+        case ("GET", "/v1/mobile") where mobileTimesOut: return (504, Data())
         case ("GET", "/v1/mobile") where colleague: return (403, Data(#"{"error":"Откройте настройки на Mac"}"#.utf8))
         case ("GET", "/v1/integrations") where bot: return json(["telegram": await readTelegram()])
         case ("GET", "/v1/integrations"): return json(["telegram": ["configured": false, "running": false, "linkedChats": []]])
