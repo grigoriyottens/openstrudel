@@ -65,7 +65,7 @@ export class ProviderSignInError extends ProviderIncident {
 /** Grok no longer knows the saved session, or it started with other rules; the route starts a new one seeded with the chat. */
 export class AcpSessionLost extends Error {}
 
-const instructions = agentInstructions("ask_user_question");
+const instructions = agentInstructions();
 const stopped = () => new Error("Ответ остановлен");
 /** -32000 is Grok's "authentication required"; one caused by an unreachable sign-in server is an outage, not a lost sign-in. */
 const signedOut = (error: unknown) => error instanceof acp.RequestError && error.code === -32000 && !/error sending request|timed out/i.test(error.message);

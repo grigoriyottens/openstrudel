@@ -39,6 +39,10 @@ it("defines the key provider on every thread start and resume, without ChatGPT c
     expect(start.config["model_providers.openstrudel-xai"]).toEqual({ name: "xAI", base_url: "https://api.x.ai/v1", wire_api: "responses", experimental_bearer_token: "xai-first" });
     expect(start.config).toMatchObject({ "features.apps": false, web_search: "disabled", model_context_window: 500_000, model_auto_compact_token_limit: 450_000, model_reasoning_effort: "medium" });
     expect(start.approvalsReviewer).toBe("user");
+    // The employee answers and acts; Codex does not stop the turn with a question card.
+    expect(start.config).not.toHaveProperty("features.default_mode_request_user_input");
+    expect(start.developerInstructions).not.toContain("request_user_input");
+    expect(start.developerInstructions).toContain("state the assumption in one short line");
     const [turn] = calls("turn/start");
     expect(turn).toMatchObject({ model: "grok-4.7", effort: "medium" });
     expect(turn).not.toHaveProperty("serviceTier");

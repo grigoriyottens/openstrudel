@@ -78,7 +78,8 @@ it("reports the session at once, resumes it and sends a changed SOUL every turn"
   const prompt = calls[1]!.options.systemPrompt as { type: string; preset: string; append: string; snapshot: boolean };
   expect(prompt).toMatchObject({ type: "preset", preset: "claude_code", snapshot: false });
   expect(prompt.append).toContain("Current employee SOUL (authoritative):\nИмя: Ада\nОтвечай стихами");
-  expect(prompt.append).toContain("AskUserQuestion");
+  // The agent answers first; it is not told to stop for a question.
+  expect(prompt.append).toContain("state the assumption in one short line");
   expect(prompt.append).not.toMatch(/Codex's|request_user_input/);
 });
 
