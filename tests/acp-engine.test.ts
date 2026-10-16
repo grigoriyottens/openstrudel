@@ -68,8 +68,8 @@ it("runs the pinned agent in the workspace with a private home, the employee too
     ]);
     expect(g.calls("session/set_config_option")).toEqual([{ sessionId: "s-new", configId: "model", value: "grok-4.6" }]);
     expect(g.calls("session/prompt")).toEqual([{ sessionId: "s-new", prompt: [{ type: "text", text: "Привет" }] }]);
-    expect(g.models).toEqual([[{ id: "grok-4.7", name: "Grok 4.7", description: "", isDefault: true, speeds: [{ id: "default", name: "Обычная", description: "" }], provider: "grok" },
-      { id: "grok-4.6", name: "Grok 4.6", description: "Faster", isDefault: false, speeds: [{ id: "default", name: "Обычная", description: "" }], provider: "grok" }]]);
+    expect(g.models).toEqual([[{ id: "grok-4.7", name: "Grok 4.7", description: "", isDefault: true, reasoningEfforts: [], speeds: [{ id: "default", name: "Обычная", description: "" }], provider: "grok" },
+      { id: "grok-4.6", name: "Grok 4.6", description: "Faster", isDefault: false, reasoningEfforts: [], speeds: [{ id: "default", name: "Обычная", description: "" }], provider: "grok" }]]);
     expect(() => g.engine.forContext("../personal")).toThrow("Область не найдена");
   } finally { delete process.env.XAI_API_KEY; delete process.env.OPENSTRUDEL_SECRET_FIXTURE; }
 });
@@ -182,4 +182,19 @@ it("reads the agent's model catalog for the picker from a scratch session that s
   expect((await g.engine.models()).map(m => [m.id, m.isDefault])).toEqual([["grok-4.7", true], ["grok-4.6", false]]);
   expect(g.calls("session/new")).toEqual([expect.objectContaining({ mcpServers: [] })]);
   expect(g.calls("session/prompt")).toEqual([]);
+});
+
+it('uses the native thought-level option, validates after a model switch, and rejects unsupported values before prompting', async()=>{
+ const thinking={id:'effort',name:'Thinking',category:'thought_level',type:'select',currentValue:'low',options:[{value:'low',name:'Low'},{value:'high',name:'High'}]};
+ const g=mock({configOptions:[...configOptions,thinking]});
+ const models=await g.engine.models();
+ expect(models.find(m=>m.id==='grok-4.7')?.reasoningEfforts?.map(e=>e.id)).toEqual(['low','high']);
+ expect(models.find(m=>m.id==='grok-4.6')?.reasoningEfforts).toEqual([]);
+ await g.engine.run('Think',{model:'grok-4.6',reasoningEffort:'high'});
+ expect(g.calls('session/set_config_option').slice(-2)).toEqual([
+  {sessionId:'s-new',configId:'model',value:'grok-4.6'},
+  {sessionId:'s-new',configId:'effort',value:'high'},
+ ]);
+ await expect(g.engine.run('Wrong level',{reasoningEffort:'ultra'})).rejects.toThrow('обдумывания');
+ expect(g.calls('session/prompt')).toHaveLength(1);
 });

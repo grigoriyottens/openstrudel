@@ -1,4 +1,4 @@
-import { createSdkMcpServer, query as sdkQuery, tool, type CanUseTool, type McpServerConfig, type PermissionResult, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import { createSdkMcpServer, query as sdkQuery, tool, type CanUseTool, type McpServerConfig, type PermissionResult, type SDKUserMessage, type EffortLevel } from "@anthropic-ai/claude-agent-sdk";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -6,7 +6,8 @@ import { basename, dirname, resolve, sep } from "node:path";
 import { z } from "zod";
 import { INSTRUCTIONS } from "./codex.js";
 import { readToml } from "./extensions.js";
-import { ProviderKeyError, exhaustedPlan, providerNotConnected, type ProviderInfo } from "./providers.js";
+import { ProviderKeyError, exhaustedPlan, providerNotConnected, providerModels, type ProviderInfo } from "./providers.js";
+import { modelReasoning, reasoningChoices, type ModelChoice } from "./model-settings.js";
 import { contextPattern } from "./scopes.js";
 import { telegramMcpConfig } from "./telegram-mcp.js";
 import type { CodexEngine, CodexRunResult } from "./types.js";
@@ -40,7 +41,37 @@ const edits = ["Edit", "MultiEdit", "Write", "NotebookEdit"];
  * each turn is one CLI process that resumes its session by id. */
 export class ClaudeEngine implements CodexEngine {
   private readonly running = new Set<AbortController>();
+  private modelCache?: { until:number; value:ModelChoice[] };
+  private modelReading?: Promise<ModelChoice[]>;
   constructor(readonly options: ClaudeEngineOptions) {}
+  /** Read the CLI's catalog without submitting a prompt. Other vendors cannot inherit Claude's capabilities. */
+  async models(refresh = false): Promise<ModelChoice[]> {
+    const { provider, root } = this.options;
+    if (provider.id !== 'anthropic') return providerModels(provider);
+    if (!refresh && this.modelCache && this.modelCache.until > Date.now()) return this.modelCache.value;
+    if (!this.modelReading) this.modelReading = (async () => {
+      const cwd = resolve(root,'.data/providers',provider.id,'catalog'), home = resolve(cwd,'home');
+      mkdirSync(home,{recursive:true,mode:0o700});
+      const abort = new AbortController();
+      let finish!: () => void;
+      const wait = new Promise<void>(r => { finish = r; });
+      const session = (this.options.query ?? sdkQuery)({prompt:(async function* () { await wait; })(),options:{
+        cwd,settingSources:[],strictMcpConfig:true,abortController:abort,
+        env:{...hostEnvironment(),HOME:home,CLAUDE_CONFIG_DIR:cwd,ANTHROPIC_BASE_URL:provider.baseUrl,ANTHROPIC_API_KEY:this.options.key() ?? '',CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:'1',CLAUDE_CODE_DISABLE_AUTO_MEMORY:'1'},
+      }});
+      this.running.add(abort);
+      const timer = setTimeout(() => abort.abort(),15_000);
+      try {
+        const rows = await session.supportedModels();
+        const value = providerModels(provider).map(model => {
+          const row = rows.find(r => (r.resolvedModel ?? r.value) === model.id);
+          return {...model,reasoningEfforts:reasoningChoices(row?.supportsEffort ? (row.supportedEffortLevels ?? []).map(reasoningEffort=>({reasoningEffort})) : [])};
+        });
+        this.modelCache = {until:Date.now()+60_000,value}; return value;
+      } finally { clearTimeout(timer);this.running.delete(abort);finish();session.close(); }
+    })().finally(() => { this.modelReading = undefined; });
+    return this.modelReading;
+  }
   forContext(context: string): CodexEngine {
     if (!contextPattern.test(context)) throw new Error("Область не найдена");
     return { run: (input, options) => this.turn(context, input, options) };
@@ -55,6 +86,7 @@ export class ClaudeEngine implements CodexEngine {
     for (const dir of [home, cwd]) mkdirSync(dir, { recursive: true, mode: 0o700 });
     const data = realpathSync(resolve(root, ".data")), workspace = realpathSync(cwd), owner = realpathSync(homedir());
     const model = options.model ?? (provider.models.find(m => m.recommended) ?? provider.models[0])!.id;
+    const effort = options.reasoningEffort == null ? undefined : modelReasoning((await this.models()).find(m=>m.id===model),options.reasoningEffort) as EffortLevel;
     const env: Record<string, string> = hostEnvironment();
     Object.assign(env, { HOME: home, CLAUDE_CONFIG_DIR: config, ANTHROPIC_BASE_URL: provider.baseUrl,
       ...provider.auth === "bearer" ? { ANTHROPIC_AUTH_TOKEN: key, ANTHROPIC_API_KEY: "" } : { ANTHROPIC_API_KEY: key },
@@ -115,7 +147,7 @@ export class ClaudeEngine implements CodexEngine {
     let threadId = "", response: string | undefined, rejected = false, stopped = false, failure: string | undefined, stop = () => {};
     try {
       const turn = (this.options.query ?? sdkQuery)({ prompt: (async function* () { yield message; })(), options: {
-        cwd, env, model, abortController: abort, resume: options.threadId ?? undefined, permissionMode: "default", canUseTool, mcpServers: sdkServers, extraArgs: { "mcp-config": mcpConfig },
+        cwd, env, model, ...(effort ? {effort} : {}), abortController: abort, resume: options.threadId ?? undefined, permissionMode: "default", canUseTool, mcpServers: sdkServers, extraArgs: { "mcp-config": mcpConfig },
         // Nothing from ~/.claude, the workspace's .mcp.json or CLAUDE.md. User text never runs CLI slash commands or @file mentions.
         settingSources: [], strictMcpConfig: true, verbatimPrompts: true,
         // Not recorded in the session, so a changed SOUL applies on resume.

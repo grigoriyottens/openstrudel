@@ -1,4 +1,11 @@
 {
+  "Автоматически": {
+    "en": "Automatic",
+    "fr": "Automatique",
+    "es": "Automático",
+    "he": "אוטומטי",
+    "ru": "Автоматически"
+  },
   "В приложении": {
     "en": "In the app",
     "fr": "Dans l’application",
@@ -9385,5 +9392,68 @@
     "es": "Actualiza OpenStrudel en «{0}» para trasladar asistentes.",
     "he": "יש לעדכן את OpenStrudel ב״{0}״ כדי להעביר עוזרים.",
     "ru": "Обновите OpenStrudel на «{0}», чтобы переносить сотрудников."
+  },
+  "Обдумывание": {
+    "en": "Reasoning",
+    "fr": "Réflexion",
+    "es": "Razonamiento",
+    "he": "חשיבה",
+    "ru": "Обдумывание"
+  },
+  "Без обдумывания": {
+    "en": "None",
+    "fr": "Aucune",
+    "es": "Ninguno",
+    "he": "ללא",
+    "ru": "Без обдумывания"
+  },
+  "Минимальное": {
+    "en": "Minimal",
+    "fr": "Minimale",
+    "es": "Mínimo",
+    "he": "מזערית",
+    "ru": "Минимальное"
+  },
+  "Низкое": {
+    "en": "Low",
+    "fr": "Faible",
+    "es": "Bajo",
+    "he": "נמוכה",
+    "ru": "Низкое"
+  },
+  "Среднее": {
+    "en": "Medium",
+    "fr": "Moyenne",
+    "es": "Medio",
+    "he": "בינונית",
+    "ru": "Среднее"
+  },
+  "Высокое": {
+    "en": "High",
+    "fr": "Élevée",
+    "es": "Alto",
+    "he": "גבוהה",
+    "ru": "Высокое"
+  },
+  "Очень высокое": {
+    "en": "Very high",
+    "fr": "Très élevée",
+    "es": "Muy alto",
+    "he": "גבוהה מאוד",
+    "ru": "Очень высокое"
+  },
+  "Максимальное": {
+    "en": "Maximum",
+    "fr": "Maximale",
+    "es": "Máximo",
+    "he": "מרבית",
+    "ru": "Максимальное"
+  },
+  "Ультра": {
+    "en": "Ultra",
+    "fr": "Ultra",
+    "es": "Ultra",
+    "he": "אולטרה",
+    "ru": "Ультра"
   }
 }

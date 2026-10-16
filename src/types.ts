@@ -46,6 +46,7 @@ export interface EmployeeProfile {
   provider?: string | null;
   model: string | null;
   serviceTier?: string | null;
+  reasoningEffort?: string | null;
   tokenLimit: number | null;
   createdAt: string;
   preview?: string | null;
@@ -82,7 +83,8 @@ export interface CodexEngine {
       /** The resolved provider; a turn stays on its route. */
       provider?: string | null;
       model?: string | null;
-    serviceTier?: string | null;
+      serviceTier?: string | null;
+      reasoningEffort?: string | null;
       /** Permanent employees offered as native Codex roles on this device. */
       employees?: EmployeeProfile[];
       images?: string[];

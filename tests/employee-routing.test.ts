@@ -38,14 +38,16 @@ function complete(threadId = 'parent') {
 }
 it('keeps an immutable specialist and originating rules, with the chosen model and without personal credentials', () => {
   const dir = home();
-  const first = employeeRoleConfig(dir, [employee], 'Group A requires explicit confirmation.').agents as any;
+  const first = employeeRoleConfig(dir, [{...employee, reasoningEffort:'high'}], 'Group A requires explicit confirmation.').agents as any;
   const role = Object.values(first).find((r: any) => r?.config_file) as any;
   const content = readFileSync(role.config_file, 'utf8');
   const second = employeeRoleConfig(dir, [employee], 'Group B rules.').agents as any;
   expect(readFileSync(role.config_file, 'utf8')).toBe(content);
   expect(JSON.stringify(second)).not.toContain(role.config_file);
   expect(Object.keys(parse(content))).toEqual(['developer_instructions','model','service_tier','model_reasoning_effort']);
-  expect(parse(content)).toMatchObject({model:'other-model',service_tier:'default',model_reasoning_effort:'medium'});
+  expect(parse(content)).toMatchObject({model:'other-model',service_tier:'default',model_reasoning_effort:'high'});
+  const automatic = Object.values(second).find((r:any) => r?.config_file) as any;
+  expect(parse(readFileSync(automatic.config_file,'utf8'))).not.toHaveProperty('model_reasoning_effort');
   expect(content).toContain('Group A requires explicit confirmation.');
   expect(first.max_threads).toBe(2);
 });

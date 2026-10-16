@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { stringify } from "smol-toml";
 import { toolBridge } from "./acp-mcp.js";
 import { agentInstructions, contextServers, hostEnvironment, imageType, insideWorkspace } from "./claude.js";
-import type { ModelChoice } from "./model-settings.js";
+import { modelReasoning, reasoningChoices, type ModelChoice } from "./model-settings.js";
 import { ProviderIncident, type ProviderInfo } from "./providers.js";
 import { contextPattern } from "./scopes.js";
 import type { CodexEngine, CodexRunResult } from "./types.js";
@@ -182,7 +182,16 @@ export class AcpEngine implements CodexEngine {
           }
           const models = catalog(provider, configOptions), model = configOptions?.find(o => o.category === "model");
           if (models.length) this.options.onModels?.(models);
-          if (options.model && model?.type === "select" && model.currentValue !== options.model) await client.request("session/set_config_option", { sessionId, configId: model.id, value: options.model });
+          if (options.model && model?.type === "select" && model.currentValue !== options.model) {
+            ({configOptions} = await client.request("session/set_config_option", { sessionId, configId: model.id, value: options.model }));
+          }
+          // Switching models may change the available levels; validate the new native catalog before applying.
+          if (options.reasoningEffort != null) {
+            const choices = catalog(provider,configOptions), chosen = choices.find(m=>m.id === options.model) ?? choices.find(m=>m.isDefault);
+            modelReasoning(chosen,options.reasoningEffort);
+            const thinking = configOptions?.find(o=>o.category === "thought_level");
+            if (thinking?.type === "select" && thinking.currentValue !== options.reasoningEffort) await client.request("session/set_config_option",{sessionId,configId:thinking.id,value:options.reasoningEffort});
+          }
           const images = init.agentCapabilities?.promptCapabilities?.image ? (options.images ?? []).flatMap(path => {
             const data = readFileSync(path), mimeType = imageType(data);
             return mimeType ? [{ type: "image" as const, data: data.toString("base64"), mimeType }] : [];
@@ -231,6 +240,10 @@ const http = (name: string, url: string, headers: Record<string, string> = {}): 
 function catalog(provider: ProviderInfo, configOptions: acp.SessionConfigOption[] | null | undefined): ModelChoice[] {
   const option = configOptions?.find(o => o.category === "model");
   if (option?.type !== "select") return [];
+  const thinking = configOptions?.find(o => o.category === "thought_level");
+  const levels = thinking?.type === "select" ? reasoningChoices(thinking.options.flatMap(o => "group" in o ? o.options : [o]).map(o=>({reasoningEffort:o.value,description:o.description ?? undefined}))) : [];
   return option.options.flatMap(o => "group" in o ? o.options : [o]).map(o => ({ id: o.value, name: o.name, description: o.description ?? "",
-    isDefault: o.value === option.currentValue, speeds: [{ id: "default", name: "Обычная", description: "" }], provider: provider.id }));
+    isDefault: o.value === option.currentValue, reasoningEfforts:o.value === option.currentValue ? levels : [],
+    ...(o.value === option.currentValue && thinking?.type === 'select' ? {defaultReasoningEffort:thinking.currentValue} : {}),
+    speeds: [{ id: "default", name: "Обычная", description: "" }], provider: provider.id }));
 }

@@ -282,7 +282,7 @@ export class AccountEngines implements CodexEngine {
         const chatgpt = chatgptSignedIn(this.accounts.store) ? await selection().then(selected => this.scoped(selected.id, selected.service).forContext(context).models!(refresh))
           .catch(error => { if (error instanceof AccountUnavailableError) return []; throw error; }) : [];
         const keyed = await Promise.all(providerInfos().filter(p => providerConnected(this.accounts.store, p.id))
-          .map(p => p.engine === "acp" ? this.subscriptionModels(p.id) : p.models.length ? providerModels(p) : this.keyed(p.id).scope.forContext(context).models!(refresh)));
+          .map(p => p.engine === "acp" ? this.subscriptionModels(p.id) : p.id === "anthropic" ? this.keyed(p.id).engine.models!(refresh).catch(() => providerModels(p)) : p.models.length ? providerModels(p) : this.keyed(p.id).scope.forContext(context).models!(refresh)));
         return [...chatgpt, ...keyed.flat()];
       },
       connections: async refresh => {

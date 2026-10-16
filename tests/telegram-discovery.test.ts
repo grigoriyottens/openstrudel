@@ -22,7 +22,7 @@ function membership(update: number, sender = 42, status = "member") {
 it("adding the bot by its owner enables the assistant with isolated group history", async () => {
   const { store, adapter, handle } = setup();
   await adapter.processUpdate(membership(1));
-  expect(store.getTelegramChat("-100")).toMatchObject({ title: "Офис", allowedSenders: ["42"], profileId: null, conversationId: expect.any(String), access: "members", replies: "mentions" });
+  expect(store.getTelegramChat("-100")).toMatchObject({ title: "Офис", allowedSenders: ["42"], profileId: null, conversationId: expect.any(String), access: "members", replies: "instructions" });
   const conversation = store.getTelegramChat("-100")!.conversationId!;
   expect(store.getConversation(conversation)).toMatchObject({ channel: "telegram", externalId: "-100", profileId: null });
   expect(handle).not.toHaveBeenCalled();
@@ -58,14 +58,14 @@ it("revokes a removed group but keeps its conversation history", async () => {
   expect(store.getTelegramChat("-100")).toMatchObject({ conversationId: chat.conversationId, profileId: p.id, access: chat.access, replies: chat.replies });
 });
 
-it("answers an addressed colleague without choosing an employee or exposing a private chat", async () => {
+it("lets the native agent read the group without choosing an employee or exposing a private chat", async () => {
   const { store, adapter, handle } = setup();
   store.setSetting("telegram.bot_username", "strudel_bot");
   await adapter.processUpdate(membership(1));
   await adapter.processUpdate({ update_id: 2, message: { message_id: 2, chat: { id: -100, type: "group" }, from: { id: 77 }, text: "Morning" } });
-  expect(handle).not.toHaveBeenCalled();
-  await adapter.processUpdate({ update_id: 3, message: { message_id: 3, chat: { id: -100, type: "group" }, from: { id: 77 }, text: "@strudel_bot help" } });
   expect(handle).toHaveBeenCalledTimes(1);
+  await adapter.processUpdate({ update_id: 3, message: { message_id: 3, chat: { id: -100, type: "group" }, from: { id: 77 }, text: "@strudel_bot help" } });
+  expect(handle).toHaveBeenCalledTimes(2);
   expect(handle.mock.calls[0]![0]).toMatchObject({ conversationId: store.getTelegramChat("-100")!.conversationId, externalChatId: "-100", telegramSenderId: "77" });
 });
 

@@ -11,6 +11,7 @@ struct ModelSettingsView: View {
     /// Nil: as on the device, or automatic for the device itself.
     @State private var choice: ModelRef?
     @State private var speed = "default"
+    @State private var reasoning = ""
     @State private var loading = true
     @State private var saving = false
     @State private var error: (any Error)?
@@ -22,7 +23,7 @@ struct ModelSettingsView: View {
         let ref = choice ?? settings.defaults.ref
         return settings.model(ref) ?? (settings.recommended?.ref == ref ? settings.recommended : nil)
     }
-    private var selection: ModelSelection { ModelSelection(provider: choice?.provider, model: choice?.model, serviceTier: choice == nil && agentID != nil ? nil : speed) }
+    private var selection: ModelSelection { ModelSelection(provider: choice?.provider, model: choice?.model, serviceTier: choice == nil && agentID != nil ? nil : speed, reasoningEffort: choice == nil && agentID != nil || reasoning.isEmpty ? nil : reasoning) }
     private var changed: Bool { selection != settings?.selection }
     /// One speed needs no choice; an unavailable saved speed stays visible so it can be changed.
     private var showsSpeed: Bool {
@@ -66,6 +67,14 @@ struct ModelSettingsView: View {
                     Text(choiceTitle(settings))
                 }
                 .accessibilityIdentifier("modelChoice").disabled(saving || !settings.canManage)
+                if !(selected?.reasoningEfforts ?? []).isEmpty || !reasoning.isEmpty {
+                    Picker(L("Обдумывание"), selection: $reasoning) {
+                        Text(L("Автоматически")).tag("")
+                        ForEach(selected?.reasoningEfforts ?? []) { Text(L10n.text($0.name)).tag($0.id) }
+                        if !reasoning.isEmpty && !(selected?.reasoningEfforts ?? []).contains(where: { $0.id == reasoning }) { Text(L("\(reasoning) · unavailable")).tag(reasoning) }
+                    }
+                    .accessibilityIdentifier("modelReasoning").disabled((choice == nil && agentID != nil) || saving || !settings.canManage)
+                }
                 if showsSpeed {
                     Picker(L("Скорость"), selection: $speed) {
                         ForEach(selected?.speeds ?? []) { Text(L10n.text($0.name)).tag($0.id) }
@@ -76,7 +85,7 @@ struct ModelSettingsView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         if choice == nil && agentID == nil, let recommended = settings.recommended {
-                            Text(settings.recommendation(recommended) + (recommended.defaultReasoningEffort.map { " · " + $0.capitalized } ?? ""))
+                            Text(settings.recommendation(recommended))
                         }
                         if speed != "default" { Text(L("Ускоренный режим может расходовать больше лимита аккаунта.")) }
                         if !settings.canManage { Text(L("Настройки меняет владелец устройства.")) }
@@ -87,7 +96,7 @@ struct ModelSettingsView: View {
                     Spacer(minLength: 0)
                     if settings.canManage && changed {
                         Button(saving ? L("Сохраняем…") : L("Применить")) { Task { await save() } }
-                            .disabled(saving || selected == nil || ((agentID == nil || choice != nil) && selected?.speeds.contains(where: { $0.id == speed }) != true))
+                            .disabled(saving || selected == nil || ((agentID == nil || choice != nil) && (selected?.speeds.contains(where: { $0.id == speed }) != true || (!reasoning.isEmpty && selected?.reasoningEfforts?.contains(where: { $0.id == reasoning }) != true))))
                             .accessibilityIdentifier("saveModelSelection")
                     }
                 }
@@ -113,8 +122,11 @@ struct ModelSettingsView: View {
         .onChange(of: choice) { _, value in
             guard let settings else { return }
             saved = false
-            if value == nil && agentID != nil { speed = settings.defaults.serviceTier ?? "default" }
-            else if selected?.speeds.contains(where: { $0.id == speed }) != true { speed = "default" }
+            if value == nil && agentID != nil { speed = settings.defaults.serviceTier ?? "default"; reasoning = settings.defaults.reasoningEffort ?? "" }
+            else {
+                if selected?.speeds.contains(where: { $0.id == speed }) != true { speed = "default" }
+                if selected?.reasoningEfforts?.contains(where: { $0.id == reasoning }) != true { reasoning = "" }
+            }
         }
     }
     private func options(_ models: [ModelChoice]) -> some View {
@@ -123,6 +135,7 @@ struct ModelSettingsView: View {
     private func apply(_ value: ModelSettings) {
         settings = value; choice = value.selection.ref
         speed = value.selection.serviceTier ?? value.defaults.serviceTier ?? "default"
+        reasoning = value.selection.reasoningEffort ?? (value.selection.model == nil && agentID != nil ? value.defaults.reasoningEffort : nil) ?? ""
         onLoad(value)
     }
     private func load() async {
@@ -137,7 +150,7 @@ struct ModelSettingsView: View {
         defer { saving = false }
         do {
             let payload: [String: Any] = ["provider": selection.provider as Any? ?? NSNull(), "model": selection.model as Any? ?? NSNull(),
-                                          "serviceTier": selection.serviceTier as Any? ?? NSNull()]
+                                          "serviceTier": selection.serviceTier as Any? ?? NSNull(), "reasoningEffort": selection.reasoningEffort as Any? ?? NSNull()]
             let result: ModelSettings = try await client.management(path, method: "POST", payload: payload)
             apply(result); saved = true
             // Another provider can open or close the chat's account gate.

@@ -5,6 +5,7 @@ import { request as httpsRequest } from "node:https";
 import { afterEach, describe, expect, it } from "vitest";
 import { AgentArchives, encodeArchive, decodeArchive, type AgentArchive } from "../src/agent-archive.js";
 import { OpenStrudelRuntime } from "../src/runtime.js";
+import { saveModelSelection } from "../src/model-settings.js";
 
 const fixtures: { root: string; runtime: OpenStrudelRuntime }[] = [];
 function fixture() {
@@ -126,6 +127,7 @@ describe("additive team transfer", () => {
 
   it("round-trips every profile field, history, files and paused schedules without touching the existing team or credentials", async () => {
     const source = populated(), destination = fixture();
+    saveModelSelection(source.store, {provider:'openai',model:'gpt-5',serviceTier:'default',reasoningEffort:'high'},source.employee.id);
     const existing = destination.store.createProfile({ name: "Редактор", instructions: "Existing personality" });
     destination.store.setSetting("main.soul", "My existing main assistant");
     const workspace = destination.messages.files.workspace("work"); mkdirSync(workspace, { recursive: true });
@@ -144,7 +146,7 @@ describe("additive team transfer", () => {
     expect(destination.store.getSetting("main.soul")).toBe("My existing main assistant");
     expect(readFileSync(resolve(workspace, "MEMORY.md"), "utf8")).toBe("Existing memory");
     const editor = destination.store.getProfile("Редактор (2)")!;
-    expect(editor).toMatchObject({ instructions: source.employee.instructions, capabilities: ["research"], provider: "openai", model: "gpt-5", tokenLimit: 12345, purpose: "Мой журнал", domain: "work" });
+    expect(editor).toMatchObject({ instructions: source.employee.instructions, capabilities: ["research"], provider: "openai", model: "gpt-5", reasoningEffort:'high', tokenLimit: 12345, purpose: "Мой журнал", domain: "work" });
     expect(editor.id).not.toBe(source.employee.id);
     const chat = destination.store.profileConversation(editor.id), context = destination.messages.contextFor(chat.id);
     expect(context).toMatch(/^import-[a-f0-9]{32}$/);

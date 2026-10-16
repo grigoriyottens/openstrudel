@@ -28,7 +28,7 @@ it("defines the key provider on every thread start and resume, without ChatGPT c
   let key = "xai-first";
   const engine = new CodexEngineAdapter({ provider: { info: providerInfo("xai")!, key: () => key } });
   try {
-    // The registry names no effort; Codex's own default is sent.
+    // This provider declares no effort support; leave the vendor's default alone.
     expect((await engine.models()).map(m => [m.provider, m.id, m.isDefault, m.defaultReasoningEffort])).toEqual([["xai", "grok-4.7", true, undefined], ["xai", "grok-4.5", false, undefined]]);
     const employees: any[] = [{ id: "e", name: "Helper", instructions: "", capabilities: [], tokenLimit: null, createdAt: "", provider: "xai", model: "grok-4.5", serviceTier: "default" }];
     await engine.run("Hello", { model: "grok-4.7", serviceTier: "default", approvalMode: "ask", employees });
@@ -37,14 +37,16 @@ it("defines the key provider on every thread start and resume, without ChatGPT c
     expect(start.model).toBe("grok-4.7");
     expect(start).not.toHaveProperty("serviceTier");
     expect(start.config["model_providers.openstrudel-xai"]).toEqual({ name: "xAI", base_url: "https://api.x.ai/v1", wire_api: "responses", experimental_bearer_token: "xai-first" });
-    expect(start.config).toMatchObject({ "features.apps": false, web_search: "disabled", model_context_window: 500_000, model_auto_compact_token_limit: 450_000, model_reasoning_effort: "medium" });
+    expect(start.config).toMatchObject({ "features.apps": false, web_search: "disabled", model_context_window: 500_000, model_auto_compact_token_limit: 450_000 });
+    expect(start.config).not.toHaveProperty("model_reasoning_effort");
     expect(start.approvalsReviewer).toBe("user");
     // The employee answers and acts; Codex does not stop the turn with a question card.
     expect(start.config).not.toHaveProperty("features.default_mode_request_user_input");
     expect(start.developerInstructions).not.toContain("request_user_input");
     expect(start.developerInstructions).toContain("state the assumption in one short line");
     const [turn] = calls("turn/start");
-    expect(turn).toMatchObject({ model: "grok-4.7", effort: "medium" });
+    expect(turn).toMatchObject({ model: "grok-4.7" });
+    expect(turn).not.toHaveProperty("effort");
     expect(turn).not.toHaveProperty("serviceTier");
     expect(wire.request.mock.calls.some(([m]) => ["account/login/start", "model/list", "configRequirements/read"].includes(m))).toBe(false);
     expect(JSON.stringify(calls("turn/start"))).not.toContain("xai-first");

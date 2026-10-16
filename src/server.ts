@@ -22,6 +22,7 @@ import { WebAccess, sameOrigin } from "./web-access.js";
 import type { Accounts } from "./accounts.js";
 import { hostingOrigin } from "./hosting-origin.js";
 import { approvalSetting, isApprovalMode, readApprovalMode } from "./approval-mode.js";
+import { ownerTimezone, saveOwnerTimezone } from "./timezone.js";
 
 const MAX_BODY_BYTES = 1_048_576;
 
@@ -158,7 +159,7 @@ export class HttpApi {
       const localExecution = request.headers["x-openstrudel-executor"] === this.executorKey && ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress ?? "");
       const canManageAccount = localExecution ? request.headers["x-openstrudel-owner"] === "1" : webSession ? webSession.owner : !paired || owner;
       if (path.startsWith("/v1/extensions") && request.method !== "GET" && !canManageAccount) throw new HomeError("Расширения подключает владелец устройства.",403);
-      if (["/v1/settings/approvals", "/v1/settings/models"].includes(path) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
+      if (["/v1/settings/approvals", "/v1/settings/models", "/v1/settings/timezone"].includes(path) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
       if (!localExecution && request.method !== "GET" && path !== "/v1/home/transfer" && path !== "/v1/home/poll") {
         if (this.home.state.role === "primary" && this.store.getSetting("home.transfer")) throw new HomeError("Передаём управление. Изменения будут доступны после завершения.", 409);
         this.activeWrites++; counted = true;
@@ -328,13 +329,20 @@ export class HttpApi {
           this.mobile.cancelInvite(invitation[1]); this.send(response, 200, { ok: true }); return;
         }
         if (request.method === "GET" && path === "/v1/mobile") {
-          this.send(response, 200, this.mobile.status(currentClient)); return;
+          this.send(response, 200, {...this.mobile.status(currentClient), timezoneVersion:1, timezone:this.store.getSetting('owner.timezone')}); return;
         }
         if (request.method === "DELETE" && path === "/v1/mobile") {
           // A remote owner's own credential is one of these, as on servers set up from the app.
           if (paired) throw new HomeError("Отключайте подключения по одному, чтобы не потерять доступ к этому устройству.", 409);
           await this.mobile.revoke(); this.send(response, 200, { ok: true }); return;
         }
+      }
+      if (path === '/v1/settings/timezone' && ['GET','POST'].includes(request.method ?? '')) {
+        if (request.method === 'POST') {
+          const body = await this.body(request);
+          saveOwnerTimezone(this.store,body.timezone,body.initialize === true);
+        }
+        this.send(response,200,{timezone:ownerTimezone(this.store),configured:Boolean(this.store.getSetting('owner.timezone'))}); return;
       }
       if (request.method === "GET" && path === "/health") {
         this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, ownerInvitesVersion: 1, subscriptionsVersion: 1, telegramPrivateChoiceVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });

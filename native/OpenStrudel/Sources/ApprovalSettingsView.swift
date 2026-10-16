@@ -55,7 +55,7 @@ struct ApprovalSettingsView: View {
         Group {
             if let settings {
                 let mode = shown(choice ?? settings.mode)
-                Picker(selection: Binding(get: { mode }, set: choose)) {
+                Picker(selection: Binding(get: { mode }, set: { choose($0) })) {
                     ForEach(EmployeeApprovalMode.allCases.filter { reviews || $0 != .auto }) { option in
                         Text(option.title).tag(option)
                             .accessibilityIdentifier("approvalMode-" + option.rawValue)
