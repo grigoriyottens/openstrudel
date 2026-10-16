@@ -518,3 +518,8 @@ checkout and other chats' files remain untouched.
   No new tool, model call or persistent setup state was added. Focused employee,
   routing, group and message checks pass (31 tests), plus typecheck. A repeat of
   the exact live request is pending deployment.
+
+- Preparing build 47 to include the verified server additions after the frozen
+  46 bundle (scheduled cards, Telegram delivery options and employee setup).
+  The signed 46 archives remain immutable; public 46 publication is superseded
+  by this candidate. Internal TestFlight 46 remains available until 47 passes.
