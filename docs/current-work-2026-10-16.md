@@ -230,3 +230,24 @@ checkout and other chats' files remain untouched.
   the outstanding native OAuth and multi-host release acceptance complete.
 - Resource check: 9.4 GiB free, normal memory pressure (39% free). No user data
   or active build caches removed.
+
+## Main merge and live Telegram follow-up
+
+- PR #49 merged into main at `f7a08fd`; its merged local and remote branch was
+  removed. Other chats' branches/checkouts remain intact.
+- Wolf received `46-f7a08fd` after a packaged Linux smoke test, idle check,
+  timestamped backup, atomic source swap and exact-service restart. Integrity
+  and all counts were preserved (9 employees, 18 conversations, 6,893 messages,
+  9 schedules, 8 bot chats). Backup: `/root/openstrudel-upgrade-46-20261016T134532Z`.
+  This is a Home deployment; Sparkle and TestFlight still publish build 45.
+- The first real DM test (1679023 → 1679024) failed before sending anything:
+  AccountEngines resumed a second cached thread ID from settings after the
+  conversation's ID was cleared. Added a regression through AccountEngines,
+  cleared both execution references, and preserved both sets of previous IDs
+  in one migration transaction. Canonical messages remain untouched.
+- Added explicit delivered/pending/partial/unknown/not_sent tool receipts.
+  An unreadable output file now becomes not_sent instead of remaining forever
+  pending in the outbox. Both failure paths have regression tests.
+- The parallel migration task owns missing histories, imported files/schedules
+  and eventual legacy shutdown. This task retains News/Connect, Telegram/OAuth
+  and releases. Do not stop the old gateway here or race its imports.

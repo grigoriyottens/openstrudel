@@ -283,8 +283,11 @@ export class TelegramAdapter {
     const receipt = (messageId:string) => {
       const message = this.store.getMessage(conversation.id,messageId)!;
       const prefix=`${chat.chatId}:reply:${messageId}:`;
-      const delivered=this.store.db.prepare("SELECT message_id FROM telegram_outbox WHERE key>=? AND key<? AND status='delivered' ORDER BY key").all(prefix,prefix+"\uffff");
-      return {sent:message.status === "completed",chatId:chat.chatId,title:chat.title,messageId,
+      const deliveries=this.store.db.prepare("SELECT message_id,status FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix,prefix+"\uffff");
+      const delivered=deliveries.filter(row=>row.status === "delivered");
+      const status=message.status === "completed" ? "delivered" : message.status === "running" ? "pending"
+        : deliveries.some(row=>row.status === "unknown" || row.status === "sending") ? "unknown" : delivered.length ? "partial" : "not_sent";
+      return {sent:status === "delivered",status,chatId:chat.chatId,title:chat.title,messageId,
         telegramMessageIds:delivered.map(row=>String(row.message_id)),...(message.error?{error:message.error}:{})};
     };
     if (previous) {
@@ -320,15 +323,17 @@ export class TelegramAdapter {
       if (row.payload !== payload) throw new Error("Содержимое доставки изменилось");
       if (row.status === "delivered") continue;
       if (row.status !== "pending") throw new Error("Проверьте доставку файла в Telegram перед повтором");
-      const form = new FormData();form.set("chat_id",String(chatId));
-      const animation=file.mimeType === "image/gif";
-      form.set(animation?"animation":"document",new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
-      this.store.db.prepare("UPDATE telegram_outbox SET status='sending' WHERE key=?").run(key);
+      let attempted=false;
       try {
+        const form = new FormData();form.set("chat_id",String(chatId));
+        const animation=file.mimeType === "image/gif";
+        form.set(animation?"animation":"document",new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
+        this.store.db.prepare("UPDATE telegram_outbox SET status='sending' WHERE key=?").run(key);
+        attempted=true;
         const sent = await this.call<{message_id:number}>(animation?"sendAnimation":"sendDocument",form);
         this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=? WHERE key=?").run(String(sent.message_id),key);
       } catch (error) {
-        this.store.db.prepare("UPDATE telegram_outbox SET status=?,error=? WHERE key=?").run(...(refused(error) ? ["not_sent", REFUSED] : ["unknown", "Доставка файла не подтверждена. Проверьте Telegram перед повтором."]), key);
+        this.store.db.prepare("UPDATE telegram_outbox SET status=?,error=? WHERE key=?").run(...(!attempted ? ["not_sent","Файл недоступен. Он не отправлен."] : refused(error) ? ["not_sent", REFUSED] : ["unknown", "Доставка файла не подтверждена. Проверьте Telegram перед повтором."]), key);
         throw error;
       }
     }

@@ -90,7 +90,7 @@ it("sends documents and text through the existing outbox and reports partial fai
     : Response.json({ok:true,result:{message_id:101}}));
   const args={chatId:"-1001",text:"Report",paths:[path]};
   const result=await tools().call("send_telegram_message",args) as any;
-  expect(result).toMatchObject({sent:false,telegramMessageIds:["101"],error:expect.any(String)});
+  expect(result).toMatchObject({sent:false,status:"partial",telegramMessageIds:["101"],error:expect.any(String)});
   await tools().call("send_telegram_message",args);expect(fetch).toHaveBeenCalledTimes(2);
   expect(store.db.prepare("SELECT status FROM telegram_outbox ORDER BY key").all().map(r=>r.status)).toEqual(["delivered","not_sent"]);
 });
@@ -99,10 +99,19 @@ it("never repeats an unacknowledged send, even after a new adapter loads the per
   const {tools,store,messages}=setup();
   vi.mocked(fetch).mockRejectedValue(new TypeError("connection lost"));
   const args={chatId:"-1001",text:"Once",paths:[]};
-  expect(await tools().call("send_telegram_message",args)).toMatchObject({sent:false,error:expect.stringContaining("не подтверждена")});
+  expect(await tools().call("send_telegram_message",args)).toMatchObject({sent:false,status:"unknown",error:expect.stringContaining("не подтверждена")});
   const replacement=new TelegramAdapter("1:fixture",store,messages);
   expect(await tools({telegram:replacement}).call("send_telegram_message",args)).toMatchObject({sent:false});
   expect(fetch).toHaveBeenCalledTimes(1);
+});
+
+it("does not leave an unreadable file forever pending in the outbox",async()=>{
+  const {messages,adapter,store,source,context,sent}=setup();
+  const file=messages.files.put(source.id,context.scope!,{name:"gone.txt",contentBase64:Buffer.from("temporary").toString("base64")});
+  rmSync(messages.files.get(file.id)!.path);
+  await expect(adapter.sendFiles("-1001",[file],"missing-file")).rejects.toThrow();
+  expect(store.db.prepare("SELECT status FROM telegram_outbox").get()?.status).toBe("not_sent");
+  expect(sent).toEqual([]);
 });
 
 it("keeps an ordinary participant and an unattended schedule inside their own audience",async()=>{
