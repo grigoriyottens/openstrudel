@@ -33,13 +33,18 @@ export class ConversationFiles {
     return {id,conversationId,name,mimeType,size:bytes.length};
   }
   output(conversationId:string,context:string,path:string): Attachment {
+    return this.put(conversationId,context,this.readOutput(context,path));
+  }
+  /** Validate the workspace boundary before reading a file for an explicit delivery. */
+  readOutput(context:string,path:string): {name:string;mimeType?:string;contentBase64:string} {
     const workspace=realpathSync(this.workspace(context));
     const candidate=resolve(workspace,path);
     const actual=realpathSync(candidate);
     if (!actual.startsWith(workspace+sep) || !statSync(actual).isFile()) throw new Error("Файл должен находиться в рабочей области сотрудника");
     if (statSync(actual).size > MAX_FILE_BYTES) throw new Error("Выберите файл до 25 МБ");
     const mimeTypes:Record<string,string>={".pdf":"application/pdf",".txt":"text/plain",".md":"text/markdown",".png":"image/png",".jpg":"image/jpeg",".jpeg":"image/jpeg",".webp":"image/webp",".csv":"text/csv",".json":"application/json",".xlsx":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",".docx":"application/vnd.openxmlformats-officedocument.wordprocessingml.document",".pptx":"application/vnd.openxmlformats-officedocument.presentationml.presentation",".mp3":"audio/mpeg",".m4a":"audio/mp4"};
-    return this.put(conversationId,context,{name:basename(actual),mimeType:mimeTypes[extname(actual).toLowerCase()],contentBase64:readFileSync(actual).toString("base64")});
+    mimeTypes[".gif"]="image/gif"; mimeTypes[".mp4"]="video/mp4";
+    return {name:basename(actual),mimeType:mimeTypes[extname(actual).toLowerCase()],contentBase64:readFileSync(actual).toString("base64")};
   }
   get(id: string): StoredFile | null {
     const r = this.store.db.prepare("SELECT * FROM conversation_files WHERE id=?").get(id) as Record<string, any> | undefined;

@@ -201,3 +201,32 @@ checkout and other chats' files remain untouched.
 - Closed the isolated QA app and OAuth fixture, stopped only the temporary
   `openstrudel-qa45` container, and closed its browser tabs. Production app and
   Wolf Home remain running. Test data, evidence and release archives are kept.
+
+## Connected bot can send to its chats
+
+- The owner's 16:21 DM exposed a real missing capability: normal Telegram
+  replies existed, but employees had no native cross-chat send tool. The bot
+  incorrectly recommended installing another Telegram service.
+- Added `list_telegram_chats` and `send_telegram_message` to the existing native
+  employee tool set. The already connected bot sends owner-requested text,
+  files and GIF animations. Destinations come from current bot memberships;
+  paused/removed chats and revoked owner access are checked at call time.
+- The existing durable Telegram outbox tracks these sends. Identical calls in
+  one request cannot duplicate delivery, and uncertain or partial delivery is
+  not reported as success. Only requested content is copied into the destination
+  conversation; private source history is not forwarded. Files stay inside the
+  requesting employee's permitted workspace.
+- Existing Codex execution threads renew once because dynamic tools are accepted
+  at thread creation. Original thread IDs, all messages, profiles and bindings
+  remain stored. Ordinary group participants and schedules retain their audience.
+- Runtime validation: 526 passed, 2 skipped; typecheck and diff whitespace checks
+  pass. Real Telegram cross-chat acceptance and production rollout are next.
+- Native OAuth diagnostics also tested Apple's SwiftUI authentication API with
+  an active app/key window. The browser still did not appear. That rules out a
+  simple foreground-window fix; the diagnostic UI has been removed from source.
+  Native OAuth remains unverified. No speculative activation workaround shipped.
+- The owner explicitly requested committing and pushing all current work to
+  main. This supersedes keeping candidate changes in draft, but does not make
+  the outstanding native OAuth and multi-host release acceptance complete.
+- Resource check: 9.4 GiB free, normal memory pressure (39% free). No user data
+  or active build caches removed.

@@ -479,7 +479,8 @@ export class Store {
     }
     if (message.channel !== "telegram") return { ...message, origin: { channel: "api", title: "" } };
     const inbound = message.replyToId ? this.db.prepare("SELECT external_id FROM messages WHERE id=? AND conversation_id=?").get(message.replyToId, message.conversationId) : undefined;
-    const external = message.direction === "inbound" ? message.externalId : inbound?.external_id;
+    const external = message.direction === "inbound" ? message.externalId : inbound?.external_id
+      ?? (/^-?\d+:send:/.test(message.externalId ?? "") ? message.externalId : undefined);
     const chatId = String(external ?? conversation.externalId ?? "").split(/:|::/)[0]!;
     const chat = this.getTelegramChat(chatId);
     const current = chat?.conversationId === conversation.id && chat.profileId === (conversation.profileId ?? null);
