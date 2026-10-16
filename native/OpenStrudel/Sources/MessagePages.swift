@@ -70,6 +70,16 @@ enum MessagePages {
         }
     }
 
+    /// The line under a reply sent to Telegram. A delivered reply stays silent; only a send in flight or a problem speaks.
+    static func deliveryNotice(_ delivery: MessageDelivery) -> String? {
+        switch delivery.state {
+        case "delivered": nil
+        case "unknown": L("Доставка не подтверждена. Проверьте Telegram перед новой отправкой.")
+        case "not_sent": L("Не отправлено в Telegram")
+        default: L("Отправляем в Telegram…")
+        }
+    }
+
     enum DeliveryAction: Equatable { case open(URL), resend(HomeMessage) }
 
     /// One clear way on from a reply Telegram did not take or did not confirm: open the request in

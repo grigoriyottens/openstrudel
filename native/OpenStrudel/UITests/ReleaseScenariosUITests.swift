@@ -196,10 +196,15 @@ final class ReleaseScenariosUITests: XCTestCase {
         // A reply sent before delivery was tracked claims no delivery state at all.
         XCTAssertFalse(app.staticTexts["Не отправлено в Telegram"].exists)
         XCTAssertFalse(app.staticTexts["Отправляем в Telegram…"].exists)
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "telegramReply-")).firstMatch.exists)
         XCTAssertFalse(app.descendants(matching: .any)["conversationSources"].exists)
         XCTAssertFalse(app.staticTexts["telegramReplyDestination"].exists)
         capture("main-feed-history", app)
+        // With no Reply to offer, a long press selects the archived text and its menu is the system one.
+        app.staticTexts["Сохранённая заметка"].press(forDuration: 1)
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Скопировать")).firstMatch.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Ответить в Telegram")).firstMatch.exists, app.debugDescription)
+        capture("archive-keeps-selection", app)
+        app.staticTexts["Архив · Старые заметки"].tap()
         // A group found by name opens the feed of the employee who works there.
         app.buttons["Чаты"].tap()
         let search = app.searchFields["Найти чат"]

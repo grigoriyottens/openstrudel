@@ -165,6 +165,13 @@ struct EmployeeFeedTests {
         #expect(MessagePages.sourceLine(message("none", channel: "api")) == nil)
     }
 
+    @Test func aDeliveredReplyIsSilentAndOnlyASendInFlightOrAProblemSpeaks() {
+        #expect(MessagePages.deliveryNotice(MessageDelivery(state: "delivered")) == nil)
+        #expect(MessagePages.deliveryNotice(MessageDelivery(state: "pending")) == L("Отправляем в Telegram…"))
+        #expect(MessagePages.deliveryNotice(MessageDelivery(state: "not_sent")) == L("Не отправлено в Telegram"))
+        #expect(MessagePages.deliveryNotice(MessageDelivery(state: "unknown")) == L("Доставка не подтверждена. Проверьте Telegram перед новой отправкой."))
+    }
+
     @Test func aFailedOrUncertainDeliveryOffersOneActionAndNothingIsResentByItself() throws {
         let group = MessageOrigin(channel: "telegram", title: "Team", chatId: "-1001", url: "https://t.me/c/1/7", canReply: true)
         let privateChat = MessageOrigin(channel: "telegram", title: "Mik", chatId: "42", canReply: true)

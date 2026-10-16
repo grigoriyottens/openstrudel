@@ -121,7 +121,8 @@ struct MessageBubble: View {
             if let parentID = message.replyToId, message.channel == "telegram", previous?.id != parentID,
                let parent = client.messages.first(where: { $0.id == parentID }) {
                 Text(L("В ответ на: \(String(parent.text.prefix(140)))"))
-                    .modifier(MetaLine()).lineLimit(2)
+                    .modifier(MetaLine()).lineLimit(2).multilineTextAlignment(ownerReply ? .trailing : .leading)
+                    .frame(maxWidth: .infinity, alignment: ownerReply ? .trailing : .leading)
             }
             if let scheduleTitle = message.scheduleTitle {
                 VStack(alignment: .leading, spacing: 4) {
@@ -142,10 +143,11 @@ struct MessageBubble: View {
             if message.direction == "inbound", message.channel == "telegram", message.status == "queued" || message.status == "running" {
                 Label(L("Готовим ответ…"), systemImage: "ellipsis").modifier(MetaLine())
             }
-            // A delivered reply stays silent; only a send in flight or a problem speaks.
-            if let delivery = message.delivery, delivery.state != "delivered" {
+            if let delivery = message.delivery, let notice = MessagePages.deliveryNotice(delivery) {
                 VStack(alignment: ownerReply ? .trailing : .leading, spacing: 0) {
-                    deliveryCaption(delivery).padding(.trailing, ownerReply ? 16 : 0)
+                    Text(notice).modifier(MetaLine())
+                        .foregroundStyle(delivery.state == "unknown" || delivery.state == "not_sent" ? AppTheme.warning : AppTheme.secondaryText)
+                        .padding(.trailing, ownerReply ? 16 : 0)
                     deliveryRecovery
                 }
                 .frame(maxWidth: .infinity, alignment: ownerReply ? .trailing : .leading)
@@ -176,33 +178,27 @@ struct MessageBubble: View {
         } else { Text(line).modifier(MetaLine()) }
     }
 
-    /// A Telegram request's actions: its context menu and its accessibility actions. Its text is not selectable,
-    /// so a right-click or a long press always opens this menu, and Copy lives here.
+    /// A Telegram request the owner can answer here.
+    private var canReply: Bool { message.origin?.canReply == true && client.canManageOpenAI }
+
+    /// A request's Reply, in its context menu and its accessibility actions. Selectable text would take the
+    /// right-click and the long press from this menu, so such a request is plain text and Copy lives here.
+    /// Without Reply there is no menu, and the text keeps its selection and the system Copy.
     @ViewBuilder private var requestActions: some View {
-        if message.origin?.canReply == true && client.canManageOpenAI {
+        if canReply {
             Button(L("Ответить в Telegram"), systemImage: "arrowshape.turn.up.left") { telegramReply = TelegramReplyTarget(request: message) }
                 .accessibilityIdentifier("telegramReply-" + message.id)
-        }
-        if message.origin?.channel == "telegram", !message.text.isEmpty {
-            Button(L("Скопировать"), systemImage: "doc.on.doc") {
-                #if os(macOS)
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(message.text, forType: .string)
-                #else
-                UIPasteboard.general.string = message.text
-                #endif
+            if !message.text.isEmpty {
+                Button(L("Скопировать"), systemImage: "doc.on.doc") {
+                    #if os(macOS)
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(message.text, forType: .string)
+                    #else
+                    UIPasteboard.general.string = message.text
+                    #endif
+                }
             }
         }
-    }
-
-    private func deliveryCaption(_ delivery: MessageDelivery) -> some View {
-        let text: String = switch delivery.state {
-        case "unknown": L("Доставка не подтверждена. Проверьте Telegram перед новой отправкой.")
-        case "not_sent": L("Не отправлено в Telegram")
-        default: L("Отправляем в Telegram…")
-        }
-        return Text(text).modifier(MetaLine())
-            .foregroundStyle(delivery.state == "unknown" || delivery.state == "not_sent" ? AppTheme.warning : AppTheme.secondaryText)
     }
 
     private var person: some View {
@@ -230,12 +226,14 @@ struct MessageBubble: View {
             VStack(alignment: .leading, spacing: 8) {
                 if message.text.isEmpty { EmptyView() }
                 else if message.imported == true { ImportedMessageText(source: message.text) }
-                else { ChatBubble(text: message.text, fill: AppTheme.surface, selectable: message.origin?.channel != "telegram").accessibilityActions { requestActions } }
+                else { ChatBubble(text: message.text, fill: AppTheme.surface, selectable: !canReply) }
                 attachments
             }
-            .contextMenu { requestActions }
-            if let error = message.error { warning(error).padding(.leading, 16) }
+            if let error = message.error { warning(error, selectable: !canReply).padding(.leading, 16) }
         }
+        // The whole request answers, so one whose file never arrived still offers Reply on its error.
+        .contextMenu { requestActions }
+        .accessibilityActions { requestActions }
         .frame(maxWidth: bubbleWidth, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -267,12 +265,12 @@ struct MessageBubble: View {
         }
     }
 
-    private func warning(_ error: String) -> some View {
-        Text(UserFacingError.text(error))
+    @ViewBuilder private func warning(_ error: String, selectable: Bool = true) -> some View {
+        let text = Text(UserFacingError.text(error))
             .font(AppTypography.meta)
             .foregroundStyle(AppTheme.warning)
             .fixedSize(horizontal: false, vertical: true)
-            .textSelection(.enabled)
+        if selectable { text.textSelection(.enabled) } else { text }
     }
 
     private func withTime(_ text: String) -> String {

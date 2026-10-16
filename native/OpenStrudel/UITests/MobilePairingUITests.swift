@@ -8,7 +8,10 @@ final class MobilePairingUITests: XCTestCase {
         guard let invitation = env["OPENSTRUDEL_DEVICE_INVITATION"], let profileID = env["OPENSTRUDEL_DEVICE_PROFILE"] else {
             throw XCTSkip("Requires the isolated Telegram timeline fixture.")
         }
-        let app = XCUIApplication(); app.launch(); app.open(try XCTUnwrap(URL(string: invitation)))
+        let app = XCUIApplication()
+        // The feed's lines are checked in Russian; a fresh simulator opens in English.
+        app.launchArguments = ["-openstrudel.language", "ru", "-AppleLanguages", "(ru)"]
+        app.launch(); app.open(try XCTUnwrap(URL(string: invitation)))
         XCTAssertTrue(app.buttons["confirmMacPairing"].waitForExistence(timeout: 15)); app.buttons["confirmMacPairing"].tap(); app.finishDevicePairing()
         let consent = app.buttons["acceptAIDataSharing"]
         if consent.waitForExistence(timeout: 3) { consent.tap() }
@@ -17,18 +20,23 @@ final class MobilePairingUITests: XCTestCase {
         let employee = app.buttons["employee-" + profileID]
         for _ in 0..<10 where !employee.isHittable { app.swipeUp() }
         XCTAssertTrue(employee.isHittable, app.debugDescription); employee.tap()
+        // A private chat's request names the person once: no «Telegram · <first name>», no separate author line.
+        XCTAssertTrue(app.staticTexts["Mik Wiseman · Telegram"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertFalse(app.staticTexts["Telegram · Mik"].exists, app.debugDescription)
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Mik Wiseman")).count, 1, app.debugDescription)
         let request = app.staticTexts["Собери решения встречи и следующий шаг."]
         XCTAssertTrue(request.waitForExistence(timeout: 10), app.debugDescription)
         for _ in 0..<8 where !request.isHittable { app.swipeDown() }
-        // One source line per request, no inline Reply, and a delivered reply stays silent.
+        // One source line per request, no inline Reply, and the delivered reply below stays silent.
+        XCTAssertTrue(app.staticTexts["Решили подготовить общий документ. Следующий шаг — согласовать ответственных."].exists, app.debugDescription)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "telegramReply-")).firstMatch.exists, app.debugDescription)
-        XCTAssertFalse(app.staticTexts["Доставлено в Telegram"].exists, app.debugDescription)
+        XCTAssertFalse(app.staticTexts["Отправляем в Telegram…"].exists, app.debugDescription)
         // The author lives in the group's line, a link named after the group, never on a line of its own.
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Гриша")).firstMatch.exists, app.debugDescription)
-        XCTAssertTrue(app.links["Открыть в Telegram: WAI Core Team · тест"].exists, app.debugDescription)
+        XCTAssertTrue(telegramLink("Открыть в Telegram: WAI Core Team · тест", app).exists, app.debugDescription)
         // Only a reply Telegram did not confirm speaks, with its one way on.
         XCTAssertTrue(app.staticTexts["Доставка не подтверждена. Проверьте Telegram перед новой отправкой."].exists, app.debugDescription)
-        XCTAssertTrue(app.links["Открыть в Telegram"].exists, app.debugDescription)
+        XCTAssertTrue(telegramLink("Открыть в Telegram", app).exists, app.debugDescription)
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Посторонняя беседа")).firstMatch.exists)
         capture("phone-unified-telegram-feed", app)
         // Reply lives in the request's context menu. Menu items may not carry identifiers, so it is found by its title.
@@ -404,6 +412,12 @@ final class MobilePairingUITests: XCTestCase {
         let payload = try await read(value)
         return try XCTUnwrap(URL(string: XCTUnwrap(payload["url"] as? String)))
     }
+    /// A SwiftUI Link: iOS reports it as a link or, on newer systems, as a button with the same label.
+    @MainActor private func telegramLink(_ label: String, _ app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ AND (elementType == %d OR elementType == %d)", label,
+            XCUIElement.ElementType.link.rawValue, XCUIElement.ElementType.button.rawValue)).firstMatch
+    }
+
     @MainActor private func capture(_ name:String,_ app:XCUIApplication) {
         // Capture the screen so landscape attachments retain the full display bounds.
         let attachment=XCTAttachment(screenshot:XCUIScreen.main.screenshot());attachment.name=name;attachment.lifetime = .keepAlways;add(attachment)
