@@ -195,3 +195,9 @@ checkout and other chats' files remain untouched.
   required before adopting it. The production recognizer remains unchanged.
 - Latest resource snapshot: 7.8 GiB disk free, normal memory pressure (61%
   free). Other development sessions are active; no process or data was removed.
+- Candidate work is pushed as draft PR #49. Build 45 remains the released
+  version; native remote sign-in acceptance is still required before merging
+  and releasing this candidate.
+- Closed the isolated QA app and OAuth fixture, stopped only the temporary
+  `openstrudel-qa45` container, and closed its browser tabs. Production app and
+  Wolf Home remain running. Test data, evidence and release archives are kept.
