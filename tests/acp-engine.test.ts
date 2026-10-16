@@ -58,7 +58,8 @@ it("runs the pinned agent in the workspace with a private home, the employee too
     expect(g.calls("authenticate")).toEqual([{ methodId: "cached_token" }]);
     const [created] = g.calls("session/new");
     expect(created.cwd).toBe(workspace);
-    expect(created._meta.rules).toContain("ask_user_question");
+    // The agent answers first; it is not told to stop for a question.
+    expect(created._meta.rules).toContain("state the assumption in one short line");
     expect(created._meta.rules).toMatch(/Current employee SOUL \(authoritative\):\nИмя: Ада$/);
     expect(created.mcpServers).toEqual([
       { type: "http", name: "openstrudel", url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/[0-9a-f]{32}$/), headers: [{ name: "Authorization", value: expect.stringMatching(/^Bearer [0-9a-f]{64}$/) }] },

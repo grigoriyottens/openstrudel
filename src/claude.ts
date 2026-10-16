@@ -24,11 +24,11 @@ export interface ClaudeEngineOptions {
 
 type RunOptions = NonNullable<Parameters<CodexEngine["run"]>[1]>;
 
-/** OpenStrudel's instructions for a vendor's own agent, which asks its questions with `question`. */
-export const agentInstructions = (question: string) => INSTRUCTIONS.replace("Use Codex's native tools, memory, skills and connectors.", "Use your native tools and connected services.")
+/** OpenStrudel's instructions for a vendor's own agent. */
+export const agentInstructions = () => INSTRUCTIONS.replace("Use Codex's native tools, memory, skills and connectors.", "Use your native tools and connected services.")
   .replace("where the owner can add MCP services, SKILL.md skills and local Codex plugins", "where the owner can add MCP services")
-  .replace("request_user_input", question).replace("Follow Codex's native approval policy", "Follow the approval policy");
-const instructions = agentInstructions("AskUserQuestion");
+  .replace("Follow Codex's native approval policy", "Follow the approval policy");
+const instructions = agentInstructions();
 /** The only host variables a vendor's CLI gets: no OpenStrudel keys or data, and no vendor key that would bill another account. */
 export const hostEnvironment = (): Record<string, string> => Object.fromEntries(["PATH", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TZ", "USER", "LOGNAME", "TERM"]
   .flatMap(name => process.env[name] ? [[name, process.env[name]!]] : []));
