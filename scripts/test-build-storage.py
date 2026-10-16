@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 
@@ -154,6 +155,24 @@ class StorageSafety(unittest.TestCase):
         source.mkdir()
         with self.assertRaises(ValueError):
             backup.create_backup(source, source / 'backups', app=None)
+
+    def test_locked_database_fails_without_hanging_or_claiming_a_complete_backup(self):
+        source = self.base / 'user-data'
+        source.mkdir()
+        with sqlite3.connect(source / 'locked.sqlite') as writer:
+            writer.execute('CREATE TABLE messages(text)')
+            writer.execute("INSERT INTO messages VALUES ('keep')")
+            writer.commit()
+            writer.execute('BEGIN EXCLUSIVE')
+            started = time.monotonic()
+            with patch.object(backup, 'SQLITE_LOCK_TIMEOUT', 0.1):
+                with self.assertRaisesRegex(RuntimeError, 'Database remains locked: locked.sqlite'):
+                    backup.create_backup(source, self.base / 'backups', app=None)
+            self.assertLess(time.monotonic() - started, 5)
+            writer.rollback()
+            self.assertEqual(writer.execute('SELECT text FROM messages').fetchall(), [('keep',)])
+        self.assertEqual(list((self.base / 'backups').glob('backup-*')), [])
+        self.assertEqual(list((self.base / 'backups').rglob('backup.json')), [])
 
     def test_backup_skips_downloadable_dictation_model_but_preserves_unique_files(self):
         source = self.base / 'user-data'
