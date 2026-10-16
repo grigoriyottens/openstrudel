@@ -382,3 +382,37 @@ checkout and other chats' files remain untouched.
   native delivery receipts. Connect's portable helper fixes UTC-day counting
   at Moscow midnight and rejects a nonnumeric delivery ID; 4 port tests pass.
   Both skill manifests validate. These packages are prepared, not deployed.
+
+## Live scheduled-card acceptance and migration handoff
+
+- PR #55 merged at `82a04ce`. Wolf's Docker image was built from that source
+  and passed isolated packaged-runtime/API/SQLite smoke checks. Production
+  deployment waited for an idle Home, took a consistent rollback snapshot at
+  `/root/openstrudel-upgrade-46-20261016T154241Z`, atomically installed the
+  candidate and restarted only its Home container. All 9 profiles, 18
+  conversations, 8 Telegram bindings and 11 existing schedules were retained;
+  SQLite is healthy and @waiwai_is_bot is running with no connection error.
+- Real Codex scheduled delivery passed in the isolated QA group: two separate
+  cards, both quiet, a link preview only on the second, and no extra automatic
+  third reply. Native Telegram receipts are 2103/2104; independent personal
+  MCP reads confirm messages 1679120/1679121. Both canonical messages are also
+  visible through the app API. The test schedule is disabled and its receipts
+  retained. Private proof: `.data/migration-news-connect/live-scheduled-cards.log`.
+- Prepared the concrete News/Connect cutover handoff and a thin native Home
+  request dispatcher in `.data/migration-news-connect/HANDOFF.md`. Existing
+  MacBook-to-Mini SSH can carry these private packages; no new credentials,
+  secondary model runner or Telegram token are needed. The parallel migration
+  task reports WaiClaw on the same source with a verified backup. Its task owns
+  that host and the old Core; this task keeps Wolf/Mini ownership. Legacy News
+  and Connect publishers are still enabled until the fresh-state cutover.
+- Mini preservation is being checked by actual text/file hashes, not counts
+  alone. All 81 local attachments exist (58.8 MB); some older attachments and
+  app history are absent from corresponding Wolf profiles, so Mini's Home
+  remains enabled pending reconciliation. No deleted employees were restored.
+- Managed build-cache pruning found no eligible idle caches. Disk has 6.3 GiB
+  free and memory pressure is normal. Unique data, active caches, release
+  archives, rollback snapshots and Codex history are retained.
+- Installed-app OAuth acceptance is still blocked by the browser policy on the
+  disposable invitation. No alternate tool or route was used to bypass it.
+  Public Sparkle remains 45; installed Mac and internal TestFlight are 46. The
+  newer server-only commits are not represented as part of the staged 46 app.
