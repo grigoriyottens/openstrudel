@@ -29,13 +29,10 @@ struct TelegramSetupView: View {
     @State private var checking = false
     @State private var checked = false
     @State private var confirmDisconnect = false
+    /// The owner's choice while the Home saves it, so the picker does not show the previous responder meanwhile.
+    @State private var choosing: (chatId: String, profileId: String?)?
     private var privateChats: [TelegramChat] { (client.telegram?.chats ?? []).filter(\.isPairedOwner) }
     private var linked: Bool { !privateChats.isEmpty }
-    /// The bot belongs to one device; its private chat can be answered only by that device's employees.
-    private var deviceEmployees: [EmployeeProfile] {
-        let device = client.activeProfile?.deviceId ?? client.health?.nodeId
-        return client.profiles.filter { $0.deviceId == nil || $0.deviceId == device }
-    }
 
     /// Rows only: TelegramSetupSection wraps them in a Form section.
     var body: some View {
@@ -83,10 +80,10 @@ struct TelegramSetupView: View {
         if linked {
             ForEach(privateChats) { chat in
                 // The owner chooses once the device has an employee; otherwise the row only says who answers.
-                if client.canChooseTelegramResponder && !deviceEmployees.isEmpty {
-                    Picker(L("Личный чат"), selection: Binding(get: { chat.profileId }, set: { bind(chat, to: $0) })) {
+                if let employees = client.telegramResponders(for: chat) {
+                    Picker(L("Личный чат"), selection: Binding(get: { choosing?.chatId == chat.chatId ? choosing?.profileId : chat.profileId }, set: { bind(chat, to: $0) })) {
                         Text(L("Общий помощник")).tag(String?.none)
-                        ForEach(deviceEmployees) { Text($0.name).tag(Optional($0.id)) }
+                        ForEach(employees) { Text($0.name).tag(Optional($0.id)) }
                     }
                     .disabled(busy).accessibilityIdentifier("telegramResponder-" + chat.chatId)
                 } else {
@@ -188,11 +185,11 @@ struct TelegramSetupView: View {
     }
 
     private func bind(_ chat: TelegramChat, to profileID: String?) {
-        busy = true; error = nil
+        busy = true; error = nil; choosing = (chat.chatId, profileID)
         Task {
             await client.bindTelegram(chatID: chat.chatId, profileID: profileID)
             if let problem = client.errorMessage { error = UserFacingError.text(problem); client.errorMessage = nil }
-            busy = false
+            busy = false; choosing = nil
         }
     }
 

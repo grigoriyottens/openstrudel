@@ -1413,10 +1413,16 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     private var employeeDeviceQuery: String { activeProfile?.deviceId.map { "?deviceId=" + $0 } ?? "" }
-    /// Only the owner chooses who answers the bot's private chat. An older device pauses that chat when
-    /// it returns to the main assistant, and another device's version is not known here.
-    var canChooseTelegramResponder: Bool {
-        ownsDevice && health?.telegramPrivateChoiceVersion == 1 && (activeProfile?.deviceId ?? health?.nodeId) == health?.nodeId
+    /// The employees the owner may choose to answer the bot's private chat: this device's employees.
+    /// Nil keeps the plain line instead: a colleague cannot change it, an older device pauses the chat when it
+    /// returns to the main assistant, another device's version is not known here, a device without
+    /// employees has nothing to choose, and an employee that left this device still answers by name.
+    func telegramResponders(for chat: TelegramChat) -> [EmployeeProfile]? {
+        guard ownsDevice, health?.telegramPrivateChoiceVersion == 1, let device = health?.nodeId,
+              (activeProfile?.deviceId ?? device) == device else { return nil }
+        let employees = profiles.filter { $0.deviceId == nil || $0.deviceId == device }
+        guard !employees.isEmpty, chat.profileId.map({ id in employees.contains { $0.id == id } }) ?? true else { return nil }
+        return employees
     }
 
     func configureTelegram(token: String) async throws {

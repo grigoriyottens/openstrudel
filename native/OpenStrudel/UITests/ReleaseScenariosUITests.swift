@@ -166,10 +166,12 @@ final class ReleaseScenariosUITests: XCTestCase {
         try reveal(responder, in: app)
         waitUntil(responder, shows: "Общий помощник")
         try choose("Редактор", in: responder, app)
+        waitUntil(responder, shows: "Редактор", saving: true)
         try await waitForState(fixture) { privateChat($0)?["profileId"] as? String == state["editor"] as? String }
         waitUntil(responder, shows: "Редактор")
         capture("telegram-private-employee", app)
         try choose("Общий помощник", in: responder, app)
+        waitUntil(responder, shows: "Общий помощник", saving: true)
         let restored = try await waitForState(fixture) { privateChat($0)?["profileId"] as? String == nil }
         XCTAssertEqual(privateChat(restored)?["enabled"] as? Bool, true)
         XCTAssertEqual(privateChat(restored)?["conversationId"] as? String, direct)
@@ -439,9 +441,10 @@ final class ReleaseScenariosUITests: XCTestCase {
     }
 
     /// The owner sees the chat's responder, and the picker takes the next choice only after the Home answers.
-    @MainActor private func waitUntil(_ picker: XCUIElement, shows option: String) {
-        let shown = NSPredicate(format: "enabled == true AND label BEGINSWITH %@ AND (label CONTAINS %@ OR value CONTAINS %@)", "Личный чат", option, option)
-        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: shown, object: picker)], timeout: 10), .completed, picker.debugDescription)
+    /// While the Home saves (the fixture takes 5 s), the picker already shows the owner's choice.
+    @MainActor private func waitUntil(_ picker: XCUIElement, shows option: String, saving: Bool = false) {
+        let shown = NSPredicate(format: "enabled == %@ AND label BEGINSWITH %@ AND (label CONTAINS %@ OR value CONTAINS %@)", NSNumber(value: !saving), "Личный чат", option, option)
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: shown, object: picker)], timeout: saving ? 2 : 10), .completed, picker.debugDescription)
     }
 
     @MainActor @discardableResult private func waitForState(_ fixture: String, until condition: ([String: Any]) -> Bool) async throws -> [String: Any] {

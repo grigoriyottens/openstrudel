@@ -538,19 +538,34 @@ private final class CredentialReadGate: @unchecked Sendable {
         fixture.bot = true
         let (client, cleanup) = makeClient(fixture)
         defer { cleanup() }
+        // The employees offered for the private chat; nil keeps the plain «В Telegram отвечает …» line.
+        func responders(_ client: HomeClient) -> [String]? {
+            guard let chat = client.telegram?.chats?.first else { return nil }
+            return client.telegramResponders(for: chat)?.map(\.id)
+        }
         await client.load()
         #expect(client.telegram?.chats?.first?.chatId == "42")
         #expect(client.ownsDevice)
-        #expect(!client.canChooseTelegramResponder, "An older Home pauses the private chat when it returns to the main assistant")
+        #expect(responders(client) == nil, "An older Home pauses the private chat when it returns to the main assistant")
         fixture.flags["telegramPrivateChoiceVersion"] = 1
         await client.load()
-        #expect(client.canChooseTelegramResponder)
-        // The employee's bot runs on another device, whose version this connection cannot see.
+        #expect(responders(client) == ["employee"])
+        fixture.telegramResponder = "employee"
+        await client.load()
+        #expect(responders(client) == ["employee"])
+        // The chat still answers with an employee that has left this device; the plain line keeps its name.
+        fixture.telegramResponder = "moved"
+        await client.load()
+        #expect(responders(client) == nil)
+        fixture.telegramResponder = nil
+        // The only employee lives on another device, so this device has no one to choose.
         fixture.profileDevice = "worker"
         await client.load()
+        #expect(responders(client) == nil)
+        // The employee's bot runs on another device, whose version this connection cannot see.
         await client.selectProfile("employee")
         #expect(client.activeProfile?.deviceId == "worker")
-        #expect(!client.canChooseTelegramResponder)
+        #expect(responders(client) == nil)
 
         let other = DevicesFixture()
         other.bot = true; other.flags["telegramPrivateChoiceVersion"] = 1
@@ -559,7 +574,8 @@ private final class CredentialReadGate: @unchecked Sendable {
         defer { cleanupColleague() }
         await colleague.load()
         #expect(colleague.health?.telegramPrivateChoiceVersion == 1)
-        #expect(!colleague.canChooseTelegramResponder, "Only the device's owner may change who answers")
+        #expect(colleague.telegram?.chats?.first?.chatId == "42")
+        #expect(responders(colleague) == nil, "Only the device's owner may change who answers")
     }
 
     @Test func aSlowTelegramReadDoesNotUndoTheChosenResponder() async throws {
@@ -569,16 +585,18 @@ private final class CredentialReadGate: @unchecked Sendable {
         defer { cleanup() }
         await client.load()
         #expect(client.telegram?.chats?.first?.profileId == nil)
-        // Polls that began before the choice answer later with what they saw then.
+        // The poll, the catalogue and a full load began before the choice and answer later with what they saw then.
         fixture.holdTelegram = true
         let poll = Task { await client.loadChatSettings() }
         let catalogue = Task { await client.refreshCatalogue() }
         for _ in 0..<500 where fixture.heldTelegramReads < 2 { try await Task.sleep(for: .milliseconds(10)) }
-        #expect(fixture.heldTelegramReads == 2)
+        let load = Task { await client.load() }
+        for _ in 0..<500 where fixture.heldTelegramReads < 3 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(fixture.heldTelegramReads == 3)
         await client.bindTelegram(chatID: "42", profileID: "employee")
         #expect(client.telegram?.chats?.first?.profileId == "employee")
         fixture.holdTelegram = false
-        await poll.value; await catalogue.value
+        await poll.value; await catalogue.value; await load.value
         #expect(client.telegram?.chats?.first?.profileId == "employee")
     }
 
