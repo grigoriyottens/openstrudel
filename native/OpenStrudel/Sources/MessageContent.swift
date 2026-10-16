@@ -99,13 +99,18 @@ struct ImportedMessageText: View {
 struct ChatBubble: View {
     let text: String
     var fill: Color = AppTheme.userBubble
+    /// A bubble with its own context menu stays plain: selectable text answers a right-click with the system text menu.
+    var selectable = true
 
     var body: some View {
+        if selectable { bubble.textSelection(.enabled) } else { bubble }
+    }
+
+    private var bubble: some View {
         Text(text)
             .font(AppTypography.reading)
             .lineSpacing(AppTypography.readingLineSpacing)
             .foregroundStyle(.primary)
-            .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
             // A single 15-pt line is 19 tall; its 22-pt line box keeps the capsule at 40.
             .frame(minHeight: 22)

@@ -50,6 +50,15 @@ enum MessagePages {
         message.direction == "outbound" && message.channel == "telegram" && message.author != nil && message.imported != true
     }
 
+    /// The one line above a message from Telegram or the archive. A request names its author first, then its group,
+    /// or just Telegram in a private chat, whose title only repeats the person's name.
+    static func sourceLine(_ message: HomeMessage) -> String? {
+        guard let origin = message.origin, origin.channel != "api" else { return nil }
+        guard origin.channel == "telegram" else { return L("Архив") + " · " + origin.title }
+        guard message.direction == "inbound", let author = message.author, !author.isEmpty else { return "Telegram · " + origin.title }
+        return author + " · " + (origin.chatId?.hasPrefix("-") == true ? origin.title : "Telegram")
+    }
+
     /// In a group where the employee decides by its own rules, a message still being decided is not
     /// a request yet: it joins the feed with its reply, and never if the employee stays silent.
     /// A request whose approval card waits for the owner stays visible with it.
@@ -58,6 +67,16 @@ enum MessagePages {
         return messages.filter { message in
             awaiting.contains(message.id) || !(message.direction == "inbound" && message.origin?.channel == "telegram" && (message.status == "queued" || message.status == "running")
               && decidingChats.contains(message.origin?.chatId ?? ""))
+        }
+    }
+
+    /// The line under a reply sent to Telegram. A delivered reply stays silent; only a send in flight or a problem speaks.
+    static func deliveryNotice(_ delivery: MessageDelivery) -> String? {
+        switch delivery.state {
+        case "delivered": nil
+        case "unknown": L("Доставка не подтверждена. Проверьте Telegram перед новой отправкой.")
+        case "not_sent": L("Не отправлено в Telegram")
+        default: L("Отправляем в Telegram…")
         }
     }
 

@@ -151,6 +151,27 @@ struct EmployeeFeedTests {
         #expect(!MessagePages.isOwnerReply(message("app", direction: "outbound", channel: "api", author: "Mik")))
     }
 
+    @Test func aTelegramRequestHasOneSourceLineLedByItsAuthor() {
+        let dm = MessageOrigin(channel: "telegram", title: "Mik", chatId: "42", canReply: true)
+        let group = MessageOrigin(channel: "telegram", title: "WAI Core Team", chatId: "-1001", url: "https://t.me/c/1/7", canReply: true)
+        #expect(MessagePages.sourceLine(message("dm", author: "Mik Wiseman", origin: dm)) == "Mik Wiseman · Telegram")
+        #expect(MessagePages.sourceLine(message("g", author: "Гриша", origin: group)) == "Гриша · WAI Core Team")
+        #expect(MessagePages.sourceLine(message("old", origin: dm)) == "Telegram · Mik")
+        // Replies name the chat, so an owner's pending reply and its sent row read the same.
+        #expect(MessagePages.sourceLine(message("r", direction: "outbound", origin: dm)) == "Telegram · Mik")
+        #expect(MessagePages.sourceLine(message("own", direction: "outbound", author: "OpenStrudel", origin: group)) == "Telegram · WAI Core Team")
+        #expect(MessagePages.sourceLine(message("a", author: "Вы", imported: true, origin: MessageOrigin(channel: "archive", title: "Старые заметки"))) == L("Архив") + " · Старые заметки")
+        #expect(MessagePages.sourceLine(message("app", channel: "api", origin: MessageOrigin(channel: "api", title: ""))) == nil)
+        #expect(MessagePages.sourceLine(message("none", channel: "api")) == nil)
+    }
+
+    @Test func aDeliveredReplyIsSilentAndOnlyASendInFlightOrAProblemSpeaks() {
+        #expect(MessagePages.deliveryNotice(MessageDelivery(state: "delivered")) == nil)
+        #expect(MessagePages.deliveryNotice(MessageDelivery(state: "pending")) == L("Отправляем в Telegram…"))
+        #expect(MessagePages.deliveryNotice(MessageDelivery(state: "not_sent")) == L("Не отправлено в Telegram"))
+        #expect(MessagePages.deliveryNotice(MessageDelivery(state: "unknown")) == L("Доставка не подтверждена. Проверьте Telegram перед новой отправкой."))
+    }
+
     @Test func aFailedOrUncertainDeliveryOffersOneActionAndNothingIsResentByItself() throws {
         let group = MessageOrigin(channel: "telegram", title: "Team", chatId: "-1001", url: "https://t.me/c/1/7", canReply: true)
         let privateChat = MessageOrigin(channel: "telegram", title: "Mik", chatId: "42", canReply: true)

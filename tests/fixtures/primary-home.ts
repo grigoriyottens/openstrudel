@@ -44,6 +44,13 @@ if (process.env.OPENSTRUDEL_TIMELINE_FIXTURE === "1") {
     const chatter = store.addMessage({ conversationId: accepted.conversationId, channel: "telegram", direction: "inbound", text: "Посторонняя беседа — не показывать", externalId: id + ":13" });
     store.db.prepare("UPDATE messages SET context_only=1 WHERE id=?").run(chatter.id);
   }
+  // A private chat is titled with the person's first name; its request still names them once.
+  store.linkTelegramChat({ chatId: "42", title: "Mik", allowedSenders: ["42"] });
+  const direct = store.bindTelegramChat("42", profile.id);
+  const asked = store.addMessage({ conversationId: direct.conversationId!, channel: "telegram", direction: "inbound", text: "Че по гранту?", externalId: "42:21", author: "Mik Wiseman" });
+  store.setMessageStatus(asked.id, "completed");
+  const answered = store.addMessage({ conversationId: direct.conversationId!, channel: "telegram", direction: "outbound", replyToId: asked.id, text: "Заявка готова на 80%." });
+  store.db.prepare("INSERT INTO telegram_outbox(key,chat_id,payload,status,message_id) VALUES(?,?,?,?,?)").run("42:reply:" + answered.id + ":0", "42", "{}", "delivered", "22");
   const privateMessage = store.addMessage({ conversationId: chat.id, channel: "api", direction: "inbound", text: "Это личное обращение из приложения." });
   store.setMessageStatus(privateMessage.id, "completed");
 }
