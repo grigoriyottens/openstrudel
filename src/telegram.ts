@@ -550,6 +550,8 @@ export class TelegramAdapter {
       if (link && !link.chatId && this.isOwner(sender)) this.store.db.prepare("UPDATE telegram_links SET payload=? WHERE hash=?").run(JSON.stringify({ ...link, error: text }), sha256(code));
       if (Number(chatId) > 0 || this.isOwner(sender)) await this.sendMessage(String(sender), text, `link:${update.update_id}`);
     };
+    // Telegram can deliver the same /start twice; the chat that redeemed this link is already connected.
+    if (link?.chatId === chatId) return;
     if (!link || link.chatId || link.expiresAt < new Date().toISOString() || link.tokenHash !== sha256(this.token ?? "")) {
       await fail("Ссылка уже использована или устарела. Откройте новую в OpenStrudel."); return;
     }
