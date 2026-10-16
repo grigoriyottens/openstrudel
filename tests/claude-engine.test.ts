@@ -17,7 +17,7 @@ afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 const init = (session = "s-1") => ({ type: "system", subtype: "init", session_id: session });
 const success = (result: string, session = "s-1") => ({ type: "result", subtype: "success", is_error: false, result, session_id: session });
 /** A stand-in for `query` that records the turn and replays scripted SDK messages. */
-function fake(script: (call: Call) => AsyncGenerator<any> | any[] = () => [init(), success("Привет")]) {
+function fake(script: (call: Call) => AsyncGenerator<any> | any[] = () => [init(), success("Привет")], models: any[] = []) {
   const calls: Call[] = [];
   const query = (({ prompt, options }: { prompt: AsyncIterable<SDKUserMessage>; options: Options }) => {
     let interrupt!: () => void;
@@ -26,7 +26,7 @@ function fake(script: (call: Call) => AsyncGenerator<any> | any[] = () => [init(
       for await (const message of prompt) call.prompt.push(message);
       calls.push(call);
       yield* script(call);
-    })(), { interrupt: async () => interrupt() });
+    })(), { interrupt: async () => interrupt(), supportedModels: async () => models, close: () => interrupt() });
   }) as unknown as typeof sdkQuery;
   return { query, calls };
 }
@@ -288,4 +288,18 @@ it("states turn failures and stops as catalog text", async () => {
   stop.abort();
   const stopped = fake(async function* (call) { yield init(); await call.interrupted; yield interrupted; });
   expect(english.error(await engine("zai", stopped.query).run("Hi", { signal: stop.signal }).catch(e => e.message))).toBe("Reply stopped");
+});
+
+it('gets only reported Anthropic effort levels and passes an explicit choice to the native SDK', async()=>{
+ const f=fake(undefined,[{value:'fable',resolvedModel:'claude-fable-5-1',supportsEffort:true,supportedEffortLevels:['low','high']}]);
+ const e=engine('anthropic',f.query);
+ expect((await e.models()).find(m=>m.id==='claude-fable-5-1')?.reasoningEfforts?.map(x=>x.id)).toEqual(['low','high']);
+ expect(f.calls).toHaveLength(0); // Listing models submits no user turn.
+ await e.run('Think',{reasoningEffort:'high'});
+ expect(f.calls[0].options.effort).toBe('high');
+ await expect(e.run('Unsupported',{reasoningEffort:'ultra'})).rejects.toThrow('обдумывания');
+ expect(f.calls).toHaveLength(1);
+ const kimi=engine('kimi',f.query);
+ expect((await kimi.models()).every(m=>!m.reasoningEfforts?.length)).toBe(true);
+ await expect(kimi.run('No inherited Claude controls',{reasoningEffort:'high'})).rejects.toThrow('обдумывания');
 });

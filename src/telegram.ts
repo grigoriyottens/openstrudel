@@ -64,6 +64,7 @@ export class TelegramAdapter {
   private checking?: Promise<TelegramIntegrationStatus>;
   private readonly pendingUpdates = new Map<number, Promise<void>>();
   private readonly questionMessages = new Map<string, string>();
+  private cleaningInteractions?: Promise<void>;
   private readonly preparations = new Map<string, Promise<Pick<MessageInput,"text"|"uploads">>>();
   private readonly activeChats = new Map<string, number>();
   transcribe = transcribeVoice;
@@ -72,7 +73,8 @@ export class TelegramAdapter {
     this.token = token?.trim() || undefined;
     this.store.db.exec(`CREATE TABLE IF NOT EXISTS telegram_inbox(update_id INTEGER PRIMARY KEY,payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS telegram_outbox(key TEXT PRIMARY KEY,chat_id TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,message_id TEXT,error TEXT);
-      CREATE TABLE IF NOT EXISTS telegram_links(hash TEXT PRIMARY KEY,payload TEXT NOT NULL,expires_at TEXT NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS telegram_links(hash TEXT PRIMARY KEY,payload TEXT NOT NULL,expires_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS telegram_interactions(bot_id TEXT NOT NULL,chat_id TEXT NOT NULL,message_id INTEGER NOT NULL,interaction_id TEXT NOT NULL,PRIMARY KEY(bot_id,chat_id,message_id));`);
     this.store.db.prepare("UPDATE telegram_outbox SET status='unknown',error='Перезапуск во время отправки; проверьте Telegram перед повтором' WHERE status='sending'").run();
     this.offset=Number(this.store.getSetting("telegram.offset") ?? 0);
     // Legacy private pairings remain owned by that Telegram user.
@@ -81,9 +83,8 @@ export class TelegramAdapter {
     messages.interactions?.onSettled(card => {
       for (const [key, id] of this.questionMessages) if (id === card.id) {
         this.questionMessages.delete(key);
-        const [chatId, messageId] = key.split(":");
-        void this.call("editMessageReplyMarkup", { chat_id: chatId, message_id: Number(messageId), reply_markup: { inline_keyboard: [] } }).catch(() => undefined);
       }
+      void this.cleanupInteractions().catch(() => undefined);
     });
   }
 
@@ -168,7 +169,7 @@ export class TelegramAdapter {
     // Only groups pause; a private chat always answers.
     if (profileId || Number(chatId) > 0) this.store.deleteSetting("telegram.paused." + chatId);
     else this.store.setSetting("telegram.paused." + chatId, "true");
-    if (Number(chatId) < 0 && profileId && !previous?.profileId) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='mentions' WHERE chat_id=?").run(chatId);
+    if (Number(chatId) < 0 && profileId && !previous?.profileId && !previous?.conversationId) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='instructions' WHERE chat_id=?").run(chatId);
   }
 
   setGroupEnabled(chatId: string, enabled: boolean): void {
@@ -509,6 +510,32 @@ export class TelegramAdapter {
       reply_markup: tooLong ? { inline_keyboard: [] } : rows.length ? { inline_keyboard: rows } : { force_reply: true },
     });
     this.questionMessages.set(chatId + ":" + result.message_id, card.id);
+    this.store.db.prepare('INSERT OR REPLACE INTO telegram_interactions VALUES(?,?,?,?)').run(this.token!.split(':')[0]!,chatId,result.message_id,card.id);
+    // Approval may have completed in the app while Telegram was still acknowledging the card.
+    if (!this.messages.interactions.get(card.id)) await this.cleanupInteractions();
+  }
+
+  /** Native requests do not survive a Home restart. Remove only their old controls, never replay an approval. */
+  async cleanupInteractions(): Promise<void> {
+    if (!this.token) return;
+    if (this.cleaningInteractions) return this.cleaningInteractions;
+    const botId = this.token.split(':')[0]!;
+    this.cleaningInteractions = (async () => {
+      const rows = this.store.db.prepare('SELECT chat_id,message_id,interaction_id FROM telegram_interactions WHERE bot_id=?').all(botId)
+        .filter(row => !this.messages.interactions?.get(String(row.interaction_id))).slice(0,50);
+      for (const row of rows) {
+        if (this.token?.split(':')[0] !== botId) return;
+        try {
+          await this.call('editMessageReplyMarkup',{chat_id:String(row.chat_id),message_id:Number(row.message_id),reply_markup:{inline_keyboard:[]}});
+        } catch (error) {
+          // Already removed or too old to edit: there is nothing left we can clear.
+          if (!(error instanceof TelegramRequestError && error.code === 400 && /message (?:is not modified|to edit not found|can.t be edited)/i.test(error.message))) continue;
+        }
+        this.store.db.prepare('DELETE FROM telegram_interactions WHERE bot_id=? AND chat_id=? AND message_id=?').run(botId,row.chat_id!,row.message_id!);
+        this.questionMessages.delete(String(row.chat_id)+':'+row.message_id);
+      }
+    })().finally(() => { this.cleaningInteractions = undefined; });
+    return this.cleaningInteractions;
   }
 
   private interactionOrigin(card: Interaction): string | undefined {
@@ -524,6 +551,7 @@ export class TelegramAdapter {
         if (!this.running || controller !== this.controller) return;
         this.connectionError = null;
         this.lastCheckedAt = new Date().toISOString();
+        void this.cleanupInteractions().catch(() => undefined);
         for (const update of updates) {
           void this.processUpdate(update).catch(() => { this.lastError = "Входящее сообщение не завершено; оно сохранено для восстановления"; });
           this.offset = Math.max(this.offset, update.update_id + 1); this.store.setSetting("telegram.offset",String(this.offset));
@@ -574,7 +602,7 @@ export class TelegramAdapter {
       // Reconnecting an established private chat never changes its employee.
       if (link.profileId && (link.kind === "group" || !existing)) this.store.bindTelegramChat(chatId, link.profileId);
       if (link.kind === "group" && !link.profileId && !existing?.profileId) this.store.connectTelegramGroup(chatId);
-      if (link.kind === "group" && !existing?.profileId) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='mentions' WHERE chat_id=?").run(chatId);
+      if (link.kind === "group" && !existing?.profileId && !existing?.conversationId) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='instructions' WHERE chat_id=?").run(chatId);
       this.store.db.prepare("UPDATE telegram_links SET payload=? WHERE hash=?").run(JSON.stringify({ ...link, chatId, error: undefined }), sha256(code));
       this.store.db.exec("COMMIT");
     } catch (error) { this.store.db.exec("ROLLBACK"); throw error; }

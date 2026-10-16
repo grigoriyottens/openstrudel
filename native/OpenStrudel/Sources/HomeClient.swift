@@ -669,7 +669,7 @@ final class HomeClient: ObservableObject, Identifiable {
 
     /// Whether the Home answered. Only its refusal or an expired credential takes owner rights away.
     @discardableResult func refreshMobileStatus() async -> Bool {
-        struct Status: Decodable { let connections: Int; let clients: [MobileClient]?; let invitations: [WaitingInvitation]? }
+        struct Status: Decodable { let connections: Int; let clients: [MobileClient]?; let invitations: [WaitingInvitation]?; let timezoneVersion: Int?; let timezone: String? }
         var refusal: Int?
         do {
             let status = try decoder.decode(Status.self, from: try await requestData("/v1/mobile", refused: { refusal = $0 }))
@@ -680,6 +680,9 @@ final class HomeClient: ObservableObject, Identifiable {
             if waitingInvitations != invitations { waitingInvitations = invitations }
             canManageConnections = true
             if openAIAccount != nil { canManageOpenAI = true }
+            if status.timezoneVersion == 1 && status.timezone == nil {
+                _ = try? await requestData("/v1/settings/timezone", method: "POST", body: try JSONSerialization.data(withJSONObject: ["timezone": TimeZone.current.identifier, "initialize": true]))
+            }
             return true
         } catch HomeClientError.authenticationExpired {
             // A revoked credential answers as clearly as a refusal.

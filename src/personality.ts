@@ -3,6 +3,7 @@ import type { Attachment, CodexEngine, DynamicTool, EmployeeProfile } from "./ty
 import type { ConversationFiles } from "./files.js";
 import { Interactions, safeURL } from "./interactions.js";
 import type { Scheduler } from "./scheduler.js";
+import { ownerTimezone } from "./timezone.js";
 
 const schema = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const text = { type: "string" };
@@ -40,13 +41,13 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
       const file=context.files!.output(context.conversationId,context.scope!,String(args.path ?? ""));
       attachments.push(file); return {attached:true,file};
     }
-    if (name === "list_schedules") return { schedules:context.scheduler!.list(context.conversationId), runs:context.scheduler!.runs(context.conversationId), timezone:Intl.DateTimeFormat().resolvedOptions().timeZone };
+    if (name === "list_schedules") return { schedules:context.scheduler!.list(context.conversationId), runs:context.scheduler!.runs(context.conversationId), timezone:ownerTimezone(store) };
     if (name === "save_schedule" || name === "pause_schedule") {
       if (context.scheduled) throw new Error("A scheduled edition cannot create or modify schedules");
       if (name === "pause_schedule") { context.scheduler!.remove(String(args.id),context.conversationId); return { paused:true }; }
       if (context.scope?.startsWith("group-") && args.telegramChatId != null && store.getTelegramChat(String(args.telegramChatId))?.conversationId !== context.conversationId) throw new Error("Из группы можно настроить доставку только в эту же группу.");
       // A request made in Telegram comes back to that chat unless another connected chat is named.
-      return context.scheduler!.save({ conversationId:context.conversationId,id:args.id == null ? undefined : String(args.id),name:String(args.name ?? ""),prompt:String(args.prompt ?? ""),cron:String(args.cron ?? ""),timezone:String(args.timezone ?? ""),enabled:args.enabled !== false,telegramChatId:args.telegramChatId == null ? null : String(args.telegramChatId),
+      return context.scheduler!.save({ conversationId:context.conversationId,id:args.id == null ? undefined : String(args.id),name:String(args.name ?? ""),prompt:String(args.prompt ?? ""),cron:String(args.cron ?? ""),timezone:args.timezone == null || args.timezone === '' ? ownerTimezone(store) : String(args.timezone),enabled:args.enabled !== false,telegramChatId:args.telegramChatId == null ? null : String(args.telegramChatId),
         ...(args.telegramChatId == null && context.channel === "telegram" ? { delivery:"bound" as const } : {}) });
     }
     if (name === "update_employee" || name === "create_employee") {

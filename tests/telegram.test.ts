@@ -61,3 +61,25 @@ it("accepts a callback while the original Telegram turn is waiting", async () =>
   expect(sent.some(s => s.method === "sendMessage" && s.body.text === "decline")).toBe(true);
   await messages.close();
 });
+
+it('clears completed approval controls durably after restart, retries network failures and leaves live requests alone',async()=>{
+ const {MessageService}=await import('../src/messages.js');
+ const store=new Store(':memory:');stores.push(store);
+ const messages=new MessageService(store,{run:vi.fn()});
+ const adapter=new TelegramAdapter('123:test',store,messages);
+ store.db.prepare('INSERT INTO telegram_interactions VALUES(?,?,?,?)').run('123','42',88,'from-before-restart');
+ store.db.prepare('INSERT INTO telegram_interactions VALUES(?,?,?,?)').run('999','42',89,'other-bot');
+ const pending=messages.interactions.ask({conversationId:'c',messageId:'m',title:'Confirm',questions:[{id:'a',question:'Allow?',options:['No']}]}).catch(()=>{});
+ const card=messages.interactions.list('c')[0];
+ store.db.prepare('INSERT INTO telegram_interactions VALUES(?,?,?,?)').run('123','42',90,card.id);
+ const fetcher=vi.fn(async()=>Response.json({ok:true,result:true})).mockRejectedValueOnce(new Error('offline'));vi.stubGlobal('fetch',fetcher);
+ await adapter.cleanupInteractions();
+ expect(store.db.prepare('SELECT COUNT(*) AS n FROM telegram_interactions').get()?.n).toBe(3);
+ await adapter.cleanupInteractions();
+ expect(store.db.prepare('SELECT message_id FROM telegram_interactions ORDER BY message_id').all().map(x=>x.message_id)).toEqual([89,90]);
+ expect(fetcher).toHaveBeenCalledTimes(2);
+ expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({chat_id:'42',message_id:88,reply_markup:{inline_keyboard:[]}});
+ await messages.interactions.answer(card.id,'c',{a:'No'});await pending;await adapter.cleanupInteractions();
+ expect(store.db.prepare('SELECT message_id FROM telegram_interactions').all().map(x=>x.message_id)).toEqual([89]);
+ await messages.close();
+});

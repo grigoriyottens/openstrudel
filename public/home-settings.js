@@ -148,6 +148,7 @@ async function bootstrapWeb() {
     const session = key ? await api('/auth/session',{method:'POST',body:JSON.stringify({key})}) : await api('/auth/session');
     if (!session.csrf) { showWelcome(); return; }
     state.csrf=session.csrf; state.owner=session.owner; state.authenticated=true; closeModal(); await refresh();
+    if(state.owner) void api('/v1/settings/timezone',{method:'POST',body:JSON.stringify({timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,initialize:true})}).catch(()=>{});
     restoreDraft();
     const transfer = JSON.parse(localStorage.getItem('openstrudel.transfer') || 'null');
     if (transfer) await watchTransfer(transfer);
@@ -546,38 +547,52 @@ async function openModelSettings(agent, deviceId) {
     const path='/v1/settings/models?'+query;
     const data=await api(path);status.textContent='';
     const modelLabel=element('label',t("Модель")), model=element('select','','field');model.id='model-choice';model.setAttribute('aria-label',t("Модель"));modelLabel.append(model);page.content.append(modelLabel);
-    if(agent) { const o=element('option',t("Как на устройстве · ")+(data.models.find(m=>m.id===data.defaults.model)?.name||data.defaults.model));o.value='';model.append(o); }
+    const ref=m=>m?.model?JSON.stringify([m.provider||'chatgpt',m.model]):'';
+    const modelRef=m=>JSON.stringify([m.provider||'chatgpt',m.id]);
+    const lookup=key=>data.models.find(m=>modelRef(m)===key);
+    if(agent) { const o=element('option',t("Как на устройстве · ")+(lookup(ref(data.defaults))?.name||data.recommended?.name||data.defaults.model||t("Автоматически")));o.value='';model.append(o); }
     else if(data.recommended) { const o=element('option',t("Автоматически · ")+data.recommended.name);o.value='';model.append(o); }
-    for(const m of data.models) { const o=element('option',m.name);o.value=m.id;model.append(o); }
-    if(data.selection.model&&!data.models.some(m=>m.id===data.selection.model)) {const o=element('option',data.selection.model+t(" · недоступна"));o.value=data.selection.model;model.append(o);}
-    model.value=data.selection.model||'';
+    for(const m of data.models) { const o=element('option',m.name);o.value=modelRef(m);model.append(o); }
+    if(data.selection.model&&!lookup(ref(data.selection))) {const o=element('option',data.selection.model+t(" · недоступна"));o.value=ref(data.selection);model.append(o);}
+    model.value=ref(data.selection);
     const speedLabel=element('label',t("Скорость")), speed=element('select','','field');speed.id='model-speed';speed.setAttribute('aria-label',t("Скорость"));speedLabel.append(speed);page.content.append(speedLabel);
+    const reasoningLabel=element('label',t("Обдумывание")), reasoning=element('select','','field');reasoning.id='model-reasoning';reasoning.setAttribute('aria-label',t("Обдумывание"));reasoningLabel.append(reasoning);page.content.append(reasoningLabel);
     const recommendation=element('p'),note=element('p');page.content.append(recommendation,note);
     let pending=false;
-    const value=()=>({model:model.value||null,serviceTier:!model.value&&agent?null:speed.value});
-    const chosenModel=()=>!model.value&&!agent?data.recommended:(data.models.find(m=>m.id===(model.value||data.defaults.model))||(data.recommended?.id===(model.value||data.defaults.model)?data.recommended:null));
+    const value=()=>{const [provider,id]=model.value?JSON.parse(model.value):[null,null];return {provider,model:id,serviceTier:!model.value&&agent?null:speed.value,...(model.value||!agent)&&reasoning.value?{reasoningEffort:reasoning.value}:{}};};
+    const chosenModel=()=>model.value?lookup(model.value):agent?(lookup(ref(data.defaults))||data.recommended):data.recommended;
     const save=element('button',t("Применить"),'primary');save.type='button';save.dataset.main='true';page.actions.append(save);arrange(page);
     save.onclick=async()=>{
-      pending=true;save.disabled=true;page.error.textContent='';model.disabled=speed.disabled=true;status.textContent=t("Сохраняем…");
+      pending=true;save.disabled=true;page.error.textContent='';model.disabled=speed.disabled=reasoning.disabled=true;status.textContent=t("Сохраняем…");
       try {const result=await api(path,{method:'POST',body:JSON.stringify(value())});data.selection=result.selection;status.textContent=t("Сохранено. Применится со следующего поручения.");}
       catch(e){status.textContent=t("Не удалось сохранить.");page.report(e);}
       finally {pending=false;model.disabled=!data.canManage;update();}
     };
     function update(){
       speed.disabled=(!model.value&&Boolean(agent))||!data.canManage||pending;
-      recommendation.textContent=!model.value&&!agent&&data.recommended?(data.recommended.isDefault?t("Рекомендует OpenAI"):t("Модель по умолчанию"))+' · '+(data.recommended.defaultReasoningEffort||'medium').replace(/^./,c=>c.toUpperCase()):'';
+      reasoning.disabled=speed.disabled;
+      recommendation.textContent=!model.value&&!agent&&data.recommended?(data.recommended.isDefault?t("Рекомендует OpenAI"):t("Модель по умолчанию")):'';
       note.textContent=speed.value&&speed.value!=='default'?t("Ускоренный режим может расходовать больше лимита аккаунта."):'';
       const chosen=chosenModel();
-      save.disabled=!data.canManage||pending||JSON.stringify(value())===JSON.stringify(data.selection)||!chosen||(!model.value&&agent?false:!chosen.speeds.some(s=>s.id===speed.value));
+      const selected=value(),saved=data.selection;
+      const unchanged=['provider','model','serviceTier','reasoningEffort'].every(k=>(selected[k]??null)===(saved[k]??null));
+      save.disabled=!data.canManage||pending||unchanged||!chosen||(!model.value&&agent?false:!chosen.speeds.some(s=>s.id===speed.value)||(reasoning.value&&!(chosen.reasoningEfforts||[]).some(e=>e.id===reasoning.value)));
     }
     function speeds(preferred,preserve=false){
       const chosen=chosenModel();speed.replaceChildren();
       for(const s of chosen?.speeds||[]){const o=element('option',t(s.name));o.value=s.id;speed.append(o);}
       if(preserve&&preferred&&!(chosen?.speeds||[]).some(s=>s.id===preferred)){const o=element('option',preferred+t(" · недоступна"));o.value=preferred;speed.append(o);}
-      speed.value=preserve&&preferred?preferred:(chosen?.speeds||[]).some(s=>s.id===preferred)?preferred:'default';update();
+      speed.value=preserve&&preferred?preferred:(chosen?.speeds||[]).some(s=>s.id===preferred)?preferred:'default';
+      const effort=preserve?(data.selection.reasoningEffort||(!model.value&&agent?data.defaults.reasoningEffort:'')):!model.value&&agent?data.defaults.reasoningEffort:reasoning.value;
+      reasoning.replaceChildren();const automatic=element('option',t("Автоматически"));automatic.value='';reasoning.append(automatic);
+      for(const e of chosen?.reasoningEfforts||[]){const o=element('option',t(e.name));o.value=e.id;reasoning.append(o);}
+      if(preserve&&effort&&!(chosen?.reasoningEfforts||[]).some(e=>e.id===effort)){const o=element('option',effort+t(" · недоступна"));o.value=effort;reasoning.append(o);}
+      reasoning.value=effort&&(preserve||(chosen?.reasoningEfforts||[]).some(e=>e.id===effort))?effort:'';
+      reasoningLabel.hidden=!(chosen?.reasoningEfforts||[]).length&&!reasoning.value;
+      speedLabel.hidden=(chosen?.speeds||[]).length<=1&&speed.value==='default';update();
     }
     speeds(data.selection.serviceTier||data.defaults.serviceTier,true);model.disabled=!data.canManage;
-    model.onchange=()=>{status.textContent='';speeds(!model.value&&agent?data.defaults.serviceTier:speed.value);};speed.onchange=()=>{status.textContent='';update();};
+    model.onchange=()=>{status.textContent='';speeds(!model.value&&agent?data.defaults.serviceTier:speed.value);};speed.onchange=reasoning.onchange=()=>{status.textContent='';update();};
   }catch(e){status.textContent='';page.report(e);action(page,t("Повторить"),()=>openModelSettings(agent,deviceId));}
 }
 

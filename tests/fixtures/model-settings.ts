@@ -10,8 +10,8 @@ const root = await mkdtemp(join(tmpdir(),'strudel-model-ui-'));
 let unavailable = false;
 let recommended = true;
 const catalog = normalizeModels([
-  {model:'gpt-6-astra',displayName:'GPT-6 Astra',isDefault:true,serviceTiers:[{id:'priority',name:'Fast'}]},
-  {model:'gpt-6-sol',displayName:'GPT-6 Sol',serviceTiers:[{id:'priority',name:'Fast'},{id:'ultra',name:'Ultra Fast'}]},
+  {model:'gpt-6-astra',displayName:'GPT-6 Astra',isDefault:true,defaultReasoningEffort:'medium',supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'medium'},{reasoningEffort:'high'}],serviceTiers:[{id:'priority',name:'Fast'}]},
+  {model:'gpt-6-sol',displayName:'GPT-6 Sol',defaultReasoningEffort:'medium',supportedReasoningEfforts:[{reasoningEffort:'medium'},{reasoningEffort:'high'}],serviceTiers:[{id:'priority',name:'Fast'},{id:'ultra',name:'Ultra Fast'}]},
   {model:'gpt-6-luna',displayName:'GPT-6 Luna',serviceTiers:[]},
 ],null);
 const runtime = new OpenStrudelRuntime({rootDirectory:root,dbPath:join(root,'home.db'),startTelegram:false,mobilePort:0,apiToken:'model-ui-owner',engine:{

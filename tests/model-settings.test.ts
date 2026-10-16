@@ -3,8 +3,8 @@ import { Store } from '../src/store.js';
 import { MessageService } from '../src/messages.js';
 import { normalizeModels, readModelSelection, saveModelSelection, resolveModelSelection, validateModelSelection, recommendedModel, parseModelSelection } from '../src/model-settings.js';
 const catalog = normalizeModels([
- {model:'m1',displayName:'Model One',isDefault:true,serviceTiers:[{id:'priority',name:'Fast',description:'Increased usage'}]},
- {model:'m2',displayName:'Model Two',serviceTiers:[{id:'priority',name:'Fast'},{id:'ultra',name:'Ultra Fast'}]},
+ {model:'m1',displayName:'Model One',isDefault:true,supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'high'}],serviceTiers:[{id:'priority',name:'Fast',description:'Increased usage'}]},
+ {model:'m2',displayName:'Model Two',supportedReasoningEfforts:[{reasoningEffort:'medium'}],serviceTiers:[{id:'priority',name:'Fast'},{id:'ultra',name:'Ultra Fast'}]},
  {model:'hidden',hidden:true},
 ],null);
 it('follows the account recommendation and falls back to GPT-6.1 Sol with Medium reasoning',()=>{
@@ -75,16 +75,16 @@ it('applies the choice to the next queued turn, preserves the thread and covers 
  const store=new Store(':memory:');let finish!:()=>void;const seen:any[]=[];
  const messages=new MessageService(store,{run:async(_input,options)=>{seen.push(options);if(seen.length===1)await new Promise<void>(r=>finish=r);return {threadId:'same-thread',response:'OK',events:[]};}});
  try {
- saveModelSelection(store,{provider:'chatgpt',model:'m1',serviceTier:'priority'});
+ saveModelSelection(store,{provider:'chatgpt',model:'m1',serviceTier:'priority',reasoningEffort:'low'});
  const first=await messages.submit({channel:'api',text:'First',externalChatId:'home'});
  await vi.waitFor(()=>expect(seen).toHaveLength(1));
- saveModelSelection(store,{provider:'chatgpt',model:'m2',serviceTier:'default'});
+ saveModelSelection(store,{provider:'chatgpt',model:'m2',serviceTier:'default',reasoningEffort:'medium'});
  const next=await messages.submit({channel:'api',text:'Next',externalChatId:'home'});
  finish();await Promise.all([first.completion,next.completion]);
- expect(seen[0]).toMatchObject({model:'m1',serviceTier:'priority'});
- expect(seen[1]).toMatchObject({model:'m2',serviceTier:'default',threadId:'same-thread'});
+ expect(seen[0]).toMatchObject({model:'m1',serviceTier:'priority',reasoningEffort:'low'});
+ expect(seen[1]).toMatchObject({model:'m2',serviceTier:'default',reasoningEffort:'medium',threadId:'same-thread'});
  await messages.handle({channel:'telegram',text:'Hi',externalChatId:'42',telegramSenderId:'42',externalId:'42:1'});
- expect(seen[2]).toMatchObject({model:'m2',serviceTier:'default'});
+ expect(seen[2]).toMatchObject({model:'m2',serviceTier:'default',reasoningEffort:'medium'});
  }finally{store.close();}
 });
 
@@ -146,4 +146,25 @@ it('lets an employee follow an automatic device default saved with a speed the a
   expect((await inherited.json()).effective).toEqual({provider:'anthropic',model:'claude-fable-5-1',serviceTier:'default'});
   expect((await call('/v1/settings/models?agentId=main','POST',{provider:null,model:null,serviceTier:null})).status).toBe(200);
  }finally{await runtime.stop();}
+});
+
+it('validates reasoning against the chosen model and persists independent employee choices',()=>{
+ const store=new Store(':memory:');
+ try {
+  const e=store.createProfile({name:'Analyst'});
+  expect(catalog[0].reasoningEfforts?.map(e=>e.id)).toEqual(['low','high']);
+  expect(()=>validateModelSelection({model:'m2',serviceTier:'default',reasoningEffort:'high'},catalog)).toThrow('обдумывания');
+  expect(()=>validateModelSelection({model:'m1',serviceTier:'default',reasoningEffort:'high'},catalog)).not.toThrow();
+  expect(()=>parseModelSelection({model:'m1',serviceTier:'default',reasoningEffort:123},false)).toThrow();
+  expect(normalizeModels([{model:'no-support'}],null)[0].reasoningEfforts).toEqual([]);
+  saveModelSelection(store,{provider:'chatgpt',model:'m1',serviceTier:'default',reasoningEffort:'low'});
+  expect(resolveModelSelection(store,e.id).reasoningEffort).toBe('low');
+  const override=parseModelSelection({provider:'chatgpt',model:'m1',serviceTier:'default',reasoningEffort:'high'},true);
+  saveModelSelection(store,override,e.id);
+  expect(readModelSelection(store,e.id)).toEqual(override);
+  expect(store.getProfile(e.id)?.reasoningEffort).toBe('high');
+  saveModelSelection(store,{provider:null,model:null,serviceTier:null},e.id);
+  expect(store.getProfile(e.id)?.reasoningEffort).toBeUndefined();
+  expect(resolveModelSelection(store,e.id).reasoningEffort).toBe('low');
+ } finally {store.close();}
 });

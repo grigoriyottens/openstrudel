@@ -458,6 +458,7 @@ struct ModelSelection: Codable, Equatable {
     var provider: String? = nil
     let model: String?
     let serviceTier: String?
+    var reasoningEffort: String? = nil
     var ref: ModelRef? { model.map { ModelRef(provider: provider, model: $0) } }
 }
 /// A model is unique only within its provider: ChatGPT and an OpenAI API key share model ids.
@@ -469,6 +470,7 @@ struct ModelChoice: Decodable, Identifiable {
     let description: String
     let isDefault: Bool
     let defaultReasoningEffort: String?
+    var reasoningEfforts: [Speed]? = nil
     let speeds: [Speed]
     var provider: String? = nil
     var ref: ModelRef { ModelRef(provider: provider, model: id) }

@@ -70,6 +70,7 @@ export class Store {
     if (!profileColumns.has("appearance_json")) this.db.exec("ALTER TABLE employee_profiles ADD COLUMN appearance_json TEXT");
 
     if (!profileColumns.has("service_tier")) this.db.exec("ALTER TABLE employee_profiles ADD COLUMN service_tier TEXT");
+    if (!profileColumns.has("reasoning_effort")) this.db.exec("ALTER TABLE employee_profiles ADD COLUMN reasoning_effort TEXT");
     if (!profileColumns.has("provider")) this.db.exec("ALTER TABLE employee_profiles ADD COLUMN provider TEXT");
 
     const oldMessages = this.db.prepare("PRAGMA table_info(messages)").all() as Row[];
@@ -257,7 +258,7 @@ export class Store {
     if (!chat || Number(chatId) >= 0) throw new Error("Группа Telegram не найдена");
     if (chat.conversationId || chat.profileId) return chat;
     const conversation = this.getOrCreateConversation({ channel: "telegram", externalId: chatId, title: chat.title });
-    this.db.prepare("UPDATE telegram_chats SET conversation_id=?,access='members',replies='mentions' WHERE chat_id=?").run(conversation.id, chatId);
+    this.db.prepare("UPDATE telegram_chats SET conversation_id=?,access='members',replies='instructions' WHERE chat_id=?").run(conversation.id, chatId);
     return this.getTelegramChat(chatId)!;
   }
 
@@ -634,6 +635,7 @@ export class Store {
       provider: row.provider == null ? null : String(row.provider),
       model: row.model == null ? null : String(row.model),
       serviceTier: row.service_tier == null ? null : String(row.service_tier),
+      ...(row.reasoning_effort == null ? {} : {reasoningEffort:String(row.reasoning_effort)}),
       tokenLimit: row.token_limit == null ? null : Number(row.token_limit),
       createdAt: String(row.created_at),
       preview: row.preview == null ? null : String(row.preview),

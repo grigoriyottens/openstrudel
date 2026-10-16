@@ -19,7 +19,7 @@ import XCTest
         app.buttons["settingsSection"].tap(); app.buttons["Приложение"].tap()
         let model = app.buttons["modelChoice"], speed = app.buttons["modelSpeed"]
         XCTAssertTrue(model.waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["Рекомендует OpenAI · Medium"].exists, app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Рекомендует OpenAI"].exists, app.debugDescription)
         capture("automatic-account-model", app)
         model.tap(); app.buttons["GPT-6 Astra"].tap()
         speed.tap()
