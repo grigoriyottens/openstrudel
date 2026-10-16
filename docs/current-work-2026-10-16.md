@@ -451,3 +451,23 @@ checkout and other chats' files remain untouched.
   after process/open-file checks. Signed release artifacts, archives, private
   data and all Codex history remain. Only the two branches merged by PRs #54
   and #55 were pruned after verifying both tips are ancestors of main.
+
+## Voice latency experiment and remaining acceptance
+
+- Compared the shipped offline recognizer against Whisper's official shortened
+  audio-context option in an isolated, network-disabled container. Six samples
+  covered Russian/English dates and times, French/Spanish amounts, a short
+  greeting and the owner's recovered real voice. The normal configuration took
+  35.7–39.7 seconds; the experiment took 24.5–27.6 seconds.
+- The experiment repeated an entire Spanish sentence that the normal setting
+  transcribed once. Upstream also labels this option experimental and warns of
+  output-quality loss. It is **not enabled in production**. No model fork, extra
+  recognizer daemon, language guess or post-processing rule was introduced.
+  Private source-pinned evidence: `.data/voice-quality-46/benchmark.jsonl`.
+  The production Home stayed healthy while the independent benchmark ran.
+- The migration task reports its final News/Connect source freeze, 275,753
+  candidate records and 393 transferred files with matching hashes. Its four
+  target schedules are still disabled during real scoped service checks. The
+  concise Mini status and exact News history package are documented in private
+  `MINI-FINAL-HANDOFF.md`; local Home/relay remain enabled pending actual remote
+  app access. Do not report the entire migration or public release complete.
