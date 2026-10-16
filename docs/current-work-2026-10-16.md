@@ -1,8 +1,9 @@
 # OpenStrudel — build 45 continuation
 
-The owner's 16 October handoff is the current baseline. Build 44 is published;
-build 45 starts from `1236b8f` (six merged PRs). Do not repeat the completed
-Wolf/WaiClaw cutover or restore intentionally deleted employees.
+The owner's 16 October handoff is the baseline. Build 45 is now published from
+`64fa34f` (PR #47, after the six earlier merged PRs). Do not repeat the completed
+Wolf/WaiClaw cutover or restore intentionally deleted employees. The primary
+checkout and other chats' files remain untouched.
 
 ## Plan and acceptance
 
@@ -37,7 +38,7 @@ Wolf/WaiClaw cutover or restore intentionally deleted employees.
 - This checkout's native builds must use `scripts/native-build.py` and its
   locked product snapshot, per AGENTS.md.
 
-## Verified so far
+## Initial baseline (before this continuation)
 
 - Fetched GitHub; `origin/main` is `1236b8f`. Primary checkout and its untracked
   files were left intact. The reused release checkout was clean before switching.
@@ -71,7 +72,48 @@ Wolf/WaiClaw cutover or restore intentionally deleted employees.
 - Resource check: normal memory pressure (54% free); about 6.8 GiB disk free.
   Removed only an unused reproducible Google Updater cache (~0.7 GiB). Active
   simulator/runtime/build files and the two managed rollback snapshots retained.
-- Release artifacts, production rollout, TestFlight, original voice delivery,
-  stale cards, three group connections, News/Connect migration and remote Notion
-  OAuth remain open. Remote OAuth investigation confirmed native Codex callback
-  configuration; no replacement authentication engine has been introduced.
+
+## Release and production acceptance
+
+- Build 45 Mac app is signed, notarized (Accepted), stapled and accepted by
+  Gatekeeper. Packaged-app checks: 5 passed. The DMG and Home package, stable
+  aliases and signed Sparkle feed were verified through public HTTPS, including
+  streamed artifact hashes. See [release evidence](releases/2026-10-16-build-45.md).
+- TestFlight build 45 processed as VALID and is IN_BETA_TESTING in the existing
+  internal group Mik. No external beta group was created.
+- Wolf runs `openstrudel:45-64fa34f`. A quiesced, timestamped backup preceded
+  the atomic source replacement and exact-service restart. SQLite integrity and
+  employee/conversation/message/schedule counts were preserved; Telegram runs
+  without errors. Rollback is retained on Wolf.
+- This Mac runs the signed build 45. Its Home is healthy and the native app
+  opens the existing employees and histories. All pre-upgrade row counts were
+  preserved. The managed rollback snapshot is marked healthy, retaining two
+  healthy snapshots. Installation used the staged signed app; an end-to-end
+  Sparkle download/install was not repeated for 45.
+- A fresh Linux container using the shipped 45 image passed TLS pairing,
+  invitation consumption, remote employee creation, request idempotency,
+  owner-time-zone initialization and persistence across a real restart.
+  The AI engine in this isolated test was a mock; it is not live-provider proof.
+- The three stale approval messages were already deleted in Telegram. Verified
+  their lifecycle; no approvals or old work were replayed.
+- The original 08:25 voice has now been recovered as a reply to the original
+  message in Wai Core Team (MCP message 1678972). Awaiting and inspecting the
+  actual answer; this is the owner's original request, not a synthetic test.
+
+## Storage and remaining work
+
+- Resource snapshot after rollout: 2.8 GiB free, normal memory pressure (59%
+  free). Removed only verified unused reproducible caches; active builds,
+  pending ChatGPT updater files, Codex history and user data were retained.
+- The rollback snapshot encountered a live SQLite lock in the OpenStrudel
+  office-search browser profile. The exact idle headless process was quiesced
+  and restored after the backup. The helper now times out on a persistent lock
+  and refuses to label the partial backup complete. Storage safety: 13 passed.
+- Still open: live message-type/surface acceptance, the three named groups,
+  WAI News/Wai Connect migration, remote Notion OAuth and remaining Homes.
+  Grant and WaiClaw reject this Mac's existing SSH key. Do not reset credentials
+  or report their deployments complete; investigate their documented access.
+- Remote OAuth investigation confirmed native Codex callback configuration;
+  no replacement authentication engine has been introduced.
+- Private evidence/scripts are under `.data/release-45`; credentials, raw chat
+  content and customer documents must not enter Git or public release assets.

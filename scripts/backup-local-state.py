@@ -11,9 +11,11 @@ import plistlib
 import shutil
 import sqlite3
 import subprocess
+import time
 import uuid
 
 SCHEMA = 'openstrudel-local-backup-v1'
+SQLITE_LOCK_TIMEOUT = 10
 DEFAULT_SOURCE = Path.home() / 'Library/Application Support/OpenStrudel'
 DEFAULT_DEST = Path.home() / 'Library/Application Support/OpenStrudelBackups'
 EXCLUDED = {('deployment',), ('releases',), ('runtime', 'node_modules'),
@@ -43,9 +45,19 @@ def copy_state(source, destination):
     def copy_file(src, dest):
         src, dest = Path(src), Path(dest)
         if is_sqlite(src):
-            with closing(sqlite3.connect(src.as_uri() + '?mode=ro', uri=True)) as original:
+            blocked_since = None
+            def progress(status, remaining, total):
+                nonlocal blocked_since
+                if status in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+                    blocked_since = blocked_since or time.monotonic()
+                    if time.monotonic() - blocked_since >= SQLITE_LOCK_TIMEOUT:
+                        raise RuntimeError(f'Database remains locked: {src.relative_to(source)}. '
+                                           'Quiesce its writer and retry; this snapshot is incomplete.')
+                else:
+                    blocked_since = None
+            with closing(sqlite3.connect(src.as_uri() + '?mode=ro', uri=True, timeout=1)) as original:
                 with closing(sqlite3.connect(dest)) as snapshot:
-                    original.backup(snapshot)
+                    original.backup(snapshot, pages=256, progress=progress, sleep=0.1)
                     snapshot.execute('PRAGMA journal_mode=DELETE')
                     if snapshot.execute('PRAGMA integrity_check').fetchall() != [('ok',)]:
                         raise RuntimeError('Snapshot database failed integrity_check')
