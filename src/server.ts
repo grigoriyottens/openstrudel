@@ -23,6 +23,7 @@ import type { Accounts } from "./accounts.js";
 import { hostingOrigin } from "./hosting-origin.js";
 import { approvalSetting, isApprovalMode, readApprovalMode } from "./approval-mode.js";
 import { ownerTimezone, saveOwnerTimezone } from "./timezone.js";
+import { notificationDestination, receiveNotification } from "./notification-hook.js";
 import { SERVICE_SIGN_IN_SECONDS } from "./service-oauth.js";
 import type { ServiceSignIn } from "./types.js";
 
@@ -180,6 +181,14 @@ export class HttpApi {
     if (request.method === "GET" && /^\/characters\/(main|coil|fold|knot|curl|wave|pillow)\.png$/.test(path)) { await this.asset(response, path.slice(1), "image/png"); return; }
     let counted = false;
     try {
+      if (path === "/hooks/telegram") {
+        const chatId = notificationDestination(this.store, request.headers.authorization);
+        if (request.method !== "POST") throw new HomeError("method_not_allowed", 405);
+        if (this.store.getSetting("home.transfer")) throw new HomeError("Передаём управление. Повторите после завершения.", 409);
+        this.activeWrites++; counted = true;
+        const receipt = await receiveNotification(this.store, this.telegram, chatId, request.headers["idempotency-key"], await this.body(request, 128 * 1024));
+        this.send(response, 200, receipt); return;
+      }
       if (await this.web.handle(request, response)) return;
       const webSession = this.web.authenticate(request);
       if (!paired && !isPeerRoute(path) && !this.authorized(request) && !webSession) {
