@@ -26,7 +26,9 @@ final class MobilePairingUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Mik Wiseman")).count, 1, app.debugDescription)
         let request = app.staticTexts["Собери решения встречи и следующий шаг."]
         XCTAssertTrue(request.waitForExistence(timeout: 10), app.debugDescription)
-        for _ in 0..<8 where !request.isHittable { app.swipeDown() }
+        // A request under the floating header counts as hittable, but a press there lands on the header.
+        let header = app.buttons["openChats"]
+        for _ in 0..<8 where !request.isHittable || request.frame.minY < header.frame.maxY { app.swipeDown() }
         // One source line per request, no inline Reply, and the delivered reply below stays silent.
         XCTAssertTrue(app.staticTexts["Решили подготовить общий документ. Следующий шаг — согласовать ответственных."].exists, app.debugDescription)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "telegramReply-")).firstMatch.exists, app.debugDescription)
