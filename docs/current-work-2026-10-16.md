@@ -416,3 +416,38 @@ checkout and other chats' files remain untouched.
   disposable invitation. No alternate tool or route was used to bypass it.
   Public Sparkle remains 45; installed Mac and internal TestFlight are 46. The
   newer server-only commits are not represented as part of the staged 46 app.
+
+## Mini history and employee preservation
+
+- Reconciled five existing Wolf conversations against Mini's actual historical
+  text, dates, authors and attachment hashes. Added 636 missing historical rows
+  (including 281 hidden entries), 45 missing file blobs and nine attachment
+  backfills. Existing profiles, schedules and audience boundaries were retained;
+  no Telegram messages were replayed. A consistent database backup preceded the
+  additive repair. A second preview reports zero remaining additions or patches.
+- Authenticated app-API acceptance downloaded all 76 selected attachments and
+  verified their SHA256 values, then verified 352 visible imported messages
+  across 15 transcript pages. SQLite integrity is OK. Private evidence lives in
+  `.data/migration-news-connect/mini-reconcile-verified.json`; source Mini data
+  and rollback copies remain intact.
+- Moved the real conference manager through the existing native employee
+  transfer protocol. The same profile/conversation IDs, six messages and exact
+  instructions are present on Wolf; Mini retains the source archive marked
+  moved. This was not treated as a disposable test employee.
+- That employee's old Notion app connection was already unauthorized on Mini.
+  Configured the official Notion MCP through the existing connection API on
+  Wolf. It correctly reports sign-in required; a successful live Notion read
+  has not been claimed. Other conversations' OAuth grants were not copied.
+- Mini's 1,110 News rows are older imported history, with no new native app
+  exchange. Keep the private source export and compare against WaiClaw's
+  existing Telegram archive instead of duplicating it into the editor chat.
+  The parallel migration task owns the final News/Connect cutover.
+- Computer Use confirms the installed Mini app currently has only its local
+  Home connected. Its Home and exact legacy relay remain enabled until an
+  actual remote connection and remaining migration checks pass. The idle app
+  and local Home each use about 80 MiB RSS in this snapshot; this does not
+  constitute a long-duration memory-leak test.
+- Removed only five verified idle, reproducible QA app copies (~242 MB logical)
+  after process/open-file checks. Signed release artifacts, archives, private
+  data and all Codex history remain. Only the two branches merged by PRs #54
+  and #55 were pruned after verifying both tips are ancestors of main.
