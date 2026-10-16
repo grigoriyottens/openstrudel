@@ -9,13 +9,13 @@ import { employeeTools } from "../src/personality.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanups.splice(0)) await close(); vi.unstubAllGlobals(); });
-function setup() {
+function setup(replies: "mentions" | "instructions" = "mentions") {
   const root = mkdtempSync(join(tmpdir(), "strudel-context-"));
   const store = new Store(join(root, "test.sqlite"));
   store.setSetting("telegram.bot_username", "strudel_bot");
   store.linkTelegramChat({chatId:"-100",title:"Team",allowedSenders:["7"]});
   const chat = store.connectTelegramGroup("-100");
-  store.db.prepare("UPDATE telegram_chats SET replies='mentions' WHERE chat_id='-100'").run();
+  if (replies === "mentions") store.db.prepare("UPDATE telegram_chats SET replies='mentions' WHERE chat_id='-100'").run();
   const run = vi.fn(async () => ({threadId:"test",response:"Answer",events:[]}));
   const messages = new MessageService(store, {run}, root);
   const adapter = new TelegramAdapter("123:test", store, messages);
@@ -25,6 +25,29 @@ function setup() {
   const update = (id:number,text:string,from=7) => ({update_id:id,message:{message_id:id,from:{id:from,first_name:"Grisha"},chat:{id:-100,type:"group"},text}});
   return {store,chat,run,messages,adapter,update};
 }
+
+it("lets new groups answer unmentioned text and native voice while retaining contextual silence", async () => {
+  const { store, chat, run, adapter, update } = setup("instructions");
+  expect(store.getTelegramChat("-100")?.replies).toBe("instructions");
+  adapter.transcribe = vi.fn(async () => 'Можешь ответить "Привет"?');
+  run.mockResolvedValueOnce({ threadId: "test", response: "51", events: [] });
+  run.mockResolvedValueOnce({ threadId: "test", response: "Привет", events: [] });
+  run.mockResolvedValueOnce({ threadId: "test", response: "NO_REPLY", events: [] });
+  await adapter.processUpdate(update(1, "Посчитай 17 × 3."));
+  const voice = { ...update(2, ""), message: { ...update(2, "").message, voice: { file_id: "voice", file_size: 9501 } } };
+  await adapter.processUpdate(voice);
+  await adapter.processUpdate(voice); // Telegram redelivery must not answer twice.
+  await adapter.processUpdate(update(3, "Гриша, встретимся у входа."));
+  expect(adapter.transcribe).toHaveBeenCalledTimes(1);
+  expect(run).toHaveBeenCalledTimes(3);
+  expect(run.mock.calls[1]![0]).toContain('Можешь ответить "Привет"?');
+  expect(run.mock.calls[2]![1].profile).toContain("do not reply or take actions merely because you can read it");
+  expect(store.db.prepare("SELECT context_only FROM messages WHERE external_id='-100:2'").get()?.context_only).toBe(0);
+  const sent = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/sendMessage"))
+    .map(([, init]) => JSON.parse(String(init!.body)).text);
+  expect(sent).toEqual(["51", "Привет"]);
+  expect(store.listMessages(chat.conversationId!).some(message => message.text === "NO_REPLY")).toBe(false);
+});
 
 it("remembers unaddressed discussion and files without a model run or reply", async () => {
   const {store,chat,run,adapter,update,messages} = setup();

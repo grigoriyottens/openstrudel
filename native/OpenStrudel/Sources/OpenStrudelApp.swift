@@ -102,6 +102,10 @@ struct OpenStrudelApp: App {
                     #endif
                     return
                 }
+                if url.scheme == "openstrudel" && url.host == "oauth" && url.path.hasPrefix("/service/") {
+                    _ = library.clients.first { $0.acceptServiceCallback(url) }
+                    return
+                }
                 library.preparePairing(url)
             }
             .environmentObject(client)

@@ -106,8 +106,14 @@ export interface CodexEngine {
   connections?(refresh?: boolean): Promise<Connection[]>;
   connectionNotice?: string;
   isConnected?(id: string): Promise<boolean>;
-  connect?(id: string): Promise<{ url: string | null }>;
+  connect?(id: string, options?: { callbackURL: string }): Promise<ServiceSignIn>;
   extensions?(): import("./extensions.js").CodexExtensions | Promise<import("./extensions.js").CodexExtensions>;
+}
+
+export interface ServiceSignIn {
+  url: string | null;
+  /** In-memory continuation, never serialized or exposed as a generic proxy. */
+  oauth?: { complete(callback: string): Promise<void>; cancel(): void };
 }
 
 export interface DynamicTool { type: "function"; name: string; description: string; inputSchema: Record<string, unknown> }

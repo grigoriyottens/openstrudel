@@ -117,3 +117,116 @@ checkout and other chats' files remain untouched.
   no replacement authentication engine has been introduced.
 - Private evidence/scripts are under `.data/release-45`; credentials, raw chat
   content and customer documents must not enter Git or public release assets.
+
+## Post-release acceptance, 16 October
+
+- Continued on `codex/post-release-45-acceptance` from `ceb4771`; primary and
+  other chats' working files remain untouched.
+- Recovered voice request completed in Wai Core Team. The actual answer gives
+  this week's priorities and links a real Notion page, independently fetched and
+  checked. This closes the dropped 08:25 request.
+- In the isolated two-member QA group, queued audio, an image, an ordinary
+  video and a CSV all produced the correct concrete answers. Two audio messages
+  sent while processing were both answered. These audio fixtures were uploaded
+  files, not native microphone recordings; that distinction remains in acceptance.
+- Measured the shipped Whisper on the same eight-second fixture: 52.86 s at
+  2 CPUs, 35.30 s at 4 and 36.84 s at 6. Wolf now has 4 CPUs, retaining the 2 GiB
+  memory limit. Configuration backup, idle check, exact-service restart and
+  health/data checks passed. The repeated real Telegram request took 45 s,
+  versus 64 s before tuning. Voice works, but its latency still merits work.
+- Verified the bot and owner's membership before connecting `wai team`,
+  `wai активности` and `AiGid планы`. Each has an isolated root conversation and
+  contextual participation; no synthetic messages were sent to those groups.
+  Online SQLite backup and integrity checks passed. Wolf now has eight chat
+  bindings; employee profiles and existing messages were preserved.
+- Mac maintenance reclaimed about 3.4 GiB of physical space from verified idle
+  reproducible caches. Free space is 6.1 GiB; memory pressure is normal. Active
+  builds, Codex history, user data and release archives were retained. An exact
+  duplicate old app was also removed after comparison with the managed rollback
+  copy; APFS sharing means this is not counted as additional reclaimed space.
+- Located the old personal OpenClaw source host and read the live WAI News and
+  Wai Connect definitions, editorial rules and delivery journals. Wai Connect's
+  latest failure is Telegram 401 after successful candidate preparation. The
+  new personal Home still rejects this Mac's SSH key. No legacy schedule has
+  been disabled and no second bot poller has been started.
+- Remote MCP sign-in: the shipped Codex successfully completed an isolated
+  OAuth fixture using an `openstrudel://` callback, with Codex owning PKCE,
+  state validation, token exchange and storage. Product integration and live
+  Notion acceptance remain open; the fixture is not a real Notion grant.
+
+## Current continuation: remote sign-in and real voice notes
+
+- Candidate 46 adds remote MCP OAuth callback forwarding over the paired Home
+  connection. Native Codex still owns discovery, PKCE, exchange and tokens;
+  temporary overrides do not rewrite service configuration. Pending logins are
+  bounded, tied to the owner client, canceled on dismissal and rejected after
+  access is revoked. An aborted initial HTTP request also cancels its login.
+- Runtime suite: 515 passed, 2 skipped, including the aborted-login and
+  unmentioned native-voice regressions. Native suite: 323 tests
+  in 32 suites passed. Web Computer Use verified dismiss/retry, cancel/retry,
+  the real Codex token exchange with a synthetic provider, and connected state.
+  Private screenshot: `.data/release-46/web-oauth-connected.jpg`.
+- Native browser opening still needs acceptance: AuthenticationServices starts
+  its session, but its consent/browser window has not appeared in the Mac QA
+  installation. Manual browser opening reaches the provider; duplicate QA and
+  installed app URL handlers make that fallback insufficient proof. Do not
+  publish candidate 46 or claim a real Notion grant from the synthetic fixture.
+  The same opening problem was reproduced with Notion's real HTTPS login,
+  then canceled; no Notion permission grant was made. An unsuccessful anchor
+  experiment was reverted rather than retained as a speculative workaround.
+- The owner's native Telegram voice note at 15:48 was received and transcribed,
+  but the isolated QA group retained the old explicit `mentions` rule. Both
+  it and a plain-text reproduction were recorded as context only. Telegram
+  privacy mode was not the cause: the bot receives all group messages.
+- Changed only that QA group's rule to contextual replies after a consistent
+  SQLite backup on Wolf. No service restart or global rules migration was
+  needed. New groups already use contextual replies in build 45; existing
+  explicit settings elsewhere remain intact.
+- Real post-fix evidence: unmentioned text 1678994 received the correct answer
+  `51` in 1678995, about 10 seconds later. The owner's next native voice note
+  1678996 received `Привет` in 1678998, about 42 seconds later. The voice was
+  recognized after about 36 seconds; speech latency remains open despite the
+  successful delivery. These are real Telegram notes, not uploaded audio files.
+- Whisper's timing output isolates the speech cost: on the eight-second QA
+  fixture, two encoder runs take 33.06 of 35.47 seconds (language detection and
+  transcription). Upstream's experimental audio-context setting reduced the
+  same fixture to 24.46 seconds with identical text. This was an isolated
+  benchmark, not a production change: broader language/quality checks are
+  required before adopting it. The production recognizer remains unchanged.
+- Latest resource snapshot: 7.8 GiB disk free, normal memory pressure (61%
+  free). Other development sessions are active; no process or data was removed.
+- Candidate work is pushed as draft PR #49. Build 45 remains the released
+  version; native remote sign-in acceptance is still required before merging
+  and releasing this candidate.
+- Closed the isolated QA app and OAuth fixture, stopped only the temporary
+  `openstrudel-qa45` container, and closed its browser tabs. Production app and
+  Wolf Home remain running. Test data, evidence and release archives are kept.
+
+## Connected bot can send to its chats
+
+- The owner's 16:21 DM exposed a real missing capability: normal Telegram
+  replies existed, but employees had no native cross-chat send tool. The bot
+  incorrectly recommended installing another Telegram service.
+- Added `list_telegram_chats` and `send_telegram_message` to the existing native
+  employee tool set. The already connected bot sends owner-requested text,
+  files and GIF animations. Destinations come from current bot memberships;
+  paused/removed chats and revoked owner access are checked at call time.
+- The existing durable Telegram outbox tracks these sends. Identical calls in
+  one request cannot duplicate delivery, and uncertain or partial delivery is
+  not reported as success. Only requested content is copied into the destination
+  conversation; private source history is not forwarded. Files stay inside the
+  requesting employee's permitted workspace.
+- Existing Codex execution threads renew once because dynamic tools are accepted
+  at thread creation. Original thread IDs, all messages, profiles and bindings
+  remain stored. Ordinary group participants and schedules retain their audience.
+- Runtime validation: 526 passed, 2 skipped; typecheck and diff whitespace checks
+  pass. Real Telegram cross-chat acceptance and production rollout are next.
+- Native OAuth diagnostics also tested Apple's SwiftUI authentication API with
+  an active app/key window. The browser still did not appear. That rules out a
+  simple foreground-window fix; the diagnostic UI has been removed from source.
+  Native OAuth remains unverified. No speculative activation workaround shipped.
+- The owner explicitly requested committing and pushing all current work to
+  main. This supersedes keeping candidate changes in draft, but does not make
+  the outstanding native OAuth and multi-host release acceptance complete.
+- Resource check: 9.4 GiB free, normal memory pressure (39% free). No user data
+  or active build caches removed.

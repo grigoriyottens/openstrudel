@@ -234,6 +234,7 @@ async function openCurrentAgent(draft) {
   if(profile && state.appearanceVersion===1) { editor=appearanceEditor(draft?.appearance||agentAppearance(profile),look=>avatar.replaceChildren(characterImage(look,64))); page.content.append(editor.root); }
   const list=group(page.content);
   row(list,t("Модель и скорость"),sub(t("Модель и скорость"),()=>openModelSettings(agent)));
+  row(list,t("Сервисы"),sub(t("Сервисы"),openServices));
   row(list,t("Управление компьютером"),sub(t("Управление компьютером"),openComputerSettings));
   let danger=null;
   if(profile && state.owner) { danger=group(page.content); row(danger,t("Удалить сотрудника…"),()=>confirmDelete(),{className:'destructive-row'}); }
@@ -275,6 +276,59 @@ async function openCurrentAgent(draft) {
     initialAccount=select.value;
     if([...select.options].some(option=>option.value===draft?.account)) select.value=draft.account;
   } catch(e) { page.report(e); }
+}
+async function openServices() {
+  const conversationId=state.conversationID;
+  const page=modalPage(t("Сервисы"),t("Подключения, которыми сотрудник может пользоваться в этом чате."));
+  const status=element('p',t("Проверяем подключение…"));status.setAttribute('role','status');page.content.append(status);
+  const list=group(page.content), suffix='?conversationId='+encodeURIComponent(conversationId||'');
+  let loading=false, starting=false, disposed=false, pending=null;
+  async function cancelPending() {
+    const flow=pending;pending=null;cancel.hidden=true;
+    if(flow) {flow.popup?.close();try {await api('/v1/connections/oauth/'+flow.id+suffix,{method:'DELETE'});} catch(e) {if(e.status!==404)throw e;}}
+  }
+  const cancel=action(page,t("Отменить вход"),async()=>{await cancelPending();await refreshServices();});cancel.hidden=true;
+  const onFocus=()=>void refreshServices();window.addEventListener('focus',onFocus);
+  page.box.addEventListener('dismiss',()=>{disposed=true;window.removeEventListener('focus',onFocus);void cancelPending().catch(()=>{});},{once:true});
+  async function refreshServices() {
+    if(disposed || loading || !$('modal-content').contains(page.box)) return;
+    loading=true;page.error.textContent='';status.textContent=t("Проверяем подключение…");
+    try {
+      if(!conversationId) throw new Error(t("Откройте чат сотрудника, для которого добавляете расширение."));
+      const data=await api('/v1/connections'+suffix+'&refresh=true');
+      if(disposed)return;
+      if(pending&&(data.connections||[]).some(connection=>connection.id===pending.service&&connection.connected)) {pending=null;cancel.hidden=true;}
+      list.replaceChildren();status.textContent=data.notice||'';
+      for(const connection of data.connections||[]) {
+        const ready=connection.connected, unknown=connection.status==='unknown', disabled=connection.status==='disabled', unavailable=connection.status==='unavailable';
+        const detail=ready?t("Подключено"):unknown?t("Не удалось проверить подключение"):disabled?t("Выключено"):unavailable?t("Нет связи с сервисом"):t("Нужен вход");
+        const item=row(list,connection.name,null,{detail:[connection.detail,detail].filter(Boolean).join(' · ')});
+        if(state.owner&&!ready&&!disabled) {
+          const button=element('button',t("Подключить"),'secondary');button.type='button';button.disabled=Boolean(pending)||starting;button.setAttribute('aria-label',t("Подключить")+' '+connection.name);item.append(button);
+          button.onclick=async()=>{
+            // Open while the click is active, so browsers do not block sign-in.
+            const popup=window.open('about:blank','_blank');if(popup)popup.opener=null;
+            starting=true;for(const other of list.querySelectorAll('button'))other.disabled=true;page.error.textContent='';status.textContent=t("Подключаем…");
+            try {
+              const result=await api('/v1/connections/connect',{method:'POST',body:JSON.stringify({id:connection.id,conversationId,callback:'web'})});
+              if(!result.url) {popup?.close();await refreshServices();return;}
+              if(disposed) {popup?.close();if(result.signInId)await api('/v1/connections/oauth/'+result.signInId+suffix,{method:'DELETE'});return;}
+              const url=new URL(result.url);if(!['https:','http:'].includes(url.protocol))throw new Error(t("Не удалось прочитать ответ сервиса. Попробуйте ещё раз."));
+              if(result.signInId) {pending={id:result.signInId,service:connection.id,popup};cancel.hidden=false;for(const other of list.querySelectorAll('button'))other.disabled=true;}
+              if(popup)popup.location.href=url.href;
+              status.replaceChildren(element('span',t("Завершите вход в браузере и вернитесь сюда.")));
+              if(!popup) {const link=element('a',t("Продолжить вход"));link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';status.append(document.createTextNode(' '),link);}
+            } catch(e) {popup?.close();status.textContent='';page.report(e);}
+            finally {starting=false;for(const other of list.querySelectorAll('button'))other.disabled=Boolean(pending);}
+          };
+        }
+      }
+      if(!data.connections?.length&&!data.notice)status.textContent=t("Подключений пока нет. Добавьте сервис в приложении OpenStrudel.");
+    } catch(e) {status.textContent='';page.report(e);}
+    finally {loading=false;}
+  }
+  action(page,t("Обновить"),refreshServices);
+  await refreshServices();
 }
 async function watchAgentMove(id) {
   const page=modalPage(t("Перенос сотрудника"),t("Можно закрыть окно. Состояние операции сохранено."));

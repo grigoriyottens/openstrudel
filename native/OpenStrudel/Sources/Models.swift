@@ -682,7 +682,17 @@ struct ExtensionPreview: Decodable {
     let hasHooks: Bool
     let replaces: String?
 }
-struct ConnectionLink: Decodable { let url: String? }
+struct ConnectionLink: Decodable { let url: String?; let signInId: String? }
+
+enum ServiceOAuthCallback {
+    static func accepts(_ url: URL, signInID: String) -> Bool {
+        guard signInID.range(of: "^[a-f0-9]{48}$", options: .regularExpression) != nil,
+              url.scheme == "openstrudel", url.host == "oauth", url.port == nil,
+              url.user == nil, url.password == nil, url.fragment == nil else { return false }
+        let base = "/service/" + signInID
+        return url.path == base || url.path.hasPrefix(base + "/")
+    }
+}
 struct ChatInteraction: Decodable, Identifiable, Equatable {
     let id: String
     let conversationId: String

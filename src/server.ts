@@ -23,6 +23,8 @@ import type { Accounts } from "./accounts.js";
 import { hostingOrigin } from "./hosting-origin.js";
 import { approvalSetting, isApprovalMode, readApprovalMode } from "./approval-mode.js";
 import { ownerTimezone, saveOwnerTimezone } from "./timezone.js";
+import { SERVICE_SIGN_IN_SECONDS } from "./service-oauth.js";
+import type { ServiceSignIn } from "./types.js";
 
 const MAX_BODY_BYTES = 1_048_576;
 
@@ -38,6 +40,8 @@ export class HttpApi {
   private localURL?: string;
   private activeWrites = 0;
   readonly web: WebAccess;
+  private readonly serviceSignIns = new Map<string, { oauth: NonNullable<ServiceSignIn["oauth"]>; client: string; web: boolean; authorized: () => boolean; timer: NodeJS.Timeout }>();
+  private startingServiceSignIns = 0;
 
   constructor(
     private readonly store: Store,
@@ -105,12 +109,19 @@ export class HttpApi {
   }
 
   async close(): Promise<void> {
+    for (const id of this.serviceSignIns.keys()) this.cancelServiceSignIn(id);
     await this.homeLink.stop();
     await this.mobile.close();
     if (!this.server) return;
     const server = this.server;
     this.server = null;
     await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+
+  private cancelServiceSignIn(id: string): void {
+    const flow = this.serviceSignIns.get(id);
+    if (!flow) return;
+    this.serviceSignIns.delete(id); clearTimeout(flow.timer); flow.oauth.cancel();
   }
 
   private async handle(request: IncomingMessage, response: ServerResponse, paired = false, owner = false): Promise<void> {
@@ -131,6 +142,25 @@ export class HttpApi {
     }
     let url = new URL(request.url ?? "/", "http://localhost");
     let path = url.pathname;
+    // The provider's redirect has no bearer and may omit strict cookies. Only
+    // an existing web login with its Codex state may use this callback route.
+    const webCallback = path.match(/^\/oauth\/service\/([a-f0-9]{48})(?:\/[^/]+)?$/);
+    if (request.method === "GET" && webCallback) {
+      const flow = this.serviceSignIns.get(webCallback[1]!);
+      response.setHeader("cache-control", "no-store");
+      response.setHeader("referrer-policy", "no-referrer");
+      response.setHeader("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+      response.setHeader("content-type", "text/plain; charset=utf-8");
+      try {
+        if (!flow?.web) throw new Error("Вход истёк");
+        if (!flow.authorized()) { this.cancelServiceSignIn(webCallback[1]!); throw new Error("Подключение отозвано"); }
+        const scheme = (request.socket as { encrypted?: boolean }).encrypted ? "https:" : "http:";
+        await flow.oauth.complete(`${scheme}//${host}${request.url}`);
+        this.cancelServiceSignIn(webCallback[1]!);
+        response.writeHead(200).end("Сервис подключён. Вернитесь в OpenStrudel.");
+      } catch { response.writeHead(400).end("Не удалось завершить вход. Вернитесь в OpenStrudel и попробуйте ещё раз."); }
+      return;
+    }
     const messageLimit=Math.min(5000,Math.max(1,Number(url.searchParams.get("limit")) || 100));
     if (request.method === "GET" && path === "/") {
       await this.asset(response, "index.html", "text/html; charset=utf-8");
@@ -159,6 +189,7 @@ export class HttpApi {
       const localExecution = request.headers["x-openstrudel-executor"] === this.executorKey && ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress ?? "");
       const canManageAccount = localExecution ? request.headers["x-openstrudel-owner"] === "1" : webSession ? webSession.owner : !paired || owner;
       if (path.startsWith("/v1/extensions") && request.method !== "GET" && !canManageAccount) throw new HomeError("Расширения подключает владелец устройства.",403);
+      if (path.startsWith("/v1/connections/") && request.method !== "GET" && !canManageAccount) throw new HomeError("Сервисы подключает владелец устройства.",403);
       if (["/v1/settings/approvals", "/v1/settings/models", "/v1/settings/timezone"].includes(path) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
       if (!localExecution && request.method !== "GET" && path !== "/v1/home/transfer" && path !== "/v1/home/poll") {
         if (this.home.state.role === "primary" && this.store.getSetting("home.transfer")) throw new HomeError("Передаём управление. Изменения будут доступны после завершения.", 409);
@@ -605,8 +636,39 @@ export class HttpApi {
         if (conversationId && !this.store.getConversation(conversationId)) throw new Error("Чат не найден");
         const engine=conversationId ? this.engine?.forAgent?.(this.store.getConversation(conversationId)?.profileId ?? "main", this.messages.contextFor(conversationId)) ?? this.engine?.forContext?.(this.messages.contextFor(conversationId)) ?? this.engine : this.engine;
         if (!engine?.connect) throw new Error("Подключения Codex недоступны");
-        const link = await engine.connect(String(body.id ?? ""));
-        this.send(response, 200, { url: link.url ? safeURL(link.url) : null }); return;
+        if (body.callback !== undefined && body.callback !== "app" && body.callback !== "web") throw new HomeError("Проверьте способ входа.");
+        const signInId = randomBytes(24).toString("hex");
+        const scheme = (request.socket as { encrypted?: boolean }).encrypted ? "https:" : "http:";
+        const callbackURL = body.callback === "app" ? `openstrudel://oauth/service/${signInId}`
+          : body.callback === "web" ? `${scheme}//${host}/oauth/service/${signInId}` : undefined;
+        if (callbackURL && this.serviceSignIns.size + this.startingServiceSignIns >= 8) throw new HomeError("Завершите открытый вход и попробуйте ещё раз.",429);
+        if (body.callback === "web" && localExecution) throw new HomeError("Для этого устройства подключите сервис в приложении.",409);
+        let link: ServiceSignIn;
+        this.startingServiceSignIns++;
+        try { link = await engine.connect(String(body.id ?? ""), callbackURL ? { callbackURL } : undefined); }
+        finally { this.startingServiceSignIns--; }
+        if (response.destroyed) { link.oauth?.cancel(); return; }
+        if (link.oauth) {
+          const timer = setTimeout(() => this.cancelServiceSignIn(signInId), SERVICE_SIGN_IN_SECONDS * 1000); timer.unref();
+          const sessionID = webSession?.id;
+          const mobileID = paired ? digest(request.headers.authorization?.replace(/^Bearer /, "") ?? "").slice(0, 20) : undefined;
+          const authorized = sessionID ? () => this.web.list().some(s => s.id === sessionID && s.owner)
+            : mobileID ? () => this.mobile.status().clients.some(c => c.id === mobileID && c.role === "owner") : () => true;
+          this.serviceSignIns.set(signInId, { oauth: link.oauth, authorized, client: digest(webSession?.id ?? request.headers.authorization ?? ""), web: body.callback === "web", timer });
+        }
+        this.send(response, 200, { url: link.url ? safeURL(link.url) : null, ...(link.oauth ? { signInId } : {}) }); return;
+      }
+      const serviceCallback = path.match(/^\/v1\/connections\/oauth\/([a-f0-9]{48})$/);
+      if (serviceCallback && ["POST", "DELETE"].includes(request.method ?? "")) {
+        const id = serviceCallback[1]!, flow = this.serviceSignIns.get(id);
+        if (!flow || flow.client !== digest(webSession?.id ?? request.headers.authorization ?? "")) throw new HomeError("Вход истёк. Подключите сервис ещё раз.",404);
+        if (request.method === "POST") {
+          const body = await this.body(request, 20_000);
+          if (typeof body.url !== "string") throw new HomeError("Проверьте ответ сервиса.");
+          await flow.oauth.complete(body.url);
+        }
+        this.cancelServiceSignIn(id);
+        this.send(response, 200, { ok: true }); return;
       }
       const answerMatch = path.match(/^\/v1\/interactions\/([^/]+)$/);
       if (request.method === "POST" && answerMatch) {

@@ -270,6 +270,45 @@ export class TelegramAdapter {
     }
   }
 
+  /** A requested cross-chat delivery uses the same durable outbox as ordinary replies. */
+  async sendToChat(input: {chatId:string;text:string;files:Array<{name:string;mimeType?:string;contentBase64:string}>;externalId:string}) {
+    if (!this.token) throw new Error("Telegram не подключён");
+    const chat = this.store.getTelegramChat(input.chatId);
+    if (!chat || chat.enabled === false) throw new Error("Бот больше не подключён к этому чату.");
+    assertAgentWritable(this.store,chat.profileId ?? "main");
+    const previous = this.store.findMessageByExternal("telegram",input.externalId);
+    const conversation = chat.conversationId ? this.store.getConversation(chat.conversationId)
+      : Number(chat.chatId)>0 ? this.store.getOrCreateConversation({channel:"telegram",externalId:chat.chatId,title:chat.title}) : null;
+    if (!conversation) throw new Error("Чат бота недоступен.");
+    const receipt = (messageId:string) => {
+      const message = this.store.getMessage(conversation.id,messageId)!;
+      const prefix=`${chat.chatId}:reply:${messageId}:`;
+      const delivered=this.store.db.prepare("SELECT message_id FROM telegram_outbox WHERE key>=? AND key<? AND status='delivered' ORDER BY key").all(prefix,prefix+"\uffff");
+      return {sent:message.status === "completed",chatId:chat.chatId,title:chat.title,messageId,
+        telegramMessageIds:delivered.map(row=>String(row.message_id)),...(message.error?{error:message.error}:{})};
+    };
+    if (previous) {
+      if (previous.conversationId !== conversation.id) throw new Error("Подключение чата изменилось; проверьте предыдущую отправку.");
+      return receipt(previous.id);
+    }
+    const files=input.files.map(file=>this.messages.files.put(conversation.id,this.messages.contextFor(conversation.id),file));
+    const message=this.store.addMessage({conversationId:conversation.id,channel:"telegram",direction:"outbound",text:input.text,
+      externalId:input.externalId,attachments:files,author:this.bot?.first_name ?? this.store.getSetting("telegram.bot_name") ?? "OpenStrudel"});
+    this.store.setMessageStatus(message.id,"running");
+    this.activeChats.set(chat.chatId,(this.activeChats.get(chat.chatId) ?? 0)+1);
+    try {
+      await this.sendMessage(chat.chatId,input.text,"reply:"+message.id);
+      await this.sendFiles(chat.chatId,files,"reply:"+message.id);
+      this.store.setMessageStatus(message.id,"completed");
+    } catch (error) {
+      this.store.setMessageStatus(message.id,"failed",refused(error)?REFUSED:"Доставка не подтверждена. Проверьте Telegram перед новой отправкой.");
+    } finally {
+      const remaining=(this.activeChats.get(chat.chatId) ?? 1)-1;
+      if (remaining) this.activeChats.set(chat.chatId,remaining); else this.activeChats.delete(chat.chatId);
+    }
+    return receipt(message.id);
+  }
+
   async sendFiles(chatId: string | number, files: Attachment[] = [], deliveryKey: string = randomUUID()): Promise<void> {
     for (const file of files) {
       const stored = this.messages.files.get(file.id);
@@ -282,10 +321,11 @@ export class TelegramAdapter {
       if (row.status === "delivered") continue;
       if (row.status !== "pending") throw new Error("Проверьте доставку файла в Telegram перед повтором");
       const form = new FormData();form.set("chat_id",String(chatId));
-      form.set("document",new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
+      const animation=file.mimeType === "image/gif";
+      form.set(animation?"animation":"document",new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
       this.store.db.prepare("UPDATE telegram_outbox SET status='sending' WHERE key=?").run(key);
       try {
-        const sent = await this.call<{message_id:number}>("sendDocument",form);
+        const sent = await this.call<{message_id:number}>(animation?"sendAnimation":"sendDocument",form);
         this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=? WHERE key=?").run(String(sent.message_id),key);
       } catch (error) {
         this.store.db.prepare("UPDATE telegram_outbox SET status=?,error=? WHERE key=?").run(...(refused(error) ? ["not_sent", REFUSED] : ["unknown", "Доставка файла не подтверждена. Проверьте Telegram перед повтором."]), key);

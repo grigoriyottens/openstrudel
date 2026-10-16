@@ -52,6 +52,7 @@ export class OpenStrudelRuntime {
     this.messages = new MessageService(this.store, this.engine,options.rootDirectory);
     if (!(this.engine instanceof AccountEngines)) this.messages.onAuthenticationError = () => this.account.invalidate();
     this.telegram = new TelegramAdapter(telegramToken, this.store, this.messages);
+    this.messages.telegram=this.telegram;
     this.scheduler = new Scheduler(this.store,this.messages);
     this.messages.scheduler=this.scheduler;
     this.scheduler.deliver=async(chat,text,key,attachments)=>{
@@ -89,11 +90,12 @@ export class OpenStrudelRuntime {
       });
     }
     this.store.interruptUnfinishedMessages();
-    if (this.store.getSetting("codex.transport.version") !== "app-server-scopes-3") {
-      // Preserve old public thread IDs; the chat text bootstraps the new tool-enabled thread.
-      this.store.setSetting("codex.previous_threads", JSON.stringify(this.store.listConversations().filter(c => c.codexThreadId).map(c => ({ conversationId: c.id, threadId: c.codexThreadId }))));
+    if (this.store.getSetting("codex.transport.version") !== "app-server-scopes-4-telegram") {
+      // Codex accepts dynamic tools on thread/start, not thread/resume. Retain
+      // the old IDs and all chat messages; only the execution thread is renewed.
+      this.store.setSetting("codex.previous_threads.app-server-scopes-4-telegram", JSON.stringify(this.store.listConversations().filter(c => c.codexThreadId).map(c => ({ conversationId: c.id, threadId: c.codexThreadId }))));
       this.store.clearConversationThreads();
-      this.store.setSetting("codex.transport.version", "app-server-scopes-3");
+      this.store.setSetting("codex.transport.version", "app-server-scopes-4-telegram");
     }
     if (this.startTelegram) await this.telegram.start();
     this.scheduler.start();

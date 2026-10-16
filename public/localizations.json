@@ -9455,5 +9455,173 @@
     "es": "Ultra",
     "he": "אולטרה",
     "ru": "Ультра"
+  },
+  "Сервисы": {
+    "en": "Services",
+    "ru": "Сервисы",
+    "fr": "Services",
+    "es": "Servicios",
+    "he": "שירותים"
+  },
+  "Подключено": {
+    "en": "Connected",
+    "ru": "Подключено",
+    "fr": "Connecté",
+    "es": "Conectado",
+    "he": "מחובר"
+  },
+  "Выключено": {
+    "en": "Off",
+    "ru": "Выключено",
+    "fr": "Désactivé",
+    "es": "Desactivado",
+    "he": "כבוי"
+  },
+  "Подключаем…": {
+    "en": "Connecting…",
+    "ru": "Подключаем…",
+    "fr": "Connexion…",
+    "es": "Conectando…",
+    "he": "מתחבר…"
+  },
+  "Продолжить вход": {
+    "en": "Continue sign-in",
+    "ru": "Продолжить вход",
+    "fr": "Continuer la connexion",
+    "es": "Continuar inicio de sesión",
+    "he": "המשך הכניסה"
+  },
+  "Подключения, которыми сотрудник может пользоваться в этом чате.": {
+    "en": "Services this assistant can use in this chat.",
+    "ru": "Подключения, которыми сотрудник может пользоваться в этом чате.",
+    "fr": "Services utilisables par cet assistant dans cette conversation.",
+    "es": "Servicios que este asistente puede usar en este chat.",
+    "he": "שירותים שהעוזר יכול להשתמש בהם בצ׳אט הזה."
+  },
+  "Подключений пока нет. Добавьте сервис в приложении OpenStrudel.": {
+    "en": "No services yet. Add one in the OpenStrudel app.",
+    "ru": "Подключений пока нет. Добавьте сервис в приложении OpenStrudel.",
+    "fr": "Aucun service pour le moment. Ajoutez-en un dans l’application OpenStrudel.",
+    "es": "Aún no hay servicios. Añade uno en la aplicación OpenStrudel.",
+    "he": "עדיין אין שירותים. אפשר להוסיף שירות באפליקציית OpenStrudel."
+  },
+  "Завершите вход в браузере и вернитесь сюда.": {
+    "en": "Finish signing in in your browser, then return here.",
+    "ru": "Завершите вход в браузере и вернитесь сюда.",
+    "fr": "Terminez la connexion dans le navigateur, puis revenez ici.",
+    "es": "Termina de iniciar sesión en el navegador y vuelve aquí.",
+    "he": "יש להשלים את הכניסה בדפדפן ולחזור לכאן."
+  },
+  "Откройте чат сотрудника, для которого добавляете расширение.": {
+    "en": "Open the chat of the assistant you want to connect.",
+    "ru": "Откройте чат сотрудника, для которого добавляете расширение.",
+    "fr": "Ouvrez la conversation de l’assistant à connecter.",
+    "es": "Abre el chat del asistente que quieres conectar.",
+    "he": "יש לפתוח את הצ׳אט של העוזר שרוצים לחבר."
+  },
+  "Не удалось завершить вход. Попробуйте ещё раз.": {
+    "en": "Couldn’t finish signing in. Try again.",
+    "ru": "Не удалось завершить вход. Попробуйте ещё раз.",
+    "fr": "Impossible de terminer la connexion. Réessayez.",
+    "es": "No se pudo completar el inicio de sesión. Inténtalo de nuevo.",
+    "he": "לא ניתן להשלים את הכניסה. כדאי לנסות שוב."
+  },
+  "Не удалось прочитать ответ сервиса. Попробуйте ещё раз.": {
+    "en": "Couldn’t read the service’s reply. Try again.",
+    "ru": "Не удалось прочитать ответ сервиса. Попробуйте ещё раз.",
+    "fr": "Impossible de lire la réponse du service. Réessayez.",
+    "es": "No se pudo leer la respuesta del servicio. Inténtalo de nuevo.",
+    "he": "לא ניתן לקרוא את תשובת השירות. כדאי לנסות שוב."
+  },
+  "Некорректный ответ сервиса.": {
+    "en": "The service returned an invalid reply.",
+    "ru": "Некорректный ответ сервиса.",
+    "fr": "La réponse du service est incorrecte.",
+    "es": "El servicio devolvió una respuesta no válida.",
+    "he": "השירות החזיר תשובה לא תקינה."
+  },
+  "Завершите открытый вход и попробуйте ещё раз.": {
+    "en": "Finish or cancel the open sign-in, then try again.",
+    "ru": "Завершите открытый вход и попробуйте ещё раз.",
+    "fr": "Terminez ou annulez la connexion ouverte, puis réessayez.",
+    "es": "Termina o cancela el inicio de sesión abierto e inténtalo de nuevo.",
+    "he": "יש להשלים או לבטל את הכניסה הפתוחה ולנסות שוב."
+  },
+  "Вход в этот сервис уже открыт. Завершите или отмените его.": {
+    "en": "Sign-in to this service is already open. Finish or cancel it.",
+    "ru": "Вход в этот сервис уже открыт. Завершите или отмените его.",
+    "fr": "La connexion à ce service est déjà ouverte. Terminez-la ou annulez-la.",
+    "es": "El inicio de sesión de este servicio ya está abierto. Termínalo o cancélalo.",
+    "he": "הכניסה לשירות הזה כבר פתוחה. יש להשלים או לבטל אותה."
+  },
+  "Вход истёк. Подключите сервис ещё раз.": {
+    "en": "Sign-in expired. Connect the service again.",
+    "ru": "Вход истёк. Подключите сервис ещё раз.",
+    "fr": "La connexion a expiré. Reconnectez le service.",
+    "es": "El inicio de sesión caducó. Vuelve a conectar el servicio.",
+    "he": "תוקף הכניסה פג. יש לחבר את השירות שוב."
+  },
+  "Вход уже завершён или истёк. Подключите сервис ещё раз.": {
+    "en": "Sign-in has finished or expired. Connect the service again.",
+    "ru": "Вход уже завершён или истёк. Подключите сервис ещё раз.",
+    "fr": "La connexion est terminée ou a expiré. Reconnectez le service.",
+    "es": "El inicio de sesión terminó o caducó. Vuelve a conectar el servicio.",
+    "he": "הכניסה הושלמה או שתוקפה פג. יש לחבר את השירות שוב."
+  },
+  "Этот ответ не относится к начатому входу. Подключите сервис ещё раз.": {
+    "en": "This reply doesn’t match your sign-in. Connect the service again.",
+    "ru": "Этот ответ не относится к начатому входу. Подключите сервис ещё раз.",
+    "fr": "Cette réponse ne correspond pas à votre connexion. Reconnectez le service.",
+    "es": "Esta respuesta no corresponde a tu inicio de sesión. Vuelve a conectar el servicio.",
+    "he": "התשובה אינה תואמת לכניסה שהתחילה. יש לחבר את השירות שוב."
+  },
+  "Сервис не поддержал возврат в OpenStrudel. Проверьте адрес возврата в его настройках.": {
+    "en": "The service didn’t accept the return to OpenStrudel. Check its callback address.",
+    "ru": "Сервис не поддержал возврат в OpenStrudel. Проверьте адрес возврата в его настройках.",
+    "fr": "Le service n’a pas accepté le retour dans OpenStrudel. Vérifiez son adresse de retour.",
+    "es": "El servicio no aceptó volver a OpenStrudel. Revisa su dirección de retorno.",
+    "he": "השירות לא קיבל את החזרה ל־OpenStrudel. יש לבדוק את כתובת החזרה שלו."
+  },
+  "Сервис не подтвердил вход. Попробуйте подключиться ещё раз.": {
+    "en": "The service didn’t confirm sign-in. Try connecting again.",
+    "ru": "Сервис не подтвердил вход. Попробуйте подключиться ещё раз.",
+    "fr": "Le service n’a pas confirmé la connexion. Réessayez.",
+    "es": "El servicio no confirmó el inicio de sesión. Intenta conectarlo de nuevo.",
+    "he": "השירות לא אישר את הכניסה. כדאי לנסות להתחבר שוב."
+  },
+  "Сервисы подключает владелец устройства.": {
+    "en": "Only the device owner can connect services.",
+    "ru": "Сервисы подключает владелец устройства.",
+    "fr": "Seul le propriétaire de l’appareil peut connecter des services.",
+    "es": "Solo el propietario del dispositivo puede conectar servicios.",
+    "he": "רק בעלי המכשיר יכולים לחבר שירותים."
+  },
+  "Для этого устройства подключите сервис в приложении.": {
+    "en": "Connect this device’s service in the app.",
+    "ru": "Для этого устройства подключите сервис в приложении.",
+    "fr": "Connectez le service de cet appareil dans l’application.",
+    "es": "Conecta el servicio de este dispositivo en la aplicación.",
+    "he": "יש לחבר את השירות של המכשיר הזה באפליקציה."
+  },
+  "Проверьте ответ сервиса.": {
+    "en": "Check the service’s reply.",
+    "ru": "Проверьте ответ сервиса.",
+    "fr": "Vérifiez la réponse du service.",
+    "es": "Revisa la respuesta del servicio.",
+    "he": "יש לבדוק את תשובת השירות."
+  },
+  "Проверьте способ входа.": {
+    "en": "Check the sign-in method.",
+    "ru": "Проверьте способ входа.",
+    "fr": "Vérifiez le mode de connexion.",
+    "es": "Revisa el método de inicio de sesión.",
+    "he": "יש לבדוק את שיטת הכניסה."
+  },
+  "У сервиса задан собственный OAuth-клиент. Используйте автоматическую регистрацию или настройте его адрес возврата.": {
+    "en": "This service uses a custom OAuth client. Use automatic registration or configure its callback address.",
+    "ru": "У сервиса задан собственный OAuth-клиент. Используйте автоматическую регистрацию или настройте его адрес возврата.",
+    "fr": "Ce service utilise un client OAuth personnalisé. Utilisez l’enregistrement automatique ou configurez son adresse de retour.",
+    "es": "Este servicio usa un cliente OAuth personalizado. Usa el registro automático o configura su dirección de retorno.",
+    "he": "השירות משתמש בלקוח OAuth מותאם. יש להשתמש ברישום אוטומטי או להגדיר את כתובת החזרה שלו."
   }
 }
