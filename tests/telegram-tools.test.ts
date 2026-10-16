@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Store } from "../src/store.js";
 import { MessageService } from "../src/messages.js";
 import { TelegramAdapter } from "../src/telegram.js";
+import { Scheduler } from "../src/scheduler.js";
 import { employeeTools } from "../src/personality.js";
 import type { TelegramToolContext } from "../src/telegram-tools.js";
 
@@ -117,11 +118,60 @@ it("does not leave an unreadable file forever pending in the outbox",async()=>{
 it("keeps an ordinary participant and an unattended schedule inside their own audience",async()=>{
   const {tools,store,sent}=setup();
   const conversationId=store.getTelegramChat("-1001")!.conversationId!;
-  for (const scope of [{channel:"telegram" as const,byOwner:false,telegramSenderId:"7"},{channel:"api" as const,byOwner:false},{channel:"api" as const,byOwner:true,scheduled:true}]) {
+  for (const scope of [{channel:"telegram" as const,byOwner:false,telegramSenderId:"7"},{channel:"api" as const,byOwner:false},{channel:"api" as const,byOwner:true,scheduled:true,scheduleTelegramChatId:"-1001"}]) {
     const tool=tools({...scope,conversationId});
     expect(await tool.call("list_telegram_chats",{query:null})).toEqual({chats:[{chatId:"-1001",title:"Core Team",type:"group"}]});
     await expect(tool.call("send_telegram_message",{chatId:"42",text:"Do not leak",paths:[],byOwner:true,telegramSenderId:"42"})).rejects.toThrow("недоступен");
   }
+  expect(sent).toEqual([]);
+});
+
+it("delivers separate scheduled cards to the saved destination without an extra automatic post",async()=>{
+  const {store,messages,run,source,sent}=setup();
+  const scheduler=new Scheduler(store,messages);messages.scheduler=scheduler;
+  const automatic=vi.fn(async()=>{});scheduler.deliver=automatic;
+  run.mockImplementation(async(_input,options:any)=>{
+    expect(await options.tools.call("list_telegram_chats",{query:null})).toEqual({chats:[{chatId:"-1002",title:"Test group",type:"group"}]});
+    await expect(options.tools.call("send_telegram_message",{chatId:"-1001",text:"Another audience",paths:[]})).rejects.toThrow("недоступен");
+    for (const text of ["First verified card","Second verified card"]) {
+      const args={chatId:"-1002",text,paths:[]};
+      expect(await options.tools.call("send_telegram_message",args)).toMatchObject({sent:true});
+      expect(await options.tools.call("send_telegram_message",args)).toMatchObject({sent:true});
+    }
+    return {threadId:"scheduled-cards",response:"NO_REPLY",events:[]};
+  });
+  scheduler.save({conversationId:source.id,name:"Cards",prompt:"Send each card separately",cron:"0 7 * * *",timezone:"Europe/Moscow",delivery:"telegram",telegramChatId:"-1002"},new Date("2026-10-15T10:00:00Z"));
+  await scheduler.tick(new Date("2026-10-16T04:00:01Z"));await scheduler.idle();
+  expect(scheduler.runs(source.id)[0]).toMatchObject({status:"quiet"});
+  expect(automatic).not.toHaveBeenCalled();
+  expect(sent).toHaveLength(2);
+  expect(sent.map(s=>s.body.chat_id)).toEqual(["-1002","-1002"]);
+  const target=store.getTelegramChat("-1002")!.conversationId!;
+  expect(store.listMessages(target).map(m=>m.text)).toEqual(["First verified card","Second verified card"]);
+});
+
+it("does not let an app-only schedule send to a bound Telegram chat",async()=>{
+  const {store,messages,run,sent}=setup();
+  const conversationId=store.getTelegramChat("-1001")!.conversationId!;
+  const scheduler=new Scheduler(store,messages);messages.scheduler=scheduler;
+  run.mockImplementation(async(_input,options:any)=>{
+    expect(await options.tools.call("list_telegram_chats",{query:null})).toEqual({chats:[]});
+    await expect(options.tools.call("send_telegram_message",{chatId:"-1001",text:"Keep in app",paths:[]})).rejects.toThrow("недоступен");
+    return {threadId:"app-edition",response:"App only",events:[]};
+  });
+  scheduler.save({conversationId,name:"Private review",prompt:"Review only",cron:"0 7 * * *",timezone:"Europe/Moscow",delivery:"app"},new Date("2026-10-15T10:00:00Z"));
+  await scheduler.tick(new Date("2026-10-16T04:00:01Z"));await scheduler.idle();
+  expect(scheduler.runs(conversationId)[0]).toMatchObject({status:"completed"});
+  expect(sent).toEqual([]);
+});
+
+it("rechecks a scheduled destination's availability and cannot grant itself another audience",async()=>{
+  const {tools,store,sent}=setup();
+  const tool=tools({scheduled:true,scheduleTelegramChatId:"-1002"});
+  store.setSetting("telegram.paused.-1002","true");
+  expect(await tool.call("list_telegram_chats",{query:null})).toEqual({chats:[]});
+  await expect(tool.call("send_telegram_message",{chatId:"-1001",text:"No",paths:[],scheduleTelegramChatId:"-1001"})).rejects.toThrow("недоступен");
+  await expect(tool.call("send_telegram_message",{chatId:"-1002",text:"No",paths:[]})).rejects.toThrow("недоступен");
   expect(sent).toEqual([]);
 });
 

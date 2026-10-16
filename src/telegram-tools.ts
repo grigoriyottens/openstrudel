@@ -9,6 +9,7 @@ export interface TelegramToolContext {
   messageId: string;
   channel: "api" | "telegram";
   scheduled?: boolean;
+  scheduleTelegramChatId?: string | null;
   byOwner?: boolean;
   telegramSenderId?: string;
   telegram?: TelegramAdapter;
@@ -28,7 +29,9 @@ export function telegramTools(store: Store, context: TelegramToolContext) {
     // The sender identity comes from the adapter, never from model arguments.
     const sender = context.channel === "telegram" ? context.telegramSenderId : undefined;
     const owner = !context.scheduled && (context.byOwner === true || Boolean(sender && store.getTelegramChat(sender)?.allowedSenders.includes(sender)));
-    return store.telegramChats().filter(chat => chat.enabled !== false && (owner || chat.conversationId === context.conversationId));
+    return store.telegramChats().filter(chat => chat.enabled !== false && (context.scheduled
+      ? chat.chatId === context.scheduleTelegramChatId
+      : owner || chat.conversationId === context.conversationId));
   };
   return { definitions, async call(name: string, args: Record<string, unknown>) {
     if (!context.telegram?.enabled()) throw new Error("Подключите бота в настройках устройства → Telegram. Дополнительный сервис Telegram сотруднику не нужен.");

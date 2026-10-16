@@ -138,6 +138,8 @@ export interface MessageInput {
   contextOnly?: boolean;
   /** Background runs cannot wait forever for an interactive approval. */
   scheduled?: boolean;
+  /** Trusted scheduler destination; null means app-only. Never accepted from a request body. */
+  scheduleTelegramChatId?: string | null;
   /** Trusted: the device owner sent this message. Set by the server and the Telegram adapter, never from a request body. */
   byOwner?: boolean;
   attachments?: string[];
