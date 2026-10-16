@@ -158,7 +158,7 @@ it("keeps group replies with its bound employee even when an old digest came fro
  expect(s.listConversations().filter(c=>c.externalId===`-100::employee::${baby.id}`)).toHaveLength(0);
  expect(s.getTelegramChat("-100")?.profileId).toBe(news.id);await m.close();
 });
-it.each(["voice", "video_note"] as const)("transcribes %s before later text in the same chat",async(kind)=>{
+it.each(["voice", "video_note", "video"] as const)("transcribes %s before later text in the same chat",async(kind)=>{
  const {a,run,m,s}=setup();let finish!:(v:string)=>void;
  s.bindTelegramChat("-100",s.createProfile({name:"Voice"}).id);
  a.transcribe=()=>new Promise(r=>{finish=r;});

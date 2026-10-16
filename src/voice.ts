@@ -1,24 +1,37 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtemp, writeFile, readFile, stat, rm, access } from "node:fs/promises";
-import { tmpdir, homedir, platform } from "node:os";
+import { tmpdir, homedir, platform, availableParallelism } from "node:os";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const run = promisify(execFile);
 const whisper = "/usr/local/bin/whisper-cli";
 const model = "/opt/openstrudel/voice/ggml-large-v3-turbo-q5_0.bin";
 const formats = "ogg,wav,mp3,mov,matroska,webm,flac,aac";
-let recognizing = false;
+let queue: Promise<unknown> = Promise.resolve();
+
+/** Recordings are recognised one at a time, in the order they arrive: a busy Home answers later, never refuses. */
+export function transcribeVoice(bytes: Uint8Array, extension = "ogg"): Promise<string> {
+  const next = queue.then(() => recognize(bytes, extension));
+  queue = next.catch(() => undefined);
+  return next;
+}
+
+/** The processors this Home may use: its container's CPU quota when it has one. */
+function processors(): number {
+  try {
+    const [quota, period] = readFileSync("/sys/fs/cgroup/cpu.max", "utf8").trim().split(/\s+/);
+    if (quota && quota !== "max") return Math.max(1, Math.floor(Number(quota) / Number(period)));
+  } catch {}
+  return availableParallelism();
+}
 
 /** Installed OpenRamble on Mac; bundled, offline Whisper on the Linux server. */
-export async function transcribeVoice(bytes: Uint8Array, extension = "ogg"): Promise<string> {
+async function recognize(bytes: Uint8Array, extension: string): Promise<string> {
   if (!bytes.length) throw new Error("Голосовое сообщение пустое. Запишите его ещё раз.");
   if (bytes.length > 20_000_000) throw new Error("Отправьте голосовое до 20 МБ.");
   const system = platform();
-  // Loading two speech models at once can exhaust a small server. Do not queue
-  // recordings indefinitely or silently drop one to stay inside its limit.
-  if (system === "linux" && recognizing) throw new Error("Уже распознаю другое голосовое. Отправьте это сообщение ещё раз через минуту.");
-  if (system === "linux") recognizing = true;
   let directory: string | undefined;
   try {
     let executable: string | undefined;
@@ -76,8 +89,9 @@ export async function transcribeVoice(bytes: Uint8Array, extension = "ogg"): Pro
       if (!hasSound) throw new Error("Речь не распознана. Попробуйте записать сообщение ещё раз.");
       try {
         const output = join(directory, "transcript");
-        await run(whisper, ["-m", model, "-f", wav, "-l", "auto", "-t", "2", "-ng", "-fa", "-nt", "-np", "-otxt", "-of", output],
-          { timeout: 240_000, maxBuffer: 1_048_576, env: { ...process.env, OPENBLAS_NUM_THREADS: "2", OMP_NUM_THREADS: "2" } });
+        const threads = String(Math.max(2, Math.min(8, processors())));
+        await run(whisper, ["-m", model, "-f", wav, "-l", "auto", "-t", threads, "-ng", "-fa", "-nt", "-np", "-otxt", "-of", output],
+          { timeout: 240_000, maxBuffer: 1_048_576, env: { ...process.env, OPENBLAS_NUM_THREADS: threads, OMP_NUM_THREADS: threads } });
         text = (await readFile(output + ".txt", "utf8")).trim();
       } catch (error) {
         if (error && typeof error === "object" && "killed" in error && error.killed) {
@@ -89,7 +103,6 @@ export async function transcribeVoice(bytes: Uint8Array, extension = "ogg"): Pro
     if (!text) throw new Error("Речь не распознана. Попробуйте записать сообщение ещё раз.");
     return text;
   } finally {
-    try { if (directory) await rm(directory, { recursive: true, force: true }); }
-    finally { if (system === "linux") recognizing = false; }
+    if (directory) await rm(directory, { recursive: true, force: true });
   }
 }

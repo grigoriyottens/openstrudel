@@ -21,7 +21,7 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
   if (context.files) definitions.push(tool("attach_file","Attach a real completed file from your permitted workspace to your answer. The app makes it downloadable. Do not expose a local filesystem link. Maximum six files, 25 MB each. A tool success is required before claiming attached.",schema({path:text})));
   if (context.scheduler) definitions.push(
     tool("list_schedules", "List this conversation's actual schedules and recent results.", schema({})),
-    tool("save_schedule", "Only on an explicit user request, create or update a recurring request in this conversation. Five-field cron, IANA timezone. Null id creates. Results stay in this app unless the user explicitly requests Telegram delivery to a connected chat ID. Preserve other schedules. Never claim scheduled without successful result.", schema({ id: { type:["string","null"] }, name:text, prompt:text, cron:text, timezone:text, enabled:{ type:"boolean" }, telegramChatId:{ type:["string","null"] } })),
+    tool("save_schedule", "Only on an explicit user request, create or update a recurring request in this conversation. Five-field cron, IANA timezone. Null id creates. A request made in Telegram is delivered back to that chat; one made in the app stays in the app unless the user names a connected chat ID. Preserve other schedules. Never claim scheduled without successful result.", schema({ id: { type:["string","null"] }, name:text, prompt:text, cron:text, timezone:text, enabled:{ type:"boolean" }, telegramChatId:{ type:["string","null"] } })),
     tool("pause_schedule", "Pause a schedule belonging to this chat when the user asks to stop or remove it.", schema({ id:text })),
   );
   if (!context.profile) definitions.push(tool("create_employee", "Create a permanent employee only when the user asks to create one. Return its actual identity.", profileSchema), tool("list_employees", "List permanent employees so the user can address one by @name.", schema({})));
@@ -45,7 +45,9 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
       if (context.scheduled) throw new Error("A scheduled edition cannot create or modify schedules");
       if (name === "pause_schedule") { context.scheduler!.remove(String(args.id),context.conversationId); return { paused:true }; }
       if (context.scope?.startsWith("group-") && args.telegramChatId != null && store.getTelegramChat(String(args.telegramChatId))?.conversationId !== context.conversationId) throw new Error("Из группы можно настроить доставку только в эту же группу.");
-      return context.scheduler!.save({ conversationId:context.conversationId,id:args.id == null ? undefined : String(args.id),name:String(args.name ?? ""),prompt:String(args.prompt ?? ""),cron:String(args.cron ?? ""),timezone:String(args.timezone ?? ""),enabled:args.enabled !== false,telegramChatId:args.telegramChatId == null ? null : String(args.telegramChatId) });
+      // A request made in Telegram comes back to that chat unless another connected chat is named.
+      return context.scheduler!.save({ conversationId:context.conversationId,id:args.id == null ? undefined : String(args.id),name:String(args.name ?? ""),prompt:String(args.prompt ?? ""),cron:String(args.cron ?? ""),timezone:String(args.timezone ?? ""),enabled:args.enabled !== false,telegramChatId:args.telegramChatId == null ? null : String(args.telegramChatId),
+        ...(args.telegramChatId == null && context.channel === "telegram" ? { delivery:"bound" as const } : {}) });
     }
     if (name === "update_employee" || name === "create_employee") {
       if (Object.keys(args).some(k => !["name", "instructions", "purpose"].includes(k)) || typeof args.name !== "string" || typeof args.instructions !== "string") throw new Error("Expected name, instructions and optional short purpose");
