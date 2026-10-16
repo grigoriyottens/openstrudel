@@ -82,6 +82,33 @@ it("sends a real GIF as an animation and preserves a downloadable copy in its de
   expect(store.db.prepare("SELECT COUNT(*) n FROM conversation_files").get()?.n).toBe(1);
 });
 
+it("keeps requested quiet delivery and link previews in the durable text and file outbox",async()=>{
+  const {tools,messages,context,sent,store}=setup();
+  const workspace=messages.files.workspace(context.scope!);mkdirSync(workspace,{recursive:true});
+  const path=join(workspace,"night.gif");writeFileSync(path,"GIF89a-fixture");
+  const args={chatId:"-1001",text:"Verified source https://example.com/news",paths:[path],silent:true,linkPreview:true};
+  expect(await tools().call("send_telegram_message",args)).toMatchObject({sent:true});
+  expect(sent[0]!.body).toMatchObject({disable_notification:true,link_preview_options:{is_disabled:false}});
+  expect(sent[1]!.body.get("disable_notification")).toBe("true");
+  const rows=store.db.prepare("SELECT payload,status FROM telegram_outbox").all();
+  expect(rows).toHaveLength(2);
+  expect(rows.every(row=>JSON.parse(String(row.payload)).disable_notification === true && row.status === "delivered")).toBe(true);
+  // Presentation changes cannot turn a repeated request into a second send.
+  expect(await tools().call("send_telegram_message",{...args,silent:false,linkPreview:false})).toMatchObject({sent:true});
+  expect(sent).toHaveLength(2);
+});
+
+it("preserves ordinary delivery defaults and rejects invalid presentation options before sending",async()=>{
+  const {tools,sent}=setup();
+  const args={chatId:"-1001",text:"Ordinary message",paths:[]};
+  await expect(tools().call("send_telegram_message",{...args,silent:"true"})).rejects.toThrow("уведомления");
+  await expect(tools().call("send_telegram_message",{...args,linkPreview:1})).rejects.toThrow("предпросмотр");
+  expect(sent).toEqual([]);
+  expect(await tools().call("send_telegram_message",{...args,silent:null,linkPreview:null})).toMatchObject({sent:true});
+  expect(sent[0]!.body.disable_notification).toBeUndefined();
+  expect(sent[0]!.body.link_preview_options).toEqual({is_disabled:true});
+});
+
 it("sends documents and text through the existing outbox and reports partial failures honestly",async()=>{
   const {tools,messages,context,store}=setup();
   const workspace=messages.files.workspace(context.scope!);mkdirSync(workspace,{recursive:true});

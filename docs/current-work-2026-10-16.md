@@ -371,3 +371,14 @@ checkout and other chats' files remain untouched.
   post, duplicate-call coalescing, app-only isolation, and paused destinations.
   This change is newer than the staged Mac/iOS 46 artifacts; those artifacts
   have not been silently replaced or advertised as including it.
+- PR #54 merged at `33aa98c`. Native Telegram sending also supports requested
+  quiet delivery and link previews, so news need no legacy outbound bot token.
+  Those options use the same durable outbox; changing presentation cannot
+  duplicate the same content in one turn. The tool catalog renews once with
+  prior execution IDs and account routes retained. All chat messages remain.
+- Validation after delivery options: 542 runtime tests passed, 2 skipped;
+  typecheck passed. The unchanged legacy news pipeline passes 137 tests.
+  Two private Codex skill packages preserve News/Connect editorial rules and
+  native delivery receipts. Connect's portable helper fixes UTC-day counting
+  at Moscow midnight and rejects a nonnumeric delivery ID; 4 port tests pass.
+  Both skill manifests validate. These packages are prepared, not deployed.

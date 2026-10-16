@@ -246,12 +246,13 @@ export class TelegramAdapter {
     return { messageId: reply.id };
   }
 
-  async sendMessage(chatId: string | number, text: string, deliveryKey: string = randomUUID(), replyToMessageId?: number): Promise<void> {
+  async sendMessage(chatId: string | number, text: string, deliveryKey: string = randomUUID(), replyToMessageId?: number, options: { silent?: boolean; linkPreview?: boolean } = {}): Promise<void> {
     if (!this.token) throw new Error("Telegram не подключён");
     const chunks=telegramText(text);
     for (const [index,chunk] of chunks.entries()) {
       const key=`${chatId}:${deliveryKey}:${index}`;
-      const payload=JSON.stringify({chat_id:chatId,...chunk,link_preview_options:{is_disabled:true},
+      const payload=JSON.stringify({chat_id:chatId,...chunk,link_preview_options:{is_disabled:options.linkPreview !== true},
+        ...(options.silent ? { disable_notification:true } : {}),
         // The owner's words still reach the group if the original was deleted.
         ...(index === 0 && replyToMessageId ? { reply_parameters: { message_id: replyToMessageId, allow_sending_without_reply: true } } : {})});
       this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status) VALUES(?,?,?,'pending')").run(key,String(chatId),payload);
@@ -271,7 +272,7 @@ export class TelegramAdapter {
   }
 
   /** A requested cross-chat delivery uses the same durable outbox as ordinary replies. */
-  async sendToChat(input: {chatId:string;text:string;files:Array<{name:string;mimeType?:string;contentBase64:string}>;externalId:string}) {
+  async sendToChat(input: {chatId:string;text:string;files:Array<{name:string;mimeType?:string;contentBase64:string}>;externalId:string;silent?:boolean;linkPreview?:boolean}) {
     if (!this.token) throw new Error("Telegram не подключён");
     const chat = this.store.getTelegramChat(input.chatId);
     if (!chat || chat.enabled === false) throw new Error("Бот больше не подключён к этому чату.");
@@ -300,8 +301,8 @@ export class TelegramAdapter {
     this.store.setMessageStatus(message.id,"running");
     this.activeChats.set(chat.chatId,(this.activeChats.get(chat.chatId) ?? 0)+1);
     try {
-      await this.sendMessage(chat.chatId,input.text,"reply:"+message.id);
-      await this.sendFiles(chat.chatId,files,"reply:"+message.id);
+      await this.sendMessage(chat.chatId,input.text,"reply:"+message.id,undefined,input);
+      await this.sendFiles(chat.chatId,files,"reply:"+message.id,input);
       this.store.setMessageStatus(message.id,"completed");
     } catch (error) {
       this.store.setMessageStatus(message.id,"failed",refused(error)?REFUSED:"Доставка не подтверждена. Проверьте Telegram перед новой отправкой.");
@@ -312,12 +313,12 @@ export class TelegramAdapter {
     return receipt(message.id);
   }
 
-  async sendFiles(chatId: string | number, files: Attachment[] = [], deliveryKey: string = randomUUID()): Promise<void> {
+  async sendFiles(chatId: string | number, files: Attachment[] = [], deliveryKey: string = randomUUID(), options: { silent?: boolean } = {}): Promise<void> {
     for (const file of files) {
       const stored = this.messages.files.get(file.id);
       if (!stored || stored.conversationId !== file.conversationId) throw new Error("Файл ответа не найден");
       const key = `${chatId}:${deliveryKey}:file:${file.id}`;
-      const payload = JSON.stringify({chat_id:chatId,fileId:file.id,name:file.name});
+      const payload = JSON.stringify({chat_id:chatId,fileId:file.id,name:file.name,...(options.silent ? {disable_notification:true} : {})});
       this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status) VALUES(?,?,?,'pending')").run(key,String(chatId),payload);
       const row = this.store.db.prepare("SELECT * FROM telegram_outbox WHERE key=?").get(key)!;
       if (row.payload !== payload) throw new Error("Содержимое доставки изменилось");
@@ -326,6 +327,7 @@ export class TelegramAdapter {
       let attempted=false;
       try {
         const form = new FormData();form.set("chat_id",String(chatId));
+        if (options.silent) form.set("disable_notification","true");
         const animation=file.mimeType === "image/gif";
         form.set(animation?"animation":"document",new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
         this.store.db.prepare("UPDATE telegram_outbox SET status='sending' WHERE key=?").run(key);
