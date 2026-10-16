@@ -90,12 +90,17 @@ export class OpenStrudelRuntime {
       });
     }
     this.store.interruptUnfinishedMessages();
-    if (this.store.getSetting("codex.transport.version") !== "app-server-scopes-4-telegram") {
+    if (this.store.getSetting("codex.transport.version") !== "app-server-scopes-5-telegram") {
       // Codex accepts dynamic tools on thread/start, not thread/resume. Retain
       // the old IDs and all chat messages; only the execution thread is renewed.
-      this.store.setSetting("codex.previous_threads.app-server-scopes-4-telegram", JSON.stringify(this.store.listConversations().filter(c => c.codexThreadId).map(c => ({ conversationId: c.id, threadId: c.codexThreadId }))));
-      this.store.clearConversationThreads();
-      this.store.setSetting("codex.transport.version", "app-server-scopes-4-telegram");
+      this.store.db.exec("BEGIN IMMEDIATE");
+      try {
+        this.store.setSetting("codex.previous_threads.app-server-scopes-5-telegram", JSON.stringify(this.store.listConversations().filter(c => c.codexThreadId).map(c => ({ conversationId: c.id, threadId: c.codexThreadId }))));
+        this.store.setSetting("codex.previous_thread_routes.app-server-scopes-5-telegram", JSON.stringify(this.store.db.prepare("SELECT key,value FROM settings WHERE key GLOB 'codex.thread.*' OR key GLOB 'codex.threadOwner.*' OR key GLOB 'codex.threadCheckpoint.*'").all()));
+        this.store.clearConversationThreads();
+        this.store.setSetting("codex.transport.version", "app-server-scopes-5-telegram");
+        this.store.db.exec("COMMIT");
+      } catch(error) { this.store.db.exec("ROLLBACK"); throw error; }
     }
     if (this.startTelegram) await this.telegram.start();
     this.scheduler.start();

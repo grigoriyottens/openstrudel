@@ -73,6 +73,24 @@ describe("per-device Codex subscriptions", () => {
     accounts.prioritize("default"); await pool.run("three", { conversationId: conversation.id, threadId: second + "-thread" });
     expect(engines.run.mock.calls[2]?.[3].threadId).toBe("default-thread");
   });
+  it("does not resurrect an account's old tool catalog after the runtime renews execution threads",async()=>{
+    const {store,pool,second}=fixture(),conversation=store.primaryConversation();
+    const messages=new MessageService(store,pool);
+    engines.run.mockImplementation(async()=>({threadId:"fresh-thread",response:"ok",events:[]}));
+    store.setConversationThread(conversation.id,"public-old-thread");
+    store.setSetting("codex.thread.default."+conversation.id,"cached-old-thread");
+    store.setSetting("codex.thread."+second+"."+conversation.id,"other-old-thread");
+    store.setSetting("codex.threadOwner."+conversation.id,"default");
+    store.setSetting("codex.threadCheckpoint.default."+conversation.id,"old-checkpoint");
+    store.addMessage({conversationId:conversation.id,channel:"api",direction:"outbound",text:"The previous decision"});
+    store.clearConversationThreads();
+    await messages.handle({channel:"api",conversationId:conversation.id,text:"Continue"});
+    expect(engines.run.mock.calls[0]?.[3].threadId).toBeNull();
+    expect(engines.run.mock.calls[0]?.[2]).toContain("The previous decision");
+    expect(store.getSetting("codex.thread."+second+"."+conversation.id)).toBeNull();
+    expect(store.getSetting("codex.thread.default."+conversation.id)).toBe("fresh-thread");
+    await messages.close();
+  });
   it("blocks account maintenance during a turn and avoids choosing an account being logged out", async () => {
     const { accounts, second } = fixture(); let done!: () => void;
     const maintenance = accounts.withIdle("default", () => new Promise<void>(resolve => done = resolve));

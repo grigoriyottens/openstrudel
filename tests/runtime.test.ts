@@ -15,13 +15,16 @@ describe("OpenStrudel runtime", () => {
     runtime.store.setConversationThread(conversation.id,"existing-codex-thread");
     runtime.store.setSetting("codex.transport.version","app-server-scopes-3");
     runtime.store.setSetting("codex.previous_threads","earlier migration");
+    runtime.store.setSetting("codex.thread.default."+conversation.id,"account-cached-thread");
     runtime.store.addMessage({conversationId:conversation.id,channel:"api",direction:"inbound",text:"Remember this decision"});
     try {
       await runtime.start();
       expect(runtime.store.getConversation(conversation.id)?.codexThreadId).toBeNull();
       expect(runtime.store.listMessages(conversation.id)[0]?.text).toBe("Remember this decision");
       expect(runtime.store.getSetting("codex.previous_threads")).toBe("earlier migration");
-      expect(JSON.parse(runtime.store.getSetting("codex.previous_threads.app-server-scopes-4-telegram")!)).toEqual([{conversationId:conversation.id,threadId:"existing-codex-thread"}]);
+      expect(JSON.parse(runtime.store.getSetting("codex.previous_threads.app-server-scopes-5-telegram")!)).toEqual([{conversationId:conversation.id,threadId:"existing-codex-thread"}]);
+      expect(runtime.store.getSetting("codex.thread.default."+conversation.id)).toBeNull();
+      expect(JSON.parse(runtime.store.getSetting("codex.previous_thread_routes.app-server-scopes-5-telegram")!)).toEqual([{key:"codex.thread.default."+conversation.id,value:"account-cached-thread"}]);
       expect(runtime.messages.telegram).toBe(runtime.telegram);
     } finally {await runtime.stop();rmSync(root,{recursive:true,force:true});}
   });

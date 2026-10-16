@@ -324,6 +324,9 @@ export class Store {
 
   clearConversationThreads(): void {
     this.db.prepare("UPDATE conversations SET codex_thread_id = NULL, updated_at = ?").run(nowIso());
+    // Account/provider routing also persists execution IDs. Clearing only the
+    // public conversation reference silently resumes the old tool catalog.
+    this.db.exec("DELETE FROM settings WHERE key GLOB 'codex.thread.*' OR key GLOB 'codex.threadOwner.*' OR key GLOB 'codex.threadCheckpoint.*'");
   }
 
   addMessage(input: {
