@@ -125,6 +125,18 @@ it("does not grant a group's members delivery into another connected chat", asyn
   await expect(tools.call("save_schedule", { name: "Leak", prompt: "share", cron: "0 12 * * *", timezone: "UTC", telegramChatId: "42" })).rejects.toThrow("эту же группу");
 });
 
+it("brings a schedule asked for in Telegram back to that chat, and keeps an app request in the app", async () => {
+  const { store, messages, profile } = setup();
+  const scheduler = new Scheduler(store, messages);
+  store.linkTelegramChat({ chatId: "-100", title: "Group", allowedSenders: ["42"] });
+  const chat = store.bindTelegramChat("-100", profile.id);
+  const asked = (channel: string) => employeeTools(store, { run: vi.fn() }, messages.interactions, { profile, conversationId: chat.conversationId!, messageId: "one", channel, scheduler, scope: messages.contextFor(chat.conversationId!) });
+  const fromTelegram = await asked("telegram").call("save_schedule", { name: "Brief", prompt: "brief", cron: "0 7 * * *", timezone: "Europe/Moscow", telegramChatId: null }) as any;
+  expect(fromTelegram).toMatchObject({ delivery: "bound", telegramChatId: null });
+  const fromApp = await asked("api").call("save_schedule", { name: "Notes", prompt: "notes", cron: "0 8 * * *", timezone: "Europe/Moscow", telegramChatId: null }) as any;
+  expect(fromApp).toMatchObject({ delivery: "app" });
+});
+
 it("confirms selecting an already connected group without broadening its audience", async () => {
   const { store, adapter, profile } = setup();
   store.linkTelegramChat({ chatId: "-100", title: "Test group", allowedSenders: ["42"] });

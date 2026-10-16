@@ -14,7 +14,7 @@ export interface TelegramUpdate {
   update_id: number;
   my_chat_member?: { chat: { id: number | string; title?: string; type?: string }; from: { id: number }; date: number; old_chat_member: { status: string }; new_chat_member: { status: string; is_member?: boolean } };
   callback_query?: { id: string; from?: { id:number }; data?: string; message?: { message_id: number; chat: { id: number | string } } };
-  message?: { from?: { id:number; first_name?:string; last_name?:string; is_bot?:boolean }; sender_chat?: { id:number }; is_topic_message?:boolean; message_thread_id?:number; date?:number; migrate_to_chat_id?:number|string; migrate_from_chat_id?:number|string; voice?:TelegramFile; audio?:TelegramFile; video_note?:TelegramFile; document?:TelegramFile & {file_name?:string;mime_type?:string}; photo?:TelegramFile[]; caption?:string; reply_to_message?: { message_id: number; from?: { id: number; is_bot?: boolean; username?: string } }; message_id: number; text?: string; chat: { id: number | string; title?: string; type?: string } };
+  message?: { from?: { id:number; first_name?:string; last_name?:string; is_bot?:boolean }; sender_chat?: { id:number }; is_topic_message?:boolean; message_thread_id?:number; date?:number; migrate_to_chat_id?:number|string; migrate_from_chat_id?:number|string; voice?:TelegramFile; audio?:TelegramFile; video_note?:TelegramFile; video?:TelegramFile; document?:TelegramFile & {file_name?:string;mime_type?:string}; photo?:TelegramFile[]; caption?:string; reply_to_message?: { message_id: number; from?: { id: number; is_bot?: boolean; username?: string } }; message_id: number; text?: string; chat: { id: number | string; title?: string; type?: string } };
 }
 type TelegramFile = {file_id:string;file_size?:number};
 
@@ -356,7 +356,7 @@ export class TelegramAdapter {
       this.store.markTelegramUpdate(update.update_id); return;
     }
     if (message?.chat.title) this.store.renameTelegramGroup(String(message.chat.id), message.chat.title);
-    if (!message || (!message.text?.trim() && !message.voice && !message.audio && !message.video_note && !message.document && !message.photo?.length)) { this.store.markTelegramUpdate(update.update_id); return; }
+    if (!message || (!message.text?.trim() && !message.voice && !message.audio && !message.video_note && !message.video && !message.document && !message.photo?.length)) { this.store.markTelegramUpdate(update.update_id); return; }
     const chatId = String(message.chat.id); let text = (message.text ?? message.caption)?.trim() ?? "";
     const groupStart = text.match(/^\/start@([\w]+)\s+choose$/i);
     if (groupStart && Number(chatId) < 0 && groupStart[1]!.toLowerCase() === (this.bot?.username ?? this.store.getSetting("telegram.bot_username"))?.toLowerCase()) {
@@ -413,7 +413,7 @@ export class TelegramAdapter {
     const externalId = chatId + ":" + String(message.message_id), author = [message.from?.first_name,message.from?.last_name].filter(Boolean).join(" ") || undefined;
     let received = false;
     const prepared=(this.preparations.get(chatId) ?? Promise.resolve({text:""})).catch(()=>({text:""})).then(async()=>{
-      const media=message.voice ?? message.audio ?? message.video_note ?? message.document ?? message.photo?.at(-1);
+      const media=message.voice ?? message.audio ?? message.video_note ?? message.video ?? message.document ?? message.photo?.at(-1);
       if(!media) return {text};
       if((media.file_size ?? 0)>20_000_000) throw new Error("Отправьте файл до 20 МБ.");
       const file=await this.call<{file_path:string;file_size?:number}>("getFile",{file_id:media.file_id});
@@ -422,7 +422,7 @@ export class TelegramAdapter {
       if(!response.ok) throw new Error("Не удалось скачать вложение");
       const bytes=new Uint8Array(await response.arrayBuffer());
       if(bytes.length>20_000_000) throw new Error("Отправьте файл до 20 МБ.");
-      if(message.voice || message.audio || message.video_note) return {text:[text,await this.transcribe(bytes,file.file_path.split(".").at(-1))].filter(Boolean).join("\n")};
+      if(message.voice || message.audio || message.video_note || message.video) return {text:[text,await this.transcribe(bytes,file.file_path.split(".").at(-1))].filter(Boolean).join("\n")};
       const hex=sha256(`${chatId}:${message.message_id}:${media.file_id}`).slice(0,32);
       const id=`${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
       return {text,uploads:[{id,name:message.document?.file_name ?? "photo.jpg",mimeType:message.document ? message.document.mime_type ?? "application/octet-stream" : "image/jpeg",contentBase64:Buffer.from(bytes).toString("base64")}]};

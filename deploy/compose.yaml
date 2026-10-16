@@ -21,8 +21,8 @@ services:
       - "${OPENSTRUDEL_PUBLIC_PORT:-7789}:7789"
     volumes:
       - data:/data
-    mem_limit: 2g
-    cpus: 2
+    mem_limit: ${OPENSTRUDEL_MEMORY:-2g}
+    cpus: ${OPENSTRUDEL_CPUS:-2}
     pids_limit: 512
 volumes:
   data:

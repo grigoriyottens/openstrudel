@@ -40,6 +40,32 @@ afterEach(async () => {
 });
 
 describe("offline voice", () => {
+  it("queues a second recording behind the first instead of refusing it", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(done => { release = done; });
+    const whisper = mocks.run.getMockImplementation()!;
+    mocks.run.mockImplementation(async (binary: string, args: string[]) => {
+      if (binary.endsWith("whisper-cli") && !mocks.run.mock.calls.slice(0, -1).some(([b]) => b.endsWith("whisper-cli"))) await gate;
+      return whisper(binary, args);
+    });
+    const first = transcribeVoice(new Uint8Array([1])), second = transcribeVoice(new Uint8Array([2]));
+    await vi.waitFor(() => expect(mocks.run.mock.calls.filter(([b]) => b.endsWith("whisper-cli"))).toHaveLength(1));
+    // The second recording has not started while the first is being recognised.
+    expect(mocks.run.mock.calls.filter(([b]) => b.endsWith("ffprobe"))).toHaveLength(1);
+    release();
+    await expect(first).resolves.toBe("Привет, мир.");
+    await expect(second).resolves.toBe("Привет, мир.");
+    expect(mocks.run.mock.calls.filter(([b]) => b.endsWith("whisper-cli"))).toHaveLength(2);
+  });
+
+  it("gives Whisper the processors the Home may use", async () => {
+    await transcribeVoice(new Uint8Array([1]));
+    const [, args, options] = mocks.run.mock.calls.find(([b]) => b.endsWith("whisper-cli"))!;
+    const threads = Number(args[args.indexOf("-t") + 1]);
+    expect(threads).toBeGreaterThanOrEqual(2); expect(threads).toBeLessThanOrEqual(8);
+    expect(options.env.OMP_NUM_THREADS).toBe(String(threads));
+  });
+
   it("rejects empty and oversized audio before starting a process", async () => {
     await expect(transcribeVoice(new Uint8Array())).rejects.toThrow("пустое");
     await expect(transcribeVoice(new Uint8Array(20_000_001))).rejects.toThrow("20 МБ");
@@ -125,8 +151,9 @@ describe("offline voice", () => {
         await writeFile(args.at(-1)!, pcmWav());
       }
       if (binary.endsWith("whisper-cli")) {
-        expect(args).toEqual(expect.arrayContaining(["-l", "auto", "-t", "2", "-ng", "-fa"]));
-        expect(options.env).toMatchObject({ OPENBLAS_NUM_THREADS: "2", OMP_NUM_THREADS: "2" });
+        const threads = args[args.indexOf("-t") + 1];
+        expect(args).toEqual(expect.arrayContaining(["-l", "auto", "-t", threads, "-ng", "-fa"]));
+        expect(options.env).toMatchObject({ OPENBLAS_NUM_THREADS: threads, OMP_NUM_THREADS: threads });
         const prefix = args[args.indexOf("-of") + 1];
         expect(dirname(prefix)).toBe(mocks.directories.at(-1));
         await writeFile(prefix + ".txt", "Привет, мир.\n");
@@ -137,15 +164,18 @@ describe("offline voice", () => {
     expect(mocks.run).toHaveBeenCalledTimes(3);
   });
 
-  it("keeps one recognition in memory and releases the slot after failure", async () => {
+  it("keeps one recognition in memory and goes on with the next after a failure", async () => {
     let reject!: (error: Error) => void;
     mocks.run.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
     const first = transcribeVoice(new Uint8Array([1]));
     const firstResult = first.catch(error => error);
     await vi.waitFor(() => expect(reject).toBeTypeOf("function"));
-    try { await expect(transcribeVoice(new Uint8Array([2]))).rejects.toThrow("Уже распознаю"); }
-    finally { reject(new Error("broken audio")); }
+    const second = transcribeVoice(new Uint8Array([2]));
+    // The second recording waits; it does not start a second model alongside the first.
+    expect(mocks.run).toHaveBeenCalledTimes(1);
+    reject(new Error("broken audio"));
     expect(await firstResult).toMatchObject({ message: expect.stringContaining("прочитать") });
+    expect(await second).toBe("Привет, мир.");
     expect(await transcribeVoice(new Uint8Array([3]))).toBe("Привет, мир.");
   });
 
