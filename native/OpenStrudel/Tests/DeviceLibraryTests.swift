@@ -626,6 +626,73 @@ private final class CredentialReadGate: @unchecked Sendable {
         #expect(log.entries.allSatisfy { !$0.allowed }, "\(log.entries)")
     }
 
+    @Test func onlyTheOwnerOfAHomeThatKeepsThePrivateChatAnsweringChoosesWhoAnswersIt() async throws {
+        let fixture = DevicesFixture()
+        fixture.bot = true
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        // The employees offered for the private chat; nil keeps the plain «В Telegram отвечает …» line.
+        func responders(_ client: HomeClient) -> [String]? {
+            guard let chat = client.telegram?.chats?.first else { return nil }
+            return client.telegramResponders(for: chat)?.map(\.id)
+        }
+        await client.load()
+        #expect(client.telegram?.chats?.first?.chatId == "42")
+        #expect(client.ownsDevice)
+        #expect(responders(client) == nil, "An older Home pauses the private chat when it returns to the main assistant")
+        fixture.flags["telegramPrivateChoiceVersion"] = 1
+        await client.load()
+        #expect(responders(client) == ["employee"])
+        fixture.telegramResponder = "employee"
+        await client.load()
+        #expect(responders(client) == ["employee"])
+        // The chat still answers with an employee that has left this device; the plain line keeps its name.
+        fixture.telegramResponder = "moved"
+        await client.load()
+        #expect(responders(client) == nil)
+        fixture.telegramResponder = nil
+        // The only employee lives on another device, so this device has no one to choose.
+        fixture.profileDevice = "worker"
+        await client.load()
+        #expect(responders(client) == nil)
+        // The employee's bot runs on another device, whose version this connection cannot see.
+        await client.selectProfile("employee")
+        #expect(client.activeProfile?.deviceId == "worker")
+        #expect(responders(client) == nil)
+
+        let other = DevicesFixture()
+        other.bot = true; other.flags["telegramPrivateChoiceVersion"] = 1
+        other.accountUnavailable = true; other.colleague = true
+        let (colleague, cleanupColleague) = makeClient(other, saved: ["openstrudel.homeURL": "https://server.test:7789"])
+        defer { cleanupColleague() }
+        await colleague.load()
+        #expect(colleague.health?.telegramPrivateChoiceVersion == 1)
+        #expect(colleague.telegram?.chats?.first?.chatId == "42")
+        #expect(responders(colleague) == nil, "Only the device's owner may change who answers")
+    }
+
+    @Test func aSlowTelegramReadDoesNotUndoTheChosenResponder() async throws {
+        let fixture = DevicesFixture()
+        fixture.bot = true
+        let (client, cleanup) = makeClient(fixture)
+        defer { cleanup() }
+        await client.load()
+        #expect(client.telegram?.chats?.first?.profileId == nil)
+        // The poll, the catalogue and a full load began before the choice and answer later with what they saw then.
+        fixture.holdTelegram = true
+        let poll = Task { await client.loadChatSettings() }
+        let catalogue = Task { await client.refreshCatalogue() }
+        for _ in 0..<500 where fixture.heldTelegramReads < 2 { try await Task.sleep(for: .milliseconds(10)) }
+        let load = Task { await client.load() }
+        for _ in 0..<500 where fixture.heldTelegramReads < 3 { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(fixture.heldTelegramReads == 3)
+        await client.bindTelegram(chatID: "42", profileID: "employee")
+        #expect(client.telegram?.chats?.first?.profileId == "employee")
+        fixture.holdTelegram = false
+        await poll.value; await catalogue.value; await load.value
+        #expect(client.telegram?.chats?.first?.profileId == "employee")
+    }
+
     private func makeClient(_ fixture: DevicesFixture, saved: [String: String] = [:]) -> (HomeClient, () -> Void) {
         let suite = "OpenStrudel.devices-test." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
@@ -718,17 +785,36 @@ private final class KeychainLog: @unchecked Sendable {
     var invitations: [(id: String, owner: Bool)] = []
     var cancelledInvitationIDs: [String] = []
     private var issuedInvitations = 0
+    /// The device runs a bot linked to the owner's private chat 42.
+    var bot = false
+    /// The employee lives on another device of this Home.
+    var profileDevice: String?
+    var telegramResponder: String?
+    /// Telegram reads wait, then answer with what they saw on arrival, like a slow poll.
+    var holdTelegram = false
+    var heldTelegramReads = 0
+    private func telegram() -> [String: Any] {
+        ["configured": true, "running": true, "linkedChats": ["42"],
+         "chats": [["chatId": "42", "title": "Личный чат", "profileId": telegramResponder.map { $0 as Any } ?? NSNull(), "allowedSenders": ["42"], "enabled": true]]]
+    }
+    private func readTelegram() async -> [String: Any] {
+        let seen = telegram()
+        if holdTelegram { heldTelegramReads += 1 }
+        while holdTelegram { try? await Task.sleep(for: .milliseconds(10)) }
+        return seen
+    }
     func respond(_ request: URLRequest) async -> (Int, Data) {
         if offline { return (503, Data()) }
         if revoked { return (401, Data()) }
         let path = request.url!.path, method = request.httpMethod ?? "GET"
         func json(_ value: Any) -> (Int, Data) { (200, try! JSONSerialization.data(withJSONObject: value)) }
-        let profile: () -> [String: Any] = { ["id": "employee", "name": self.profileName, "instructions": self.instructions, "capabilities": [], "createdAt": "2026-10-09T00:00:00Z"] }
+        let profile: () -> [String: Any] = { ["id": "employee", "name": self.profileName, "instructions": self.instructions, "capabilities": [], "createdAt": "2026-10-09T00:00:00Z", "deviceId": self.profileDevice ?? NSNull()] }
         if method == "GET", path == "/v1/mobile" { mobileChecks += 1 }
         switch (method, path) {
         case ("GET", "/health"):
             healthChecks += 1
             return json((["ok": true, "homeId": "home-fixture", "homeProtocol": 1, "nodeId": "node"] as [String: Any]).merging(flags) { _, new in new })
+        case ("GET", "/v1/profiles") where bot: return json(["profiles": [profile()], "telegram": await readTelegram()])
         case ("GET", "/v1/profiles"): return json(["profiles": [profile()]])
         case ("PATCH", "/v1/profiles/employee"):
             let body = (try? JSONSerialization.jsonObject(with: Self.body(request))) as? [String: Any] ?? [:]
@@ -745,7 +831,11 @@ private final class KeychainLog: @unchecked Sendable {
             return json(["account": ["connected": true, "managed": true], "canManage": true])
         case ("GET", "/v1/mobile") where mobileTimesOut: return (504, Data())
         case ("GET", "/v1/mobile") where colleague: return (403, Data(#"{"error":"Откройте настройки на Mac"}"#.utf8))
+        case ("GET", "/v1/integrations") where bot: return json(["telegram": await readTelegram()])
         case ("GET", "/v1/integrations"): return json(["telegram": ["configured": false, "running": false, "linkedChats": []]])
+        case ("PATCH", "/v1/integrations/telegram/chats/42"):
+            telegramResponder = ((try? JSONSerialization.jsonObject(with: Self.body(request))) as? [String: Any])?["profileId"] as? String
+            return json(["telegram": telegram()])
         case ("GET", "/v1/mobile"):
             guard flags["colleagueInvitesVersion"] == 1 else {
                 return json(["connections": 1, "clients": [["id": "legacy", "name": "Устройство 1", "owner": true]]])

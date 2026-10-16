@@ -162,10 +162,11 @@ export class TelegramAdapter {
   }
 
   bindChat(chatId: string, profileId: string | null): void {
-    if (this.activeChats.has(chatId)) throw new Error("Сотрудник ещё отвечает в этой группе. Дождитесь ответа и повторите.");
+    if (this.activeChats.has(chatId)) throw new Error("В этом чате ещё идёт ответ. Дождитесь его и повторите.");
     const previous = this.store.getTelegramChat(chatId);
     this.store.bindTelegramChat(chatId, profileId);
-    if (profileId) this.store.deleteSetting("telegram.paused." + chatId);
+    // Only groups pause; a private chat always answers.
+    if (profileId || Number(chatId) > 0) this.store.deleteSetting("telegram.paused." + chatId);
     else this.store.setSetting("telegram.paused." + chatId, "true");
     if (Number(chatId) < 0 && profileId && !previous?.profileId) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='mentions' WHERE chat_id=?").run(chatId);
   }
