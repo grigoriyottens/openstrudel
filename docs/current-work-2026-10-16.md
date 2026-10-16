@@ -319,7 +319,7 @@ checkout and other chats' files remain untouched.
   opens the original histories. The backup is marked healthy.
 - iOS 46 archived and exported with the existing App Store signing identity.
   Apple accepted the upload, delivery `81339fbd-d34e-48ea-b7ef-94c5b1e2ae3a`.
-  Processing/internal TestFlight availability is still being checked. Archive
+  It is now VALID and IN_BETA_TESTING in the existing internal group Mik. Archive
   builds used the managed native wrapper; export used Xcode's separate export
   operation because it rejects the wrapper's DerivedData/project flags.
 - Full installed-app service sign-in is still pending. The browser security
@@ -340,3 +340,11 @@ checkout and other chats' files remain untouched.
   cache after an open-file check. Managed healthy-backup retention removed one
   older snapshot. Active builds, private data, release archives and Codex history
   remain intact; the current memory pressure is normal.
+- PR #53 merged at `f0c4b5c`; its finished local/remote branch was removed after
+  verifying both tips are ancestors of main. The main checkout is up to date.
+  The final Home 46 archive passes both shipped extractors with matching source
+  bytes; its packaging/installer suite passed 49 tests. Sparkle 46's archive
+  signature and enclosure length also verify, but the public feed is still 45.
+- Computer Use confirms the installed About panel shows 1.0 (46). Private proof:
+  `.data/release-46/installed-build46.png`. Latest resource check: 8.3 GiB free
+  disk space and normal memory pressure (55% free).
