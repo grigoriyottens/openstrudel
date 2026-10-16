@@ -1,4 +1,4 @@
-# OpenStrudel — build 45 continuation
+# OpenStrudel — builds 45 and 46 continuation
 
 The owner's 16 October handoff is the baseline. Build 45 is now published from
 `64fa34f` (PR #47, after the six earlier merged PRs). Do not repeat the completed
@@ -304,3 +304,39 @@ checkout and other chats' files remain untouched.
   AuthenticationServices. Actual browser opening passed; full callback acceptance
   awaits an installed candidate because the production URL handler receives the
   isolated QA app's callback. Do not claim a real Notion grant or public release 46.
+
+## Installed build 46 acceptance
+
+- PR #51 merged at `36c2cb7`. PR #52's scoped notification hook is also included
+  in the staged runtime from `c8a7d0f`; its focused notification/timezone checks
+  passed (9 tests). Only the release version and generated Xcode project changed
+  after the native acceptance tests recorded above.
+- Mac 46 and its DMG are Developer ID signed, notarized (Accepted), stapled and
+  accepted by Gatekeeper. Packaged runtime/installer checks: 5 passed. The app
+  was installed atomically on this Mini after the managed backup
+  `backup-20261016T144722Z-a66328f0`. Health and integrity passed; all 8 employee
+  profiles, 18 conversations, 2,155 messages and 4 schedules remain. The app
+  opens the original histories. The backup is marked healthy.
+- iOS 46 archived and exported with the existing App Store signing identity.
+  Apple accepted the upload, delivery `81339fbd-d34e-48ea-b7ef-94c5b1e2ae3a`.
+  Processing/internal TestFlight availability is still being checked. Archive
+  builds used the managed native wrapper; export used Xcode's separate export
+  operation because it rejects the wrapper's DerivedData/project flags.
+- Full installed-app service sign-in is still pending. The browser security
+  policy blocked the test invitation's custom-scheme navigation and explicitly
+  prohibits a workaround. The user has been asked to open that disposable local
+  invitation manually. No real service permissions or production credentials
+  were changed. Sparkle remains on 45 until this acceptance is complete.
+- The parallel migration task reports both Wolf and WaiClaw on `c8a7d0f` with
+  health/integrity/counts preserved and timestamped rollback snapshots. That
+  task owns WAI Web hooks and MacBook client-only setup. Mini client-only awaits
+  verification of its unique jobs and an actual remote connection.
+- WAI News/Connect remain active in the old OpenClaw SQLite scheduler. Connect
+  still fails Telegram authentication (401); the five active news/connect jobs
+  and their source/delivery journals have not been disabled. The new personal
+  host rejects this Mac's and the old host's existing SSH keys. Host-key checks
+  remained strict; no credentials or access rules were changed.
+- Safe cache cleanup removed 1.49 GiB of an unused reproducible dependency
+  cache after an open-file check. Managed healthy-backup retention removed one
+  older snapshot. Active builds, private data, release archives and Codex history
+  remain intact; the current memory pressure is normal.
