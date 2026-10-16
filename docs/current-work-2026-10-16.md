@@ -471,3 +471,34 @@ checkout and other chats' files remain untouched.
   concise Mini status and exact News history package are documented in private
   `MINI-FINAL-HANDOFF.md`; local Home/relay remain enabled pending actual remote
   app access. Do not report the entire migration or public release complete.
+
+## Live resource tuning and production Mini connection
+
+- Checked the pinned recognizer build: AVX2/FMA/F16C are already enabled on
+  Wolf's EPYC CPU. No new binary, CPU-specific build or recognizer fork is
+  needed. A controlled full-context comparison at 4/6/8 threads preserved the
+  exact Russian and Spanish transcripts; eight threads took about 21 seconds.
+- Wolf had eight CPUs available but its documented container limit was four.
+  Raised only `OPENSTRUDEL_CPUS` to eight, with the prior configuration saved
+  in `/root/openstrudel-resources-20261016T163710Z`. Applied the resource limit
+  live to the same container; memory remains capped at 2 GiB, with no restart.
+  The production recognition module then completed the recovered real voice in
+  19.89 seconds with the expected text. Fourteen concurrent health checks
+  passed (worst 70 ms); observed container memory peaked at 1,409 MiB.
+  Private receipts: `.data/voice-quality-46/resource-acceptance.json`.
+- The rejected browser action was specifically the isolated OAuth fixture's
+  custom-scheme invitation. Its exact refusal is retained privately. A separate
+  real Wolf invitation was accepted through the installed app's normal native
+  Connect with a link flow. Wolf's employee list, existing root conversation
+  and transferred conference history are visible on Mini. This does not count
+  the blocked disposable OAuth test as passed.
+- The migration task reports four active News/Connect schedules after live
+  X/Apollo/Parallel checks and final old Core shutdown. Its content comparison
+  matched 998 Mini News rows, preserved three service/empty rows in the raw
+  archive and imported 109 unique historical rows (10 hidden). A second import
+  adds zero; 99 visible rows pass the target app API check. The full source
+  remains retained. Actual Telegram.app on Mini independently shows the new
+  WaiClaw card with its link preview and a later real meeting notification.
+- Personal Telegram MCP currently returns HTTP 404 on a separate host. The
+  migration task observed the failure before Core shutdown. No other task's
+  Telegram deployment or access configuration was changed here.

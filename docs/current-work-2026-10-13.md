@@ -2,6 +2,8 @@
 
 User requests remain active when new questions arrive. Implementation and verification are separate; a build is not product acceptance.
 
+The active 16 October continuation is in [current-work-2026-10-16.md](current-work-2026-10-16.md). The entries below retain the earlier acceptance history; they are not the current release status.
+
 **Latest checkpoint: 14 October 2026.** Design PR #30 and release PR #31 are merged in main. Mac/Home/Sparkle **42** are public; the installed Mac is 42 and iOS 42 is in internal TestFlight. The App Review Home was updated to 42 with preserved data and a real model reply. Public App Store version 1.0 still retains build **34**, `WAITING_FOR_REVIEW`. The user explicitly authorized publication before the remaining provider acceptance. See [build 42 delivery](releases/2026-10-14-build-42.md).
 
 The original Sparkle signing key is now backed up and read back from 1Password (Development, **OpenStrudel Sparkle EdDSA private key**). The temporary export was removed; the application's public key is unchanged. Mac mini SSH is reachable again, but its last observed installed version was 40, not proof of automatic installation of 42.
