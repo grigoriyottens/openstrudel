@@ -111,7 +111,8 @@ it("blocks rebinding until the original answer is delivered", async () => {
   run.mockImplementationOnce(async () => { await new Promise<void>(resolve => { finish = resolve; }); return { threadId: "fixture", response: "Ready", events: [] }; });
   const turn = adapter.processUpdate(message(1, "Please continue"));
   await vi.waitFor(() => expect(finish).toBeDefined());
-  expect(() => adapter.bindChat("-100", null)).toThrow("ещё отвечает");
+  // The same refusal reaches a private chat, so it does not say «группа».
+  expect(() => adapter.bindChat("-100", null)).toThrow("В этом чате ещё идёт ответ. Дождитесь его и повторите.");
   finish(); await turn; adapter.bindChat("-100", null);
   expect(store.getTelegramChat("-100")?.profileId).toBeNull();
 });
@@ -159,4 +160,27 @@ it("never gives a different bot the old update cursor or membership events", asy
   expect(store.wasTelegramUpdateProcessed(10)).toBe(false);
   expect(store.telegramChats()).toHaveLength(0);
   expect(store.listMessages(chat.id)[0]?.text).toBe("Keep history");
+});
+
+it("answers a pairing /start that Telegram delivers twice only once", async () => {
+  const { store, adapter } = setup(); const link = adapter.createLink();
+  const start = (id: number) => message(id, `/start ${link.code}`, 77, 77, { message_id: 1950 });
+  const sent = () => vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/sendMessage")).map(([, init]) => JSON.parse(String(init!.body))).map(({ chat_id, text }) => ({ chat_id, text }));
+  await Promise.all([adapter.processUpdate(start(565291610)), adapter.processUpdate(start(565291611))]);
+  expect(store.getTelegramChat("77")).toMatchObject({ allowedSenders: ["77"] });
+  expect(sent()).toEqual([{ chat_id: "77", text: "Telegram подключён. Здесь отвечает «Общий помощник»." }]);
+  // Only the chat that redeemed the link is spared the refusal.
+  vi.mocked(fetch).mockClear();
+  await adapter.processUpdate(message(565291612, `/start ${link.code}`, 88, 88));
+  expect(store.getTelegramChat("88")).toBeNull();
+  expect(sent()).toEqual([{ chat_id: "88", text: "Ссылка уже использована или устарела. Откройте новую в OpenStrudel." }]);
+});
+
+it("does not re-answer a redeemed pairing when its uncertain update is replayed", async () => {
+  const { store, adapter, messages } = setup(); const link = adapter.createLink();
+  vi.mocked(fetch).mockRejectedValueOnce(new Error("socket hang up"));
+  await expect(adapter.processUpdate(message(7, `/start ${link.code}`, 77, 77))).rejects.toThrow();
+  vi.mocked(fetch).mockClear();
+  await new TelegramAdapter("123:test", store, messages).processUpdate(message(7, `/start ${link.code}`, 77, 77));
+  expect(store.wasTelegramUpdateProcessed(7)).toBe(true); expect(fetch).not.toHaveBeenCalled();
 });

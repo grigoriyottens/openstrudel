@@ -147,6 +147,8 @@ final class HomeClient: ObservableObject, Identifiable {
         // An offline launch keeps the screens this Home served last time.
         didSet {
             guard let health else { return }
+            // The owner's lists follow what this Home supports, so a change asks the owner check again.
+            if health.colleagueInvitesVersion != oldValue?.colleagueInvitesVersion { managementChecked = -1 }
             servedTimeline = health.employeeTimelineVersion == 1; defaults.set(servedTimeline, forKey: "openstrudel.employeeTimeline")
             // However the feed is found, a group opened before it closes, so the composer stays private.
             if usesEmployeeTimeline && selectedChatID != nil { selectedChatID = nil; conversationID = nil; resetHistory() }
@@ -198,6 +200,8 @@ final class HomeClient: ObservableObject, Identifiable {
     private var latestReachabilityCheck = 0
     private var refreshingCatalogue: Int?
     private var catalogueETag: String?
+    /// Each Telegram change bumps it; a read that began earlier must not undo the change.
+    private var telegramGeneration = 0
     @Published var syncError: String?
     @Published private(set) var isCreating = false
     @Published var draftEmployeeDomain = "personal"
@@ -663,9 +667,12 @@ final class HomeClient: ObservableObject, Identifiable {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func refreshMobileStatus() async {
+    /// Whether the Home answered. Only its refusal or an expired credential takes owner rights away.
+    @discardableResult func refreshMobileStatus() async -> Bool {
         struct Status: Decodable { let connections: Int; let clients: [MobileClient]?; let invitations: [WaitingInvitation]? }
-        if let status: Status = try? await request("/v1/mobile") {
+        var refusal: Int?
+        do {
+            let status = try decoder.decode(Status.self, from: try await requestData("/v1/mobile", refused: { refusal = $0 }))
             mobileConnections = status.connections
             let clients = supportsColleagueInvites ? status.clients ?? [] : []
             if mobileClients != clients { mobileClients = clients }
@@ -673,7 +680,15 @@ final class HomeClient: ObservableObject, Identifiable {
             if waitingInvitations != invitations { waitingInvitations = invitations }
             canManageConnections = true
             if openAIAccount != nil { canManageOpenAI = true }
-        } else { canManageConnections = false; mobileClients = []; waitingInvitations = [] }
+            return true
+        } catch HomeClientError.authenticationExpired {
+            // A revoked credential answers as clearly as a refusal.
+        } catch {
+            // A timeout or failure is no answer: the last one stands and the next load asks again.
+            guard refusal == 403 else { return false }
+        }
+        canManageConnections = false; mobileClients = []; waitingInvitations = []
+        return true
     }
 
     /// Several colleague links can wait for 24 hours, and the owner sees each paired device.
@@ -734,17 +749,18 @@ final class HomeClient: ObservableObject, Identifiable {
             if let homeId = loadedHealth.homeId { defaults.set(homeId, forKey: "openstrudel.catalogueIdentity") }
             await refreshDevicePresence(generation: generation)
             // Owning the device decides who manages and renames it; its ChatGPT account may be unavailable.
-            if loadedHealth.homeProtocol == 1, managementChecked != generation { managementChecked = generation; await refreshMobileStatus() }
+            if loadedHealth.homeProtocol == 1, managementChecked != generation, await refreshMobileStatus() { managementChecked = generation }
             guard generation == connectionGeneration else { return }
             if catalogueLoaded == true, reachability >= latestReachabilityCheck { connectionState = .connected; homeUnreachable = false; connectionNeedsPairing = false }
             // Publish employees before waiting for provider state.
+            let telegramRead = telegramGeneration
             async let integrations: TelegramEnvelope? = try? request("/v1/integrations")
             async let account = loadOpenAIAccount()
 
             await refreshConversation()
             let (value, loadedAccount) = try await (integrations, account)
             guard generation == connectionGeneration else { return }
-            if let value { telegram = value.telegram }
+            if let value, telegramRead == telegramGeneration { telegram = value.telegram }
             applyOpenAIAccount(loadedAccount)
         } catch {
             guard generation == connectionGeneration else { return }
@@ -767,7 +783,7 @@ final class HomeClient: ObservableObject, Identifiable {
     /// deletion or overwrite a newly created employee.
     @discardableResult func refreshCatalogue(refreshPresence: Bool = true, reachabilityCheck: Int? = nil) async -> Bool? {
         guard acceptsOperations, isConfigured, !isSignedOut, refreshingCatalogue == nil else { return nil }
-        let generation = connectionGeneration, catalogue = catalogueGeneration
+        let generation = connectionGeneration, catalogue = catalogueGeneration, telegramRead = telegramGeneration
         let reachability = reachabilityCheck ?? nextReachabilityCheck()
         refreshingCatalogue = generation
         defer { if refreshingCatalogue == generation { refreshingCatalogue = nil } }
@@ -778,7 +794,7 @@ final class HomeClient: ObservableObject, Identifiable {
             guard catalogue == catalogueGeneration else { catalogueETag = nil; return nil }
             if !data.isEmpty {
                 let loaded = try decoder.decode(ProfilesEnvelope.self, from: data)
-                if let status = loaded.telegram {
+                if let status = loaded.telegram, telegramRead == telegramGeneration {
                     telegram = status
                     // A removed/reassigned chat must not stay selected under its old employee.
                     if let selectedChatID, !(loaded.importedConversations ?? importedConversations).contains(where: { $0.id == selectedChatID }),
@@ -804,10 +820,11 @@ final class HomeClient: ObservableObject, Identifiable {
             catalogueETag = etag
             guard reachability >= latestReachabilityCheck else { return nil }
             latestReachabilityCheck = reachability
+            let returned = homeUnreachable
             if connectionState != .connected { connectionState = .connected }
             if homeUnreachable { homeUnreachable = false }
             if connectionNeedsPairing { connectionNeedsPairing = false }
-            if refreshPresence { await refreshDevicePresence(generation: generation) }
+            if refreshPresence { await refreshDevicePresence(generation: generation, reloadHealth: returned) }
             return true
         } catch {
             guard generation == connectionGeneration else { return nil }
@@ -827,10 +844,11 @@ final class HomeClient: ObservableObject, Identifiable {
         return reachabilitySequence
     }
 
-    private func refreshDevicePresence(generation: Int) async {
+    private func refreshDevicePresence(generation: Int, reloadHealth: Bool = false) async {
         // Presence changes independently of the employee catalogue's ETag.
-        // Recover health here too when this device was offline at app launch.
-        if health == nil, let loaded: HomeHealth = try? await request("/health"),
+        // Recover health here too when this device was offline at app launch,
+        // and after it returns: an update may have changed what it supports.
+        if health == nil || reloadHealth, let loaded: HomeHealth = try? await request("/health"),
            generation == connectionGeneration, !connectionNeedsPairing {
             health = loaded
             if let homeId = loaded.homeId { defaults.set(homeId, forKey: "openstrudel.catalogueIdentity") }
@@ -1152,8 +1170,9 @@ final class HomeClient: ObservableObject, Identifiable {
 
     func loadChatSettings() async {
         do {
+            let telegramRead = telegramGeneration
             let value: TelegramEnvelope = try await request("/v1/integrations" + employeeDeviceQuery)
-            telegram = value.telegram
+            if telegramRead == telegramGeneration { telegram = value.telegram }
             // The employee card keeps a schedule made in any of its chats, with that chat's latest run.
             var found: [ChatSchedule] = [], latest: [ScheduleRun] = [], scopes = Set<String>()
             for scope in ([conversationID] + employeeTelegramChats.map(\.conversationId)).compactMap({ $0 }) where scopes.insert(scope).inserted {
@@ -1217,7 +1236,7 @@ final class HomeClient: ObservableObject, Identifiable {
         do {
             let body = try JSONSerialization.data(withJSONObject: ["profileId": profileID as Any? ?? NSNull()])
             let response: TelegramEnvelope = try await request("/v1/integrations/telegram/chats/" + chatID + employeeDeviceQuery, method: "PATCH", body: body)
-            telegram = response.telegram
+            telegramGeneration += 1; telegram = response.telegram
             await refreshConversation()
         } catch { errorMessage = error.localizedDescription }
     }
@@ -1225,7 +1244,7 @@ final class HomeClient: ObservableObject, Identifiable {
     func setTelegramGroupEnabled(_ chatID: String, enabled: Bool) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["enabled": enabled])
         let response: TelegramEnvelope = try await request("/v1/integrations/telegram/chats/" + chatID + employeeDeviceQuery, method: "PATCH", body: body)
-        telegram = response.telegram
+        telegramGeneration += 1; telegram = response.telegram
     }
 
     func setSchedule(_ schedule: ChatSchedule, enabled: Bool) async {
@@ -1409,22 +1428,33 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     private var employeeDeviceQuery: String { activeProfile?.deviceId.map { "?deviceId=" + $0 } ?? "" }
+    /// The employees the owner may choose to answer the bot's private chat: this device's employees.
+    /// Nil keeps the plain line instead: a colleague cannot change it, an older device pauses the chat when it
+    /// returns to the main assistant, another device's version is not known here, a device without
+    /// employees has nothing to choose, and an employee that left this device still answers by name.
+    func telegramResponders(for chat: TelegramChat) -> [EmployeeProfile]? {
+        guard ownsDevice, health?.telegramPrivateChoiceVersion == 1, let device = health?.nodeId,
+              (activeProfile?.deviceId ?? device) == device else { return nil }
+        let employees = profiles.filter { $0.deviceId == nil || $0.deviceId == device }
+        guard !employees.isEmpty, chat.profileId.map({ id in employees.contains { $0.id == id } }) ?? true else { return nil }
+        return employees
+    }
 
     func configureTelegram(token: String) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["token": token.trimmingCharacters(in: .whitespacesAndNewlines)])
         let value: TelegramEnvelope = try await request("/v1/integrations/telegram" + employeeDeviceQuery, method: "POST", body: body)
-        telegram = value.telegram
+        telegramGeneration += 1; telegram = value.telegram
     }
 
     func checkTelegramConnection() async throws {
         let value: TelegramEnvelope = try await request("/v1/integrations/telegram/check" + employeeDeviceQuery, method: "POST")
-        telegram = value.telegram
+        telegramGeneration += 1; telegram = value.telegram
     }
 
     func disconnectTelegram() async {
         do {
             let response: TelegramEnvelope = try await request("/v1/integrations/telegram" + employeeDeviceQuery, method: "DELETE")
-            telegram = response.telegram
+            telegramGeneration += 1; telegram = response.telegram
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -1680,7 +1710,7 @@ final class HomeClient: ObservableObject, Identifiable {
                     let pending = relocation!
                     defer { relocation = nil }
                     try await pending.value
-                    if method == "GET" { return try await requestData(path, mayRelocate: false, responseETag: responseETag) }
+                    if method == "GET" { return try await requestData(path, mayRelocate: false, responseETag: responseETag, refused: refused) }
                     throw HomeClientError.server(L("Адрес устройства изменился. Действие не отправлено: повторите его на новом подключении."))
                 }
                 // The Home's own answer, with the status that tells a refusal from a failure.

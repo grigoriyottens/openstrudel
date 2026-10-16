@@ -70,6 +70,8 @@ const originalHandle = api.handle.bind(runtime.api);
 api.handle = async (req, res, ...rest) => {
   if (req.method !== "GET") await appendFile(output + ".requests.jsonl", JSON.stringify({ at: new Date().toISOString(), method: req.method, path: new URL(req.url, "http://127.0.0.1").pathname }) + "\n", { mode: 0o600 });
   if (offline) { res.writeHead(503).end('{"error":"Тестовое отключение"}'); return; }
+  // Saving who answers the private chat takes a moment, as over a network.
+  if (req.method === "PATCH" && req.url?.startsWith("/v1/integrations/telegram/chats/42")) await new Promise(done => setTimeout(done, 5000));
   await originalHandle(req, res, ...rest);
 };
 Object.assign((runtime.api.mobile as any).options, { port: 0, host: "127.0.0.1", hostname: "127.0.0.1", directory: join(directory, "mobile") });

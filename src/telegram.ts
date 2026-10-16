@@ -162,10 +162,11 @@ export class TelegramAdapter {
   }
 
   bindChat(chatId: string, profileId: string | null): void {
-    if (this.activeChats.has(chatId)) throw new Error("Сотрудник ещё отвечает в этой группе. Дождитесь ответа и повторите.");
+    if (this.activeChats.has(chatId)) throw new Error("В этом чате ещё идёт ответ. Дождитесь его и повторите.");
     const previous = this.store.getTelegramChat(chatId);
     this.store.bindTelegramChat(chatId, profileId);
-    if (profileId) this.store.deleteSetting("telegram.paused." + chatId);
+    // Only groups pause; a private chat always answers.
+    if (profileId || Number(chatId) > 0) this.store.deleteSetting("telegram.paused." + chatId);
     else this.store.setSetting("telegram.paused." + chatId, "true");
     if (Number(chatId) < 0 && profileId && !previous?.profileId) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='mentions' WHERE chat_id=?").run(chatId);
   }
@@ -550,6 +551,8 @@ export class TelegramAdapter {
       if (link && !link.chatId && this.isOwner(sender)) this.store.db.prepare("UPDATE telegram_links SET payload=? WHERE hash=?").run(JSON.stringify({ ...link, error: text }), sha256(code));
       if (Number(chatId) > 0 || this.isOwner(sender)) await this.sendMessage(String(sender), text, `link:${update.update_id}`);
     };
+    // Telegram can deliver the same /start twice; the chat that redeemed this link is already connected.
+    if (link?.chatId === chatId) return;
     if (!link || link.chatId || link.expiresAt < new Date().toISOString() || link.tokenHash !== sha256(this.token ?? "")) {
       await fail("Ссылка уже использована или устарела. Откройте новую в OpenStrudel."); return;
     }

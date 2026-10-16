@@ -29,6 +29,8 @@ struct TelegramSetupView: View {
     @State private var checking = false
     @State private var checked = false
     @State private var confirmDisconnect = false
+    /// The owner's choice while the Home saves it, so the picker does not show the previous responder meanwhile.
+    @State private var choosing: (chatId: String, profileId: String?)?
     private var privateChats: [TelegramChat] { (client.telegram?.chats ?? []).filter(\.isPairedOwner) }
     private var linked: Bool { !privateChats.isEmpty }
 
@@ -77,8 +79,17 @@ struct TelegramSetupView: View {
         }
         if linked {
             ForEach(privateChats) { chat in
-                let name = client.profiles.first(where: { $0.id == chat.profileId })?.name ?? L("Общий помощник")
-                Text(L("В Telegram отвечает \(name)")).foregroundStyle(AppTheme.secondaryText)
+                // The owner chooses once the device has an employee; otherwise the row only says who answers.
+                if let employees = client.telegramResponders(for: chat) {
+                    Picker(L("Личный чат"), selection: Binding(get: { choosing?.chatId == chat.chatId ? choosing?.profileId : chat.profileId }, set: { bind(chat, to: $0) })) {
+                        Text(L("Общий помощник")).tag(String?.none)
+                        ForEach(employees) { Text($0.name).tag(Optional($0.id)) }
+                    }
+                    .disabled(busy).accessibilityIdentifier("telegramResponder-" + chat.chatId)
+                } else {
+                    let name = client.profiles.first(where: { $0.id == chat.profileId })?.name ?? L("Общий помощник")
+                    Text(L("В Telegram отвечает \(name)")).foregroundStyle(AppTheme.secondaryText)
+                }
             }
         } else if !contextual {
             Text(L("Подтвердите свой Telegram, чтобы писать боту и добавлять его в группы."))
@@ -170,6 +181,15 @@ struct TelegramSetupView: View {
             }
         } else {
             openInBrowser()
+        }
+    }
+
+    private func bind(_ chat: TelegramChat, to profileID: String?) {
+        busy = true; error = nil; choosing = (chat.chatId, profileID)
+        Task {
+            await client.bindTelegram(chatID: chat.chatId, profileID: profileID)
+            if let problem = client.errorMessage { error = UserFacingError.text(problem); client.errorMessage = nil }
+            busy = false; choosing = nil
         }
     }
 

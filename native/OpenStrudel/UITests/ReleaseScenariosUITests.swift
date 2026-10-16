@@ -133,8 +133,10 @@ final class ReleaseScenariosUITests: XCTestCase {
         continueAfterFailure = false
         guard let fixture = ProcessInfo.processInfo.environment["OPENSTRUDEL_RELEASE_FIXTURE"] else { throw XCTSkip("Start the isolated fixture.") }
         let app = XCUIApplication()
+        // The flow reads the Russian interface; a fresh simulator opens in English.
+        app.launchArguments = ["-openstrudel.language", "ru", "-AppleLanguages", "(ru)"]
         if let size = ProcessInfo.processInfo.environment["OPENSTRUDEL_QA_CONTENT_SIZE"] {
-            app.launchArguments = ["-UIPreferredContentSizeCategoryName", size]
+            app.launchArguments += ["-UIPreferredContentSizeCategoryName", size]
         }
         XCUIDevice.shared.orientation = ProcessInfo.processInfo.environment["OPENSTRUDEL_QA_LANDSCAPE"] == "1" ? .landscapeLeft : .portrait
         app.launch()
@@ -157,6 +159,23 @@ final class ReleaseScenariosUITests: XCTestCase {
         XCTAssertTrue(app.buttons["addTelegramGroup"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["Связать мой Telegram"].exists)
         XCTAssertFalse(app.buttons["chooseTelegramGroup--100"].exists)
+        // The owner chooses who answers the private chat; the main assistant keeps its history.
+        let privateChat = { (state: [String: Any]) in (state["telegram"] as? [[String: Any]])?.first { $0["chatId"] as? String == "42" } }
+        let direct = try XCTUnwrap(privateChat(state)?["conversationId"] as? String)
+        let responder = app.buttons["telegramResponder-42"]
+        try reveal(responder, in: app)
+        waitUntil(responder, shows: "Общий помощник")
+        try choose("Редактор", in: responder, app)
+        waitUntil(responder, shows: "Редактор", saving: true)
+        try await waitForState(fixture) { privateChat($0)?["profileId"] as? String == state["editor"] as? String }
+        waitUntil(responder, shows: "Редактор")
+        capture("telegram-private-employee", app)
+        try choose("Общий помощник", in: responder, app)
+        waitUntil(responder, shows: "Общий помощник", saving: true)
+        let restored = try await waitForState(fixture) { privateChat($0)?["profileId"] as? String == nil }
+        XCTAssertEqual(privateChat(restored)?["enabled"] as? Bool, true)
+        XCTAssertEqual(privateChat(restored)?["conversationId"] as? String, direct)
+        waitUntil(responder, shows: "Общий помощник")
         let toggle = app.buttons["toggleTelegramGroup--100"]
         try reveal(toggle, in: app)
         capture("telegram-auto-connected", app)
@@ -416,6 +435,31 @@ final class ReleaseScenariosUITests: XCTestCase {
         let (data, response) = try await URLSession.shared.data(from: XCTUnwrap(URL(string: value)))
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    @MainActor private func choose(_ option: String, in picker: XCUIElement, _ app: XCUIApplication) throws {
+        picker.tap()
+        // The menu's option sits above the sheet; rows behind it can share the name.
+        let item = app.buttons.matching(NSPredicate(format: "label == %@", option))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in item.allElementsBoundByIndex.contains(where: \.isHittable) }, object: nil)], timeout: 5), .completed, app.debugDescription)
+        try XCTUnwrap(item.allElementsBoundByIndex.last(where: \.isHittable)).tap()
+    }
+
+    /// The owner sees the chat's responder, and the picker takes the next choice only after the Home answers.
+    /// While the Home saves (the fixture takes 5 s), the picker already shows the owner's choice.
+    @MainActor private func waitUntil(_ picker: XCUIElement, shows option: String, saving: Bool = false) {
+        let shown = NSPredicate(format: "enabled == %@ AND label BEGINSWITH %@ AND (label CONTAINS %@ OR value CONTAINS %@)", NSNumber(value: !saving), "Личный чат", option, option)
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: shown, object: picker)], timeout: saving ? 2 : 10), .completed, picker.debugDescription)
+    }
+
+    @MainActor @discardableResult private func waitForState(_ fixture: String, until condition: ([String: Any]) -> Bool) async throws -> [String: Any] {
+        for _ in 0..<20 {
+            let state = try await read(fixture + "/state")
+            if condition(state) { return state }
+            try await Task.sleep(for: .milliseconds(500))
+        }
+        XCTFail("The fixture state did not change.")
+        throw NSError(domain: "ReleaseUI", code: 2)
     }
 
     @MainActor private func capture(_ name: String, _ app: XCUIApplication) {
