@@ -154,7 +154,11 @@ export class MessageService {
             telegramActor: input.channel === "telegram" && input.telegramSenderId && input.externalChatId && input.externalId
               ? {userId:input.telegramSenderId,chatId:input.externalChatId,messageId:input.externalId} : undefined,
             images: files.filter(f=>["image/png","image/jpeg","image/webp","image/gif"].includes(f.mimeType)).map(f=>f.path),
-            profile: [currentProfile ? `${currentProfile.name}\n${currentProfile.instructions}` : this.store.getSetting("main.soul"), ownerTimezone(this.store)
+            profile: [currentProfile ? `${currentProfile.name}\n${currentProfile.instructions}` : this.store.getSetting("main.soul"),
+              currentProfile && !currentProfile.instructions.trim() && !groupContext && !input.scheduled
+                ? "This employee has already been created on the selected device. You are in its own setup conversation. When the user describes the desired name and ongoing role, including a request to create that employee, configure yourself with update_employee. Do not create a second employee or claim that creation is unavailable. A greeting or a one-off task alone does not define an ongoing role."
+                : undefined,
+              ownerTimezone(this.store)
               ? `Owner timezone: ${ownerTimezone(this.store)}. Use it for relative dates and new schedules unless the user specifies another timezone. In save_schedule, an empty timezone uses this default for new schedules and preserves the timezone when editing. Use list_schedules for the current local time and next run; confirm the saved local time to the user.`
               : "Owner timezone is not configured. The server's timezone is not the user's timezone. For scheduling, use a timezone explicitly given by the user or ask briefly in plain text for their city; never silently assume UTC. Existing schedules retain their own timezones.", delivery].filter(Boolean).join("\n\n"), tools,
             onRequest: (method, params) => {

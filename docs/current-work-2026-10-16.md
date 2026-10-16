@@ -502,3 +502,19 @@ checkout and other chats' files remain untouched.
 - Personal Telegram MCP currently returns HTTP 404 on a separate host. The
   migration task observed the failure before Core shutdown. No other task's
   Telegram deployment or access configuration was changed here.
+
+## Real remote Notion acceptance and employee setup
+
+- With the owner’s explicit grant, the installed native app completed official
+  Notion OAuth for the transferred conference employee on Wolf. No manual
+  tunnel was needed. The scoped catalog reports 57 ready tools; a real native
+  request read Activities / Conferences and returned 2 Going and 13 Candidate
+  entries. The browser-to-app callback and actual service use passed. This
+  does not relabel the separately rejected disposable fixture as passed.
+- Remote creation in the native app exposed an initial-role failure: the profile
+  was already created, but “create an assistant with this role” was interpreted
+  as a request for an unavailable second creation tool. The existing empty-profile
+  context now states that setup configures this employee through update_employee.
+  No new tool, model call or persistent setup state was added. Focused employee,
+  routing, group and message checks pass (31 tests), plus typecheck. A repeat of
+  the exact live request is pending deployment.
