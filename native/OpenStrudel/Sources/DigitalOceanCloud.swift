@@ -207,7 +207,7 @@ struct DigitalOceanSavedState: Codable {
     private let store: any DigitalOceanCredentialStore
     private let session: URLSession
     private let pollingAttempts: Int
-    private let browser = DigitalOceanWebLogin()
+    private let browser = BrowserSignIn()
     private var state = DigitalOceanSavedState()
     private var operation: Task<Void, Never>?
     private var erasing = false
@@ -638,21 +638,25 @@ final class DigitalOceanHomeTrust: NSObject, URLSessionDelegate, URLSessionTaskD
                     newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) { completionHandler(nil) }
 }
 
-@MainActor final class DigitalOceanWebLogin: NSObject, ASWebAuthenticationPresentationContextProviding {
+@MainActor final class BrowserSignIn: NSObject, ASWebAuthenticationPresentationContextProviding {
     typealias Completion = @Sendable (URL?, (any Error)?) -> Void
     private let makeSession: (URL, @escaping Completion) -> ASWebAuthenticationSession
     private var session: ASWebAuthenticationSession?
     private var sessionID: UUID?
     private var continuation: CheckedContinuation<URL, any Error>?
+    private let timeout: Duration
+    private var timeoutTask: Task<Void, Never>?
 
-    init(makeSession: @escaping (URL, @escaping Completion) -> ASWebAuthenticationSession = {
+    init(timeout: Duration = .seconds(600), makeSession: @escaping (URL, @escaping Completion) -> ASWebAuthenticationSession = {
         ASWebAuthenticationSession(url: $0, callbackURLScheme: "openstrudel", completionHandler: $1)
     }) {
         self.makeSession = makeSession
+        self.timeout = timeout
         super.init()
     }
 
     func open(_ url: URL) async throws -> URL {
+        cancel()
         let id = UUID()
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
@@ -665,13 +669,20 @@ final class DigitalOceanHomeTrust: NSObject, URLSessionDelegate, URLSessionTaskD
                     Task { @MainActor in
                         if let url { self?.finish(.success(url), for: id) }
                         else if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin { self?.finish(.failure(CancellationError()), for: id) }
-                        else { self?.finish(.failure(DigitalOceanFailure.signIn), for: id) }
+                        else { self?.finish(.failure(BrowserSignInError.failed), for: id) }
                     }
                 }
                 session.presentationContextProvider = self
                 session.prefersEphemeralWebBrowserSession = false
                 self.session = session
-                if !session.start() { finish(.failure(DigitalOceanFailure.signIn), for: id) }
+                timeoutTask = Task { @MainActor [weak self, timeout] in
+                    do { try await Task.sleep(for: timeout) } catch { return }
+                    guard let self, self.sessionID == id else { return }
+                    let expired = self.session
+                    self.finish(.failure(BrowserSignInError.expired), for: id)
+                    expired?.cancel()
+                }
+                if !session.start() { finish(.failure(BrowserSignInError.failed), for: id) }
             }
         } onCancel: { Task { @MainActor in self.cancel(id) } }
     }
@@ -689,6 +700,7 @@ final class DigitalOceanHomeTrust: NSObject, URLSessionDelegate, URLSessionTaskD
     private func finish(_ result: Result<URL, any Error>, for id: UUID) {
         // A canceled browser can report back after the next sign-in starts.
         guard sessionID == id else { return }
+        timeoutTask?.cancel(); timeoutTask = nil
         let pending = continuation; continuation = nil; session = nil; sessionID = nil
         pending?.resume(with: result)
     }
@@ -699,5 +711,15 @@ final class DigitalOceanHomeTrust: NSObject, URLSessionDelegate, URLSessionTaskD
         return UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows).first(where: \.isKeyWindow) ?? ASPresentationAnchor()
         #endif
+    }
+}
+
+private enum BrowserSignInError: LocalizedError {
+    case failed, expired
+    var errorDescription: String? {
+        switch self {
+        case .failed: L("Не удалось завершить вход. Попробуйте ещё раз.")
+        case .expired: L("Вход истёк. Подключите сервис ещё раз.")
+        }
     }
 }

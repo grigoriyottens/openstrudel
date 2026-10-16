@@ -831,7 +831,8 @@
     $('composer').onsubmit = event => sendDraft(event);
     $('new-employee').onclick = () => openCreateAgent(); $('mobile-agents').onclick = () => openNavigation(); $('settings').onclick = () => openHomeSettings();
     $('active-details').onclick = () => { state.back = null; void openCurrentAgent(); };
-    function showModal(content) { if(!$('modal').classList.contains('open')) state.modalFocus=document.activeElement; $('modal-content').replaceChildren(content); $('modal-content').setAttribute('aria-label',content.querySelector('h2')?.textContent||'OpenStrudel');$('modal').classList.add('open');document.querySelector('main').inert=true; } function closeModal() { $('modal').classList.remove('open');document.body.classList.remove('locked');state.back=null;document.querySelector('main').inert=false;state.modalFocus?.focus(); }
+    function dismissModalPage() { for(const page of $('modal-content').children) page.dispatchEvent(new Event('dismiss')); }
+    function showModal(content) { dismissModalPage(); if(!$('modal').classList.contains('open')) state.modalFocus=document.activeElement; $('modal-content').replaceChildren(content); $('modal-content').setAttribute('aria-label',content.querySelector('h2')?.textContent||'OpenStrudel');$('modal').classList.add('open');document.querySelector('main').inert=true; } function closeModal() { dismissModalPage(); $('modal').classList.remove('open');document.body.classList.remove('locked');state.back=null;document.querySelector('main').inert=false;state.modalFocus?.focus(); }
 
     function renderImportedChats() {
       const select = $('imported-chat'); select.replaceChildren();

@@ -26,6 +26,8 @@ struct ConnectionCatalogView: View {
     @State private var query = ""
     @State private var loading = true
     @State private var connecting: String?
+    @State private var connectTask: Task<Void, Never>?
+    @State private var browserSignIn = false
     @State private var waiting: ServiceConnection?
     @State private var authorizationURL: URL?
     @State private var notice: String?
@@ -52,6 +54,7 @@ struct ConnectionCatalogView: View {
                     if let waiting {
                         Text(L("Завершите вход в \(waiting.name) в браузере."))
                         if let authorizationURL { Link(L("Открыть ещё раз"), destination: authorizationURL) }
+                        if browserSignIn { Button(L("Отменить вход")) { connectTask?.cancel() } }
                         Button(L("Проверить подключение")) { Task { await refresh() } }.disabled(loading)
                     }
                 }
@@ -68,10 +71,10 @@ struct ConnectionCatalogView: View {
                             Label { Text(connection.name) } icon: { Image(systemName: connection.icon).frame(width: 20) }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Button {
-                                Task { await connect(connection) }
+                                connectTask = Task { await connect(connection) }
                             } label: {
                                 AdaptiveActionLabel(title: connecting == connection.id ? L("Проверяем…") : waiting?.id == connection.id ? L("Ожидаем входа") : connection.actionTitle)
-                            }.adaptiveActionStyle(.bordered).disabled(connecting != nil || waiting != nil)
+                            }.adaptiveActionStyle(.bordered).disabled(connectTask != nil || waiting != nil)
                                 .accessibilityLabel("\(connection.actionTitle) \(connection.name)")
                                 .accessibilityIdentifier("connect-service-" + connection.id)
                         }
@@ -97,8 +100,9 @@ struct ConnectionCatalogView: View {
         // A group's scope sits in the footer, so the title stays one line.
         .sheetPageTitle(L("Добавить"))
         .task { await refresh() }
+        .onDisappear { connectTask?.cancel() }
         .task(id: waiting?.id) {
-            guard waiting != nil else { return }
+            guard waiting != nil && !browserSignIn else { return }
             for _ in 0..<30 {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 if !loading { await refresh() }
@@ -123,9 +127,14 @@ struct ConnectionCatalogView: View {
     }
     private func connect(_ connection: ServiceConnection) async {
         connecting = connection.id; error = nil
-        defer { connecting = nil }
+        defer {
+            connecting = nil; connectTask = nil
+            if browserSignIn { browserSignIn = false; waiting = nil; authorizationURL = nil }
+        }
         do {
-            if let url = try await client.connectService(connection.id, for: scope.id) {
+            if let url = try await client.connectService(connection.id, for: scope.id, onAuthorization: { url in
+                browserSignIn = true; connecting = nil; waiting = connection; authorizationURL = url
+            }) {
                 waiting = connection; authorizationURL = url
                 openURL(url) { @Sendable accepted in
                     Task { @MainActor in

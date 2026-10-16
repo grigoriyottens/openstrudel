@@ -70,5 +70,5 @@ export class ScopedCodexEngine implements CodexEngine {
   run: CodexEngine["run"] = (input,options) => this.forContext("personal").run(input,options);
   connections: NonNullable<CodexEngine["connections"]> = refresh => this.forContext("personal").connections!(refresh);
   isConnected: NonNullable<CodexEngine["isConnected"]> = id => this.forContext("personal").isConnected!(id);
-  connect: NonNullable<CodexEngine["connect"]> = id => this.forContext("personal").connect!(id);
+  connect: NonNullable<CodexEngine["connect"]> = (id, options) => this.forContext("personal").connect!(id, options);
 }

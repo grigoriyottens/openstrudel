@@ -113,6 +113,8 @@ final class HomeClient: ObservableObject, Identifiable {
         #endif
     }
     let id: String
+    private let serviceBrowser: BrowserSignIn
+    private var serviceSignInID: String?
     private var credentialPrefix: String { id == "current" ? "" : id + "." }
     private let credentialReader: @Sendable (String, Bool) throws -> String?
     /// Saves a credential, or removes it when the value is nil.
@@ -238,8 +240,10 @@ final class HomeClient: ObservableObject, Identifiable {
 
     init(defaults: UserDefaults = .standard, session transport: URLSession = .shared, pendingDirectory: URL? = nil, connectionID: String = "current",
          credentialReader: (@Sendable (String, Bool) throws -> String?)? = nil,
-         credentialWriter: (@Sendable (String, String?) throws -> Void)? = nil) {
+         credentialWriter: (@Sendable (String, String?) throws -> Void)? = nil,
+         serviceBrowser: BrowserSignIn? = nil) {
         self.id = connectionID
+        self.serviceBrowser = serviceBrowser ?? BrowserSignIn()
         self.credentialReader = credentialReader ?? { try KeychainStore.read(account: $0, allowInteraction: $1) }
         self.credentialWriter = credentialWriter ?? { account, value in
             if let value { try KeychainStore.save(value, account: account) } else { KeychainStore.remove(account: account) }
@@ -629,6 +633,7 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     private func resetConnectionState() {
+        serviceBrowser.cancel(); serviceSignInID = nil
         relocation?.cancel(); relocation = nil
         pendingPairing = nil; pairingError = nil; telegramLink = nil
         devices = []; connectionNotice = nil
@@ -1260,12 +1265,50 @@ final class HomeClient: ObservableObject, Identifiable {
         } catch { errorMessage = error.localizedDescription }
     }
 
-    func connectService(_ id: String, for scope: String? = nil) async throws -> URL? {
-        var value = ["id": id]
-        if let conversationID = scope ?? conversationID { value["conversationId"] = conversationID }
+    func connectService(_ id: String, for scope: String? = nil, onAuthorization: (URL) -> Void = { _ in }) async throws -> URL? {
+        guard serviceSignInID == nil else { throw HomeClientError.server(L("Завершите открытый вход и попробуйте ещё раз.")) }
+        let generation = connectionGeneration
+        serviceSignInID = ""
+        defer { if generation == connectionGeneration { serviceSignInID = nil } }
+        var value = ["id": id, "callback": "app"]
+        let selectedScope = scope ?? conversationID
+        if let selectedScope { value["conversationId"] = selectedScope }
         let body = try JSONSerialization.data(withJSONObject: value)
         let result: ConnectionLink = try await request("/v1/connections/connect", method: "POST", body: body)
-        return result.url.flatMap { URL(string: $0) }
+        guard let url = result.url.flatMap({ URL(string: $0) }) else { return nil }
+        guard let signInID = result.signInId else { return url }
+        guard signInID.range(of: "^[a-f0-9]{48}$", options: .regularExpression) != nil else {
+            throw HomeClientError.server(L("Не удалось прочитать ответ сервиса. Попробуйте ещё раз."))
+        }
+        let suffix = selectedScope.map { "?conversationId=" + $0 } ?? ""
+        let path = "/v1/connections/oauth/" + signInID + suffix
+        do {
+            guard generation == connectionGeneration else { throw CancellationError() }
+            serviceSignInID = signInID
+            onAuthorization(url)
+            let callback = try await serviceBrowser.open(url)
+            guard generation == connectionGeneration else { throw CancellationError() }
+            guard ServiceOAuthCallback.accepts(callback, signInID: signInID) else {
+                throw HomeClientError.server(L("Этот ответ не относится к начатому входу. Подключите сервис ещё раз."))
+            }
+            let body = try JSONSerialization.data(withJSONObject: ["url": callback.absoluteString])
+            let _: HomeActionResult = try await request(path, method: "POST", body: body)
+            return nil
+        } catch {
+            // The caller may already be canceled. Finish cancellation in a fresh
+            // task so URLSession still sends DELETE before a retry can start.
+            await Task { @MainActor in
+                guard generation == connectionGeneration else { return }
+                let _: HomeActionResult? = try? await request(path, method: "DELETE")
+            }.value
+            throw error
+        }
+    }
+
+    func acceptServiceCallback(_ url: URL) -> Bool {
+        guard let serviceSignInID, ServiceOAuthCallback.accepts(url, signInID: serviceSignInID) else { return false }
+        serviceBrowser.complete(url)
+        return true
     }
 
     func extensionContexts() async throws -> [ExtensionContext] {

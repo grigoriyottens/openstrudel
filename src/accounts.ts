@@ -291,11 +291,11 @@ export class AccountEngines implements CodexEngine {
         // Computer Use is a Codex plugin; the Claude and Grok engines never load it.
         return [undefined, "codex"].includes(providerInfo(resolveModelSelection(this.accounts.store, agent).provider!)?.engine) ? all : all.filter(c => c.id !== "mcp:cua_repl");
       },
-      connect: async name => {
+      connect: async (name, options) => {
         // Codex keeps a browser sign-in in its own home, where the Claude and Grok engines cannot use it.
         const info = providerInfo(resolveModelSelection(this.accounts.store, agent).provider!);
         if (info && info.engine !== "codex") throw new HomeError(`С ${info.name} вход в сервисы через браузер недоступен. Добавьте сервис с ключом доступа в «Сервисы и навыки».`, 409);
-        return (await current()).connect!(name);
+        return (await current()).connect!(name, options);
       },
       isConnected: async name => (await current()).isConnected!(name),
       extensions: async () => (await current()).extensions!(),
@@ -315,7 +315,7 @@ export class AccountEngines implements CodexEngine {
     this.directoryEngine = this.forAgent("main", "personal");
     return this.directoryEngine.connections!(refresh);
   };
-  connect: NonNullable<CodexEngine["connect"]> = id => this.forAgent("main", "personal").connect!(id);
+  connect: NonNullable<CodexEngine["connect"]> = (id, options) => this.forAgent("main", "personal").connect!(id, options);
   close() {
     for (const engine of this.engines.values()) engine.close();
     for (const route of this.providers.values()) { route.engine.close?.(); route.scope.close(); }

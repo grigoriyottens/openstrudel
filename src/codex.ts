@@ -10,6 +10,8 @@ import { CodexExtensions, extensionConfig, beginExtensionRun, readToml } from ".
 import { nativeApprovalConfig, nativeApprovalPolicy } from "./approval-mode.js";
 import { employeeRoleConfig, routingInstructions } from "./employee-routing.js";
 import { codexProviderId, providerModels, type ProviderInfo } from "./providers.js";
+import { serviceOAuth } from "./service-oauth.js";
+import type { ServiceSignIn } from "./types.js";
 
 export const INSTRUCTIONS = `You are OpenStrudel, a personal assistant in a minimal chat app.
 Be useful, concise and truthful. Use Codex's native tools, memory, skills and connectors.
@@ -43,6 +45,7 @@ export class CodexEngineAdapter implements CodexEngine {
   connectionNotice?: string;
   private extensionManager?: CodexExtensions;
   private running = 0;
+  private signingIn = new Map<string, () => void>();
   constructor(private readonly options: CodexEngineOptions = {}) { this.codexHome = options.codexHome; }
   get busy() { return this.running>0 || this.extensionManager?.updating === true; }
 
@@ -64,7 +67,7 @@ export class CodexEngineAdapter implements CodexEngine {
   }
 
   setCodexHome(home?: string): void { this.close(); this.codexHome = home; }
-  close(): void { this.rpc?.close(); this.rpc = undefined; this.initializing = undefined; this.loaded.clear(); this.loadedConfig.clear(); this.parents.clear(); this.connectionCache = undefined; this.connectionLoading = undefined; this.appCatalog = undefined; this.modelCache = undefined; this.modelReading = undefined; }
+  close(): void { for (const cancel of this.signingIn.values()) cancel(); this.signingIn.clear(); this.rpc?.close(); this.rpc = undefined; this.initializing = undefined; this.loaded.clear(); this.loadedConfig.clear(); this.parents.clear(); this.connectionCache = undefined; this.connectionLoading = undefined; this.appCatalog = undefined; this.modelCache = undefined; this.modelReading = undefined; }
 
   private async client(): Promise<CodexRpc> {
     if (this.rpc && !this.rpc.closed) return this.rpc;
@@ -342,7 +345,7 @@ export class CodexEngineAdapter implements CodexEngine {
     return (await this.connections(true)).some(c => c.id === id && c.connected);
   }
 
-  async connect(id: string): Promise<{ url: string | null }> {
+  async connect(id: string, options?: { callbackURL: string }): Promise<ServiceSignIn> {
     const connection = (await this.connections()).find(c => c.id === id);
     if (!connection) throw new Error("Сервис не найден в Codex");
     if (connection.connected) return { url: null };
@@ -350,7 +353,7 @@ export class CodexEngineAdapter implements CodexEngine {
       this.connectionCache = undefined;
       const checked = (await this.connections(true)).find(c => c.id === id);
       if (!checked || checked.status === "unknown") throw new Error("Не удалось проверить подключение. Попробуйте обновить список позже.");
-      return this.connect(id);
+      return this.connect(id, options);
     }
     if (connection.kind === "mcp") {
       if (connection.status === "disabled") throw new Error("Сервис выключен. Включите его плагин в разделе «Навыки и плагины».");
@@ -359,6 +362,26 @@ export class CodexEngineAdapter implements CodexEngine {
         await rpc.request("config/mcpServer/reload",{});this.connectionCache=undefined;
         if (await this.isConnected(id)) return {url:null};
         throw new Error("Сервис пока не отвечает. Проверьте его адрес и ключ или попробуйте позже.");
+      }
+      if (options && this.codexHome) {
+        const name = id.slice(4);
+        const configured = readToml(resolve(this.codexHome, "config.toml")).mcp_servers?.[name]?.oauth;
+        // A pre-registered client may have an exact provider-side allowlist.
+        // Preserve it instead of silently replacing its registered callback.
+        if (configured?.client_id) throw new Error("У сервиса задан собственный OAuth-клиент. Используйте автоматическую регистрацию или настройте его адрес возврата.");
+        if (this.signingIn.has(name)) throw new Error("Вход в этот сервис уже открыт. Завершите или отмените его.");
+        const controller = new AbortController(), cancel = () => controller.abort();
+        this.signingIn.set(name, cancel);
+        const closed = () => { if (this.signingIn.get(name) === cancel) this.signingIn.delete(name); };
+        try {
+          const link = await serviceOAuth({ name, home: this.codexHome, workingDirectory: this.options.workingDirectory,
+            callbackURL: options.callbackURL, signal: controller.signal, closed, connected: async () => {
+              this.connectionCache = undefined;
+              await rpc.request("config/mcpServer/reload", {});
+              this.loaded.clear();
+            } });
+          return link;
+        } catch (error) { closed(); throw error; }
       }
       const result = await rpc.request("mcpServer/oauth/login", { name: id.slice(4) });
       return { url: result.authorizationUrl };

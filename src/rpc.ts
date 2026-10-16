@@ -16,7 +16,8 @@ export class CodexRpc {
 
   constructor(codexHome?: string, private readonly onNotification?: (m: RpcMessage) => void,
     private readonly onRequest?: (method: string, params: any) => Promise<unknown>,
-    private readonly onClose?: (error: Error) => void, processHome?: string) {
+    private readonly onClose?: (error: Error) => void, processHome?: string,
+    overrides: Record<string, string | number> = {}) {
     const executable = resolve(dirname(createRequire(import.meta.url).resolve("@openai/codex/package.json")), "bin/codex.js");
     // Bot/server credentials must not become readable tool environment variables.
     const env: NodeJS.ProcessEnv = {};
@@ -31,7 +32,8 @@ export class CodexRpc {
       env.HOME = processHome ?? resolve(codexHome, "user-home");
       mkdirSync(env.HOME, { recursive: true, mode: 0o700 });
     }
-    this.child = spawn(process.execPath, [executable, "app-server"], { env, stdio: "pipe" });
+    const config = Object.entries(overrides).flatMap(([key, value]) => ["-c", `${key}=${JSON.stringify(value)}`]);
+    this.child = spawn(process.execPath, [executable, ...config, "app-server"], { env, stdio: "pipe" });
     this.lines = createInterface({ input: this.child.stdout, crlfDelay: Infinity });
     this.lines.on("line", line => { void this.receive(line); });
     this.child.stderr.resume();

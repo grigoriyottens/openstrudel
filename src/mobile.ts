@@ -158,6 +158,7 @@ export class MobileAccess {
       res.setHeader("cache-control", "no-store");
       if (!sameOrigin(req)) { res.writeHead(403).end('{"error":"Запрос с другого сайта отклонён"}'); return; }
       const path = new URL(req.url ?? "/", "https://localhost").pathname;
+      if (req.method === "GET" && /^\/oauth\/service\/[a-f0-9]{48}(?:\/[^/]+)?$/.test(path)) { this.handle(req, res, false); return; }
       if (/^\/characters\/(coil|fold|knot|curl|wave|pillow)\.png$/.test(path) || ["/", "/agent-characters.js", "/home-settings.js", "/localization.js", "/localizations.json", "/manifest.webmanifest", "/strudel-cream.png", "/strudel-graphite.png", "/favicon.ico", "/auth/session", "/auth/logout"].includes(path)) { this.handle(req, res, false); return; }
       if (isPeerRoute(new URL(req.url ?? "/", "https://localhost").pathname)) { this.handle(req, res, false); return; }
       try { const session = this.web?.authenticate(req); if (session) { this.handle(req, res, session.owner); return; } }
