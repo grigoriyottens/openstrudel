@@ -115,8 +115,12 @@ export class Scheduler {
           this.store.db.prepare("UPDATE schedule_runs SET status='skipped' WHERE id=?").run(runId); return;
         }
       }
-      const result = await this.messages.handle({ channel:"api",conversationId:schedule.conversationId,externalId:`schedule:${runId}`,scheduled:true,
-        text:`Scheduled request: ${schedule.name}\nScheduled for: ${scheduledFor} (${schedule.timezone}). Current time: ${new Date().toISOString()}.\n${schedule.prompt}\nReturn the completed edition here; the application handles delivery. Do not send it elsewhere or create another schedule. If verification fails, state what is unavailable; never invent news or sources.` });
+      const destination = this.destination(schedule.conversationId, schedule.telegramChatId, schedule.delivery);
+      const deliveryInstructions = destination
+        ? `Return the completed edition here; the application handles delivery to Telegram chat ${destination}. Only if the saved request explicitly requires separate messages, use send_telegram_message for that destination and return NO_REPLY to avoid an extra automatic post. Check each delivery receipt; never repeat an unknown or partial delivery. Do not send to another chat.`
+        : "Return the completed edition here; it stays in the app. Do not send it to Telegram.";
+      const result = await this.messages.handle({ channel:"api",conversationId:schedule.conversationId,externalId:`schedule:${runId}`,scheduled:true,scheduleTelegramChatId:destination,
+        text:`Scheduled request: ${schedule.name}\nScheduled for: ${scheduledFor} (${schedule.timezone}). Current time: ${new Date().toISOString()}.\n${schedule.prompt}\n${deliveryInstructions} Do not create another schedule. If verification fails, state what is unavailable; never invent news or sources.` });
       this.store.db.prepare("UPDATE schedule_runs SET status='ready',message_id=? WHERE id=?").run(result.messageId,runId);
       await this.finish(runId,schedule.conversationId,result.messageId,schedule.telegramChatId,schedule.delivery);
     } catch (error) { this.fail(runId,error); }
@@ -129,7 +133,7 @@ export class Scheduler {
       if (reply.text.trim() === "NO_REPLY") {
         this.store.db.prepare("UPDATE schedule_runs SET status='quiet',error=NULL WHERE id=?").run(runId); return;
       }
-      const destination = delivery === "app" ? null : chatId ?? (delivery === "bound" ? this.store.telegramChats().find(c => c.conversationId === conversationId)?.chatId : null);
+      const destination = this.destination(conversationId, chatId, delivery);
       if (destination) {
         if (!this.deliver) throw new Error("Доставка Telegram недоступна");
         const profileId=this.store.getConversation(conversationId)?.profileId;
@@ -142,6 +146,9 @@ export class Scheduler {
       if (deliveryAttempted) this.store.db.prepare("UPDATE schedule_runs SET status='uncertain',error=? WHERE id=?").run("Ответ сохранён. Подтверждение Telegram не получено; проверьте чат перед повтором.",runId);
       else this.fail(runId,error);
     }
+  }
+  private destination(conversationId: string, chatId?: string | null, delivery = "app"): string | null {
+    return delivery === "app" ? null : chatId ?? (delivery === "bound" ? this.store.telegramChats().find(c => c.conversationId === conversationId)?.chatId ?? null : null);
   }
   private fail(id: string, error: unknown): void {
     this.store.db.prepare("UPDATE schedule_runs SET status='failed',error=? WHERE id=?").run(error instanceof Error ? error.message : String(error),id);

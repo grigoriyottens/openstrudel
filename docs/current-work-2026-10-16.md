@@ -348,3 +348,26 @@ checkout and other chats' files remain untouched.
 - Computer Use confirms the installed About panel shows 1.0 (46). Private proof:
   `.data/release-46/installed-build46.png`. Latest resource check: 8.3 GiB free
   disk space and normal memory pressure (55% free).
+
+## News and Connect continuation
+
+- Read the current legacy SQLite cron definitions, live editorial briefs,
+  delivery journals and actual Telegram history. The latest confirmed News
+  and Connect editions are dated 15 October. Connect's 16 October selection
+  succeeded, but delivery returned Telegram 401; its three prepared cards
+  were not committed to the delivery journal.
+- Preserved a private, checksummed source snapshot in
+  `.data/migration-news-connect`. No bot token is included. The old collectors
+  and five active jobs remain enabled until the destination has passed real
+  acceptance. The new personal Home still rejects this Mini's existing SSH
+  credential; no access rules or credentials were changed.
+- Fixed a migration prerequisite in the native scheduler: a saved Telegram
+  destination now accompanies the run as trusted metadata. Separate-card
+  requests can use the existing native send tool and durable receipts for
+  exactly that destination. App-only runs cannot send to a bound Telegram
+  chat. Ordinary participants keep their existing audience restrictions.
+- The runtime suite passes: 538 tests passed, 2 skipped, plus typecheck.
+  New integration coverage verifies two cards without an extra automatic
+  post, duplicate-call coalescing, app-only isolation, and paused destinations.
+  This change is newer than the staged Mac/iOS 46 artifacts; those artifacts
+  have not been silently replaced or advertised as including it.
