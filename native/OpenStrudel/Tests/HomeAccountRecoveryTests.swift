@@ -4,6 +4,36 @@ import Testing
 
 @Suite(.serialized)
 @MainActor struct HomeAccountRecoveryTests {
+    @Test func timezoneInitializationRetriesAfterFailureWithoutLosingOwnerAccess() async throws {
+        let state = AccountFixtureState()
+        var writes = 0
+        state.customResponse = { request in
+            switch request.url?.path {
+            case "/health":
+                return (200, Data(#"{"ok":true,"service":"openstrudel","homeProtocol":1}"#.utf8))
+            case "/v1/mobile":
+                return (200, Data(#"{"connections":0,"clients":[],"timezoneVersion":1,"timezone":null}"#.utf8))
+            case "/v1/settings/timezone":
+                writes += 1
+                let body = try? JSONSerialization.jsonObject(with: requestBody(request)) as? [String: Any]
+                #expect(body?["timezone"] as? String == TimeZone.current.identifier)
+                #expect(body?["initialize"] as? Bool == true)
+                return writes == 1 ? (503, Data(#"{"error":"Temporary failure"}"#.utf8)) : (200, Data(#"{"configured":true}"#.utf8))
+            default: return nil
+            }
+        }
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        await client.load()
+        #expect(writes == 1)
+        #expect(client.canManageConnections)
+        #expect(!client.homeUnreachable)
+        await client.load(quiet: true)
+        #expect(writes == 2)
+        await client.load(quiet: true)
+        #expect(writes == 2)
+    }
+
     @Test func historyBrowserSelectsTheEmployeeForPrivateChatsAndImportedArchives() async throws {
         let state = AccountFixtureState()
         state.customResponse = { request in

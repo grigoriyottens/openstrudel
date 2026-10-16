@@ -4,9 +4,54 @@ import Testing
 
 @Suite(.serialized)
 @MainActor struct BrowserSignInTests {
+    @Test func externalBrowserWaitsForTheValidatedAppCallback() async throws {
+        var opened: [URL] = []
+        let browser = BrowserSignIn(openExternal: { opened.append($0); return true }) { _, _ in
+            Issue.record("External browser sign-in started a second browser session")
+            return ControlledWebSession(url: URL(string: "https://unused.example")!, completion: { _, _ in })
+        }
+        let destination = URL(string: "https://service.example/authorize")!
+        let expected = URL(string: "openstrudel://oauth/service/test?state=test&code=test")!
+        let result = Task { try await browser.open(destination) }
+        while opened.isEmpty { await Task.yield() }
+        #expect(opened == [destination])
+        browser.complete(expected)
+        #expect(try await result.value == expected)
+    }
+
+    @Test func externalBrowserFailureAndCancellationAllowAnotherSignIn() async throws {
+        var accepted = false
+        var count = 0
+        let browser = BrowserSignIn(openExternal: { _ in count += 1; return accepted })
+        let destination = URL(string: "https://service.example/authorize")!
+        do { _ = try await browser.open(destination); Issue.record("Failed browser opening succeeded") }
+        catch { #expect(!(error is CancellationError)) }
+        accepted = true
+        let canceled = Task { try await browser.open(destination) }
+        while count < 2 { await Task.yield() }
+        canceled.cancel()
+        do { _ = try await canceled.value; Issue.record("Canceled sign-in succeeded") }
+        catch { #expect(error is CancellationError) }
+        let retry = Task { try await browser.open(destination) }
+        while count < 3 { await Task.yield() }
+        let expected = URL(string: "openstrudel://oauth/service/retry?state=test&code=test")!
+        browser.complete(expected)
+        #expect(try await retry.value == expected)
+    }
+
+    @Test func externalBrowserCannotLaunchAFileOrAnotherApplication() async {
+        var opened = false
+        let browser = BrowserSignIn(openExternal: { _ in opened = true; return true })
+        for address in ["file:///tmp/example", "other-app://action", "https://user:password@example.com/"] {
+            do { _ = try await browser.open(URL(string: address)!); Issue.record("Unsafe browser URL accepted") }
+            catch { }
+        }
+        #expect(!opened)
+    }
+
     @Test func acceptsCompletionFromBackgroundQueue() async throws {
         var sessions: [ControlledWebSession] = []
-        let login = BrowserSignIn { url, completion in
+        let login = BrowserSignIn(openExternal: nil) { url, completion in
             let session = ControlledWebSession(url: url, completion: completion)
             sessions.append(session)
             return session
@@ -22,7 +67,7 @@ import Testing
 
     @Test func canceledSessionCannotCompleteTheNextSignIn() async throws {
         var sessions: [ControlledWebSession] = []
-        let login = BrowserSignIn { url, completion in
+        let login = BrowserSignIn(openExternal: nil) { url, completion in
             let session = ControlledWebSession(url: url, completion: completion)
             sessions.append(session)
             return session
@@ -48,7 +93,7 @@ import Testing
 
     @Test func externalBrowserCompletionWinsOverSessionCancellation() async throws {
         var sessions: [ControlledWebSession] = []
-        let login = BrowserSignIn { url, completion in
+        let login = BrowserSignIn(openExternal: nil) { url, completion in
             let session = ControlledWebSession(url: url, completion: completion)
             sessions.append(session)
             return session
@@ -74,7 +119,7 @@ import Testing
 
     @Test func anUnansweredBrowserSessionExpiresAndAllowsRetry() async throws {
         var sessions: [ControlledWebSession] = []
-        let login = BrowserSignIn(timeout: .milliseconds(30)) { url, completion in
+        let login = BrowserSignIn(timeout: .milliseconds(30), openExternal: nil) { url, completion in
             let session = ControlledWebSession(url: url, completion: completion)
             sessions.append(session)
             return session
@@ -92,7 +137,7 @@ import Testing
 
     @Test func cancelingServiceSignInReleasesTheHomeBeforeRetry() async throws {
         var sessions: [ControlledWebSession] = []
-        let browser = BrowserSignIn { url, completion in
+        let browser = BrowserSignIn(openExternal: nil) { url, completion in
             let session = ControlledWebSession(url: url, completion: completion)
             sessions.append(session); return session
         }
