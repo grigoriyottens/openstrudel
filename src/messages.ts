@@ -154,7 +154,9 @@ export class MessageService {
             telegramActor: input.channel === "telegram" && input.telegramSenderId && input.externalChatId && input.externalId
               ? {userId:input.telegramSenderId,chatId:input.externalChatId,messageId:input.externalId} : undefined,
             images: files.filter(f=>["image/png","image/jpeg","image/webp","image/gif"].includes(f.mimeType)).map(f=>f.path),
-            profile: [currentProfile ? `${currentProfile.name}\n${currentProfile.instructions}` : this.store.getSetting("main.soul"), `Owner timezone: ${ownerTimezone(this.store)}. Use it for relative dates and new schedules unless the user specifies another timezone.`, delivery].filter(Boolean).join("\n\n"), tools,
+            profile: [currentProfile ? `${currentProfile.name}\n${currentProfile.instructions}` : this.store.getSetting("main.soul"), ownerTimezone(this.store)
+              ? `Owner timezone: ${ownerTimezone(this.store)}. Use it for relative dates and new schedules unless the user specifies another timezone. In save_schedule, an empty timezone uses this default for new schedules and preserves the timezone when editing. Use list_schedules for the current local time and next run; confirm the saved local time to the user.`
+              : "Owner timezone is not configured. The server's timezone is not the user's timezone. For scheduling, use a timezone explicitly given by the user or ask briefly in plain text for their city; never silently assume UTC. Existing schedules retain their own timezones.", delivery].filter(Boolean).join("\n\n"), tools,
             onRequest: (method, params) => {
               if (input.scheduled) throw new Error("Выпуск остановлен: нужно разрешение пользователя. Продолжите в чате.");
               if (context.startsWith("group-")) {

@@ -686,7 +686,13 @@ final class HomeClient: ObservableObject, Identifiable {
             canManageConnections = true
             if openAIAccount != nil { canManageOpenAI = true }
             if status.timezoneVersion == 1 && status.timezone == nil {
-                _ = try? await requestData("/v1/settings/timezone", method: "POST", body: try JSONSerialization.data(withJSONObject: ["timezone": TimeZone.current.identifier, "initialize": true]))
+                do {
+                    _ = try await requestData("/v1/settings/timezone", method: "POST", body: try JSONSerialization.data(withJSONObject: ["timezone": TimeZone.current.identifier, "initialize": true]))
+                } catch {
+                    // Keep the owner's access. A later normal load retries this
+                    // initialization instead of marking a failed write complete.
+                    return false
+                }
             }
             return true
         } catch HomeClientError.authenticationExpired {

@@ -640,6 +640,7 @@ final class DigitalOceanHomeTrust: NSObject, URLSessionDelegate, URLSessionTaskD
 
 @MainActor final class BrowserSignIn: NSObject, ASWebAuthenticationPresentationContextProviding {
     typealias Completion = @Sendable (URL?, (any Error)?) -> Void
+    private let openExternal: ((URL) -> Bool)?
     private let makeSession: (URL, @escaping Completion) -> ASWebAuthenticationSession
     private var session: ASWebAuthenticationSession?
     private var sessionID: UUID?
@@ -647,9 +648,21 @@ final class DigitalOceanHomeTrust: NSObject, URLSessionDelegate, URLSessionTaskD
     private let timeout: Duration
     private var timeoutTask: Task<Void, Never>?
 
-    init(timeout: Duration = .seconds(600), makeSession: @escaping (URL, @escaping Completion) -> ASWebAuthenticationSession = {
+    private static var defaultExternalBrowser: ((URL) -> Bool)? {
+        #if os(macOS)
+        // Use the user's browser, as for the app's other service sign-ins.
+        // The pending owner-bound callback still validates state and PKCE.
+        return { NSWorkspace.shared.open($0) }
+        #else
+        return nil
+        #endif
+    }
+
+    init(timeout: Duration = .seconds(600), openExternal: ((URL) -> Bool)? = BrowserSignIn.defaultExternalBrowser,
+         makeSession: @escaping (URL, @escaping Completion) -> ASWebAuthenticationSession = {
         ASWebAuthenticationSession(url: $0, callbackURLScheme: "openstrudel", completionHandler: $1)
     }) {
+        self.openExternal = openExternal
         self.makeSession = makeSession
         self.timeout = timeout
         super.init()
@@ -657,12 +670,27 @@ final class DigitalOceanHomeTrust: NSObject, URLSessionDelegate, URLSessionTaskD
 
     func open(_ url: URL) async throws -> URL {
         cancel()
+        guard ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+              url.host?.isEmpty == false, url.user == nil, url.password == nil else {
+            throw BrowserSignInError.failed
+        }
         let id = UUID()
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
             return try await withCheckedThrowingContinuation { continuation in
                 self.continuation = continuation
                 self.sessionID = id
+                timeoutTask = Task { @MainActor [weak self, timeout] in
+                    do { try await Task.sleep(for: timeout) } catch { return }
+                    guard let self, self.sessionID == id else { return }
+                    let expired = self.session
+                    self.finish(.failure(BrowserSignInError.expired), for: id)
+                    expired?.cancel()
+                }
+                if let openExternal {
+                    if !openExternal(url) { finish(.failure(BrowserSignInError.failed), for: id) }
+                    return
+                }
                 // AuthenticationServices can complete on its XPC queue.
                 // Keep this callback nonisolated, then hop to the UI actor.
                 let session = makeSession(url) { @Sendable [weak self] url, error in
@@ -675,13 +703,6 @@ final class DigitalOceanHomeTrust: NSObject, URLSessionDelegate, URLSessionTaskD
                 session.presentationContextProvider = self
                 session.prefersEphemeralWebBrowserSession = false
                 self.session = session
-                timeoutTask = Task { @MainActor [weak self, timeout] in
-                    do { try await Task.sleep(for: timeout) } catch { return }
-                    guard let self, self.sessionID == id else { return }
-                    let expired = self.session
-                    self.finish(.failure(BrowserSignInError.expired), for: id)
-                    expired?.cancel()
-                }
                 if !session.start() { finish(.failure(BrowserSignInError.failed), for: id) }
             }
         } onCancel: { Task { @MainActor in self.cancel(id) } }

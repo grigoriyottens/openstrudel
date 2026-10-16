@@ -251,3 +251,56 @@ checkout and other chats' files remain untouched.
 - The parallel migration task owns missing histories, imported files/schedules
   and eventual legacy shutdown. This task retains News/Connect, Telegram/OAuth
   and releases. Do not stop the old gateway here or race its imports.
+
+## Verified native Telegram sending
+
+- PR #50 merged into main at `bf816e7`. The complete runtime suite passes:
+  528 tests passed, 2 skipped. Packaged Linux smoke passed against the built image.
+- Wolf now runs `46-bf816e7`. Backup:
+  `/root/openstrudel-upgrade-46-20261016T135940Z`. SQLite integrity and all counts
+  passed after the atomic deployment: 9 employees, 18 conversations, 6,895
+  messages, 9 schedules and 8 bot chats. Execution migration v5 is active and
+  the owner's DM starts a fresh native thread with both Telegram tools.
+- Real owner-DM to isolated-group text delivery passed: 1679027 → 1679028,
+  with confirmation 1679029, about 10 seconds. Only the requested destination
+  received the text; the durable outbox reports delivered.
+- The first GIF attempt had an unacknowledged transport failure and did not
+  appear in the test group. The bot accurately reported uncertainty and did
+  not resend automatically. The exact cause was not retained by the old generic
+  error handling; do not label this a diagnosed network fault.
+- A controlled direct animation upload succeeded. A separate new owner request
+  then passed through the normal bot tool end to end: 1679037 → group animation
+  1679038 → confirmation 1679039. The outbox confirms delivery, and Telegram
+  metadata identifies the actual animation. The owner's subsequent independent
+  DM GIF request also received a real attachment (1679040 → 1679041/1679042).
+- Sparkle/TestFlight remain at 45. Native remote-service browser acceptance is
+  still open; the web OAuth fixture is running again for that investigation.
+- A parallel migration task reports a requested client-only Mac setup. Preserve
+  the Mini's unique data and jobs until their destination and acceptance are
+  verified; do not stop its Home or modify another task's imports speculatively.
+
+## Owner time zone and Mac service sign-in
+
+- The 17:27 report was traced to a missing `owner.timezone` on Wolf. The
+  previous fallback advertised the Linux server's UTC zone as the owner's.
+  After an online SQLite backup at `/root/openstrudel-timezone-20261016T143331Z`,
+  the existing settings API initialized `Europe/Moscow`. All 11 schedule rows
+  were unchanged; no restart was needed. The bot had already corrected the
+  recurring request and paused the erroneous one-off UTC schedule.
+- Actual owner-DM verification 1679065 → 1679066 confirms Moscow and the next
+  requested send on Sunday 18 October at 16:20. This was a read-only request;
+  no test content was posted to colleagues or a new schedule created.
+- Missing owner time zones now remain unknown instead of silently becoming
+  server UTC. New schedules use the owner default; editing with no timezone
+  preserves the schedule's existing zone. Explicit UTC or another city still
+  works. Tool receipts include the next run in local time. Native initialization
+  retries on the next normal load after a failed save without losing owner access.
+- Focused runtime tests: 27 passed. Native browser/account tests: 38 passed.
+  The first full runtime run overlapped native compilation and hit timing limits
+  in four unrelated files. With two workers and no concurrent compilation, all
+  530 runtime tests passed (2 skipped); typecheck also passed.
+- On Mac, service sign-in now opens the default browser and awaits the existing
+  owner-bound callback. Codex still owns state/PKCE/exchange. iOS retains
+  AuthenticationServices. Actual browser opening passed; full callback acceptance
+  awaits an installed candidate because the production URL handler receives the
+  isolated QA app's callback. Do not claim a real Notion grant or public release 46.
