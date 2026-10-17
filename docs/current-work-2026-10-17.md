@@ -1,5 +1,35 @@
 # OpenStrudel — build 48 released, remaining device acceptance
 
+## Android continuation — 17 October
+
+The owner confirmed that no physical iPhone is available and requested a native
+Android build and testing on the USB-connected phone. The Samsung Galaxy A07 is
+authorized and available. Android-specific implementation and acceptance are
+tracked in [the Android plan](android-acceptance-2026-10-17.md). This extends the
+existing goal; it does not make Android evidence proof of iOS microphone or
+Camera behavior. AiGid has released the heavy-build/audio queue.
+
+Fresh SSH checks still reach WaiClaw and Grant but reject the documented root
+credentials. No credentials were rotated and no access rules changed. Build 48
+and the completed checks below remain valid; repeat only checks affected by new
+code or new failures.
+
+### Android acceptance checkpoint
+
+The native Kotlin/Compose companion builds and is signed. Twelve unit tests,
+eight physical-device fixture tests, release lint, real text/document/image
+requests, editable ElevenLabs dictation and HTTPS App Links have passed on the
+USB Galaxy A07. The detailed Android record separates fixtures, live provider
+results and remaining limits. Distribution APK publication is being finalized.
+
+A shared Home issue was reproduced during the real reminder test: Codex used
+`sleep`, its early calculation was overwritten by the final response, and no
+schedule was persisted. Next runtime work must retain stable answer items and
+provide one-time scheduling through the existing clock. The phone's external
+Wolf route also still exhibits packet loss; local and USB paths are independent
+positive results. WaiClaw/Grant SSH authentication and physical iPhone checks
+remain open. Do not mark the whole product acceptance complete.
+
 ## Current checkpoint — 17 October, 10:03 UTC
 
 Build **48**, source `fb84d3d`, is published to Sparkle and the Home download.

@@ -25,10 +25,19 @@ URL into Safari's address bar is not a universal-link test. Old app versions and
 browsers, including the Mac, fall back to this standalone page's explicit **Open
 OpenStrudel** button. Pasting either format into the app works on both platforms.
 
+The Android release uses the same HTTPS invitation route. Merge the statement in
+`native/Android/assetlinks.json` into `.well-known/assetlinks.json`, preserving
+other apps. Its certificate fingerprint must match the signed release APK.
+Verify on a real Android device with `pm verify-app-links --re-verify
+is.openstrudel.android` and `pm get-app-links is.openstrudel.android`; the result
+must be `verified`, not a manually forced approval. Then open an HTTPS invitation
+through an implicit browser intent and confirm that the native review appears.
+
 The documented website origin is `root@65.108.215.2`:
 
 - HTML: `/var/www/waiuni/apps/web/public/openstrudel/connect.html`
 - Association: `/var/www/waiuni/apps/web/public/.well-known/apple-app-site-association`
+- Android association: `/var/www/waiuni/apps/web/public/.well-known/assetlinks.json`
 - Nginx include: `/var/www/waiuni/deploy/openstrudel/nginx-connect.conf`, included
   by `/etc/nginx/conf.d/wai-origin.conf`
 - CDN sync: `systemctl start wai-web-showcase-push.service`

@@ -8,6 +8,15 @@ This repository contains the public source. Local credentials, chat histories an
 
 The product has three concepts: devices, employees, and conversations. Each device runs the same Home runtime. Codex owns the work and its thread history. OpenStrudel keeps channel bindings, messages and delivery receipts, employee instructions, connection state and the clock for recurring requests. There is no task dashboard or second agent loop.
 
+## Android
+
+The native Android companion connects to your existing Macs and Home servers.
+It supports employees, chat, files, editable dictation and per-chat model choices.
+[Download the signed Android APK](https://waiwai.is/openstrudel/downloads/OpenStrudel-1.0-1.apk)
+(Android 9 or later). This initial release was tested on a physical Galaxy A07;
+see the [acceptance results and known limits](docs/android-acceptance-2026-10-17.md).
+[Build instructions](native/Android/README.md) are available for contributors.
+
 ## Start on this Mac
 
 Open the app, start on the current Mac and sign in to OpenAI. Create an employee by describing its job, or restore employees from a backup. Personal/work classification and appearance are not required during creation. Appearance and instructions can be edited later.
