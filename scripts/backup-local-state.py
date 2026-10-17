@@ -2,7 +2,9 @@
 """Create a private rollback snapshot without copying deployments into backups."""
 import argparse
 from contextlib import closing
+import ctypes
 import datetime
+import errno
 import fcntl
 import json
 import os
@@ -11,6 +13,7 @@ import plistlib
 import shutil
 import sqlite3
 import subprocess
+import sys
 import time
 import uuid
 
@@ -21,6 +24,25 @@ DEFAULT_DEST = Path.home() / 'Library/Application Support/OpenStrudelBackups'
 EXCLUDED = {('deployment',), ('releases',), ('runtime', 'node_modules'),
             ('runtime', 'dist'), ('runtime', 'public'), ('runtime', 'bin'), ('runtime', 'scripts'),
             ('Dictation', 'parakeet-v3-q8.gguf')}
+
+# APFS clones are independent files. Subsequent writes allocate their own blocks,
+# unlike hard links, so large workspaces need not be duplicated before an update.
+CLONE_FILE = None
+if sys.platform == 'darwin':
+    CLONE_FILE = getattr(ctypes.CDLL(None, use_errno=True), 'clonefile', None)
+    if CLONE_FILE is not None:
+        CLONE_FILE.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
+        CLONE_FILE.restype = ctypes.c_int
+
+def copy_regular_file(source, destination):
+    if CLONE_FILE is not None:
+        if CLONE_FILE(os.fsencode(source), os.fsencode(destination), 0) == 0:
+            shutil.copystat(source, destination)
+            return str(destination)
+        error = ctypes.get_errno()
+        if error not in (errno.EXDEV, errno.ENOTSUP, errno.ENOSYS):
+            raise OSError(error, os.strerror(error), str(source))
+    return shutil.copy2(source, destination)
 
 def is_sqlite(path):
     if path.is_symlink() or not path.is_file():
@@ -64,7 +86,7 @@ def copy_state(source, destination):
             shutil.copystat(src, dest)
             databases.append(str(src.relative_to(source)))
         else:
-            shutil.copy2(src, dest)
+            copy_regular_file(src, dest)
         return str(dest)
     shutil.copytree(source, destination, symlinks=True, ignore=ignore, copy_function=copy_file)
     return databases

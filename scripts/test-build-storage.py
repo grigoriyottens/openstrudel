@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Safety checks for cache pruning and private rollback snapshots."""
 import importlib.util
+import ctypes
+import errno
 import json
 import os
 from pathlib import Path
@@ -155,6 +157,41 @@ class StorageSafety(unittest.TestCase):
         source.mkdir()
         with self.assertRaises(ValueError):
             backup.create_backup(source, source / 'backups', app=None)
+
+    def test_backup_files_remain_independent_after_changes_on_both_sides(self):
+        source = self.base / 'source'
+        source.mkdir()
+        original = source / 'important.txt'
+        original.write_text('original content')
+        original.chmod(0o600)
+        result = backup.create_backup(source, self.base / 'backups', app=None)
+        copied = result / 'user-data/important.txt'
+        self.assertNotEqual(original.stat().st_ino, copied.stat().st_ino)
+        self.assertEqual(copied.stat().st_mode & 0o777, 0o600)
+        original.write_text('live change')
+        self.assertEqual(copied.read_text(), 'original content')
+        copied.write_text('snapshot change')
+        self.assertEqual(original.read_text(), 'live change')
+
+    def test_backup_falls_back_on_an_unsupported_volume_but_not_storage_errors(self):
+        source = self.base / 'important.txt'
+        source.write_text('keep this')
+        destination = self.base / 'copy.txt'
+        def failure(number):
+            def clone(*args):
+                ctypes.set_errno(number)
+                return -1
+            return clone
+        with patch.object(backup, 'CLONE_FILE', failure(errno.EXDEV)):
+            backup.copy_regular_file(source, destination)
+        self.assertEqual(destination.read_text(), source.read_text())
+        destination.unlink()
+        with patch.object(backup, 'CLONE_FILE', failure(errno.ENOSPC)):
+            with self.assertRaises(OSError) as caught:
+                backup.copy_regular_file(source, destination)
+        self.assertEqual(caught.exception.errno, errno.ENOSPC)
+        self.assertFalse(destination.exists())
+        self.assertEqual(source.read_text(), 'keep this')
 
     def test_locked_database_fails_without_hanging_or_claiming_a_complete_backup(self):
         source = self.base / 'user-data'
