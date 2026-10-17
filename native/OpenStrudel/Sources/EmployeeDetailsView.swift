@@ -312,10 +312,21 @@ struct BotDetailsView: View {
                 }
             }
         }
-        if client.schedules.contains(where: { !$0.enabled }) {
+        if client.schedules.contains(where: { !$0.enabled && $0.oneTimeResult == nil }) {
             DisclosureGroup(L("Приостановленные")) {
-                ForEach(client.schedules.filter { !$0.enabled }) { schedule in
+                ForEach(client.schedules.filter { !$0.enabled && $0.oneTimeResult == nil }) { schedule in
                     Toggle(schedule.name + source(schedule), isOn: Binding(get: { schedule.enabled }, set: { value in Task { await client.setSchedule(schedule, enabled: value) } }))
+                }
+            }
+        }
+        if client.schedules.contains(where: { $0.oneTimeResult != nil }) {
+            DisclosureGroup(L("Результаты напоминаний")) {
+                ForEach(client.schedules.filter { $0.oneTimeResult != nil }) { schedule in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(schedule.name + source(schedule))
+                        Text((schedule.oneTimeResult ?? "") + " · " + schedule.timing)
+                            .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                    }
                 }
             }
         }

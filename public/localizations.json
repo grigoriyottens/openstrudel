@@ -9994,5 +9994,61 @@
     "fr": "Ce chat appartient à un autre assistant.",
     "es": "Este chat pertenece a otro asistente.",
     "he": "השיחה הזו שייכת לעוזר אחר."
+  },
+  "Выполнено": {
+    "en": "Completed",
+    "fr": "Terminé",
+    "es": "Completado",
+    "he": "הושלם",
+    "ru": "Выполнено"
+  },
+  "Не выполнено": {
+    "en": "Not completed",
+    "fr": "Non terminé",
+    "es": "No completado",
+    "he": "לא הושלם",
+    "ru": "Не выполнено"
+  },
+  "Ожидает доставки": {
+    "en": "Awaiting delivery",
+    "fr": "En attente de livraison",
+    "es": "Pendiente de entrega",
+    "he": "ממתין לשליחה",
+    "ru": "Ожидает доставки"
+  },
+  "Проверьте результат": {
+    "en": "Check the result",
+    "fr": "Vérifiez le résultat",
+    "es": "Comprueba el resultado",
+    "he": "יש לבדוק את התוצאה",
+    "ru": "Проверьте результат"
+  },
+  "Разово · ": {
+    "en": "Once · ",
+    "fr": "Une fois · ",
+    "es": "Una vez · ",
+    "he": "חד־פעמי · ",
+    "ru": "Разово · "
+  },
+  "Результаты напоминаний": {
+    "en": "Reminder results",
+    "fr": "Résultats des rappels",
+    "es": "Resultados de recordatorios",
+    "he": "תוצאות תזכורות",
+    "ru": "Результаты напоминаний"
+  },
+  "Время напоминания уже прошло. Укажите новое время.": {
+    "en": "This reminder’s time has passed. Choose a new time.",
+    "fr": "L’heure de ce rappel est passée. Choisissez une nouvelle heure.",
+    "es": "La hora de este recordatorio ya pasó. Elige una nueva hora.",
+    "he": "מועד התזכורת עבר. יש לבחור מועד חדש.",
+    "ru": "Время напоминания уже прошло. Укажите новое время."
+  },
+  "Пропущено": {
+    "en": "Skipped",
+    "fr": "Ignoré",
+    "es": "Omitido",
+    "he": "דולג",
+    "ru": "Пропущено"
   }
 }

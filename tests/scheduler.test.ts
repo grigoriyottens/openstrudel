@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Store } from "../src/store.js";
 import { MessageService } from "../src/messages.js";
 import { Scheduler } from "../src/scheduler.js";
+import { scheduleTiming } from "../src/schedule-timing.js";
 
 const stores: Store[] = [];
 afterEach(() => { for (const store of stores.splice(0)) store.close(); });
@@ -12,6 +13,95 @@ function setup() {
   const scheduler = new Scheduler(store, messages);
   return { store, messages, scheduler, calls: () => calls };
 }
+describe("durable one-time reminders", () => {
+  const now = new Date("2030-01-15T06:00:00Z");
+  const request = { name: "Reminder", prompt: "Send the requested reminder here", cron: "@once 2030-01-15T09:01:00+03:00", timezone: "Europe/Moscow" };
+
+  it("wakes at a newly saved deadline without waiting for the periodic recovery check", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(now);
+    const { store, scheduler, calls } = setup(), c = store.primaryConversation();
+    try {
+      scheduler.start();
+      await vi.advanceTimersByTimeAsync(0);
+      scheduler.save({...request,conversationId:c.id,cron:"@once 2030-01-15T06:00:03Z"});
+      await vi.advanceTimersByTimeAsync(2999); expect(calls()).toBe(0);
+      await vi.advanceTimersByTimeAsync(1); await scheduler.idle(); expect(calls()).toBe(1);
+      await vi.advanceTimersByTimeAsync(60_000); expect(calls()).toBe(1);
+    } finally { scheduler.stop(); vi.useRealTimers(); }
+  });
+
+  it("keeps the exact instant, runs once after a restart and never repeats next year", async () => {
+    const { store, messages, scheduler, calls } = setup(), c = store.primaryConversation();
+    const saved = scheduler.save({ ...request, conversationId: c.id }, now);
+    expect(saved.nextRunAt).toBe("2030-01-15T06:01:00.000Z");
+    await scheduler.tick(new Date("2030-01-15T06:00:59Z")); await scheduler.idle();
+    expect(calls()).toBe(0);
+    const reopened = new Scheduler(store, messages); reopened.recover();
+    await reopened.tick(new Date("2030-01-15T06:01:04Z")); await reopened.idle();
+    expect(calls()).toBe(1);
+    expect(reopened.list(c.id)[0]).toMatchObject({ enabled: false, lastRunStatus: "completed" });
+    expect(reopened.runs(c.id)[0]).toMatchObject({ status: "completed", scheduledFor: saved.nextRunAt });
+    await reopened.tick(new Date("2031-01-15T06:01:04Z")); await reopened.idle();
+    expect(calls()).toBe(1);
+  });
+
+  it("catches up a missed one-time request without changing its original timestamp", async () => {
+    const { store, scheduler, calls } = setup(), c = store.primaryConversation();
+    scheduler.save({ ...request, conversationId: c.id }, now);
+    await scheduler.tick(new Date("2030-01-16T08:00:00Z")); await scheduler.idle();
+    await scheduler.tick(new Date("2030-01-16T08:00:15Z")); await scheduler.idle();
+    expect(calls()).toBe(1);
+    expect(scheduler.runs(c.id)[0]?.scheduledFor).toBe("2030-01-15T06:01:00.000Z");
+  });
+
+  it("does not retry an uncertain one-time delivery after recovery", async () => {
+    const { store, scheduler, calls } = setup(), c = store.primaryConversation();
+    store.linkTelegramChat({chatId:"123",title:"Test",allowedSenders:["123"]});
+    let sends = 0;
+    scheduler.deliver = async () => { sends++; throw new Error("Reply lost after send"); };
+    scheduler.save({ ...request, conversationId: c.id, delivery: "telegram", telegramChatId: "123" }, now);
+    await scheduler.tick(new Date("2030-01-15T06:01:04Z")); await scheduler.idle();
+    scheduler.recover();
+    await scheduler.tick(new Date("2030-01-15T06:02:00Z")); await scheduler.idle();
+    expect(calls()).toBe(1); expect(sends).toBe(1);
+    expect(scheduler.list(c.id)[0]).toMatchObject({enabled:false,lastRunStatus:"uncertain"});
+  });
+
+  it("disarms a claimed reminder on crash recovery without executing it again", async () => {
+    const { store, scheduler, calls } = setup(), c = store.primaryConversation();
+    const saved = scheduler.save({ ...request, conversationId: c.id }, now);
+    store.db.prepare("INSERT INTO schedule_runs(id,schedule_id,conversation_id,scheduled_for,status,created_at) VALUES(?,?,?,?,?,?)")
+      .run("interrupted-once", saved.id, c.id, saved.nextRunAt, "running", saved.nextRunAt);
+    scheduler.recover();
+    await scheduler.tick(new Date("2030-01-15T06:02:00Z")); await scheduler.idle();
+    expect(calls()).toBe(0);
+    expect(scheduler.list(c.id)[0]).toMatchObject({enabled:false,lastRunStatus:"uncertain"});
+  });
+
+  it("allows pause before delivery and rejects re-enabling an elapsed reminder", async () => {
+    const { store, scheduler, calls } = setup(), c = store.primaryConversation();
+    const saved = scheduler.save({ ...request, conversationId: c.id }, now);
+    scheduler.remove(saved.id, c.id);
+    const later = new Date("2030-01-15T06:02:00Z");
+    await scheduler.tick(later); await scheduler.idle();
+    expect(calls()).toBe(0);
+    expect(() => scheduler.save({...saved, enabled:true}, later)).toThrow("Время напоминания уже прошло");
+    expect(() => scheduler.save({...saved, enabled:false}, later)).not.toThrow();
+    expect(() => scheduler.save({...saved, enabled:true, cron:"@once 2030-01-15T09:03:00+03:00"}, later)).not.toThrow();
+  });
+
+  it.each([
+    "@once 2030-01-15T09:00:00", "@once 2030-02-30T09:00:00Z",
+    "@once 2030-13-01T09:00:00Z", "@once 2030-01-15T25:00:00Z", "@once tomorrow",
+  ])("rejects an ambiguous or invalid date: %s", cron => {
+    expect(() => scheduleTiming(cron, "Europe/Moscow", now)).toThrow();
+  });
+
+  it("preserves explicit DST offsets rather than inferring server local time", () => {
+    expect(scheduleTiming("@once 2030-11-03T01:30:00-04:00", "America/New_York", now).nextRunAt).toBe("2030-11-03T05:30:00.000Z");
+    expect(scheduleTiming("@once 2030-11-03T01:30:00-05:00", "America/New_York", now).nextRunAt).toBe("2030-11-03T06:30:00.000Z");
+  });
+});
 describe("durable cron", () => {
   it("keeps the failed receipt after lost authorization and uses recovery only for later runs", async () => {
     const store = new Store(":memory:"); stores.push(store);

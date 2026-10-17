@@ -553,7 +553,7 @@ fun SchedulesScreen(model: HomeViewModel, ref: ChatRef, back: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize().consumeWindowInsets(insets), contentPadding = insets) {
             item {
                 Text(
-                    "Попросите сотрудника о повторяющейся задаче в чате. Здесь можно приостановить её.",
+                    "Напишите в чате, о чём и когда напомнить. Здесь можно проверить результат или остановить задачу.",
                     Modifier.padding(20.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -571,6 +571,16 @@ fun SchedulesScreen(model: HomeViewModel, ref: ChatRef, back: () -> Unit) {
             if (data == null && error == null)
                 item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             items(data?.objects("schedules") ?: emptyList(), key = { it.getString("id") }) { s ->
+                val result = if (!s.optBoolean("enabled") && s.optString("cron").startsWith("@once "))
+                    when (s.optString("lastRunStatus")) {
+                        "completed", "quiet" -> "Выполнено"
+                        "running" -> "Выполняется"
+                        "ready" -> "Ожидает доставки"
+                        "failed" -> "Не выполнено"
+                        "skipped" -> "Пропущено"
+                        "uncertain" -> "Проверьте результат"
+                        else -> null
+                    } else null
                 val next = runCatching {
                     Instant.parse(s.getString("nextRunAt"))
                         .atZone(ZoneId.of(s.getString("timezone")))
@@ -581,12 +591,13 @@ fun SchedulesScreen(model: HomeViewModel, ref: ChatRef, back: () -> Unit) {
                     headlineContent = { Text(s.getString("name")) },
                     supportingContent = {
                         Text(
-                            if (s.optBoolean("enabled")) "Следующий запуск: $next"
+                            if (result != null) "$result · $next"
+                            else if (s.optBoolean("enabled")) "Следующий запуск: $next"
                             else "Приостановлено"
                         )
                     },
                     trailingContent = {
-                        Switch(
+                        if (result == null) Switch(
                             checked = s.optBoolean("enabled"),
                             enabled = busy == null,
                             onCheckedChange = {

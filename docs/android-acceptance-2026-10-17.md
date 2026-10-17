@@ -140,9 +140,32 @@ release archives, user databases, Codex history and other chats' work are intact
 ### Common Home defect discovered by Android testing
 
 The combined real request “75 times 8; remind me here in one minute” reached Codex
-intact. Its recorded output included the correct calculation, then a native
-60-second `sleep`, then `ANDROID_OK_17`. Only the last response was stored by Home;
-no schedule existed. This is a reproducible shared engine/delivery issue, not an
-Android rendering failure. It is recorded for the next runtime fix: retain stable
-partial answer items and support a durable one-time request with the existing
-clock. Do not count this reminder scenario as passed.
+intact. Its recorded output included the correct calculation as `commentary`,
+then a native 60-second `sleep`, then `ANDROID_OK_17` as `final_answer`. Only the
+final response was stored by Home; no schedule existed. The earlier description
+that Home overwrote this calculation was inaccurate: it filtered a commentary
+item as designed. The missing durable one-time scheduling path caused the model
+to wait inside the turn. Fix that path with the existing clock, and keep the
+immediate calculation in the actual answer. Do not count this scenario as passed.
+
+### Publication
+
+Android 1.0 build 1, source `f8d1246`, is pushed to `main` and published at
+https://waiwai.is/openstrudel/downloads/OpenStrudel-1.0-1.apk.
+The public APK and checksum manifest were downloaded and verified after atomic
+publication with a timestamped backup. The Apple update feed is unchanged.
+SHA-256: `a921667970be67b535c7387793dc1e4838e10570220e708e03f7b76e8631d7cf`.
+The final signed app opens the attached document as `android-qa17.txt` in the
+system viewer. Publication receipt: `.data/android-release-1/published.json`.
+
+### Shared reminder fix verified for Android 2 / Home 49
+
+Two real requests from the installed release app returned the correct calculation
+and saved one-time reminders through the existing Home clock. The first survived
+a graceful server restart before delivery. The second began within 3 ms of its
+saved deadline and produced one reply about 19 seconds later; provider latency
+remains visible. No sleep tool or duplicate reminder was used. The phone shows
+both completed results without a re-enable toggle. Nine isolated physical tests
+now pass, including completed/uncertain reminder presentation. These are separate
+from the two real-model tests. The public release is still Android build 1 until
+the build 2 publication receipt is recorded.

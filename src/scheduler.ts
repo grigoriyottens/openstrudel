@@ -4,17 +4,19 @@ import type { Store } from "./store.js";
 import type { MessageService } from "./messages.js";
 import type { Attachment } from "./types.js";
 import { agentTransfer } from "./agent-move.js";
+import { scheduleTiming } from "./schedule-timing.js";
 
 export interface ScheduleInput {
   id?: string; conversationId: string; name: string; prompt: string; cron: string; timezone: string;
   enabled?: boolean; telegramChatId?: string | null; delivery?: "app" | "telegram" | "bound"; backupOf?: string | null;
 }
-export interface Schedule extends ScheduleInput { id: string; enabled: boolean; nextRunAt: string }
+export interface Schedule extends ScheduleInput { id: string; enabled: boolean; nextRunAt: string; lastRunStatus?: string | null }
 type Row = Record<string, any>;
 
 /** The clock only wakes the existing chat. Codex still owns the work. */
 export class Scheduler {
-  private timer?: ReturnType<typeof setInterval>;
+  private timer?: ReturnType<typeof setTimeout>;
+  private started = false;
   private readonly active = new Map<string, Promise<void>>();
   get hasActiveRuns() { return this.active.size > 0; }
   isRunning(conversationId: string) { return this.list(conversationId).some(s => this.active.has(s.id)); }
@@ -36,9 +38,8 @@ export class Scheduler {
   save(input: ScheduleInput, now = new Date()): Schedule {
     if (!this.store.getConversation(input.conversationId)) throw new Error("Чат не найден");
     if (!input.name?.trim() || !input.prompt?.trim() || input.name.length > 120 || input.prompt.length > 12000) throw new Error("Укажите название и поручение");
-    new Intl.DateTimeFormat("en", { timeZone: input.timezone }).format(now);
-    if (input.cron.trim().split(/\s+/).length !== 5) throw new Error("Cron должен содержать пять полей: минуты, часы, день, месяц, день недели");
-    const next = CronExpressionParser.parse(input.cron, { currentDate: now, tz: input.timezone }).next().toISOString()!;
+    const timing = scheduleTiming(input.cron, input.timezone, now), next = timing.nextRunAt;
+    if (timing.once && input.enabled !== false && new Date(next) <= now) throw new Error("Время напоминания уже прошло. Укажите новое время.");
     if (input.telegramChatId && !this.store.getTelegramChat(input.telegramChatId)) throw new Error("Сначала подключите этот Telegram-чат");
     const delivery = input.delivery ?? (input.telegramChatId ? "telegram" : "app");
     if (!["app", "telegram", "bound"].includes(delivery)) throw new Error("Выберите место доставки");
@@ -49,11 +50,12 @@ export class Scheduler {
     this.store.db.prepare(`INSERT INTO schedules(id,conversation_id,name,prompt,cron,timezone,enabled,next_run_at,telegram_chat_id,delivery,backup_of) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
       name=excluded.name,prompt=excluded.prompt,cron=excluded.cron,timezone=excluded.timezone,
       enabled=excluded.enabled,next_run_at=excluded.next_run_at,telegram_chat_id=excluded.telegram_chat_id,delivery=excluded.delivery,backup_of=excluded.backup_of`)
-      .run(id,input.conversationId,input.name.trim(),input.prompt.trim(),input.cron,input.timezone,input.enabled === false ? 0 : 1,next,input.telegramChatId ?? null,delivery,input.backupOf ?? null);
+      .run(id,input.conversationId,input.name.trim(),input.prompt.trim(),input.cron.trim(),input.timezone,input.enabled === false ? 0 : 1,next,input.telegramChatId ?? null,delivery,input.backupOf ?? null);
+    this.armClock();
     return this.list(input.conversationId).find(s => s.id === id)!;
   }
   list(conversationId: string): Schedule[] {
-    return (this.store.db.prepare("SELECT * FROM schedules WHERE conversation_id=? ORDER BY rowid").all(conversationId) as Row[]).map(r => ({ id:r.id,conversationId:r.conversation_id,name:r.name,prompt:r.prompt,cron:r.cron,timezone:r.timezone,enabled:r.enabled===1,nextRunAt:r.next_run_at,telegramChatId:r.telegram_chat_id,delivery:r.delivery,backupOf:r.backup_of }));
+    return (this.store.db.prepare("SELECT s.*,(SELECT status FROM schedule_runs r WHERE r.schedule_id=s.id AND (s.cron NOT LIKE '@once %' OR r.scheduled_for=s.next_run_at) ORDER BY scheduled_for DESC LIMIT 1) AS last_run_status FROM schedules s WHERE conversation_id=? ORDER BY s.rowid").all(conversationId) as Row[]).map(r => ({ id:r.id,conversationId:r.conversation_id,name:r.name,prompt:r.prompt,cron:r.cron,timezone:r.timezone,enabled:r.enabled===1,nextRunAt:r.next_run_at,telegramChatId:r.telegram_chat_id,delivery:r.delivery,backupOf:r.backup_of,lastRunStatus:r.last_run_status }));
   }
   runs(conversationId: string) {
     return (this.store.db.prepare("SELECT * FROM schedule_runs WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 30").all(conversationId) as Row[]).map(r => ({ id:r.id,scheduleId:r.schedule_id,status:r.status,scheduledFor:r.scheduled_for,messageId:r.message_id,error:r.error }));
@@ -62,6 +64,7 @@ export class Scheduler {
     // Keep receipts, including ambiguous deliveries, after the user removes a schedule.
     const result = this.store.db.prepare("UPDATE schedules SET enabled=0 WHERE id=? AND conversation_id=?").run(id,conversationId);
     if (!Number(result.changes)) throw new Error("Расписание этого чата не найдено");
+    this.armClock();
   }
   recover(): void {
     for (const r of this.store.db.prepare("SELECT * FROM schedule_runs WHERE status='running'").all() as Row[]) {
@@ -72,11 +75,27 @@ export class Scheduler {
     }
   }
   start(): void {
+    if (this.started) return;
+    this.started = true;
     this.recover();
-    const poll=()=>{ void this.tick().catch(error=>console.error("[schedule]",error instanceof Error ? error.message : "clock failed")); };
-    poll(); this.timer = setInterval(poll,15_000); this.timer.unref();
+    void this.wake();
   }
-  stop(): void { clearInterval(this.timer); this.timer = undefined; }
+  private async wake(): Promise<void> {
+    try { await this.tick(); }
+    catch(error) { console.error("[schedule]",error instanceof Error ? error.message : "clock failed"); }
+    finally { this.armClock(); }
+  }
+  private armClock(): void {
+    if (!this.started) return;
+    clearTimeout(this.timer);
+    const next = this.store.db.prepare("SELECT MIN(next_run_at) AS next FROM schedules WHERE enabled=1").get() as {next:string|null};
+    const remaining = next.next ? new Date(next.next).getTime() - Date.now() : NaN;
+    // Keep the existing low-frequency recovery check, but wake at an earlier
+    // exact deadline. A paused transfer or busy job never creates a hot loop.
+    const delay = remaining > 0 ? Math.min(15_000,remaining) : 15_000;
+    this.timer = setTimeout(()=>void this.wake(),delay); this.timer.unref();
+  }
+  stop(): void { this.started = false; clearTimeout(this.timer); this.timer = undefined; }
   async idle(): Promise<void> { await Promise.allSettled(this.active.values()); }
   async tick(now = new Date()): Promise<void> {
     const due = this.store.db.prepare("SELECT * FROM schedules WHERE enabled=1 AND next_run_at<=?").all(now.toISOString()) as Row[];
@@ -85,14 +104,17 @@ export class Scheduler {
       if (this.active.has(row.id)) continue;
       const schedule = this.list(row.conversation_id).find(s => s.id === row.id)!;
       // After sleep, produce only the latest due edition, never a burst of old digests.
-      const scheduledFor = CronExpressionParser.parse(schedule.cron, { currentDate: new Date(now.getTime()+1), tz: schedule.timezone }).prev().toISOString()!;
-      const next = CronExpressionParser.parse(schedule.cron, { currentDate: now, tz: schedule.timezone }).next().toISOString()!;
+      const timing = scheduleTiming(schedule.cron, schedule.timezone, now);
+      const scheduledFor = timing.once ? timing.nextRunAt : CronExpressionParser.parse(schedule.cron, { currentDate: new Date(now.getTime()+1), tz: schedule.timezone }).prev().toISOString()!;
+      const next = timing.nextRunAt;
       const runId = randomUUID();
       this.store.db.exec("BEGIN IMMEDIATE");
       let claimed = false;
       try {
         claimed = Number(this.store.db.prepare("INSERT OR IGNORE INTO schedule_runs(id,schedule_id,conversation_id,scheduled_for,status,created_at) VALUES(?,?,?,?,'running',?)").run(runId,schedule.id,schedule.conversationId,scheduledFor,now.toISOString()).changes) > 0;
-        this.store.db.prepare("UPDATE schedules SET next_run_at=? WHERE id=?").run(next,schedule.id);
+        // Disarm a one-time request in the same transaction as its unique receipt.
+        // A restart or uncertain delivery must never execute it again.
+        this.store.db.prepare("UPDATE schedules SET next_run_at=?,enabled=? WHERE id=?").run(next,timing.once ? 0 : 1,schedule.id);
         this.store.db.exec("COMMIT");
       } catch (error) { this.store.db.exec("ROLLBACK"); throw error; }
       if (claimed) this.track(schedule.id, this.execute(schedule,runId,scheduledFor));

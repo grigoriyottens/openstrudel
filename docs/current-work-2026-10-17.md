@@ -20,15 +20,41 @@ The native Kotlin/Compose companion builds and is signed. Twelve unit tests,
 eight physical-device fixture tests, release lint, real text/document/image
 requests, editable ElevenLabs dictation and HTTPS App Links have passed on the
 USB Galaxy A07. The detailed Android record separates fixtures, live provider
-results and remaining limits. Distribution APK publication is being finalized.
+results and remaining limits. Android 1.0 build 1 (`f8d1246`) is published; the
+public signed APK and manifest have matching SHA-256 checksums.
 
 A shared Home issue was reproduced during the real reminder test: Codex used
-`sleep`, its early calculation was overwritten by the final response, and no
-schedule was persisted. Next runtime work must retain stable answer items and
-provide one-time scheduling through the existing clock. The phone's external
+`sleep`, its calculation was marked as commentary and omitted from the final
+answer, and no schedule was persisted. Next runtime work must provide one-time
+scheduling through the existing clock and return the calculation immediately.
+The phone's external
 Wolf route also still exhibits packet loss; local and USB paths are independent
 positive results. WaiClaw/Grant SSH authentication and physical iPhone checks
 remain open. Do not mark the whole product acceptance complete.
+
+### Build 49 / Android 2 acceptance — 17 October, 14:40 UTC
+
+One-time reminders now use the existing scheduler. The persisted string contract
+also works with older Codex threads; no history rewrite, extra model loop or
+schema migration. An exact deadline replaces the periodic timer only when it
+is sooner, preserving the 15-second recovery check. Completed and uncertain
+one-time results are shown separately from paused work in the native apps.
+
+A real request sent from the Galaxy A07 returned its calculation, saved a
+one-time reminder, survived a graceful restart of the isolated Home and delivered
+once. A second real test after the deadline improvement started at 14:38:59.003
+for 14:38:59.000 UTC; its model reply arrived about 19 seconds later. This proves
+the clock deadline, not instantaneous provider response. The signed Android 2 UI
+shows both completed receipts without an enable toggle. Evidence is retained in
+`.data/release-49/android-live-reminders.json` and `android-one-time.png`.
+
+Native macOS: 338 tests passed before the final skipped-status label. Runtime:
+62 focused tests passed including deadline timing, restart, missed deadline,
+uncertain delivery, explicit DST offsets and paused archive transfer. The initial
+full suite had two timeouts during concurrent native compilation; their 13 tests
+passed after that load ended, without increasing limits. Nine physical Android
+fixture tests pass. Final serial regression and versioned releases are next.
+Build 49 and Android 2 are not published yet.
 
 ## Current checkpoint — 17 October, 10:03 UTC
 

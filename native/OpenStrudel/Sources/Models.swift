@@ -128,7 +128,22 @@ struct ChatSchedule: Codable, Identifiable {
     let nextRunAt: String
     let telegramChatId: String?
     var delivery: String? = nil
+    var lastRunStatus: String? = nil
+    var isOneTime: Bool { cron.hasPrefix("@once ") }
+    var oneTimeResult: String? {
+        guard isOneTime, !enabled, let lastRunStatus else { return nil }
+        switch lastRunStatus {
+        case "completed", "quiet": return L("Выполнено")
+        case "running": return L("Выполняется")
+        case "ready": return L("Ожидает доставки")
+        case "failed": return L("Не выполнено")
+        case "skipped": return L("Пропущено")
+        case "uncertain": return L("Проверьте результат")
+        default: return nil
+        }
+    }
     var timing: String {
+        if isOneTime { return L("Разово · ") + nextTime }
         let fields = cron.split(separator: " ")
         if fields.count == 5, let minute = Int(fields[0]), let hour = Int(fields[1]), fields[2...] == ["*", "*", "*"] {
             return String(format: L("Ежедневно в %02d:%02d"), hour, minute) + " · " + timeZoneLabel
@@ -137,7 +152,13 @@ struct ChatSchedule: Codable, Identifiable {
             let names = [L("По воскресеньям"), L("По понедельникам"), L("По вторникам"), L("По средам"), L("По четвергам"), L("По пятницам"), L("По субботам"), L("По воскресеньям")]
             return names[day] + String(format: L(" в %02d:%02d"), hour, minute) + " · " + timeZoneLabel
         }
-        return L("Следующий выпуск · ") + ((try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(nextRunAt))?.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)) ?? L("по расписанию"))
+        return L("Следующий выпуск · ") + nextTime
+    }
+    private var nextTime: String {
+        guard let date = try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(nextRunAt) else { return L("по расписанию") }
+        var style = Date.FormatStyle.dateTime.day().month(.abbreviated).hour().minute().locale(L10n.locale)
+        style.timeZone = TimeZone(identifier: timezone) ?? .gmt
+        return date.formatted(style) + " · " + timeZoneLabel
     }
     private var timeZoneLabel: String { timezone == "Europe/Moscow" ? L("Москва") : timezone == "UTC" ? "UTC" : TimeZone(identifier: timezone)?.localizedName(for: .standard, locale: L10n.locale) ?? timezone }
 }

@@ -107,6 +107,7 @@
 		64365D840FC1C3F656F9447B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E29C1F0D3A0FE125E35B565D /* PrivacyInfo.xcprivacy */; };
 		64B7445B113CAC51DED14856 /* localizations.json in Resources */ = {isa = PBXBuildFile; fileRef = D1E1F7D5245EC3DD74BCD8C0 /* localizations.json */; };
 		65B4211FF5BCED8897D1019F /* AgentMetalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB6A073363637CAE0C3852B9 /* AgentMetalTests.swift */; };
+		6C0D4F5404C5FF814C7D5F9B /* ScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C48647F1E5DECF8C42A91685 /* ScheduleTests.swift */; };
 		6EBA29F09BC6522B0D1E8BC6 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31C465091E283CD04778E7DC /* RootView.swift */; };
 		6FE221DABABB34CD632FF08D /* ComposerTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = F35580B8698D54DD1416DD25 /* ComposerTextField.swift */; };
 		6FF00C4E04D58F8861DAE141 /* SpeechSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62C64488686837DBAC256242 /* SpeechSettingsView.swift */; };
@@ -343,6 +344,7 @@
 		BEB733894E124793EDA9ACA3 /* TranscriptStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptStack.swift; sourceTree = "<group>"; };
 		C156BE0450E7CC24D988FA90 /* AgentCharactersUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentCharactersUITests.swift; sourceTree = "<group>"; };
 		C1A041EB646E3F285D182418 /* DigitalOceanBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigitalOceanBootstrap.swift; sourceTree = "<group>"; };
+		C48647F1E5DECF8C42A91685 /* ScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleTests.swift; sourceTree = "<group>"; };
 		C4EA2EF5DDC9D052A757B498 /* home-certificate.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "home-certificate.json"; sourceTree = "<group>"; };
 		C7D69A9EDA344A443227E0B2 /* WaiVDSClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaiVDSClient.swift; sourceTree = "<group>"; };
 		C89E66060821227C1F39AD78 /* DeviceLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLibrary.swift; sourceTree = "<group>"; };
@@ -552,6 +554,7 @@
 				08357FA8D528392355101259 /* OfflineDictationTests.swift */,
 				B097C78321B711C33AFCF4A4 /* ParakeetModelTests.swift */,
 				D6E988F61680172334C63B12 /* PrimaryHomeTests.swift */,
+				C48647F1E5DECF8C42A91685 /* ScheduleTests.swift */,
 				B16A581A5712D0014B612F21 /* ServerSetupTests.swift */,
 				B6C96E0E732FE8B6FA28C254 /* SSHConnectionReadinessTests.swift */,
 				E4AA20BE764618BEE63AF68D /* TelegramLinkTests.swift */,
@@ -851,6 +854,7 @@
 				FA990FEF4C0EA7D7B16F790C /* PrimaryHomeTests.swift in Sources */,
 				F80AFA3802EBE1953E88724E /* SSHConnectionReadiness.swift in Sources */,
 				FE8C4A78CD3C816919083231 /* SSHConnectionReadinessTests.swift in Sources */,
+				6C0D4F5404C5FF814C7D5F9B /* ScheduleTests.swift in Sources */,
 				7BE9A629D5B09FA528495F79 /* ServerSetup.swift in Sources */,
 				849AE228B80A871E9172A20B /* ServerSetupTests.swift in Sources */,
 				59DBFFCCB9930F45EC2895BB /* SpeechSettingsView.swift in Sources */,
@@ -1060,7 +1064,7 @@
 				CODE_SIGN_ENTITLEMENTS = iOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 48;
+				CURRENT_PROJECT_VERSION = 49;
 				INFOPLIST_FILE = "iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = OpenStrudel;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -1101,7 +1105,7 @@
 				CODE_SIGN_ENTITLEMENTS = iOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 48;
+				CURRENT_PROJECT_VERSION = 49;
 				INFOPLIST_FILE = "iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = OpenStrudel;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -1202,7 +1206,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 48;
+				CURRENT_PROJECT_VERSION = 49;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = R4A779QVVY;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1300,7 +1304,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 48;
+				CURRENT_PROJECT_VERSION = 49;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = R4A779QVVY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

@@ -2,7 +2,7 @@ import { readModelSelection, parseModelSelection, type ModelSelection } from "./
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
-import { CronExpressionParser } from "cron-parser";
+import { scheduleTiming } from "./schedule-timing.js";
 import { gzipSync, gunzipSync } from "node:zlib";
 import type { Store } from "./store.js";
 import type { MessageService } from "./messages.js";
@@ -189,7 +189,7 @@ export class AgentArchives {
         // Insert primaries and backups before linking them; source row order
         // is not trusted. No imported schedule can run or send to Telegram.
         db.prepare("INSERT INTO schedules(id,conversation_id,name,prompt,cron,timezone,enabled,next_run_at,telegram_chat_id,delivery,backup_of) VALUES(?,?,?,?,?,?,0,?,NULL,'app',NULL)")
-          .run(schedules.get(s.id)!, conversations.get(s.conversationId)!, s.name, s.prompt, s.cron, s.timezone, new Date().toISOString());
+          .run(schedules.get(s.id)!, conversations.get(s.conversationId)!, s.name, s.prompt, s.cron, s.timezone, scheduleTiming(s.cron,s.timezone).nextRunAt);
         this.store.setSetting("schedule.import." + schedules.get(s.id)!, JSON.stringify({ enabled: s.enabled, delivery: s.delivery, destination: s.destination }));
       }
       for (const s of archive.schedules) if (s.backupOf) db.prepare("UPDATE schedules SET backup_of=? WHERE id=?").run(schedules.get(s.backupOf)!, schedules.get(s.id)!);
@@ -325,8 +325,8 @@ export function validateArchive(input: unknown): AgentArchive {
   const schedules: Schedule[] = array(a.schedules, 10000).map(v => {
     const s = object(v), conversationId = identifier(s.conversationId); if (!chats.has(conversationId)) fail();
     const cron = string(s.cron, 200), timezone = string(s.timezone, 100), name = string(s.name, 120), prompt = string(s.prompt, 12000);
-    if (cron.trim().split(/\s+/).length !== 5 || !name.trim() || !prompt.trim()) fail();
-    try { new Intl.DateTimeFormat("en", { timeZone: timezone }); CronExpressionParser.parse(cron, { tz: timezone }).next(); } catch { fail(); }
+    if (!name.trim() || !prompt.trim()) fail();
+    try { scheduleTiming(cron, timezone); } catch { fail(); }
     return { id: identifier(s.id), conversationId, name, prompt, cron, timezone, enabled: bool(s.enabled), delivery: choice(s.delivery, ["app", "telegram", "bound"]), destination: optional(s.destination, 2000), backupOf: optional(s.backupOf, 100) };
   });
   const clocks = unique(schedules);

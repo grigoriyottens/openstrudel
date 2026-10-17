@@ -71,6 +71,20 @@ function populated() {
 }
 
 describe("additive team transfer", () => {
+  it("preserves a one-time reminder's instant during export and keeps the import paused", async () => {
+    const source = fixture(), destination = fixture();
+    const employee = source.store.createProfile({name:"One-time reminder"});
+    const chat = source.store.profileConversation(employee.id);
+    source.scheduler.save({conversationId:chat.id,name:"Follow up",prompt:"Remind here",cron:"@once 2030-01-15T09:30:00+03:00",timezone:"Europe/Moscow"},new Date("2030-01-14T00:00:00Z"));
+    const archive = decodeArchive(encodeArchive(source.archive.export()));
+    destination.archive.import(archive,destination.archive.preview(archive).planToken);
+    const imported = destination.store.profileConversation(destination.store.getProfile(employee.name)!.id);
+    const schedule = destination.scheduler.list(imported.id)[0]!;
+    expect(schedule).toMatchObject({enabled:false,cron:"@once 2030-01-15T09:30:00+03:00",nextRunAt:"2030-01-15T06:30:00.000Z",delivery:"app"});
+    await destination.scheduler.tick(new Date("2030-01-16T00:00:00Z")); await destination.scheduler.idle();
+    expect(destination.turns()).toBe(0);
+    expect(()=>destination.archive.export()).not.toThrow();
+  });
   it("preserves characters when importing with new IDs, including older archives", () => {
     const source = fixture(), target = fixture();
     const agent = source.store.createProfile({ name: "Образ", appearance: { version: 1, kind: "curl", tone: 6 } });

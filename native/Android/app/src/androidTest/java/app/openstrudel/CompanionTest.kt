@@ -264,6 +264,26 @@ class CompanionTest {
         )
     }
 
+    @Test
+    fun completedAndUncertainRemindersCannotBeSilentlyEnabledAgain() {
+        val home = fixture("Reminder fixture")
+        for ((id, status) in listOf("done" to "completed", "unknown" to "uncertain")) {
+            home.schedules += json("id" to id, "conversationId" to "chat", "name" to id,
+                "prompt" to "Remind", "cron" to "@once 2030-01-15T09:30:00+03:00",
+                "timezone" to "Europe/Moscow", "enabled" to false,
+                "nextRunAt" to "2030-01-15T06:30:00.000Z", "lastRunStatus" to status)
+        }
+        launch(StoredState(connections = listOf(home.connection)))
+        connected(home.connection.id)
+        compose.onNodeWithTag("employee-writer").performClick()
+        compose.waitUntil(10000) { model.state.value.chats.values.any { it.loaded } }
+        compose.onNodeWithContentDescription("Действия чата").performClick()
+        compose.onNodeWithText("Расписание").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithText("Выполнено", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Проверьте результат", substring = true).assertExists()
+        compose.onAllNodes(isToggleable()).assertCountEquals(0)
+    }
+
     private class Fixture(name: String) {
         val server = MockWebServer()
         val pairs = AtomicInteger()
@@ -271,6 +291,7 @@ class CompanionTest {
         val deletes = AtomicInteger()
         val sends = CopyOnWriteArrayList<JSONObject>()
         val messages = CopyOnWriteArrayList<JSONObject>()
+        val schedules = CopyOnWriteArrayList<JSONObject>()
         @Volatile var slowProfiles = false
         @Volatile var speechChat: String? = null
         @Volatile var modelChat: String? = null
@@ -352,6 +373,7 @@ class CompanionTest {
                                 sends += JSONObject(request.body.readUtf8())
                                 ok(json("messageId" to "accepted", "conversationId" to "chat"))
                             }
+                            path == "/v1/conversations/chat/schedules" -> ok(json("schedules" to JSONArray(schedules), "runs" to JSONArray()))
                             path == "/v1/speech/transcribe" -> {
                                 speechChat = request.requestUrl!!.queryParameter("conversationId")
                                 ok(json("text" to "Распознанный текст"))
