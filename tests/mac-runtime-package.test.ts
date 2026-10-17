@@ -7,6 +7,8 @@ import { join, resolve } from "node:path";
 // Exercise the finished bundle, including after signing. A successful Xcode
 // build cannot detect a Node executable that depends on the builder's Homebrew.
 const app = process.env.OPENSTRUDEL_PACKAGED_APP;
+// Cold vendor-binary launches each have a 10–20 second deadline. The whole test
+// must allow those sequential checks to finish on a busy release machine.
 it.skipIf(process.platform !== "darwin" || !app)("runs the packaged Home without the build machine's libraries or tools", () => {
   const runtime = resolve(app!, "Contents/Resources/Runtime");
   const node = join(runtime, "bin/node");
@@ -44,7 +46,7 @@ it.skipIf(process.platform !== "darwin" || !app)("runs the packaged Home without
     expect(execFileSync(grok, ["--no-auto-update", "--version"], { env: { ...env, GROK_HOME: join(fixture, "grok"), GROK_DISABLE_AUTOUPDATER: "1" }, encoding: "utf8", timeout: 20_000 })).toContain(`grok ${pinned} `);
     for (const file of ["Grok-LICENSE.txt", "Grok-THIRD_PARTY_NOTICES.md"]) expect(readFileSync(join(runtime, file), "utf8").length).toBeGreaterThan(0);
   } finally { rmSync(fixture, { recursive: true, force: true }); }
-});
+}, 75_000);
 
 // `codesign --verify --deep --strict`, the last step of signing, fails on a link to nothing.
 it.skipIf(process.platform !== "darwin" || !app)("ships no link that points at nothing", () => {
