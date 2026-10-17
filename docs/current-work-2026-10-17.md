@@ -1,4 +1,59 @@
-# OpenStrudel — build 47 released, build 48 acceptance
+# OpenStrudel — build 48 released, remaining device acceptance
+
+## Current checkpoint — 17 October, 09:28 UTC
+
+Build **48**, source `fb84d3d`, is published to Sparkle and the Home download.
+Apple processed iOS 48 as VALID; it is IN_BETA_TESTING in the existing internal
+Mik group. The notarized app is installed on Mini, and Wolf runs the same source.
+See [build 48 acceptance](releases/2026-10-17-build-48.md) for evidence and limits.
+The entries below this checkpoint are chronological history, including gates
+that were subsequently closed; they are not the current release status.
+
+Completed since the previous checkpoint:
+- Native macOS 336 tests, runtime 573 tests, three iOS model UI scenarios and
+  five signed-package checks passed. Both Home archive extractors passed.
+- ElevenLabs is selected and connected on Mini and Wolf. Real native recognition
+  produced editable text before send; real Telegram without a mention produced
+  its transcript before the correct answer. Per-chat model selection was verified
+  both in native/web fixtures and in a real Telegram/Codex turn.
+- Signed/notarized macOS 48 was installed after a managed rollback snapshot;
+  health, SQLite integrity, existing row counts and actual remote history passed.
+  The successful snapshot was marked healthy; normal retention kept two backups.
+- Public immutable downloads and stable aliases have matching hashes. One
+  verification download was truncated by the network; the first rollback SSH
+  attempt also lost its connection. Subsequent origin inspection, complete
+  downloads from Mini and Wolf, and the installed Sparkle UI confirmed build 48.
+- Closed only this task's QA apps and fixtures and shut down its simulator.
+  AiGid has the current heavy-build/audio queue; do not start new native builds
+  or disturb its simulator until that work releases the queue.
+- Safely removed the idle, reproducible Sparkle extraction for build 48 after
+  checking processes, open files and mounts. The signed DMG is retained. About
+  966 MiB of free space was recovered; Data then had 5.84 GiB free. Native cache
+  pruning found no eligible caches. Disk remains below the 15 GiB threshold.
+- Removed 18 merged remote branches after checking their exact tips, ancestry,
+  absence of open pull requests and absence from attached worktrees. Deletion
+  was atomic and conditional on unchanged tips. Active worktree references and
+  main were preserved; the private receipt retains every removed tip.
+- Two historical GIF previews initially failed during the network interruption.
+  Their stored files and authenticated API reads were intact; the native Retry
+  action loaded both correctly. No attachment migration or speculative decoder
+  patch was applied. Latest resource snapshot: 5.85 GiB free, normal pressure,
+  6,037 MiB swap, down from the previous 6,117 MiB.
+
+Still open, without restoring deleted employees or resetting credentials:
+1. WaiClaw/WAI.co and Grant reject this Mini's documented SSH access. Their 48
+   deployment, ElevenLabs defaults and requested account status are not verified.
+   Mini's second real remote connection and final client-only migration depend
+   on WaiClaw access; local data, Home and relay remain preserved.
+2. A physical iPhone is not available here. Actual microphone quality/latency,
+   system Camera Universal Links and the reported two-add/two-remove incident
+   need physical-device acceptance. Simulator coverage is recorded separately.
+3. Fresh-server 48 installation and an older isolated Sparkle client's full
+   download/install/relaunch cycle were not repeated for this release. The exact
+   Home image, shipped installers, public signatures, installed app and remote
+   production upgrade passed the checks listed in the release note.
+4. Keep reviewing the remaining product scenarios against real tasks, without
+   relabeling a synthetic engine response as live model-quality evidence.
 
 Continuation of `current-work-2026-10-16.md`; its completed checks are retained.
 Work stays in the existing release checkout. The primary checkout and other
