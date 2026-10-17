@@ -1,6 +1,6 @@
 # OpenStrudel — build 48 released, remaining device acceptance
 
-## Current checkpoint — 17 October, 09:55 UTC
+## Current checkpoint — 17 October, 10:03 UTC
 
 Build **48**, source `fb84d3d`, is published to Sparkle and the Home download.
 Apple processed iOS 48 as VALID; it is IN_BETA_TESTING in the existing internal
@@ -54,21 +54,47 @@ Completed since the previous checkpoint:
 - Removed the idle extraction cache made by the Sparkle QA check after process,
   open-file and mount checks. It recovered another 46.9 MiB; Data then had
   6.74 GiB free. Signed archives and all user data remain preserved.
+- Read-only completion audit through the personal Telegram MCP found today's
+  WaiClaw deliveries in both News and Connect (06:03 and 06:01 UTC). The recovered
+  Core Team voice request and its substantive answer with a Notion result remain
+  present. This verifies delivery, not WaiClaw's currently installed build.
+- Wolf currently reports a running bot without a connection error, all eight
+  expected enabled chats, configured Europe/Moscow, connected ElevenLabs
+  (Scribe v2 / Eleven v4), and a connected Pro Max account. Its live catalogue
+  reports six models with provider-supported reasoning/speed options. Mini also
+  reports Moscow and connected ElevenLabs; its separate local account reports
+  Pro, not Pro Max. Mini's account and preserved local Home were not replaced
+  during the pending client-only migration.
+- The existing Mac mini resource heartbeat is ACTIVE with a 12-hour interval.
+  No duplicate monitor was created. Current read-only audit receipts are under
+  `.data/release-48/completion-audit`.
 
 Still open, without restoring deleted employees or resetting credentials:
 1. WaiClaw/WAI.co and Grant reject this Mini's documented SSH access. Their 48
    deployment, ElevenLabs defaults and requested account status are not verified.
    Mini's second real remote connection and final client-only migration depend
    on WaiClaw access; local data, Home and relay remain preserved.
-2. The paired physical iPhone is currently unavailable to device tools. Actual microphone quality/latency,
+2. The paired physical iPhone is currently unavailable to device tools.
+   Actual microphone quality/latency,
    system Camera Universal Links and the reported two-add/two-remove incident
    need physical-device acceptance. Simulator coverage is recorded separately.
 3. A full bootstrap on a newly provisioned Ubuntu server was not repeated for 48.
    Fresh Home startup/restart and the isolated Sparkle cycle now pass; the exact
    Home image, shipped installers, public signatures, installed app and remote
    production upgrade passed the checks listed in the release note.
-4. Keep reviewing the remaining product scenarios against real tasks, without
-   relabeling a synthetic engine response as live model-quality evidence.
+4. Remaining device-specific live checks require those hosts or the iPhone.
+   Keep synthetic-engine coverage separate from actual provider responses;
+   neither today's deliveries nor the release receipt proves full acceptance
+   on inaccessible devices.
+
+The same host-authentication and physical-device blockers have been confirmed
+across three consecutive goal turns. A fresh check still returns SSH permission
+denied on WaiClaw and Grant, including the explicit existing local key, and
+devicectl still reports the paired iPhone unavailable. No credential reset,
+new access rule, competing publisher, or local-service shutdown was attempted.
+Resume deployment and device acceptance when existing host access is restored
+and a physical iPhone is available; do not rebuild or repeat completed tests
+without a new change or failure.
 
 Continuation of `current-work-2026-10-16.md`; its completed checks are retained.
 Work stays in the existing release checkout. The primary checkout and other
