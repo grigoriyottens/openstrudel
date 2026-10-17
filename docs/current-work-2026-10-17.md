@@ -1,6 +1,6 @@
 # OpenStrudel — build 48 released, remaining device acceptance
 
-## Current checkpoint — 17 October, 09:28 UTC
+## Current checkpoint — 17 October, 09:55 UTC
 
 Build **48**, source `fb84d3d`, is published to Sparkle and the Home download.
 Apple processed iOS 48 as VALID; it is IN_BETA_TESTING in the existing internal
@@ -39,17 +39,32 @@ Completed since the previous checkpoint:
   action loaded both correctly. No attachment migration or speculative decoder
   patch was applied. Latest resource snapshot: 5.85 GiB free, normal pressure,
   6,037 MiB swap, down from the previous 6,117 MiB.
+- The full native Sparkle cycle from 45 to 48 passed in separately identified,
+  signed and notarized QA copies: discover, download, install, relaunch, and
+  report up to date. Installed executable/dylib/plist bytes matched the candidate;
+  signature verification passed. Production Home's PID, health, integrity and
+  row counts were unchanged. The temporary HTTPS feed/archive were removed
+  after checking their hashes; the production appcast hash remained unchanged.
+- A fresh, isolated Home using the exact Wolf 48 image passed its real Codex
+  filesystem sandbox check, first startup, unauthorized-request rejection,
+  creation of two employees, restart persistence, Moscow timezone persistence,
+  rename without losing instructions, and deletion of those test employees.
+  It had no external network, published ports, model credentials or bot token.
+  Its container and volume were removed; the production container was unchanged.
+- Removed the idle extraction cache made by the Sparkle QA check after process,
+  open-file and mount checks. It recovered another 46.9 MiB; Data then had
+  6.74 GiB free. Signed archives and all user data remain preserved.
 
 Still open, without restoring deleted employees or resetting credentials:
 1. WaiClaw/WAI.co and Grant reject this Mini's documented SSH access. Their 48
    deployment, ElevenLabs defaults and requested account status are not verified.
    Mini's second real remote connection and final client-only migration depend
    on WaiClaw access; local data, Home and relay remain preserved.
-2. A physical iPhone is not available here. Actual microphone quality/latency,
+2. The paired physical iPhone is currently unavailable to device tools. Actual microphone quality/latency,
    system Camera Universal Links and the reported two-add/two-remove incident
    need physical-device acceptance. Simulator coverage is recorded separately.
-3. Fresh-server 48 installation and an older isolated Sparkle client's full
-   download/install/relaunch cycle were not repeated for this release. The exact
+3. A full bootstrap on a newly provisioned Ubuntu server was not repeated for 48.
+   Fresh Home startup/restart and the isolated Sparkle cycle now pass; the exact
    Home image, shipped installers, public signatures, installed app and remote
    production upgrade passed the checks listed in the release note.
 4. Keep reviewing the remaining product scenarios against real tasks, without
