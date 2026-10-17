@@ -38,6 +38,7 @@ import coil3.compose.AsyncImage
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import io.noties.markwon.Markwon
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -380,12 +381,15 @@ private fun EmployeeRow(
     var menu by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     val ref = ChatRef(home, p.id)
+    val context = LocalContext.current
+    val markdown = remember(context) { Markwon.create(context) }
+    val preview = remember(markdown, p.preview) { markdown.toMarkdown(p.preview).toString() }
     Box {
         ListItem(
             headlineContent = { Text(p.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             supportingContent = {
                 Text(
-                    p.preview
+                    preview
                         .ifBlank {
                             if (p.id == "main") "Помощник для ваших задач"
                             else "Напишите, что нужно"
