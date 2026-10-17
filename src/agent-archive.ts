@@ -1,4 +1,4 @@
-import { readModelSelection } from "./model-settings.js";
+import { readModelSelection, parseModelSelection, type ModelSelection } from "./model-settings.js";
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, constants, existsSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
@@ -17,7 +17,7 @@ const MAX_CONTENT_BYTES = 256 * 1024 * 1024;
 type Row = Record<string, any>;
 type Profile = Omit<EmployeeProfile, "preview"> & { context: string };
 interface Workspace { id: string; sourcePath: string; connections: string[]; directories: string[]; files: { path: string; content: string; sha256: string; executable: boolean }[] }
-interface Conversation { id: string; profileId: string; context: string; title: string; createdAt: string; updatedAt: string; primary: boolean; sourceChannel: string }
+interface Conversation { id: string; profileId: string; context: string; title: string; createdAt: string; updatedAt: string; primary: boolean; sourceChannel: string; modelSelection?: ModelSelection }
 interface Message { id: string; conversationId: string; direction: string; replyToId: string | null; text: string; createdAt: string; status: string; error: string | null; kind: string; author: string | null; hidden: boolean; attachments: string[] }
 interface Attachment { id: string; conversationId: string; name: string; mimeType: string; size: number; path: string }
 interface Schedule { id: string; conversationId: string; name: string; prompt: string; cron: string; timezone: string; enabled: boolean; delivery: string; destination: string | null; backupOf: string | null }
@@ -54,7 +54,7 @@ export class AgentArchives {
     // overwrite the receiving Home's main personality or primary conversation.
     if (profileId === "main" || !profileId && visible("main")) profiles.unshift({ appearance: defaultAppearance("main"), id: "main", name: "OpenStrudel", instructions: store.getSetting("main.soul") ?? "", capabilities: [], ...readModelSelection(store,"main"), tokenLimit: null, domain: "personal", purpose: "", createdAt: new Date().toISOString(), context: "personal" });
     if (!profiles.length) throw new Error("На устройстве нет агентов для экспорта.");
-    const chats: Conversation[] = conversations.map(c => ({ id: c.id, profileId: c.profileId ?? "main", context: this.messages.contextFor(c.id), title: c.title ?? "Чат", createdAt: c.createdAt, updatedAt: c.updatedAt, sourceChannel: c.channel,
+    const chats: Conversation[] = conversations.map(c => ({ id: c.id, profileId: c.profileId ?? "main", context: this.messages.contextFor(c.id), title: c.title ?? "Чат", createdAt: c.createdAt, updatedAt: c.updatedAt, sourceChannel: c.channel, ...(c.modelSelection ? {modelSelection:c.modelSelection} : {}),
       primary: c.channel === "api" && c.externalId === (c.profileId ? "home::employee::" + c.profileId : "home") }));
     const contexts = [...new Set([...profiles.map(p => p.context), ...chats.map(c => c.context)])];
     let contentBytes = 0, fileCount = 0;
@@ -167,8 +167,8 @@ export class AgentArchives {
       }
       for (const c of archive.conversations) {
         const id = conversations.get(c.id)!, profile = profiles.get(c.profileId)!;
-        db.prepare("INSERT INTO conversations(id,channel,external_id,title,codex_thread_id,created_at,updated_at,profile_id) VALUES(?,'api',?,?,NULL,?,?,?)")
-          .run(id, c.primary ? "home::employee::" + profile : "import::" + id, c.title, c.createdAt, c.updatedAt, profile);
+        db.prepare("INSERT INTO conversations(id,channel,external_id,title,codex_thread_id,created_at,updated_at,profile_id,model_selection) VALUES(?,'api',?,?,NULL,?,?,?,?)")
+          .run(id, c.primary ? "home::employee::" + profile : "import::" + id, c.title, c.createdAt, c.updatedAt, profile, c.modelSelection ? JSON.stringify(c.modelSelection) : null);
         this.store.setSetting("conversation.context." + id, contexts.get(c.context)!);
       }
       const files = new Map<string, Row>();
@@ -302,7 +302,7 @@ export function validateArchive(input: unknown): AgentArchive {
   const primary = new Set<string>();
   const conversations: Conversation[] = array(a.conversations, 10000).map(v => {
     const c = object(v);
-    const item = { id: identifier(c.id), profileId: identifier(c.profileId), context: identifier(c.context), title: string(c.title, 2000), createdAt: date(c.createdAt), updatedAt: date(c.updatedAt), primary: bool(c.primary), sourceChannel: choice(c.sourceChannel, ["api", "telegram"]) };
+    const item = { id: identifier(c.id), profileId: identifier(c.profileId), context: identifier(c.context), title: string(c.title, 2000), createdAt: date(c.createdAt), updatedAt: date(c.updatedAt), primary: bool(c.primary), sourceChannel: choice(c.sourceChannel, ["api", "telegram"]), ...(c.modelSelection == null ? {} : {modelSelection:parseModelSelection(object(c.modelSelection),true)}) };
     if (!people.has(item.profileId) || !spaces.has(item.context)) fail();
     if (item.primary) { if (primary.has(item.profileId) || item.context !== people.get(item.profileId)!.context) fail(); primary.add(item.profileId); }
     return item;

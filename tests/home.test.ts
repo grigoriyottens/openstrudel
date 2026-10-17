@@ -198,6 +198,7 @@ describe("user-owned primary Home", () => {
     const models=[{id:"model",name:"Model",description:"",isDefault:true,speeds:[{id:"default",name:"Обычная",description:""},{id:"priority",name:"Fast",description:""}],provider:"chatgpt"}];
     laptop.runtime.engine.models=async()=>models; mini.runtime.engine.models=async()=>models;
     const profile=mini.runtime.store.createProfile({name:"Remote editor"});
+    const chat=mini.runtime.store.profileConversation(profile.id);
     await connect(laptop,mini);
     await eventually(()=>expect(laptop.home.nodeFor("profile",profile.id)).toBe(mini.home.state.nodeId));
     const remote="/v1/settings/models?agentId="+profile.id;
@@ -208,7 +209,15 @@ describe("user-owned primary Home", () => {
     expect(mini.runtime.store.getSetting("models.defaults")).toContain("model");
     expect(laptop.runtime.store.getSetting("models.defaults")).toBeNull();
     expect((await laptop.api(remote)).value.effective).toEqual({provider:"chatgpt",model:"model",serviceTier:"priority"});
-  });
+    await eventually(()=>expect(laptop.home.nodeFor("conversation",chat.id)).toBe(mini.home.state.nodeId));
+    const chatPath="/v1/settings/models?conversationId="+chat.id;
+    expect((await laptop.api(chatPath,"POST",{model:"model",serviceTier:"default"})).status).toBe(200);
+    expect((await laptop.api(chatPath)).value).toMatchObject({selection:{model:"model",serviceTier:"default"},defaults:{model:"model",serviceTier:"priority"}});
+    expect(mini.runtime.store.getProfile(profile.id)?.serviceTier).toBe("priority");
+    const status=vi.spyOn(mini.runtime.accounts,"statusFor").mockResolvedValue({account:{connected:true,managed:true,provider:"chatgpt"}} as any);
+    expect((await laptop.api("/v1/account?conversationId="+chat.id)).status).toBe(200);
+    expect(status).toHaveBeenCalledWith(profile.id,false,chat.id);
+  }, 15000);
   it("keeps an API key on the device it is added to, with owner-only writes", async () => {
     const provider = createServer((request, response) => response.writeHead(request.headers.authorization === "Bearer xai-remote" ? 200 : 401).end("{}"));
     await new Promise<void>(done => provider.listen(0, "127.0.0.1", done));

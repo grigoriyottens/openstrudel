@@ -5,7 +5,7 @@ import { request as httpsRequest } from "node:https";
 import { afterEach, describe, expect, it } from "vitest";
 import { AgentArchives, encodeArchive, decodeArchive, type AgentArchive } from "../src/agent-archive.js";
 import { OpenStrudelRuntime } from "../src/runtime.js";
-import { saveModelSelection } from "../src/model-settings.js";
+import { saveModelSelection, saveConversationModelSelection, readConversationModelSelection } from "../src/model-settings.js";
 
 const fixtures: { root: string; runtime: OpenStrudelRuntime }[] = [];
 function fixture() {
@@ -18,6 +18,22 @@ function fixture() {
   return { root, ...runtime, runtime, archive, turns: () => turns };
 }
 afterEach(async () => { for (const f of fixtures.splice(0)) { await f.runtime.stop(); rmSync(f.root, { recursive: true, force: true }); } });
+
+it("transfers conversation model choices without changing employee defaults", () => {
+  const source=fixture(),target=fixture();
+  const employee=source.store.createProfile({name:"Chat models"}),chat=source.store.profileConversation(employee.id);
+  saveModelSelection(source.store,{provider:"chatgpt",model:"employee-model",serviceTier:"default"},employee.id);
+  const choice={provider:"chatgpt",model:"conversation-model",serviceTier:"priority",reasoningEffort:"high"};
+  saveConversationModelSelection(source.store,chat.id,choice);
+  const archive=decodeArchive(encodeArchive(source.archive.export()));
+  target.archive.import(archive,target.archive.preview(archive).planToken);
+  const imported=target.store.getProfile("Chat models")!;
+  expect(imported.model).toBe("employee-model");
+  expect(readConversationModelSelection(target.store,target.store.profileConversation(imported.id).id)).toEqual(choice);
+  const invalid=structuredClone(archive);
+  invalid.conversations.find(c=>c.modelSelection)!.modelSelection!.provider="unregistered";
+  expect(()=>target.archive.preview(decodeArchive(Buffer.from(JSON.stringify(invalid))))).toThrow();
+});
 
 function populated() {
   const f = fixture(), s = f.store;

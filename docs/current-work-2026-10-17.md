@@ -1,4 +1,4 @@
-# OpenStrudel — build 47 acceptance
+# OpenStrudel — build 47 released, build 48 acceptance
 
 Continuation of `current-work-2026-10-16.md`; its completed checks are retained.
 Work stays in the existing release checkout. The primary checkout and other
@@ -201,3 +201,61 @@ hides the local-model section immediately when ElevenLabs is selected.
 New Development profile `OpenStrudel Development Links 20261017` is ACTIVE and
 uses the same existing certificate and device roster. The Xcode project was
 regenerated without starting a build.
+
+## 17 October checkpoint — speech live on Wolf
+
+- Commit `c8297d6` is on main. Wolf now runs that image with the existing
+  company/personality/history intact. Deployment waited for idle queues, kept
+  a consistent backup, replaced the source atomically, and verified health,
+  Telegram, SQLite integrity and unchanged-or-increased row counts. Private
+  backup: `/root/openstrudel-upgrade-48-20261017T071501Z`.
+- ElevenLabs is the selected recognizer on Wolf. The key came from the named
+  1Password item through process memory and stdin; no key is in Git or logs.
+  Home API M4A recognition took 0.65 seconds.
+- Real Telegram acceptance, isolated two-member QA group, without @mention:
+  voice message 1679171 at 07:19:30 UTC, transcript 1679172 one second later,
+  correct live employee answer 1679173 at 07:19:41. The answer was “Все коробки
+  стоят 600 рублей.” No test was sent to a group containing colleagues.
+  Receipt: `.data/voice-48/telegram-live-acceptance.json`.
+- Wolf's first account is authorized and its current credential reports
+  `promax`; Codex's older account display reported `unknown`. The display-only
+  fallback checks account identity and credential expiry. Model capabilities
+  still come from Codex. Do not infer subscription price from the label alone.
+- WaiClaw/WAI.co still rejects the documented SSH access. Its deployment,
+  speech default and requested account have not been verified. No credentials
+  were rotated.
+
+## Per-conversation models — acceptance in progress
+
+- The existing model selection now supports conversation → employee → device
+  inheritance. Model, speed and reasoning remain one validated provider choice.
+  The same setting reaches queued turns, Telegram, services, remote Homes,
+  archive transfer and provider removal. Running work keeps its existing choice.
+- The conversation envelope carries its effective choice, so clients do not
+  fetch the model catalog on every transcript poll. Account status follows the
+  chosen conversation provider. Native stale-account rejection also checks the
+  effective model, not only the selected employee.
+- Web UI acceptance passed actual clicks: Sol/Ultra Fast/High, saved across
+  reload, another employee unchanged, Luna hides unsupported controls, unsaved
+  choice cancels, inheritance restores, catalog failure recovers with Retry.
+  A 390×844 viewport fits the settings without horizontal overflow. Evidence:
+  `.data/voice-48/chat-model-web-phone.png`. This fixture uses real HTTP and
+  storage but a synthetic model; it is not live model latency evidence.
+- 91 focused runtime tests passed, then 33 account/provider/localization checks
+  and 14 model checks including old-schema upgrade, reopen and group capability
+  filtering passed. TypeScript checking passes. Full serial runtime suite
+  passed: 572 tests, two packaged-app checks skipped without a signed app path
+  (75 suites passed, one skipped; 126 seconds).
+- Native composer/settings and account-scope tests are implemented but await
+  compilation and UI acceptance after AiGid explicitly releases the heavy-test
+  queue. Do not publish these as accepted yet.
+- At the last check memory pressure was normal; Data had about 7 GiB free.
+  No new native builds, memory-routing changes or speculative cache deletion.
+
+Next: finish runtime review/commit/deploy, native compilation and UI acceptance
+when the shared queue permits, then signed versioned 48 Sparkle/Home/TestFlight.
+Mini installation still needs a valid managed rollback snapshot; physical
+iPhone Camera/microphone acceptance and inaccessible Homes remain separate gates.
+
+Both finished native QA48 app processes were closed through their normal Quit
+action and verified absent. Production OpenStrudel and AiGid were untouched.

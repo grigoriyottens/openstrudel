@@ -1,4 +1,4 @@
-import { automaticProvider, checkModelSelection, parseModelSelection, readModelSelection, recommendedModel, resolveModelSelection, saveModelSelection } from "./model-settings.js";
+import { automaticProvider, checkModelSelection, parseModelSelection, readModelSelection, readConversationModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, saveConversationModelSelection } from "./model-settings.js";
 import { connectProvider, disconnectProvider, providerInfo, providerSummaries } from "./providers.js";
 import { deleteEmployee } from "./employee-delete.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -257,22 +257,28 @@ export class HttpApi {
         this.send(response,200,{mode:readApprovalMode(this.store.getSetting(approvalSetting)),canManage:canManageAccount}); return;
       }
       if (path === "/v1/settings/models" && ["GET", "POST"].includes(request.method ?? "")) {
-        const agent = url.searchParams.get("agentId") ?? undefined;
+        const conversationId = url.searchParams.get("conversationId") ?? undefined;
+        const conversation = conversationId ? this.store.getConversation(conversationId) : undefined;
+        if (conversationId && !conversation) throw new HomeError("Чат не найден.",404);
+        const requestedAgent = url.searchParams.get("agentId") ?? undefined;
+        const agent = conversation ? conversation.profileId ?? "main" : requestedAgent;
+        if (conversation && requestedAgent && requestedAgent !== agent) throw new HomeError("Этот чат принадлежит другому сотруднику.",409);
         if (agent && agent !== "main" && !this.store.getProfile(agent)) throw new HomeError("Сотрудник не найден.",404);
-        const context = agent && agent !== "main" ? this.store.getSetting("employee.context." + agent) ?? this.store.getProfile(agent)?.domain ?? "personal" : "personal";
-        const engine = this.engine?.forAgent?.(agent ?? "main",context) ?? this.engine?.forContext?.(context) ?? this.engine;
+        const context = conversationId ? this.messages.contextFor(conversationId) : agent && agent !== "main" ? this.store.getSetting("employee.context." + agent) ?? this.store.getProfile(agent)?.domain ?? "personal" : "personal";
+        const engine = this.engine?.forAgent?.(agent ?? "main",context,conversationId) ?? this.engine?.forContext?.(context) ?? this.engine;
         if (!engine?.models) throw new HomeError("Обновите OpenStrudel на устройстве сотрудника, чтобы выбирать модель.",501);
-        const models = await engine.models(url.searchParams.get("refresh") === "true");
+        const models = (await engine.models(url.searchParams.get("refresh") === "true")).filter(model => !conversationId || !context.startsWith("group-") || providerInfo(model.provider ?? "chatgpt")?.engine !== "acp");
         const automatic = automaticProvider(this.store);
         if (request.method === "POST") {
           const selection = parseModelSelection(await this.body(request),Boolean(agent));
           if (agent) assertAgentWritable(this.store,agent);
-          // Inheriting checks the device default as it runs: a registry provider has only the default speed.
-          checkModelSelection(this.store,agent && !selection.model ? resolveModelSelection(this.store) : selection,models);
-          saveModelSelection(this.store,selection,agent);
+          // A chat inherits its employee; an employee inherits the device.
+          checkModelSelection(this.store,agent && !selection.model ? resolveModelSelection(this.store,conversationId ? agent : undefined,models) : selection,models);
+          if (conversationId) saveConversationModelSelection(this.store,conversationId,selection);
+          else saveModelSelection(this.store,selection,agent);
         }
         this.send(response,200,{models,providers:providerSummaries(this.store).filter(p=>p.connected),recommended:{...recommendedModel(models.filter(m=>m.provider === automatic)),provider:automatic},
-          selection:readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,undefined,models),effective:resolveModelSelection(this.store,agent,models),canManage:canManageAccount}); return;
+          selection:conversationId ? readConversationModelSelection(this.store,conversationId) : readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,conversationId ? agent : undefined,models),effective:resolveModelSelection(this.store,agent,models,conversationId),canManage:canManageAccount}); return;
       }
       if (path === "/v1/settings/speech" && ["GET", "POST"].includes(request.method ?? "")) {
         const settings = request.method === "POST" ? await saveSpeechSettings(this.store, await this.body(request)) : speechSettings(this.store);
@@ -402,7 +408,7 @@ export class HttpApi {
         this.send(response,200,{timezone:ownerTimezone(this.store),configured:Boolean(this.store.getSetting('owner.timezone'))}); return;
       }
       if (request.method === "GET" && path === "/health") {
-        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, speechVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, ownerInvitesVersion: 1, subscriptionsVersion: 1, telegramPrivateChoiceVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
+        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, speechVersion: 1, conversationModelsVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, ownerInvitesVersion: 1, subscriptionsVersion: 1, telegramPrivateChoiceVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
         return;
       }
       if (request.method === "GET" && path === "/v1/integrations") {
@@ -411,7 +417,10 @@ export class HttpApi {
       }
       if (request.method === "GET" && path === "/v1/account") {
         if (this.accounts) {
-          this.send(response, 200, { ...await this.accounts.statusFor(url.searchParams.get("agentId") ?? "main", url.searchParams.get("refresh") === "true"), canManage: canManageAccount }); return;
+          const conversationId = url.searchParams.get("conversationId") ?? undefined;
+          const conversation = conversationId ? this.store.getConversation(conversationId) : undefined;
+          if (conversationId && !conversation) throw new HomeError("Чат не найден.",404);
+          this.send(response, 200, { ...await this.accounts.statusFor(conversation ? conversation.profileId ?? "main" : url.searchParams.get("agentId") ?? "main", url.searchParams.get("refresh") === "true", conversationId), canManage: canManageAccount }); return;
         }
         this.send(response, 200, { account: this.account ? await this.account.read(url.searchParams.get("refresh") === "true") : { connected: false, email: null, planType: null, managed: false }, canManage: canManageAccount, loginPending: this.account?.loginPending ?? false });
         return;
@@ -447,7 +456,7 @@ export class HttpApi {
       if (request.method === "GET" && path === "/v1/conversation") {
         const conversation = this.store.primaryConversation();
         if (url.searchParams.get("timeline") === "true") { this.send(response, 200, this.employeeTimeline(conversation, url.searchParams)); return; }
-        this.send(response, 200, { conversation, ...(url.searchParams.get("page") === "true" ? this.store.messagePage(conversation.id, url.searchParams) : { messages: this.store.listMessages(conversation.id, messageLimit) }), interactions: this.messages.interactions.list(conversation.id), queuedMessages: this.messages.queuedMessages(conversation.id) });
+        this.send(response, 200, { conversation: this.modelConversation(conversation), ...(url.searchParams.get("page") === "true" ? this.store.messagePage(conversation.id, url.searchParams) : { messages: this.store.listMessages(conversation.id, messageLimit) }), interactions: this.messages.interactions.list(conversation.id), queuedMessages: this.messages.queuedMessages(conversation.id) });
         return;
       }
       const agentConversationMatch = path.match(/^\/v1\/agents\/([^/]+)\/conversation$/);
@@ -459,7 +468,7 @@ export class HttpApi {
         }
         const conversation = this.store.profileConversation(profile.id);
         if (url.searchParams.get("timeline") === "true") { this.send(response, 200, this.employeeTimeline(conversation, url.searchParams)); return; }
-        this.send(response, 200, { conversation, ...(url.searchParams.get("page") === "true" ? this.store.messagePage(conversation.id, url.searchParams) : { messages: this.store.listMessages(conversation.id, messageLimit) }), interactions: this.messages.interactions.list(conversation.id), queuedMessages: this.messages.queuedMessages(conversation.id) });
+        this.send(response, 200, { conversation: this.modelConversation(conversation), ...(url.searchParams.get("page") === "true" ? this.store.messagePage(conversation.id, url.searchParams) : { messages: this.store.listMessages(conversation.id, messageLimit) }), interactions: this.messages.interactions.list(conversation.id), queuedMessages: this.messages.queuedMessages(conversation.id) });
         return;
       }
       if (request.method === "GET" && path === "/v1/conversations") {
@@ -606,7 +615,7 @@ export class HttpApi {
       if(request.method==="GET" && singleConversation) {
         const conversation=this.store.getConversation(singleConversation[1]!);
         if(!conversation) throw new Error("Чат не найден");
-        this.send(response,200,{conversation,...(url.searchParams.get("page") === "true" ? this.store.messagePage(conversation.id, url.searchParams) : { messages: this.store.listMessages(conversation.id, messageLimit) }),interactions:this.messages.interactions.list(conversation.id),queuedMessages:this.messages.queuedMessages(conversation.id)});return;
+        this.send(response,200,{conversation:this.modelConversation(conversation),...(url.searchParams.get("page") === "true" ? this.store.messagePage(conversation.id, url.searchParams) : { messages: this.store.listMessages(conversation.id, messageLimit) }),interactions:this.messages.interactions.list(conversation.id),queuedMessages:this.messages.queuedMessages(conversation.id)});return;
       }
       if (request.method === "DELETE" && path === "/v1/integrations/telegram") {
         this.send(response, 200, { telegram: this.telegram.disconnect() });
@@ -625,7 +634,7 @@ export class HttpApi {
           for (const chat of this.store.telegramChats()) if (Number(chat.chatId)<0 && chat.profileId===conversation.profileId && chat.conversationId && !contexts.some(c=>c.id===chat.conversationId)) contexts.push({id:chat.conversationId,title:chat.title,isGroup:true,sharedNotice:undefined});
           this.send(response,200,{contexts}); return;
         }
-        const engine = this.engine?.forAgent?.(conversation.profileId ?? "main",this.messages.contextFor(conversationId)) ?? this.engine?.forContext?.(this.messages.contextFor(conversationId)) ?? this.engine;
+        const engine = this.engine?.forAgent?.(conversation.profileId ?? "main",this.messages.contextFor(conversationId), conversationId) ?? this.engine?.forContext?.(this.messages.contextFor(conversationId)) ?? this.engine;
         const extensions = await engine?.extensions?.();
         if (!extensions) throw new HomeError("Обновите OpenStrudel на устройстве сотрудника, чтобы добавлять расширения.",501);
         if (request.method === "POST" && path === "/v1/extensions/preview") this.send(response,200,extensions.preview(body.files));
@@ -635,7 +644,7 @@ export class HttpApi {
         else if (request.method === "GET" && path === "/v1/extensions") {
           // A context's skills and plugins stay listed for every route, but the Claude and Grok engines load only their MCP services
           // and a key provider's Codex loads no plugins.
-          const provider = providerInfo(resolveModelSelection(this.store,conversation.profileId ?? "main").provider ?? "");
+          const provider = providerInfo(resolveModelSelection(this.store,conversation.profileId ?? "main",undefined,conversationId).provider ?? "");
           const state = await extensions.list();
           this.send(response,200,!provider ? state : {...state,notice:provider.engine !== "codex" ? `С ${provider.name} сотрудник использует только сервисы MCP. Навыки работают с ChatGPT, OpenAI API и xAI, плагины — только с ChatGPT.`
             : `С ${provider.name} сотрудник не использует плагины: они работают только с ChatGPT.`});
@@ -652,7 +661,7 @@ export class HttpApi {
       if (request.method === "GET" && path === "/v1/connections") {
         const conversationId=url.searchParams.get("conversationId");
         if (conversationId && !this.store.getConversation(conversationId)) throw new Error("Чат не найден");
-        const engine=conversationId ? this.engine?.forAgent?.(this.store.getConversation(conversationId)?.profileId ?? "main", this.messages.contextFor(conversationId)) ?? this.engine?.forContext?.(this.messages.contextFor(conversationId)) ?? this.engine : this.engine;
+        const engine=conversationId ? this.engine?.forAgent?.(this.store.getConversation(conversationId)?.profileId ?? "main", this.messages.contextFor(conversationId), conversationId) ?? this.engine?.forContext?.(this.messages.contextFor(conversationId)) ?? this.engine : this.engine;
         const connections = await engine?.connections?.(url.searchParams.get("refresh") === "true") ?? [];
         this.send(response, 200, { connections, notice: engine?.connectionNotice }); return;
       }
@@ -660,7 +669,7 @@ export class HttpApi {
         const body = await this.body(request);
         const conversationId=typeof body.conversationId === "string" ? body.conversationId : null;
         if (conversationId && !this.store.getConversation(conversationId)) throw new Error("Чат не найден");
-        const engine=conversationId ? this.engine?.forAgent?.(this.store.getConversation(conversationId)?.profileId ?? "main", this.messages.contextFor(conversationId)) ?? this.engine?.forContext?.(this.messages.contextFor(conversationId)) ?? this.engine : this.engine;
+        const engine=conversationId ? this.engine?.forAgent?.(this.store.getConversation(conversationId)?.profileId ?? "main", this.messages.contextFor(conversationId), conversationId) ?? this.engine?.forContext?.(this.messages.contextFor(conversationId)) ?? this.engine : this.engine;
         if (!engine?.connect) throw new Error("Подключения Codex недоступны");
         if (body.callback !== undefined && body.callback !== "app" && body.callback !== "web") throw new HomeError("Проверьте способ входа.");
         const signInId = randomBytes(24).toString("hex");
@@ -748,11 +757,15 @@ export class HttpApi {
     }
   }
 
+  private modelConversation(conversation: import("./types.js").Conversation) {
+    return {...conversation,effectiveModel:resolveModelSelection(this.store,conversation.profileId ?? "main",undefined,conversation.id)};
+  }
+
   private employeeTimeline(conversation: import("./types.js").Conversation, query: URLSearchParams) {
     const profileId = conversation.profileId ?? null;
     const interactions = this.store.listConversations().filter(c => (c.profileId ?? null) === profileId)
       .flatMap(c => this.messages.interactions.list(c.id).map(i => ({ ...i, sourceTitle: c.channel === "telegram" ? c.title : undefined })));
-    return { conversation, timeline: true, ...this.store.employeeMessagePage(profileId, query), interactions, queuedMessages: this.messages.queuedMessages(conversation.id) };
+    return { conversation: this.modelConversation(conversation), timeline: true, ...this.store.employeeMessagePage(profileId, query), interactions, queuedMessages: this.messages.queuedMessages(conversation.id) };
   }
 
   private authorized(request: IncomingMessage): boolean {

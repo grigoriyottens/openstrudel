@@ -592,26 +592,28 @@ async function openDeviceSignOut() {
   if(state.owner && state.archiveVersion===1) action(page,t("Сначала сохранить копию…"),openSettings);
 }
 
-async function openModelSettings(agent, deviceId) {
-  const page=modalPage(t("Модель и скорость"),agent?t("Для этого сотрудника. Начатая работа продолжится с прежними настройками."):t("По умолчанию для сотрудников устройства. Можно выбрать другую модель в настройках сотрудника."));
+async function openModelSettings(agent, deviceId, conversationId) {
+  const inherits=Boolean(agent||conversationId);
+  const page=modalPage(t("Модель и скорость"),conversationId?t("Только для этого чата. Начатая работа продолжится с прежними настройками."):inherits?t("Для этого сотрудника. Начатая работа продолжится с прежними настройками."):t("По умолчанию для сотрудников устройства. Можно выбрать другую модель в настройках сотрудника."));
   const status=element('p',t("Получаем доступные модели…"));status.setAttribute('role','status');page.content.append(status);
   try {
     const control=await api('/v1/home');
-    if(!agent) {
+    if(!inherits) {
       const label=element('label',t("Устройство")), device=element('select','','field');label.append(device);
       for(const item of control.devices) { const o=element('option',item.name+(item.online?'':t(" · нет связи")));o.value=item.id;device.append(o); }
       deviceId ||= control.home.nodeId; device.value=deviceId;
       device.onchange=()=>void openModelSettings(undefined,device.value);page.content.prepend(label);
       label.hidden=control.devices.length<2;
     }
-    const query=new URLSearchParams();if(agent)query.set('agentId',agent);if(deviceId)query.set('deviceId',deviceId);
+    const query=new URLSearchParams();if(conversationId)query.set('conversationId',conversationId);else if(agent)query.set('agentId',agent);if(deviceId)query.set('deviceId',deviceId);
     const path='/v1/settings/models?'+query;
     const data=await api(path);status.textContent='';
+    if(conversationId===state.conversationID) paintConversationModel(data);
     const modelLabel=element('label',t("Модель")), model=element('select','','field');model.id='model-choice';model.setAttribute('aria-label',t("Модель"));modelLabel.append(model);page.content.append(modelLabel);
     const ref=m=>m?.model?JSON.stringify([m.provider||'chatgpt',m.model]):'';
     const modelRef=m=>JSON.stringify([m.provider||'chatgpt',m.id]);
     const lookup=key=>data.models.find(m=>modelRef(m)===key);
-    if(agent) { const o=element('option',t("Как на устройстве · ")+(lookup(ref(data.defaults))?.name||data.recommended?.name||data.defaults.model||t("Автоматически")));o.value='';model.append(o); }
+    if(inherits) { const o=element('option',t(conversationId?"Как у сотрудника · ":"Как на устройстве · ")+(lookup(ref(data.defaults))?.name||data.recommended?.name||data.defaults.model||t("Автоматически")));o.value='';model.append(o); }
     else if(data.recommended) { const o=element('option',t("Автоматически · ")+data.recommended.name);o.value='';model.append(o); }
     for(const m of data.models) { const o=element('option',m.name);o.value=modelRef(m);model.append(o); }
     if(data.selection.model&&!lookup(ref(data.selection))) {const o=element('option',data.selection.model+t(" · недоступна"));o.value=ref(data.selection);model.append(o);}
@@ -620,31 +622,31 @@ async function openModelSettings(agent, deviceId) {
     const reasoningLabel=element('label',t("Обдумывание")), reasoning=element('select','','field');reasoning.id='model-reasoning';reasoning.setAttribute('aria-label',t("Обдумывание"));reasoningLabel.append(reasoning);page.content.append(reasoningLabel);
     const recommendation=element('p'),note=element('p');page.content.append(recommendation,note);
     let pending=false;
-    const value=()=>{const [provider,id]=model.value?JSON.parse(model.value):[null,null];return {provider,model:id,serviceTier:!model.value&&agent?null:speed.value,...(model.value||!agent)&&reasoning.value?{reasoningEffort:reasoning.value}:{}};};
-    const chosenModel=()=>model.value?lookup(model.value):agent?(lookup(ref(data.defaults))||data.recommended):data.recommended;
+    const value=()=>{const [provider,id]=model.value?JSON.parse(model.value):[null,null];return {provider,model:id,serviceTier:!model.value&&inherits?null:speed.value,...(model.value||!inherits)&&reasoning.value?{reasoningEffort:reasoning.value}:{}};};
+    const chosenModel=()=>model.value?lookup(model.value):inherits?(lookup(ref(data.defaults))||data.recommended):data.recommended;
     const save=element('button',t("Применить"),'primary');save.type='button';save.dataset.main='true';page.actions.append(save);arrange(page);
     save.onclick=async()=>{
       pending=true;save.disabled=true;page.error.textContent='';model.disabled=speed.disabled=reasoning.disabled=true;status.textContent=t("Сохраняем…");
-      try {const result=await api(path,{method:'POST',body:JSON.stringify(value())});data.selection=result.selection;status.textContent=t("Сохранено. Применится со следующего поручения.");}
+      try {const result=await api(path,{method:'POST',body:JSON.stringify(value())});Object.assign(data,result); if(conversationId===state.conversationID) paintConversationModel(result); status.textContent=t("Сохранено. Применится со следующего поручения.");}
       catch(e){status.textContent=t("Не удалось сохранить.");page.report(e);}
       finally {pending=false;model.disabled=!data.canManage;update();}
     };
     function update(){
-      speed.disabled=(!model.value&&Boolean(agent))||!data.canManage||pending;
+      speed.disabled=(!model.value&&inherits)||!data.canManage||pending;
       reasoning.disabled=speed.disabled;
-      recommendation.textContent=!model.value&&!agent&&data.recommended?(data.recommended.isDefault?t("Рекомендует OpenAI"):t("Модель по умолчанию")):'';
+      recommendation.textContent=!model.value&&!inherits&&data.recommended?(data.recommended.isDefault?t("Рекомендует OpenAI"):t("Модель по умолчанию")):'';
       note.textContent=speed.value&&speed.value!=='default'?t("Ускоренный режим может расходовать больше лимита аккаунта."):'';
       const chosen=chosenModel();
       const selected=value(),saved=data.selection;
       const unchanged=['provider','model','serviceTier','reasoningEffort'].every(k=>(selected[k]??null)===(saved[k]??null));
-      save.disabled=!data.canManage||pending||unchanged||!chosen||(!model.value&&agent?false:!chosen.speeds.some(s=>s.id===speed.value)||(reasoning.value&&!(chosen.reasoningEfforts||[]).some(e=>e.id===reasoning.value)));
+      save.disabled=!data.canManage||pending||unchanged||!chosen||(!model.value&&inherits?false:!chosen.speeds.some(s=>s.id===speed.value)||(reasoning.value&&!(chosen.reasoningEfforts||[]).some(e=>e.id===reasoning.value)));
     }
     function speeds(preferred,preserve=false){
       const chosen=chosenModel();speed.replaceChildren();
       for(const s of chosen?.speeds||[]){const o=element('option',t(s.name));o.value=s.id;speed.append(o);}
       if(preserve&&preferred&&!(chosen?.speeds||[]).some(s=>s.id===preferred)){const o=element('option',preferred+t(" · недоступна"));o.value=preferred;speed.append(o);}
       speed.value=preserve&&preferred?preferred:(chosen?.speeds||[]).some(s=>s.id===preferred)?preferred:'default';
-      const effort=preserve?(data.selection.reasoningEffort||(!model.value&&agent?data.defaults.reasoningEffort:'')):!model.value&&agent?data.defaults.reasoningEffort:reasoning.value;
+      const effort=preserve?(data.selection.reasoningEffort||(!model.value&&inherits?data.defaults.reasoningEffort:'')):!model.value&&inherits?data.defaults.reasoningEffort:reasoning.value;
       reasoning.replaceChildren();const automatic=element('option',t("Автоматически"));automatic.value='';reasoning.append(automatic);
       for(const e of chosen?.reasoningEfforts||[]){const o=element('option',t(e.name));o.value=e.id;reasoning.append(o);}
       if(preserve&&effort&&!(chosen?.reasoningEfforts||[]).some(e=>e.id===effort)){const o=element('option',effort+t(" · недоступна"));o.value=effort;reasoning.append(o);}
@@ -653,8 +655,8 @@ async function openModelSettings(agent, deviceId) {
       speedLabel.hidden=(chosen?.speeds||[]).length<=1&&speed.value==='default';update();
     }
     speeds(data.selection.serviceTier||data.defaults.serviceTier,true);model.disabled=!data.canManage;
-    model.onchange=()=>{status.textContent='';speeds(!model.value&&agent?data.defaults.serviceTier:speed.value);};speed.onchange=reasoning.onchange=()=>{status.textContent='';update();};
-  }catch(e){status.textContent='';page.report(e);action(page,t("Повторить"),()=>openModelSettings(agent,deviceId));}
+    model.onchange=()=>{status.textContent='';speeds(!model.value&&inherits?data.defaults.serviceTier:speed.value);};speed.onchange=reasoning.onchange=()=>{status.textContent='';update();};
+  }catch(e){status.textContent='';page.report(e);action(page,t("Повторить"),()=>openModelSettings(agent,deviceId,conversationId));}
 }
 
 async function openSpeechSettings(deviceId) {
@@ -728,10 +730,10 @@ function languageField(page, afterChange) {
 }
 
 function accountPlan(plan) {
-  return ({free:'ChatGPT Free',go:'ChatGPT Go',plus:'ChatGPT Plus',pro:'ChatGPT Pro',prolite:'ChatGPT Pro Lite',team:'ChatGPT Business',business:'ChatGPT Business',self_serve_business_prolite:'ChatGPT Business',self_serve_business_usage_based:'ChatGPT Business',enterprise:'ChatGPT Enterprise',ent26:'ChatGPT Enterprise',enterprise_cbp_automation:'ChatGPT Enterprise',enterprise_cbp_usage_based:'ChatGPT Enterprise',edu:'ChatGPT Edu',edu_plus:'ChatGPT Edu',edu_pro:'ChatGPT Edu'})[plan]||'ChatGPT';
+  return ({free:'ChatGPT Free',go:'ChatGPT Go',plus:'ChatGPT Plus',pro:'ChatGPT Pro',promax:'ChatGPT Pro Max',prolite:'ChatGPT Pro Lite',team:'ChatGPT Business',business:'ChatGPT Business',self_serve_business_prolite:'ChatGPT Business',self_serve_business_usage_based:'ChatGPT Business',enterprise:'ChatGPT Enterprise',ent26:'ChatGPT Enterprise',enterprise_cbp_automation:'ChatGPT Enterprise',enterprise_cbp_usage_based:'ChatGPT Enterprise',edu:'ChatGPT Edu',edu_plus:'ChatGPT Edu',edu_pro:'ChatGPT Edu'})[plan]||'ChatGPT';
 }
 function accountCategory(plan) {
-  if(['free','go','plus','pro','prolite'].includes(plan))return t('Personal account');
+  if(['free','go','plus','pro','prolite','promax'].includes(plan))return t('Personal account');
   if(accountPlan(plan)!=='ChatGPT')return t('Workspace account');
   return '';
 }

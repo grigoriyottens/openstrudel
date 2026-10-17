@@ -2,7 +2,7 @@ import type { Store } from "./store.js";
 import { HomeError } from "./home.js";
 import { chatgptSignedIn } from "./account.js";
 import { isOpenAIAuthenticationError } from "./account-errors.js";
-import { readModelSelection, resolveModelSelection, saveModelSelection, type ModelChoice } from "./model-settings.js";
+import { readModelSelection, resolveModelSelection, saveModelSelection, saveConversationModelSelection, type ModelChoice } from "./model-settings.js";
 
 /** Providers reachable with an API key or a vendor subscription. ChatGPT sign-in stays in accounts.ts.
  * Responses-native providers run on Codex; the rest use their documented
@@ -128,6 +128,7 @@ export function providerModels(info: ProviderInfo): ModelChoice[] {
 /** ChatGPT first, then every registry provider. `usedBy` counts the agents whose selection resolves to it. */
 export function providerSummaries(store: Store): ProviderSummary[] {
   const used = [undefined, "main", ...store.listProfiles().map(p => p.id)].map(agent => resolveModelSelection(store, agent).provider);
+  used.push(...store.listConversations().filter(c => c.modelSelection?.model).map(c => c.modelSelection!.provider));
   const usedBy = (id: string) => used.filter(provider => provider === id).length;
   return [{ id: "chatgpt", name: "ChatGPT", auth: "signin", connected: chatgptSignedIn(store), keyHint: null, keysUrl: null, usedBy: usedBy("chatgpt") },
     ...providerInfos().map(p => {
@@ -190,7 +191,10 @@ function forgetThreads(store: Store, id: string) {
 /** Employees on the provider return to the device default; a device or main-chat default returns to automatic. */
 export function disconnectProvider(store: Store, id: string): number {
   if (!providerInfo(id)) throw new HomeError("Провайдер не найден.", 404);
-  let reset = Number(store.db.prepare("UPDATE employee_profiles SET provider=NULL,model=NULL,service_tier=NULL WHERE provider=?").run(id).changes);
+  let reset = Number(store.db.prepare("UPDATE employee_profiles SET provider=NULL,model=NULL,service_tier=NULL,reasoning_effort=NULL WHERE provider=?").run(id).changes);
+  for (const conversation of store.listConversations()) if (conversation.modelSelection?.provider === id) {
+    saveConversationModelSelection(store,conversation.id,{provider:null,model:null,serviceTier:null}); reset++;
+  }
   for (const agent of [undefined, "main"]) if (readModelSelection(store, agent).provider === id) { saveModelSelection(store, { provider: null, model: null, serviceTier: agent ? null : "default" }, agent); reset++; }
   for (const name of ["key", "connectedAt", "signedIn", "models"]) store.deleteSetting(`providers.${id}.${name}`);
   forgetThreads(store, id);

@@ -52,6 +52,20 @@ afterEach(() => {
 });
 
 describe("one explicitly authorized Home account", () => {
+  it("labels a newly introduced plan from current matching managed credentials without inventing capabilities", async () => {
+    store.setSetting("codex.auth.mode","managed");savedAuth();
+    wire.request.mockResolvedValue({account:{...identity,planType:"unknown"}});
+    const authPath=join(root,"codex/auth.json"), saved=JSON.parse(readFileSync(authPath,"utf8"));
+    const writePlan=(id:string,exp=Date.now()/1000+3600)=>{
+      saved.tokens.access_token="test."+Buffer.from(JSON.stringify({exp,"https://api.openai.com/auth":{chatgpt_account_id:id,chatgpt_plan_type:"promax"}})).toString("base64url")+".test";
+      writeFileSync(authPath,JSON.stringify(saved));account.invalidate();
+    };
+    writePlan("owner");expect((await account.read()).planType).toBe("promax");
+    writePlan("another-workspace");expect((await account.read()).planType).toBe("unknown");
+    writePlan("owner",1);expect((await account.read()).planType).toBe("unknown");
+    writePlan("owner");wire.request.mockResolvedValue({account:{...identity,planType:"plus"}});
+    expect((await account.read(true)).planType).toBe("plus");
+  });
   it("does not publish an obsolete identity when sign-in changes during a read", async () => {
     store.setSetting("codex.auth.mode", "managed");
     let finish!: (value: unknown) => void;

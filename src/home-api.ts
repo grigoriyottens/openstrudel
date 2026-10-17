@@ -140,8 +140,12 @@ export class HomeApi {
     if (mainAgent) {
       if (path === "/v1/conversation") url.pathname = path = `/v1/agents/${mainAgent}/conversation`;
       if (path.startsWith("/v1/agents/main/")) url.pathname = path = path.replace("/v1/agents/main/", `/v1/agents/${mainAgent}/`);
-      if ((path === "/v1/account" || path.startsWith("/v1/account/")) && (!url.searchParams.get("agentId") || url.searchParams.get("agentId") === "main")) url.searchParams.set("agentId", mainAgent);
+      if (!url.searchParams.has("conversationId") && (path === "/v1/account" || path.startsWith("/v1/account/")) && (!url.searchParams.get("agentId") || url.searchParams.get("agentId") === "main")) url.searchParams.set("agentId", mainAgent);
     }
+    // A chat's model and account live with that chat, even when the Home's
+    // default assistant runs elsewhere. The destination validates any agent ID.
+    const conversationId = body?.conversationId ?? url.searchParams.get("conversationId");
+    if (conversationId) nodeId ??= this.home.nodeFor("conversation", String(conversationId));
     if (path === "/v1/conversation") nodeId ??= this.home.state.mainNodeId;
     if (path === "/v1/account" || path.startsWith("/v1/account/")) nodeId ??= url.searchParams.get("agentId") && url.searchParams.get("agentId") !== "main" ? this.home.nodeFor("profile", url.searchParams.get("agentId")!) : this.home.state.mainNodeId;
     if (path === "/v1/settings/models" && url.searchParams.has("agentId")) {
@@ -155,8 +159,6 @@ export class HomeApi {
     if (conversation) nodeId ??= this.home.nodeFor("conversation", decodeURIComponent(conversation[1]!));
     const file = path.match(/^\/v1\/files\/([^/]+)$/);
     if (file) nodeId ??= this.home.nodeFor("file", decodeURIComponent(file[1]!));
-    const conversationId = body?.conversationId ?? url.searchParams.get("conversationId");
-    if (conversationId) nodeId ??= this.home.nodeFor("conversation", String(conversationId));
     if (method !== "GET") {
       const chat = conversationId ?? conversation?.[1];
       const profile = body?.profile ?? agent?.[1] ?? (chat ? this.home.resources("conversation").find(c => c.id === chat)?.profileId ?? "main" : path === "/v1/messages" ? "main" : undefined);

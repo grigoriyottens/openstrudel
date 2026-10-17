@@ -9,6 +9,7 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   profileId?: string | null;
+  modelSelection?: import("./model-settings.js").ModelSelection;
 }
 
 export interface Message {
@@ -69,7 +70,7 @@ export interface CodexEngine {
   /** Native app-server input for an already running turn; false means no turn. */
   steer?(input: string, options: { threadId: string; images?: string[] }): Promise<boolean>;
   forContext?(context: string): CodexEngine;
-  forAgent?(agentId: string, context: string): CodexEngine;
+  forAgent?(agentId: string, context: string, conversationId?: string): CodexEngine;
   run(
     input: string,
     options?: {

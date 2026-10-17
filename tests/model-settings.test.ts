@@ -1,7 +1,10 @@
 import { expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Store } from '../src/store.js';
 import { MessageService } from '../src/messages.js';
-import { normalizeModels, readModelSelection, saveModelSelection, resolveModelSelection, validateModelSelection, recommendedModel, parseModelSelection } from '../src/model-settings.js';
+import { normalizeModels, readModelSelection, saveModelSelection, readConversationModelSelection, saveConversationModelSelection, resolveModelSelection, validateModelSelection, recommendedModel, parseModelSelection } from '../src/model-settings.js';
 const catalog = normalizeModels([
  {model:'m1',displayName:'Model One',isDefault:true,supportedReasoningEfforts:[{reasoningEffort:'low'},{reasoningEffort:'high'}],serviceTiers:[{id:'priority',name:'Fast',description:'Increased usage'}]},
  {model:'m2',displayName:'Model Two',supportedReasoningEfforts:[{reasoningEffort:'medium'}],serviceTiers:[{id:'priority',name:'Fast'},{id:'ultra',name:'Ultra Fast'}]},
@@ -70,6 +73,97 @@ it('inherits device defaults, keeps employee overrides and restores inheritance'
  expect(resolveModelSelection(store,employee.id)).toEqual({provider:'chatgpt',model:'m1',serviceTier:'default'});
  expect(()=>saveModelSelection(store,{provider:'chatgpt',model:'m2',serviceTier:'default'},'missing')).toThrow();
  }finally{store.close();}
+});
+it('keeps a conversation override independent of the employee, sibling chats and device default',()=>{
+ const store=new Store(':memory:');
+ try {
+  const employee=store.createProfile({name:'Editor'}),chat=store.profileConversation(employee.id);
+  store.linkTelegramChat({chatId:'-42',title:'Team',allowedSenders:['42']});
+  const sibling=store.bindTelegramChat('-42',employee.id);
+  saveModelSelection(store,{provider:'chatgpt',model:'m1',serviceTier:'default'});
+  saveModelSelection(store,{provider:'chatgpt',model:'m2',serviceTier:'ultra'},employee.id);
+  expect(resolveModelSelection(store,employee.id,catalog,chat.id).model).toBe('m2');
+  saveConversationModelSelection(store,chat.id,{provider:'chatgpt',model:'m1',serviceTier:'priority',reasoningEffort:'high'});
+  expect(resolveModelSelection(store,employee.id,catalog,chat.id)).toMatchObject({model:'m1',serviceTier:'priority',reasoningEffort:'high'});
+  expect(resolveModelSelection(store,employee.id,catalog,sibling.conversationId!)).toMatchObject({model:'m2',serviceTier:'ultra'});
+  expect(readModelSelection(store,employee.id).model).toBe('m2');
+  saveModelSelection(store,{provider:'chatgpt',model:'m2',serviceTier:'default'},employee.id);
+  expect(resolveModelSelection(store,employee.id,catalog,chat.id).serviceTier).toBe('priority');
+  saveConversationModelSelection(store,chat.id,{provider:null,model:null,serviceTier:null});
+  expect(readConversationModelSelection(store,chat.id).model).toBeNull();
+  expect(resolveModelSelection(store,employee.id,catalog,chat.id)).toMatchObject({model:'m2',serviceTier:'default'});
+ } finally {store.close();}
+});
+it('upgrades an existing conversation database and keeps its choice after reopening',()=>{
+ const directory=mkdtempSync(join(tmpdir(),'strudel-chat-model-')),path=join(directory,'home.db');
+ let store=new Store(path);
+ try {
+  const id=store.primaryConversation().id;
+  store.db.exec('ALTER TABLE conversations DROP COLUMN model_selection');store.close();
+  store=new Store(path);
+  expect(readConversationModelSelection(store,id).model).toBeNull();
+  saveConversationModelSelection(store,id,{provider:'chatgpt',model:'m2',serviceTier:'ultra',reasoningEffort:'medium'});
+  store.close();store=new Store(path);
+  expect(resolveModelSelection(store,'main',catalog,id)).toEqual({provider:'chatgpt',model:'m2',serviceTier:'ultra',reasoningEffort:'medium'});
+ } finally {store.close();rmSync(directory,{recursive:true,force:true});}
+});
+
+it('offers group chats only models their engine permits in groups',async()=>{
+ const {OpenStrudelRuntime}=await import('../src/runtime.js');
+ const subscription={...catalog[0],id:'grok-personal',provider:'grok',speeds:[{id:'default',name:'Standard',description:''}]};
+ const runtime=new OpenStrudelRuntime({dbPath:':memory:',startTelegram:false,apiToken:'owner',engine:{models:async()=>[...catalog,subscription],run:async()=>({threadId:'t',response:'OK',events:[]})}});
+ const addr=await runtime.api.listen('127.0.0.1',0);
+ const call=(id:string,body?:any)=>fetch(`http://127.0.0.1:${addr.port}/v1/settings/models?conversationId=${id}`,{method:body?'POST':'GET',headers:{authorization:'Bearer owner','content-type':'application/json'},body:body?JSON.stringify(body):undefined});
+ try {
+  runtime.store.setSetting('providers.grok.signedIn','yes');
+  runtime.store.setSetting('providers.grok.models',JSON.stringify([subscription]));
+  const group=runtime.store.getOrCreateConversation({channel:'telegram',externalId:'-42',title:'QA group'});
+  const personal=runtime.store.primaryConversation();
+  expect((await (await call(group.id)).json()).models.map((m:any)=>m.provider)).not.toContain('grok');
+  expect((await (await call(personal.id)).json()).models.map((m:any)=>m.provider)).toContain('grok');
+  expect((await call(group.id,{provider:'grok',model:'grok-personal',serviceTier:'default'})).status).toBe(409);
+  expect(readConversationModelSelection(runtime.store,group.id).model).toBeNull();
+ } finally {await runtime.stop();}
+});
+it('changes the next queued conversation turn and the Telegram turn, while leaving the running turn unchanged',async()=>{
+ const store=new Store(':memory:'); let finish!:()=>void;const seen:any[]=[];
+ const messages=new MessageService(store,{run:async(_input,options)=>{seen.push(options);if(seen.length===1)await new Promise<void>(r=>finish=r);return {threadId:'same-thread',response:'OK',events:[]};}});
+ try {
+  saveModelSelection(store,{provider:'chatgpt',model:'m1',serviceTier:'default'});
+  const chat=store.primaryConversation();
+  const first=await messages.submit({channel:'api',conversationId:chat.id,text:'First'});
+  await vi.waitFor(()=>expect(seen).toHaveLength(1));
+  saveConversationModelSelection(store,chat.id,{provider:'chatgpt',model:'m2',serviceTier:'ultra',reasoningEffort:'medium'});
+  const next=await messages.submit({channel:'api',conversationId:chat.id,text:'Next'});
+  finish();await Promise.all([first.completion,next.completion]);
+  expect(seen[0]).toMatchObject({model:'m1',serviceTier:'default'});
+  expect(seen[1]).toMatchObject({model:'m2',serviceTier:'ultra',threadId:'same-thread'});
+  store.linkTelegramChat({chatId:'42',title:'Owner',allowedSenders:['42']});
+  const telegram=store.getOrCreateConversation({channel:'telegram',externalId:'42',title:'Owner'});
+  saveConversationModelSelection(store,telegram.id,{provider:'chatgpt',model:'m1',serviceTier:'priority'});
+  await messages.handle({channel:'telegram',conversationId:telegram.id,text:'Hello',externalChatId:'42',telegramSenderId:'42',externalId:'42:one'});
+  expect(seen[2]).toMatchObject({model:'m1',serviceTier:'priority'});
+ } finally {await messages.close();store.close();}
+});
+it('validates conversation model writes and derives the employee from the chat',async()=>{
+ const {OpenStrudelRuntime}=await import('../src/runtime.js');
+ const runtime=new OpenStrudelRuntime({dbPath:':memory:',startTelegram:false,apiToken:'owner',engine:{models:async()=>catalog,run:async()=>({threadId:'t',response:'OK',events:[]})}});
+ const addr=await runtime.api.listen('127.0.0.1',0);
+ const call=(path:string,method='GET',body?:any,headers:any={authorization:'Bearer owner'})=>fetch(`http://127.0.0.1:${addr.port}${path}`,{method,headers:{'content-type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});
+ try {
+  const employee=runtime.store.createProfile({name:'QA'}),chat=runtime.store.profileConversation(employee.id),path='/v1/settings/models?conversationId='+chat.id;
+  saveModelSelection(runtime.store,{provider:'chatgpt',model:'m2',serviceTier:'ultra'},employee.id);
+  expect((await (await call(path)).json()).defaults).toMatchObject({model:'m2',serviceTier:'ultra'});
+  expect((await call(path,'POST',{model:'m1',serviceTier:'ultra'})).status).toBe(409);
+  expect((await call(path,'POST',{model:'m1',serviceTier:'priority'})).status).toBe(200);
+  expect((await call(path+'&agentId=main')).status).toBe(409);
+  expect((await call('/v1/settings/models?conversationId=missing')).status).toBe(404);
+  const session=await call('/auth/session','POST',{key:runtime.api.web.invite(false).key}),{csrf}=await session.json();
+  const headers={cookie:session.headers.get('set-cookie')!.split(';')[0],'x-openstrudel-csrf':csrf};
+  expect((await call(path,'POST',{model:null,serviceTier:null},headers)).status).toBe(403);
+  expect((await call(path,'POST',{model:null,serviceTier:null})).status).toBe(200);
+  expect((await (await call(path)).json()).effective).toMatchObject({model:'m2',serviceTier:'ultra'});
+ } finally {await runtime.stop();}
 });
 it('applies the choice to the next queued turn, preserves the thread and covers Telegram',async()=>{
  const store=new Store(':memory:');let finish!:()=>void;const seen:any[]=[];

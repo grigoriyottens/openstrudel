@@ -9959,5 +9959,40 @@
     "es": "Desconecta ElevenLabs primero.",
     "he": "נתקו תחילה את ElevenLabs.",
     "ru": "Сначала отключите ElevenLabs."
+  },
+  "Как у сотрудника · {0}": {
+    "ru": "Как у сотрудника · {0}",
+    "en": "Assistant default · {0}",
+    "fr": "Par défaut de l’assistant · {0}",
+    "es": "Predeterminada del asistente · {0}",
+    "he": "ברירת המחדל של העוזר · {0}"
+  },
+  "Как у сотрудника · ": {
+    "ru": "Как у сотрудника · ",
+    "en": "Assistant default · ",
+    "fr": "Par défaut de l’assistant · ",
+    "es": "Predeterminada del asistente · ",
+    "he": "ברירת המחדל של העוזר · "
+  },
+  "Только для этого чата · на «{0}»": {
+    "ru": "Только для этого чата · на «{0}»",
+    "en": "Only this chat · on “{0}”",
+    "fr": "Ce chat uniquement · sur « {0} »",
+    "es": "Solo este chat · en «{0}»",
+    "he": "רק לשיחה זו · ב־«{0}»"
+  },
+  "Только для этого чата. Начатая работа продолжится с прежними настройками.": {
+    "ru": "Только для этого чата. Начатая работа продолжится с прежними настройками.",
+    "en": "Only this chat. Work in progress keeps its current settings.",
+    "fr": "Ce chat uniquement. Le travail en cours conserve ses réglages.",
+    "es": "Solo este chat. El trabajo en curso conserva su configuración.",
+    "he": "רק לשיחה זו. עבודה שכבר החלה תמשיך עם ההגדרות הקיימות."
+  },
+  "Этот чат принадлежит другому сотруднику.": {
+    "ru": "Этот чат принадлежит другому сотруднику.",
+    "en": "This chat belongs to another assistant.",
+    "fr": "Ce chat appartient à un autre assistant.",
+    "es": "Este chat pertenece a otro asistente.",
+    "he": "השיחה הזו שייכת לעוזר אחר."
   }
 }

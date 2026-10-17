@@ -219,6 +219,8 @@
     /* Composer: Liquid Glass on the column edges, one tinted control. */
     .composer-wrap { position: absolute; inset-inline: 0; bottom: 0; padding: 0 max(var(--gutter), calc((100% - var(--column)) / 2)) var(--composer-edge); pointer-events: none; }
     .composer { pointer-events: auto; display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2); min-height: 48px; padding: var(--space-2); border-radius: var(--radius-composer); background: var(--glass); -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6); box-shadow: inset 0 0 0 1px var(--glass-edge), var(--shadow); transition: box-shadow .15s; }
+    .composer-model { flex: 1 0 100%; display: flex; justify-content: flex-end; padding-inline: var(--control); }
+    .composer-model button { max-width: 100%; min-height: var(--control); padding: 0 var(--space-2); color: var(--secondary); background: transparent; border: 0; font-size: 12px; text-align: end; }
     .composer:focus-within { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), var(--shadow); }
     .composer textarea { flex: 1 1 0; min-width: 0; height: var(--control); max-height: 186px; padding: 5px var(--space-2); margin: 0; border: 0; outline: 0; resize: none; background: transparent; font-size: 15px; line-height: 22px; }
     .composer textarea::placeholder { color: var(--secondary); opacity: 1; white-space: nowrap; }
@@ -415,7 +417,7 @@
       </header>
       <div id="connection-notice" class="connection-notice" role="status" aria-live="polite"></div>
       <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
-      <div class="composer-wrap" id="composer-wrap"><form class="composer" id="composer"><div class="composer-files" id="composer-files" hidden></div><button type="button" class="icon-button" id="attach" data-i18n-aria-label="Прикрепить файл" aria-label="Attach file" data-i18n-title="Прикрепить фото или файл до 25 МБ" title="Attach a photo or file up to 25 MB" data-icon="plus" disabled></button><textarea dir="auto" id="draft" rows="1"></textarea><button type="button" class="icon-button" id="send-mode" hidden></button><button class="send" id="send" data-i18n-aria-label="Отправить" aria-label="Send" data-i18n-title="Отправить" title="Send" data-icon="arrowUp" disabled></button></form></div>
+      <div class="composer-wrap" id="composer-wrap"><form class="composer" id="composer"><div class="composer-files" id="composer-files" hidden></div><button type="button" class="icon-button" id="attach" data-i18n-aria-label="Прикрепить файл" aria-label="Attach file" data-i18n-title="Прикрепить фото или файл до 25 МБ" title="Attach a photo or file up to 25 MB" data-icon="plus" disabled></button><textarea dir="auto" id="draft" rows="1"></textarea><button type="button" class="icon-button" id="send-mode" hidden></button><button class="send" id="send" data-i18n-aria-label="Отправить" aria-label="Send" data-i18n-title="Отправить" title="Send" data-icon="arrowUp" disabled></button><div class="composer-model" id="composer-model" hidden><button type="button" id="conversation-model" data-i18n-aria-label="Модель и скорость" aria-label="Model and speed"></button></div></form></div>
     </section>
   </main>
   <div class="modal-backdrop" id="modal"><div class="modal" id="modal-content" role="dialog" aria-modal="true" data-i18n-aria-label="Настройки" aria-label="Settings"></div></div>
@@ -780,6 +782,24 @@
     addEventListener('blur', () => document.body.classList.add('inactive'));
     addEventListener('focus', () => document.body.classList.remove('inactive'));
 
+    function paintConversationModel(data) {
+      const model=data?.models.find(m=>m.id===data.effective.model && (m.provider||'chatgpt')===(data.effective.provider||'chatgpt'));
+      const speed=model?.speeds.find(s=>s.id===data.effective.serviceTier);
+      $('conversation-model').textContent=(model?.name||data?.effective.model||t("Модель"))+(speed&&speed.id!=='default'?' · '+t(speed.name):'')+' ⌄';
+    }
+    async function refreshConversationModel() {
+      const id=state.conversationID;
+      $('composer-model').hidden=!state.conversationModels||!id;
+      if(!state.conversationModels||!id)return;
+      // The existing transcript refresh carries the effective choice. Only a
+      // change or opening a chat fetches its catalog, never every poll.
+      const key=id+JSON.stringify(state.conversationInfo?.effectiveModel||null);
+      if(state.modelKey===key)return;
+      state.modelKey=key;paintConversationModel(null);
+      try {const data=await api('/v1/settings/models?conversationId='+encodeURIComponent(id));if(state.modelKey===key)paintConversationModel(data);}
+      catch { /* The button still opens the settings page, which explains failures. */ }
+    }
+    $('conversation-model').onclick=()=>{state.back=null;void openModelSettings(undefined,undefined,state.conversationID);};
     async function loadConversation() {
       const generation=state.conversationGeneration=(state.conversationGeneration||0)+1, selected=state.selected, chat=state.chat;
       const current=()=>generation===state.conversationGeneration && selected===state.selected && chat===state.chat;
@@ -789,11 +809,11 @@
       state.conversationID=data.conversation.id; state.conversationInfo=data.conversation; state.messages=data.messages||[]; state.interactions=data.interactions||[];
       await checkOutbox(); if(!current()) return;
       const opened = state.renderedConversation !== state.conversationID; state.renderedConversation = state.conversationID;
-      renderMessages(opened); paintHeader(); renderImportedChats();
+      renderMessages(opened); paintHeader(); renderImportedChats(); void refreshConversationModel();
       if (opened && !state.messages.length && matchMedia('(pointer: fine)').matches && !$('modal').classList.contains('open')) $('draft').focus({ preventScroll: true });
     }
     async function selectAgent(id) { notify(''); try { saveDraft(); state.chat = null; state.selected = id; state.messages=[]; state.interactions=[]; paintHeader(); restoreDraft(); renderImportedChats(); renderAgents(); await loadConversation(); } catch(e) { renderMessages(); notify(e.message, true); } }
-    async function refresh() { try { const [health, profiles, integrations, devices] = await Promise.all([api('/health'), api('/v1/profiles'), api('/v1/integrations'), api('/v1/devices').catch(() => null)]); state.unreachable=false; state.homeId=health.homeId;state.nodeId=health.nodeId;state.archiveEncryption=health.agentArchiveEncryption; state.hostingOrigin=health.hostingOrigin; state.archiveVersion = health.agentArchiveVersion; state.appearanceVersion=health.agentAppearanceVersion; state.turnControl=health.turnControlVersion===1; state.importedChats = profiles.importedConversations || []; state.profiles = profiles.profiles || []; state.telegram = integrations.telegram; if (devices?.devices) state.devices = devices.devices; renderAgents(); paintHeader(); await loadConversation(); if ($('connection-notice').hasAttribute('data-loading')) notify(''); } catch (error) { state.unreachable = !error.status || error.status >= 500; await checkOutbox();renderAgents();paintHeader();renderMessages();notify(error.message, true); if(error.moved && !state.showedMoved) { state.showedMoved=true; const page=modalPage(t("Подключение изменилось"),t("Приложения переподключатся автоматически. Для браузера создайте новое приглашение на новом устройстве.")); const link=element('a',t("Открыть устройство")); const url=new URL(error.moved.url); if(url.protocol==='https:') { link.href=url.href;link.rel='noreferrer';page.content.append(link); } } } }
+    async function refresh() { try { const [health, profiles, integrations, devices] = await Promise.all([api('/health'), api('/v1/profiles'), api('/v1/integrations'), api('/v1/devices').catch(() => null)]); state.unreachable=false; state.homeId=health.homeId;state.nodeId=health.nodeId;state.archiveEncryption=health.agentArchiveEncryption; state.hostingOrigin=health.hostingOrigin; state.archiveVersion = health.agentArchiveVersion; state.appearanceVersion=health.agentAppearanceVersion; state.turnControl=health.turnControlVersion===1; state.conversationModels=health.conversationModelsVersion===1; state.importedChats = profiles.importedConversations || []; state.profiles = profiles.profiles || []; state.telegram = integrations.telegram; if (devices?.devices) state.devices = devices.devices; renderAgents(); paintHeader(); await loadConversation(); if ($('connection-notice').hasAttribute('data-loading')) notify(''); } catch (error) { state.unreachable = !error.status || error.status >= 500; await checkOutbox();renderAgents();paintHeader();renderMessages();notify(error.message, true); if(error.moved && !state.showedMoved) { state.showedMoved=true; const page=modalPage(t("Подключение изменилось"),t("Приложения переподключатся автоматически. Для браузера создайте новое приглашение на новом устройстве.")); const link=element('a',t("Открыть устройство")); const url=new URL(error.moved.url); if(url.protocol==='https:') { link.href=url.href;link.rel='noreferrer';page.content.append(link); } } } }
     /* The reply the employee is working on now; an empty field turns Send into Stop for it, as on the Mac. */
     const runningMessage = () => state.turnControl ? state.messages.find(m => m.channel === 'api' && m.direction === 'inbound' && m.status === 'running' && !m.replyToId) : null;
     /* The empty field follows the interface so its placeholder lines up; typed text takes its own direction.

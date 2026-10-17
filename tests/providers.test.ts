@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import { afterEach, expect, it, vi } from "vitest";
 import { Store } from "../src/store.js";
 import { connectProvider, disconnectProvider, providerFailure, providerInfo, providerModels, providerSummaries, ProviderKeyError } from "../src/providers.js";
-import { normalizeModels, readModelSelection, saveModelSelection } from "../src/model-settings.js";
+import { normalizeModels, readModelSelection, saveModelSelection, saveConversationModelSelection, resolveModelSelection } from "../src/model-settings.js";
 import { isOpenAIAuthenticationError } from "../src/account-errors.js";
 
 const stores: Store[] = [];
@@ -95,6 +95,18 @@ it("removing a key returns its employees to the device default and its defaults 
   expect(readModelSelection(store)).toEqual({ provider: null, model: null, serviceTier: "default" });
   expect(readModelSelection(store, "main")).toEqual({ provider: null, model: null, serviceTier: null });
   expect(() => disconnectProvider(store, "chatgpt")).toThrow();
+});
+
+it("removing a provider also resets explicit conversation choices and preserves other chat overrides", () => {
+  const store=memory(),first=store.primaryConversation(),employee=store.createProfile({name:"Editor"}),second=store.profileConversation(employee.id);
+  store.setSetting("providers.xai.key","test-key");
+  saveModelSelection(store,{provider:"chatgpt",model:"gpt-6-sol",serviceTier:"default"});
+  saveConversationModelSelection(store,first.id,{provider:"xai",model:"grok-4.7",serviceTier:"default"});
+  saveConversationModelSelection(store,second.id,{provider:"chatgpt",model:"gpt-6-astra",serviceTier:"priority"});
+  expect(providerSummaries(store).find(p=>p.id==="xai")!.usedBy).toBe(1);
+  expect(disconnectProvider(store,"xai")).toBe(1);
+  expect(resolveModelSelection(store,"main",undefined,first.id).model).toBe("gpt-6-sol");
+  expect(resolveModelSelection(store,employee.id,undefined,second.id).model).toBe("gpt-6-astra");
 });
 
 it("attributes key route failures to their provider, never to an OpenAI sign-in", () => {

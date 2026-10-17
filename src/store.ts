@@ -113,6 +113,7 @@ export class Store {
     this.db.exec("CREATE INDEX IF NOT EXISTS messages_page_idx ON messages(conversation_id, hidden, created_at)");
     const conversationColumns = new Set((this.db.prepare("PRAGMA table_info(conversations)").all() as Row[]).map(r => String(r.name)));
     if (!conversationColumns.has("profile_id")) this.db.exec("ALTER TABLE conversations ADD COLUMN profile_id TEXT REFERENCES employee_profiles(id)");
+    if (!conversationColumns.has("model_selection")) this.db.exec("ALTER TABLE conversations ADD COLUMN model_selection TEXT");
     this.db.exec("CREATE INDEX IF NOT EXISTS conversations_profile_idx ON conversations(profile_id)");
     this.db.exec(`CREATE TABLE IF NOT EXISTS telegram_chats (
       chat_id TEXT PRIMARY KEY, title TEXT NOT NULL, conversation_id TEXT REFERENCES conversations(id),
@@ -607,6 +608,7 @@ export class Store {
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
       profileId: row.profile_id == null ? null : String(row.profile_id),
+      ...(row.model_selection ? { modelSelection: JSON.parse(String(row.model_selection)) } : {}),
     };
   }
 

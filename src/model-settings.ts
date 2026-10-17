@@ -48,13 +48,26 @@ export function readModelSelection(store: Store, agent?: string): ModelSelection
   if (!profile) throw new HomeError('Сотрудник не найден.',404);
   return stored({...profile,serviceTier:profile.serviceTier ?? (profile.model ? 'default' : null)});
 }
+/** A conversation inherits its employee unless explicitly changed. Stored on the
+ * conversation so transfer/export and the existing device sync keep the choice. */
+export function readConversationModelSelection(store: Store, conversationId: string): ModelSelection {
+  const conversation = store.getConversation(conversationId);
+  if (!conversation) throw new HomeError('Чат не найден.',404);
+  return conversation.modelSelection ?? {provider:null,model:null,serviceTier:null};
+}
+export function saveConversationModelSelection(store: Store, conversationId: string, value: ModelSelection) {
+  readConversationModelSelection(store,conversationId);
+  store.db.prepare('UPDATE conversations SET model_selection=?,updated_at=? WHERE id=?')
+    .run(value.model ? JSON.stringify(value) : null,new Date().toISOString(),conversationId);
+}
 /** ChatGPT when signed in, otherwise the key or subscription connected first, so adding one changes nothing. Quota never switches it. */
 export function automaticProvider(store: Store): string {
   return chatgptSignedIn(store) ? 'chatgpt' : providerInfos().filter(p => providerConnected(store,p.id)).sort((a,b) => providerConnectedAt(store,a.id) - providerConnectedAt(store,b.id))[0]?.id ?? 'chatgpt';
 }
-/** Employee → device default → automatic. A Codex catalog fills the model only when one is given. */
-export function resolveModelSelection(store: Store, agent?: string, models?: ModelChoice[]): ModelSelection {
-  const selection = readModelSelection(store,agent);
+/** Conversation → employee → device default → automatic. A Codex catalog fills the model only when one is given. */
+export function resolveModelSelection(store: Store, agent?: string, models?: ModelChoice[], conversationId?: string): ModelSelection {
+  const conversation = conversationId ? readConversationModelSelection(store,conversationId) : undefined;
+  const selection = conversation?.model ? conversation : readModelSelection(store,agent);
   const resolved = selection.model ? selection : readModelSelection(store);
   if (resolved.model) return resolved;
   // A subscription's catalog is the one its agent last reported; without one, the agent runs its own default.

@@ -115,7 +115,7 @@ export class CodexAccountService {
       const value: OpenAIAccount = {
         connected: Boolean(account),
         email: account?.type === "chatgpt" ? account.email ?? null : disconnected.email,
-        planType: account?.type === "chatgpt" ? account.planType ?? null : disconnected.planType,
+        planType: account?.type === "chatgpt" ? this.displayPlan(account.planType) : disconnected.planType,
         managed,
         ...(!account ? { issue: "sign_in_required" as const } : {}),
       };
@@ -126,6 +126,24 @@ export class CodexAccountService {
       // unreachable. Keep credentials and history intact so login can recover.
       return { ...disconnected, issue: isOpenAIAuthenticationError(error) ? "sign_in_required" : "unavailable" };
     }
+  }
+
+  /** Older Codex versions return `unknown` for new plans. A current managed
+   * credential can supply the display label; capabilities still come from Codex. */
+  private displayPlan(reported?: string | null): string | null {
+    if (reported && reported !== "unknown") return reported;
+    try {
+      const tokens = JSON.parse(readFileSync(resolve(this.codexHome,"auth.json"),"utf8")).tokens;
+      for (const token of [tokens.access_token,tokens.id_token]) {
+        if (typeof token !== "string") continue;
+        const claims = JSON.parse(Buffer.from(token.split(".")[1]!,"base64url").toString("utf8"));
+        const auth = claims["https://api.openai.com/auth"];
+        if (typeof claims.exp !== "number" || claims.exp * 1000 <= Date.now() || !tokens.account_id || auth?.chatgpt_account_id !== tokens.account_id) continue;
+        const plan = auth.chatgpt_plan_type;
+        if (typeof plan === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(plan)) return plan;
+      }
+    } catch { /* Missing or old metadata must not change sign-in state. */ }
+    return reported ?? null;
   }
 
   /** Read-only usage. Never consumes reset credits or changes billing. */

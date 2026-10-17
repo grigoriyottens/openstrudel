@@ -23,7 +23,7 @@ import { Accounts, AccountEngines } from "../src/accounts.js";
 import { MessageService } from "../src/messages.js";
 import { ProviderKeyError } from "../src/providers.js";
 import { AcpSessionLost, ProviderSignInError } from "../src/acp.js";
-import { saveModelSelection } from "../src/model-settings.js";
+import { saveModelSelection, saveConversationModelSelection } from "../src/model-settings.js";
 const stores: Store[] = [];
 afterEach(() => { for (const store of stores.splice(0)) store.close(); vi.restoreAllMocks(); engines.run.mockReset(); engines.models.mockReset(); engines.closed.length = 0; });
 function fixture() {
@@ -38,6 +38,19 @@ function fixture() {
   return { store, accounts, second, pool: new AccountEngines(accounts) };
 }
 describe("per-device Codex subscriptions", () => {
+  it("uses the conversation provider for account status, services and execution, without changing employee defaults", async () => {
+    const {store,accounts,pool}=fixture(),chat=store.primaryConversation();
+    store.setSetting("providers.openai.key","test-key");
+    saveModelSelection(store,{provider:"chatgpt",model:"chat-model",serviceTier:"default"},"main");
+    saveConversationModelSelection(store,chat.id,{provider:"openai",model:"api-model",serviceTier:"default"});
+    const route=pool.forAgent("main","personal",chat.id);
+    expect(await route.connections!()).toEqual(["provider-openai"]);
+    expect(await accounts.statusFor("main",false,chat.id)).toMatchObject({account:{connected:true,provider:"openai"}});
+    engines.run.mockResolvedValue({threadId:"api-thread",response:"ok",events:[]});
+    await route.run("Hi",{conversationId:chat.id});
+    expect(engines.run.mock.calls[0]?.[0]).toBe("provider-openai");
+    expect(await pool.forAgent("main","personal").connections!()).toEqual(["default"]);
+  });
   it("does not wait for quota checks to open service settings", async () => {
     const { accounts, pool } = fixture();
     expect(await pool.forAgent("main", "personal").connections!()).toEqual(["default"]);
