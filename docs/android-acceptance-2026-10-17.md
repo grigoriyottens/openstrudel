@@ -167,5 +167,39 @@ saved deadline and produced one reply about 19 seconds later; provider latency
 remains visible. No sleep tool or duplicate reminder was used. The phone shows
 both completed results without a re-enable toggle. Nine isolated physical tests
 now pass, including completed/uncertain reminder presentation. These are separate
-from the two real-model tests. The public release is still Android build 1 until
-the build 2 publication receipt is recorded.
+from the two real-model tests.
+
+### Android 2 published
+
+Android 1.0 build 2, source `de19fd0`, is published at
+https://waiwai.is/openstrudel/downloads/OpenStrudel-1.0-2.apk.
+SHA-256: `5d5a1fd46c6f39b121fa406d0f7043f36e6a1fce0a706a731fceca14ace0735f`.
+The APK uses the same distribution certificate, passes signature verification,
+and its public bytes match the checksum manifest. It is installed on the Galaxy
+A07 with the existing encrypted Mini connection preserved. The temporary QA49
+Home was disconnected and gracefully stopped after its one-time work completed.
+The temporary Mini employee was archived privately and deleted through the API;
+the phone's list reflects that deletion without reinstalling or re-pairing.
+Publication receipt: `.data/android-release-2/published.json`.
+
+Home 49 is now installed on Mini and Wolf. A further real Telegram QA request
+without @mention returned its calculation and delivered one one-time reminder;
+the same exchange appeared in the Mac app. The clock began 1 ms after the saved
+deadline. The external-network limitation above remains unresolved and is not
+overridden by these successful local and Telegram checks.
+
+### Android 3 visual follow-up
+
+The final real-data list showed literal Markdown markers in two previews.
+Build 3 uses the existing Markwon renderer for plain preview text. There is no
+new formatter dependency or change to stored messages. Release compilation and
+lint passed; the signed app was updated on the phone without resetting its
+connection. The inspected list no longer shows the markers. Screenshot and UI
+hierarchy: `.data/android-release-3/phone.png` and `list-layout.json`.
+
+Source `deff31b` is on main. The public APK is
+https://waiwai.is/openstrudel/downloads/OpenStrudel-1.0-3.apk,
+SHA-256 `f1eec5e96d756c8113eca6890a998de6ff10da9d724e9b75fe5771e1e2f096d3`.
+Its signature uses the existing certificate; externally downloaded APK bytes
+and the checksum manifest match. Apple/Home 49's feed was unchanged.
+Receipt: `.data/android-release-3/published.json`.

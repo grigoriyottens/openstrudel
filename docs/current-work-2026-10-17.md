@@ -1,4 +1,58 @@
-# OpenStrudel — build 48 released, remaining device acceptance
+# OpenStrudel — build 49 and Android 3, remaining device acceptance
+
+## Latest checkpoint — 17 October, 19:54 UTC
+
+Apple/Home source `de19fd0` is on main. Mac 49 and Home 49 are published;
+versioned downloads, stable aliases, signed Sparkle feed and checksums were
+independently downloaded and verified. iOS 49 is VALID and IN_BETA_TESTING in
+the existing internal Mik group. Android 1.0 build 3 is publicly available and
+installed on the USB Galaxy A07. Publication receipts are in `.data/release-49`
+and `.data/android-release-3`. The isolated Sparkle 48 → 49 cycle passed actual
+download, install, relaunch and the native up-to-date check. Installed bytes and
+signature match the candidate. Production Home's PID and rows were unchanged;
+the temporary QA feed was removed and the public production feed preserved.
+The installed production application also reports up to date through Sparkle.
+Android's final visual pass found raw Markdown in employee previews; the existing
+renderer now produces plain preview text. Android-only `deff31b` is on main;
+release compilation/lint and inspection of the actual phone passed. Its update
+preserved the encrypted Mini connection. No Apple/Home rebuild was needed.
+
+Wolf runs `openstrudel:de19fd0`; its eight Telegram chats, employee/history counts
+and SQLite integrity are preserved. In the private two-member QA Telegram group,
+without @mention, a real request returned 126 immediately in its answer and
+saved a one-time reminder. The clock started 1 ms after its deadline; Telegram
+delivered one reminder, also visible in the native Mac timeline. This is live
+provider evidence, separate from the synthetic fixtures.
+
+Mac mini now runs notarized build 49. Its Home was quiesced for a managed rollback
+snapshot, then updated atomically. Health, integrity, data counts and the native
+version/history passed. The temporary Android QA employee was then archived
+privately and removed through the normal API; all other employee IDs stayed
+unchanged. The connected phone no longer lists it.
+
+Final regression: 586 runtime tests passed (two package-only tests skipped in
+that invocation); all five checks against the signed package passed separately.
+The 338 native tests plus the final two schedule tests passed. Android has twelve
+unit tests, nine physical fixture tests and zero release-lint errors, with actual
+provider requests and their limitations recorded in the Android acceptance note.
+
+Rollback copying now uses standard independent APFS clones for ordinary files,
+retaining the SQLite backup API and integrity checks. All fifteen storage safety
+tests pass, including independent modification and unsupported-volume fallback.
+The tooling-only change `f09fd0a` is also pushed to main; shipped application
+artifacts remain built from `de19fd0`. Healthy-backup retention removed one old
+managed snapshot after open-file checks. Data has about 5.6 GiB free, pressure is
+normal and swap is declining. No other caches were eligible for deletion.
+
+Still open: WaiClaw/CLO and Grant reject this Mini's existing SSH credentials;
+their latest deployment/settings are unverified. Android's external route to
+Wolf stalls independently in the platform HTTP client, so outside-network
+acceptance remains open. No physical iPhone is available. Do not count Android
+fixtures as physical iOS, actual QR decoding or new OAuth-install acceptance.
+These limits remain part of the original goal; this is not full acceptance.
+
+The entries below are chronological history; earlier pending-release statements
+are superseded by this checkpoint.
 
 ## Android continuation — 17 October
 

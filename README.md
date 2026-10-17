@@ -12,7 +12,7 @@ The product has three concepts: devices, employees, and conversations. Each devi
 
 The native Android companion connects to your existing Macs and Home servers.
 It supports employees, chat, files, editable dictation and per-chat model choices.
-[Download the signed Android APK](https://waiwai.is/openstrudel/downloads/OpenStrudel-1.0-1.apk)
+[Download the signed Android APK](https://waiwai.is/openstrudel/downloads/OpenStrudel-1.0-3.apk)
 (Android 9 or later). This initial release was tested on a physical Galaxy A07;
 see the [acceptance results and known limits](docs/android-acceptance-2026-10-17.md).
 [Build instructions](native/Android/README.md) are available for contributors.
