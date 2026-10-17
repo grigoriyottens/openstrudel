@@ -5,30 +5,25 @@ import VisionKit
 import AVFoundation
 #endif
 
-/// Rows for a device in Settings → Devices: a one-use connection link, a colleague's invitation
-/// and the devices paired with it. On the Mac each row explains itself with its action trailing;
-/// on iOS the action is the row.
+/// Sharing starts in one place; the owner chooses their device or a colleague.
+/// Existing connections and invitations follow the same action on both platforms.
 struct MobilePairingSettings: View {
     @EnvironmentObject private var client: HomeClient
     @State private var showingCode = false
     @State private var creating = false
     @State private var revokeConfirmation = false
     @State private var invitationOwner = true
+    @State private var choosingAccess = false
 
     var body: some View {
         #if os(macOS)
-        LabeledContent {
+        HStack {
             linkButton
-        } label: {
-            Text(L("Чтобы открыть сотрудников этого устройства на другом, создайте ссылку подключения.").withoutWidow)
+            Spacer()
         }
-        .padding(.top, 8)
         #else
         linkButton
         #endif
-        Button(L("Пригласить коллегу…")) { createInvitation(owner: false) }
-            .disabled(creating || !(client.isLocalConnection || client.canManageConnections))
-            .accessibilityIdentifier("inviteColleague")
         if client.supportsColleagueInvites {
             ForEach(client.mobileClients) { MobileClientRow(item: $0) }
             ForEach(client.waitingInvitations) { WaitingInvitationRow(item: $0) }
@@ -46,10 +41,17 @@ struct MobilePairingSettings: View {
 
     // Always present: this row also learns whether the device lets this app create links.
     private var linkButton: some View {
-        Button(creating ? L("Готовим ссылку…") : L("Получить ссылку подключения")) {
-            createInvitation(owner: true)
+        Button(creating ? L("Готовим ссылку…") : L("Поделиться доступом…")) {
+            choosingAccess = true
         }
+        .accessibilityIdentifier("shareDeviceAccess")
         .disabled(creating || !(client.isLocalConnection || client.canManageConnections))
+        .confirmationDialog(L("Кому дать доступ?"), isPresented: $choosingAccess, titleVisibility: .visible) {
+            Button(L("Моему устройству")) { createInvitation(owner: true) }
+            Button(L("Коллеге")) { createInvitation(owner: false) }
+        } message: {
+            Text(L("На своём устройстве вы сохраните все права. Коллега сможет работать с сотрудниками, но не управлять аккаунтами и доступом."))
+        }
         .task { await client.refreshMobileStatus() }
         .sheet(isPresented: $showingCode, onDismiss: { Task { await client.cancelMobileInvitation(colleague: !invitationOwner) } }) {
             MobileQRCodeView(owner: invitationOwner).environmentObject(client).modifier(InterfaceLanguage())
@@ -142,7 +144,7 @@ private struct MobileQRCodeView: View {
 
     var body: some View {
         let invitation = client.mobileInvitation
-        let code = invitation.flatMap { qr($0.url.absoluteString) }
+        let code = invitation.flatMap { qr($0.shareURL.absoluteString) }
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let remaining = invitation?.remainingSeconds(at: context.date) ?? 0
@@ -152,7 +154,7 @@ private struct MobileQRCodeView: View {
                         codeView(remaining > 0 ? code : nil)
                         VStack(alignment: .leading, spacing: 12) {
                             title
-                            Text(L("Отсканируйте QR в OpenStrudel\nили откройте ссылку на другом устройстве.").replacingOccurrences(of: "\n", with: " ").withoutWidow)
+                            Text(L("Наведите камеру телефона на QR-код или откройте ссылку на другом устройстве.").withoutWidow)
                             status(remaining)
                             HStack(spacing: 16) { actions(remaining > 0 ? invitation : nil) }.padding(.top, 12)
                         }
@@ -169,7 +171,7 @@ private struct MobileQRCodeView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         title
-                        Text(L("Отсканируйте QR в OpenStrudel\nили откройте ссылку на другом устройстве."))
+                        Text(L("Наведите камеру телефона на QR-код или откройте ссылку на другом устройстве."))
                         codeView(remaining > 0 ? code : nil).padding(.vertical, 8)
                         status(remaining)
                         actions(remaining > 0 ? invitation : nil)
@@ -230,7 +232,8 @@ private struct MobileQRCodeView: View {
                     .accessibilityHidden(true)
             }
         }
-        .frame(width: Self.codeSize, height: Self.codeSize)
+        .frame(maxWidth: Self.codeSize, maxHeight: Self.codeSize)
+        .aspectRatio(1, contentMode: .fit)
     }
 
     private static var textAlignment: HorizontalAlignment {
@@ -269,7 +272,9 @@ private struct MobileQRCodeView: View {
     /// Share leads while the link is valid; afterwards a new link is the only step.
     @ViewBuilder private func actions(_ invitation: MobileInvitation?) -> some View {
         if let invitation {
-            ShareLink(item: invitation.url) { AdaptiveActionLabel(title: L("Поделиться ссылкой")) }
+            ShareLink(item: invitation.shareURL) {
+                AdaptiveActionLabel(title: L("Поделиться ссылкой")).foregroundStyle(.primary)
+            }
                 .adaptiveActionStyle(.glass)
         }
         Button {
@@ -439,7 +444,7 @@ struct MobileConnectionHelpView: View {
                           L("Установите бесплатный OpenStrudel с waiwai.is/openstrudel. Войдите в свой аккаунт OpenAI и создайте AI-помощника для личных или рабочих задач."),
                           L("Регистрация в OpenStrudel не нужна. Ссылку для своего iPhone или iPad вы создаёте сами."))
                     topic(L("Где получить ссылку"),
-                          L("На Mac с сотрудниками откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения»."),
+                          L("На Mac с сотрудниками откройте OpenStrudel → Настройки → Устройства. Выберите устройство → Поделиться доступом."),
                           L("Для сервера откройте его веб-интерфейс → Настройки → Устройства."))
                     topic(L("Как подключиться"),
                           L("Отсканируйте QR или вставьте ссылку в OpenStrudel на этом устройстве."),
@@ -526,7 +531,7 @@ struct ConnectionInvitationView: View {
     private var connectionPage: URL? {
         guard let url = URL(string: invitation.trimmingCharacters(in: .whitespacesAndNewlines)),
               url.scheme?.lowercased() == "https", let host = url.host, !host.isEmpty,
-              url.user == nil, url.password == nil else { return nil }
+              url.user == nil, url.password == nil, (try? MacPairing(url: url)) == nil else { return nil }
         return url
     }
 
@@ -539,7 +544,7 @@ struct ConnectionInvitationView: View {
     }
 
     private var help: String {
-        L("На другом Mac или сервере откройте OpenStrudel → Настройки → Устройства → Получить ссылку подключения. Отсканируйте QR-код или вставьте ссылку сюда.")
+        L("На устройстве с сотрудниками откройте Настройки → Устройства → Поделиться доступом. Отсканируйте QR-код или вставьте ссылку сюда.")
     }
 
     var body: some View {
@@ -565,7 +570,7 @@ struct ConnectionInvitationView: View {
                     }
                 } header: {
                     // The largest text keeps the field on the first screen: the explanation follows it.
-                    SetupHeader(title: L("Подключить устройство"), paragraphs: textSize.isAccessibilitySize ? [] : [help])
+                    SetupHeader(title: L("Добавить Mac или сервер"), paragraphs: textSize.isAccessibilitySize ? [] : [L("Откройте здесь его сотрудников и чаты.")])
                 } footer: {
                     if let error {
                         Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)
@@ -574,7 +579,7 @@ struct ConnectionInvitationView: View {
                     } else if let page = connectionPage {
                         Text(L("Откроется \(page.host ?? L("страница подключения")) в браузере. На странице нажмите «Открыть OpenStrudel»."))
                             .fixedSize(horizontal: false, vertical: true)
-                    } else if textSize.isAccessibilitySize {
+                    } else {
                         Text(help).fixedSize(horizontal: false, vertical: true)
                     }
                 }

@@ -1,3 +1,3 @@
 "NSLocalNetworkUsageDescription" = "Подключение к вашему Mac или серверу, где работают сотрудники.";
 "NSCameraUsageDescription" = "Сканирование кода OpenStrudel для подключения устройства.";
-"NSMicrophoneUsageDescription" = "Запись речи и распознавание на этом устройстве.";
+"NSMicrophoneUsageDescription" = "Записывать речь и распознавать её с помощью выбранного вами сервиса.";

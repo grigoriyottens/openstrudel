@@ -9623,5 +9623,341 @@
     "fr": "Ce service utilise un client OAuth personnalisé. Utilisez l’enregistrement automatique ou configurez son adresse de retour.",
     "es": "Este servicio usa un cliente OAuth personalizado. Usa el registro automático o configura su dirección de retorno.",
     "he": "השירות משתמש בלקוח OAuth מותאם. יש להשתמש ברישום אוטומטי או להגדיר את כתובת החזרה שלו."
+  },
+  "Добавить Mac или сервер": {
+    "en": "Add a Mac or server",
+    "fr": "Ajouter un Mac ou un serveur",
+    "es": "Añadir un Mac o servidor",
+    "he": "הוספת Mac או שרת",
+    "ru": "Добавить Mac или сервер"
+  },
+  "Добавить Mac или сервер…": {
+    "en": "Add a Mac or server…",
+    "fr": "Ajouter un Mac ou un serveur…",
+    "es": "Añadir un Mac o servidor…",
+    "he": "הוספת Mac או שרת…",
+    "ru": "Добавить Mac или сервер…"
+  },
+  "Поделиться доступом…": {
+    "en": "Share access…",
+    "fr": "Partager l’accès…",
+    "es": "Compartir acceso…",
+    "he": "שיתוף גישה…",
+    "ru": "Поделиться доступом…"
+  },
+  "Кому дать доступ?": {
+    "en": "Who is this access for?",
+    "fr": "À qui donner accès ?",
+    "es": "¿A quién quieres dar acceso?",
+    "he": "למי לתת גישה?",
+    "ru": "Кому дать доступ?"
+  },
+  "Моему устройству": {
+    "en": "My device",
+    "fr": "Mon appareil",
+    "es": "Mi dispositivo",
+    "he": "למכשיר שלי",
+    "ru": "Моему устройству"
+  },
+  "Коллеге": {
+    "en": "A colleague",
+    "fr": "Un collègue",
+    "es": "Un compañero",
+    "he": "לעמית",
+    "ru": "Коллеге"
+  },
+  "Открыть этих сотрудников на другом устройстве.": {
+    "en": "Use these assistants on another device.",
+    "fr": "Utilisez ces assistants sur un autre appareil.",
+    "es": "Usa estos asistentes en otro dispositivo.",
+    "he": "השתמשו בעוזרים האלה במכשיר אחר.",
+    "ru": "Открыть этих сотрудников на другом устройстве."
+  },
+  "Откройте здесь его сотрудников и чаты.": {
+    "en": "Bring its assistants and chats here.",
+    "fr": "Retrouvez ici ses assistants et conversations.",
+    "es": "Accede aquí a sus asistentes y chats.",
+    "he": "פתחו כאן את העוזרים והשיחות שלו.",
+    "ru": "Откройте здесь его сотрудников и чаты."
+  },
+  "На своём устройстве вы сохраните все права. Коллега сможет работать с сотрудниками, но не управлять аккаунтами и доступом.": {
+    "en": "Your device keeps full access. A colleague can work with assistants but cannot manage accounts or access.",
+    "fr": "Votre appareil conserve tous les droits. Un collègue peut utiliser les assistants, mais ne peut pas gérer les comptes ni les accès.",
+    "es": "Tu dispositivo conserva todos los permisos. Un compañero puede trabajar con los asistentes, pero no administrar cuentas ni accesos.",
+    "he": "המכשיר שלכם שומר על כל ההרשאות. עמית יכול לעבוד עם העוזרים, אך לא לנהל חשבונות או גישה.",
+    "ru": "На своём устройстве вы сохраните все права. Коллега сможет работать с сотрудниками, но не управлять аккаунтами и доступом."
+  },
+  "Наведите камеру телефона на QR-код или откройте ссылку на другом устройстве.": {
+    "en": "Scan the QR code with your phone’s camera or open the link on another device.",
+    "fr": "Scannez le code QR avec l’appareil photo de votre téléphone ou ouvrez le lien sur un autre appareil.",
+    "es": "Escanea el código QR con la cámara del teléfono o abre el enlace en otro dispositivo.",
+    "he": "סרקו את קוד ה־QR במצלמת הטלפון או פתחו את הקישור במכשיר אחר.",
+    "ru": "Наведите камеру телефона на QR-код или откройте ссылку на другом устройстве."
+  },
+  "На Mac с сотрудниками откройте OpenStrudel → Настройки → Устройства. Выберите устройство → Поделиться доступом.": {
+    "en": "On the Mac with your assistants, open OpenStrudel → Settings → Devices. Select the device → Share access.",
+    "fr": "Sur le Mac de vos assistants, ouvrez OpenStrudel → Réglages → Appareils. Sélectionnez l’appareil → Partager l’accès.",
+    "es": "En el Mac de tus asistentes, abre OpenStrudel → Ajustes → Dispositivos. Elige el dispositivo → Compartir acceso.",
+    "he": "ב־Mac שבו נמצאים העוזרים, פתחו OpenStrudel ← הגדרות ← מכשירים. בחרו מכשיר ← שיתוף גישה.",
+    "ru": "На Mac с сотрудниками откройте OpenStrudel → Настройки → Устройства. Выберите устройство → Поделиться доступом."
+  },
+  "На устройстве с сотрудниками откройте Настройки → Устройства → Поделиться доступом. Отсканируйте QR-код или вставьте ссылку сюда.": {
+    "en": "On the device with your assistants, open Settings → Devices → Share access. Scan the QR code or paste the link here.",
+    "fr": "Sur l’appareil de vos assistants, ouvrez Réglages → Appareils → Partager l’accès. Scannez le code QR ou collez le lien ici.",
+    "es": "En el dispositivo de tus asistentes, abre Ajustes → Dispositivos → Compartir acceso. Escanea el código QR o pega aquí el enlace.",
+    "he": "במכשיר שבו נמצאים העוזרים, פתחו הגדרות ← מכשירים ← שיתוף גישה. סרקו את קוד ה־QR או הדביקו כאן את הקישור.",
+    "ru": "На устройстве с сотрудниками откройте Настройки → Устройства → Поделиться доступом. Отсканируйте QR-код или вставьте ссылку сюда."
+  },
+  "На устройстве с сотрудниками откройте Настройки → Устройства → Поделиться доступом. Вставьте ссылку сюда.": {
+    "en": "On the device with your assistants, open Settings → Devices → Share access. Paste the link here.",
+    "fr": "Sur l’appareil de vos assistants, ouvrez Réglages → Appareils → Partager l’accès. Collez le lien ici.",
+    "es": "En el dispositivo de tus asistentes, abre Ajustes → Dispositivos → Compartir acceso. Pega aquí el enlace.",
+    "he": "במכשיר שבו נמצאים העוזרים, פתחו הגדרות ← מכשירים ← שיתוף גישה. הדביקו כאן את הקישור.",
+    "ru": "На устройстве с сотрудниками откройте Настройки → Устройства → Поделиться доступом. Вставьте ссылку сюда."
+  },
+  "Голос": {
+    "en": "Voice",
+    "fr": "Voix",
+    "es": "Voz",
+    "he": "קול",
+    "ru": "Голос"
+  },
+  "На устройстве": {
+    "en": "On device",
+    "fr": "Sur l’appareil",
+    "es": "En el dispositivo",
+    "he": "במכשיר",
+    "ru": "На устройстве"
+  },
+  "API-ключ ElevenLabs": {
+    "en": "ElevenLabs API key",
+    "fr": "Clé API ElevenLabs",
+    "es": "Clave API de ElevenLabs",
+    "he": "מפתח API של ElevenLabs",
+    "ru": "API-ключ ElevenLabs"
+  },
+  "Новый ключ ElevenLabs": {
+    "en": "New ElevenLabs key",
+    "fr": "Nouvelle clé ElevenLabs",
+    "es": "Nueva clave de ElevenLabs",
+    "he": "מפתח ElevenLabs חדש",
+    "ru": "Новый ключ ElevenLabs"
+  },
+  "ElevenLabs подключён": {
+    "en": "ElevenLabs connected",
+    "fr": "ElevenLabs connecté",
+    "es": "ElevenLabs conectado",
+    "he": "ElevenLabs מחובר",
+    "ru": "ElevenLabs подключён"
+  },
+  "Удалить ключ ElevenLabs": {
+    "en": "Remove ElevenLabs key",
+    "fr": "Supprimer la clé ElevenLabs",
+    "es": "Eliminar la clave de ElevenLabs",
+    "he": "הסרת מפתח ElevenLabs",
+    "ru": "Удалить ключ ElevenLabs"
+  },
+  "Голос для озвучивания": {
+    "en": "Voice for spoken replies",
+    "fr": "Voix des réponses audio",
+    "es": "Voz para las respuestas habladas",
+    "he": "קול לתשובות מוקראות",
+    "ru": "Голос для озвучивания"
+  },
+  "Аудио отправляется в ElevenLabs. Ключ хранится на устройстве сотрудника.": {
+    "en": "Audio is sent to ElevenLabs. The key stays on the assistant’s device.",
+    "fr": "L’audio est envoyé à ElevenLabs. La clé reste sur l’appareil de l’assistant.",
+    "es": "El audio se envía a ElevenLabs. La clave se guarda en el dispositivo del asistente.",
+    "he": "האודיו נשלח ל־ElevenLabs. המפתח נשמר במכשיר של העוזר.",
+    "ru": "Аудио отправляется в ElevenLabs. Ключ хранится на устройстве сотрудника."
+  },
+  "Сотрудник озвучит ответ, когда вы попросите. Используется ElevenLabs.": {
+    "en": "Ask the assistant for a spoken reply. It uses ElevenLabs.",
+    "fr": "Demandez une réponse audio à l’assistant. Elle utilise ElevenLabs.",
+    "es": "Pide al asistente una respuesta hablada. Se usa ElevenLabs.",
+    "he": "בקשו מהעוזר תשובה קולית. ההקראה נעשית באמצעות ElevenLabs.",
+    "ru": "Сотрудник озвучит ответ, когда вы попросите. Используется ElevenLabs."
+  },
+  "Для сотрудников и Telegram-бота на выбранном устройстве.": {
+    "en": "For assistants and the Telegram bot on the selected device.",
+    "fr": "Pour les assistants et le bot Telegram de l’appareil sélectionné.",
+    "es": "Para los asistentes y el bot de Telegram del dispositivo elegido.",
+    "he": "לעוזרים ולבוט Telegram במכשיר שנבחר.",
+    "ru": "Для сотрудников и Telegram-бота на выбранном устройстве."
+  },
+  "На Mac используется OpenRamble, на сервере — встроенное распознавание. Аудио остаётся на устройстве.": {
+    "en": "Uses OpenRamble on Mac and built-in transcription on the server. Audio stays on the device.",
+    "fr": "Utilise OpenRamble sur Mac et la transcription intégrée sur le serveur. L’audio reste sur l’appareil.",
+    "es": "Usa OpenRamble en Mac y la transcripción integrada en el servidor. El audio permanece en el dispositivo.",
+    "he": "משתמש ב־OpenRamble ב־Mac ובתמלול המובנה בשרת. האודיו נשאר במכשיר.",
+    "ru": "На Mac используется OpenRamble, на сервере — встроенное распознавание. Аудио остаётся на устройстве."
+  },
+  "Не удалось начать диктовку": {
+    "en": "Couldn’t start dictation",
+    "fr": "Impossible de démarrer la dictée",
+    "es": "No se pudo iniciar el dictado",
+    "he": "לא ניתן להתחיל בהכתבה",
+    "ru": "Не удалось начать диктовку"
+  },
+  "Распознаём в ElevenLabs…": {
+    "en": "Transcribing with ElevenLabs…",
+    "fr": "Transcription avec ElevenLabs…",
+    "es": "Transcribiendo con ElevenLabs…",
+    "he": "מתמלל באמצעות ElevenLabs…",
+    "ru": "Распознаём в ElevenLabs…"
+  },
+  "Распознаём…": {
+    "en": "Transcribing…",
+    "fr": "Transcription…",
+    "es": "Transcribiendo…",
+    "he": "מתמלל…",
+    "ru": "Распознаём…"
+  },
+  "Надиктуйте сообщение, проверьте текст и отправьте.": {
+    "en": "Dictate a message, check the text, then send it.",
+    "fr": "Dictez un message, vérifiez le texte, puis envoyez-le.",
+    "es": "Dicta un mensaje, revisa el texto y envíalo.",
+    "he": "הכתיבו הודעה, בדקו את הטקסט ושלחו.",
+    "ru": "Надиктуйте сообщение, проверьте текст и отправьте."
+  },
+  "ElevenLabs временно недоступен или закончился лимит. Проверьте баланс и повторите позже.": {
+    "en": "ElevenLabs is temporarily unavailable or out of credits. Check your balance and try again later.",
+    "fr": "ElevenLabs est temporairement indisponible ou vos crédits sont épuisés. Vérifiez votre solde et réessayez plus tard.",
+    "es": "ElevenLabs no está disponible o se han agotado los créditos. Revisa tu saldo e inténtalo más tarde.",
+    "he": "ElevenLabs אינו זמין כרגע או שהמכסה נגמרה. בדקו את היתרה ונסו שוב מאוחר יותר.",
+    "ru": "ElevenLabs временно недоступен или закончился лимит. Проверьте баланс и повторите позже."
+  },
+  "ElevenLabs не вернул аудио. Попробуйте ещё раз.": {
+    "en": "ElevenLabs returned no audio. Try again.",
+    "fr": "ElevenLabs n’a renvoyé aucun audio. Réessayez.",
+    "es": "ElevenLabs no devolvió audio. Inténtalo de nuevo.",
+    "he": "ElevenLabs לא החזיר אודיו. נסו שוב.",
+    "ru": "ElevenLabs не вернул аудио. Попробуйте ещё раз."
+  },
+  "ElevenLabs не принял ключ или его разрешения. Проверьте ключ в настройках голоса.": {
+    "en": "ElevenLabs rejected the key or its permissions. Check the key in Voice settings.",
+    "fr": "ElevenLabs a refusé la clé ou ses autorisations. Vérifiez la clé dans les réglages de voix.",
+    "es": "ElevenLabs rechazó la clave o sus permisos. Revisa la clave en los ajustes de voz.",
+    "he": "ElevenLabs דחה את המפתח או את הרשאותיו. בדקו את המפתח בהגדרות הקול.",
+    "ru": "ElevenLabs не принял ключ или его разрешения. Проверьте ключ в настройках голоса."
+  },
+  "ElevenLabs не смог обработать запись. Проверьте формат файла и наличие речи.": {
+    "en": "ElevenLabs couldn’t process the recording. Check the file format and that it contains speech.",
+    "fr": "ElevenLabs n’a pas pu traiter l’enregistrement. Vérifiez le format du fichier et la présence de parole.",
+    "es": "ElevenLabs no pudo procesar la grabación. Revisa el formato y que contenga voz.",
+    "he": "ElevenLabs לא הצליח לעבד את ההקלטה. בדקו את פורמט הקובץ ושיש בו דיבור.",
+    "ru": "ElevenLabs не смог обработать запись. Проверьте формат файла и наличие речи."
+  },
+  "ElevenLabs сейчас не отвечает. Попробуйте ещё раз.": {
+    "en": "ElevenLabs isn’t responding. Try again.",
+    "fr": "ElevenLabs ne répond pas. Réessayez.",
+    "es": "ElevenLabs no responde. Inténtalo de nuevo.",
+    "he": "ElevenLabs אינו מגיב כרגע. נסו שוב.",
+    "ru": "ElevenLabs сейчас не отвечает. Попробуйте ещё раз."
+  },
+  "Аудио получилось слишком большим. Сократите текст.": {
+    "en": "The audio is too large. Shorten the text.",
+    "fr": "L’audio est trop volumineux. Raccourcissez le texte.",
+    "es": "El audio es demasiado grande. Acorta el texto.",
+    "he": "האודיו גדול מדי. קצרו את הטקסט.",
+    "ru": "Аудио получилось слишком большим. Сократите текст."
+  },
+  "Вставьте API-ключ ElevenLabs.": {
+    "en": "Paste your ElevenLabs API key.",
+    "fr": "Collez votre clé API ElevenLabs.",
+    "es": "Pega tu clave API de ElevenLabs.",
+    "he": "הדביקו את מפתח ה־API של ElevenLabs.",
+    "ru": "Вставьте API-ключ ElevenLabs."
+  },
+  "Выберите доступный голос ElevenLabs.": {
+    "en": "Choose an available ElevenLabs voice.",
+    "fr": "Choisissez une voix ElevenLabs disponible.",
+    "es": "Elige una voz disponible de ElevenLabs.",
+    "he": "בחרו קול זמין של ElevenLabs.",
+    "ru": "Выберите доступный голос ElevenLabs."
+  },
+  "Выберите распознавание на устройстве или ElevenLabs.": {
+    "en": "Choose on-device transcription or ElevenLabs.",
+    "fr": "Choisissez la transcription sur l’appareil ou ElevenLabs.",
+    "es": "Elige transcripción en el dispositivo o ElevenLabs.",
+    "he": "בחרו תמלול במכשיר או ElevenLabs.",
+    "ru": "Выберите распознавание на устройстве или ElevenLabs."
+  },
+  "Для озвучивания нужен текст до 5000 символов.": {
+    "en": "Use up to 5,000 characters for a spoken reply.",
+    "fr": "Utilisez au maximum 5 000 caractères pour une réponse audio.",
+    "es": "Usa hasta 5000 caracteres para una respuesta hablada.",
+    "he": "השתמשו בטקסט של עד 5,000 תווים לתשובה קולית.",
+    "ru": "Для озвучивания нужен текст до 5000 символов."
+  },
+  "Для распознавания выберите аудио или видео до 20 МБ.": {
+    "en": "Choose an audio or video file up to 20 MB to transcribe.",
+    "fr": "Choisissez un fichier audio ou vidéo de 20 Mo maximum à transcrire.",
+    "es": "Elige un archivo de audio o vídeo de hasta 20 MB para transcribir.",
+    "he": "בחרו קובץ אודיו או וידאו בגודל עד 20 MB לתמלול.",
+    "ru": "Для распознавания выберите аудио или видео до 20 МБ."
+  },
+  "Добавьте API-ключ ElevenLabs в настройках голоса.": {
+    "en": "Add an ElevenLabs API key in Voice settings.",
+    "fr": "Ajoutez une clé API ElevenLabs dans les réglages de voix.",
+    "es": "Añade una clave API de ElevenLabs en los ajustes de voz.",
+    "he": "הוסיפו מפתח API של ElevenLabs בהגדרות הקול.",
+    "ru": "Добавьте API-ключ ElevenLabs в настройках голоса."
+  },
+  "Добавьте API-ключ ElevenLabs.": {
+    "en": "Add an ElevenLabs API key.",
+    "fr": "Ajoutez une clé API ElevenLabs.",
+    "es": "Añade una clave API de ElevenLabs.",
+    "he": "הוסיפו מפתח API של ElevenLabs.",
+    "ru": "Добавьте API-ключ ElevenLabs."
+  },
+  "Запись пустая. Запишите её ещё раз.": {
+    "en": "The recording is empty. Record it again.",
+    "fr": "L’enregistrement est vide. Enregistrez à nouveau.",
+    "es": "La grabación está vacía. Grábala de nuevo.",
+    "he": "ההקלטה ריקה. הקליטו שוב.",
+    "ru": "Запись пустая. Запишите её ещё раз."
+  },
+  "Не удалось связаться с ElevenLabs. Запись можно распознать повторно.": {
+    "en": "Couldn’t reach ElevenLabs. You can retry transcribing the recording.",
+    "fr": "Impossible de joindre ElevenLabs. Vous pouvez relancer la transcription.",
+    "es": "No se pudo conectar con ElevenLabs. Puedes volver a transcribir la grabación.",
+    "he": "לא ניתן להתחבר ל־ElevenLabs. אפשר לנסות לתמלל את ההקלטה שוב.",
+    "ru": "Не удалось связаться с ElevenLabs. Запись можно распознать повторно."
+  },
+  "Неизвестная настройка голоса.": {
+    "en": "Unknown voice setting.",
+    "fr": "Réglage de voix inconnu.",
+    "es": "Ajuste de voz desconocido.",
+    "he": "הגדרת קול לא מוכרת.",
+    "ru": "Неизвестная настройка голоса."
+  },
+  "Подключите ElevenLabs и выберите голос в настройках.": {
+    "en": "Connect ElevenLabs and choose a voice in settings.",
+    "fr": "Connectez ElevenLabs et choisissez une voix dans les réglages.",
+    "es": "Conecta ElevenLabs y elige una voz en los ajustes.",
+    "he": "חברו את ElevenLabs ובחרו קול בהגדרות.",
+    "ru": "Подключите ElevenLabs и выберите голос в настройках."
+  },
+  "Проверьте настройку ключа.": {
+    "en": "Check the key setting.",
+    "fr": "Vérifiez le réglage de la clé.",
+    "es": "Revisa el ajuste de la clave.",
+    "he": "בדקו את הגדרת המפתח.",
+    "ru": "Проверьте настройку ключа."
+  },
+  "Речь не распознана. Попробуйте записать сообщение ещё раз.": {
+    "en": "No speech was recognized. Try recording the message again.",
+    "fr": "Aucune parole reconnue. Essayez d’enregistrer le message à nouveau.",
+    "es": "No se reconoció voz. Intenta grabar el mensaje de nuevo.",
+    "he": "לא זוהה דיבור. נסו להקליט את ההודעה שוב.",
+    "ru": "Речь не распознана. Попробуйте записать сообщение ещё раз."
+  },
+  "Сначала отключите ElevenLabs.": {
+    "en": "Disconnect ElevenLabs first.",
+    "fr": "Déconnectez d’abord ElevenLabs.",
+    "es": "Desconecta ElevenLabs primero.",
+    "he": "נתקו תחילה את ElevenLabs.",
+    "ru": "Сначала отключите ElevenLabs."
   }
 }

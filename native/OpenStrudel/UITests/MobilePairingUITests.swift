@@ -167,7 +167,7 @@ final class MobilePairingUITests: XCTestCase {
         let app = XCUIApplication()
         #if targetEnvironment(simulator)
         // Launch-domain overrides leave existing test connections on disk intact.
-        app.launchArguments = ["-openstrudel.signedOut", "YES", "-openstrudel.deviceConnections", "()", "-openstrudel.selectedDevice", "current"]
+        app.launchArguments = ["-openstrudel.signedOut", "YES", "-openstrudel.deviceConnections", "()", "-openstrudel.selectedDevice", "current", "-openstrudel.language", "ru"]
         #endif
         app.launch()
         let paste = app.buttons["pasteInvitation"]
@@ -183,6 +183,15 @@ final class MobilePairingUITests: XCTestCase {
         XCTAssertTrue(app.secureTextFields["connectionInvitation"].exists)
         #endif
         capture("connection-qr-and-link", app)
+        let native = "openstrudel://connect?host=preview.example&port=7789&key=" + String(repeating: "a", count: 64) + "&pin=" + String(repeating: "b", count: 64) + "&name=Preview"
+        let shared = "https://waiwai.is/openstrudel/connect.html#" + native.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        let field = app.secureTextFields["connectionInvitation"]
+        field.tap(); field.typeText(shared)
+        app.buttons["continueConnection"].tap()
+        XCTAssertTrue(app.buttons["confirmMacPairing"].waitForExistence(timeout: 10), app.debugDescription)
+        capture("camera-link-destination-review", app)
+        // Parsing a link must never redeem it before the user confirms.
+        app.buttons["cancelMacPairing"].tap()
     }
 
     @MainActor
@@ -362,7 +371,7 @@ final class MobilePairingUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Управлять облаком"].exists)
         addDevice.tap()
         XCTAssertTrue(app.secureTextFields["connectionInvitation"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Получить ссылку подключения")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Поделиться доступом")).firstMatch.exists)
         XCTAssertEqual(app.links.count, 0)
         capture("06-settings-help", app)
         app.buttons["Отмена"].tap()
@@ -388,6 +397,9 @@ final class MobilePairingUITests: XCTestCase {
     func testWelcomeWithLargeText() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        #if targetEnvironment(simulator)
+        app.launchArguments += ["-openstrudel.signedOut", "YES", "-openstrudel.deviceConnections", "()", "-openstrudel.selectedDevice", "current", "-openstrudel.language", "ru"]
+        #endif
         app.launch()
         let button = app.buttons["pasteInvitation"]
         XCTAssertTrue(button.waitForExistence(timeout: 15))

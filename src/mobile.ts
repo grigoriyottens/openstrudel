@@ -76,7 +76,8 @@ export class MobileAccess {
     const name = (JSON.parse(this.store.getSetting("home.state") ?? "null") as HomeState | null)?.name ?? defaultDeviceName();
     const host = this.options.hostname ?? (machine.endsWith(".local") ? machine : machine + ".local");
     const query = new URLSearchParams({ host, port: String(this.options.advertisedPort ?? this.port), name, key, pin: this.fingerprint, keyPin: this.keyFingerprint });
-    return { id: invitation.id, url: "openstrudel://connect?" + query, expiresAt: new Date(invitation.expires).toISOString() };
+    const url = "openstrudel://connect?" + query;
+    return { id: invitation.id, url, shareUrl: "https://waiwai.is/openstrudel/connect.html#" + encodeURIComponent(url), expiresAt: new Date(invitation.expires).toISOString() };
   }
 
   /** Ends one waiting link by its id. Without an id, ends the owner's own link, as older apps do when its sheet closes. */

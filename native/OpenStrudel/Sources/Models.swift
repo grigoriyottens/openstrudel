@@ -48,6 +48,7 @@ struct HomeHealth: Decodable {
     var agentAppearanceVersion: Int? = nil
     var deviceLogoutVersion: Int? = nil
     var turnControlVersion: Int? = nil
+    var speechVersion: Int? = nil
     var queueControlVersion: Int? = nil
     var employeeTimelineVersion: Int? = nil
     var employeeRenameKeepsInstructions: Int? = nil

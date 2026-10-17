@@ -4,6 +4,67 @@ import Testing
 
 @Suite(.serialized)
 @MainActor struct DeviceLibraryTests {
+    @Test func addingTwoAndRemovingTwoKeepsTheNewListAfterReopening() async throws {
+        let suite = "OpenStrudel.device-persistence." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        let credentials = MemoryConnectionCredentials()
+        var domains = [suite]
+        defer { for domain in domains { UserDefaults.standard.removePersistentDomain(forName: domain) } }
+        let factory: (String) -> HomeClient = { id in
+            let domain = suite + "." + id
+            if !domains.contains(domain) { domains.append(domain) }
+            return HomeClient(defaults: UserDefaults(suiteName: domain)!, connectionID: id,
+                credentialReader: { account, _ in credentials.read(account) },
+                credentialWriter: { account, value in credentials.write(account, value) })
+        }
+        for id in ["old-a", "old-b", "new-a", "new-b"] {
+            let saved = HomeConnection(url: "https://\(id).example:7789", token: "fixture-\(id)", pin: String(repeating: "b", count: 64), name: id)
+            credentials.write(id + ".home-connection", String(decoding: try JSONEncoder().encode(saved), as: UTF8.self))
+        }
+        defaults.set(["old-a", "old-b"], forKey: "openstrudel.deviceConnections")
+        let library = DeviceLibrary(defaults: defaults, clientFactory: factory)
+        let old = library.clients
+        library.add(factory("new-a")); library.add(factory("new-b"))
+        await library.removeConnection(old[0]); await library.removeConnection(old[1])
+        #expect(library.visibleClients.map(\.id) == ["new-a", "new-b"])
+        let reopened = DeviceLibrary(defaults: defaults, clientFactory: factory)
+        #expect(reopened.visibleClients.map(\.id) == ["new-a", "new-b"])
+        #expect(reopened.active.id == "new-b")
+        #expect(reopened.clients.allSatisfy { $0.hasToken && !$0.connectionNeedsPairing })
+        #expect(credentials.read("old-a.home-connection") == nil)
+        #expect(credentials.read("new-a.home-connection") != nil)
+    }
+
+    @Test func removalPersistsBeforeSlowLogoutAndCannotRemoveAReplacement() async throws {
+        let suite = "OpenStrudel.pending-logout." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("http://127.0.0.1:57091", forKey: "openstrudel.homeURL")
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [DelayedLogoutProtocol.self]
+        let transport = URLSession(configuration: config)
+        defer { DelayedLogoutProtocol.release = true; transport.invalidateAndCancel() }
+        DelayedLogoutProtocol.started = false; DelayedLogoutProtocol.release = false
+        let first = HomeClient(defaults: defaults, session: transport, connectionID: suite + "-old",
+            credentialReader: { account, _ in account.hasSuffix("home-api-token") ? "fixture" : nil }, credentialWriter: { _, _ in })
+        // Keep the injected transport, but exercise a paired remote logout.
+        first.baseURLString = "https://logout.example:7789"
+        await first.load(quiet: true)
+        #expect(first.health?.deviceLogoutVersion == 1)
+        let replacement = HomeClient(defaults: defaults, connectionID: suite + "-new", credentialReader: { _, _ in nil }, credentialWriter: { _, _ in })
+        let library = DeviceLibrary(defaults: defaults, clients: [first, replacement])
+        defaults.set([first.id, replacement.id], forKey: "openstrudel.deviceConnections")
+        let removal = Task { await library.removeConnection(first) }
+        for _ in 0..<200 where !DelayedLogoutProtocol.started { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(DelayedLogoutProtocol.started)
+        #expect(defaults.stringArray(forKey: "openstrudel.deviceConnections") == [replacement.id])
+        #expect(library.clients.first === replacement)
+        DelayedLogoutProtocol.release = true
+        await removal.value
+        #expect(library.clients.first === replacement && !replacement.isSignedOut)
+        #expect(defaults.stringArray(forKey: "openstrudel.deviceConnections") == [replacement.id])
+    }
+
     @Test func collapsedDevicesPersistAndCreatingAnEmployeeRevealsItsDevice() throws {
         let suite = "OpenStrudel.collapsed-devices." + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: suite))
@@ -264,6 +325,41 @@ import Testing
         #expect(library.visibleClients.count == 1)
         #expect(library.visibleClients.first === first)
     }
+}
+
+private final class MemoryConnectionCredentials: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String: String] = [:]
+    func read(_ account: String) -> String? { lock.withLock { values[account] } }
+    func write(_ account: String, _ value: String?) { lock.withLock { values[account] = value } }
+}
+
+private final class DelayedLogoutProtocol: URLProtocol, @unchecked Sendable {
+    @MainActor static var started = false
+    @MainActor static var release = false
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        Task { @MainActor in
+            if request.url?.path == "/auth/device/logout" {
+                Self.started = true
+                while !Self.release { try? await Task.sleep(for: .milliseconds(5)) }
+            }
+            guard let url = request.url, let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil) else { return }
+            let body: String
+            switch url.path {
+            case "/health": body = #"{"ok":true,"service":"openstrudel","deviceLogoutVersion":1}"#
+            case "/v1/profiles": body = #"{"profiles":[]}"#
+            case "/v1/account": body = #"{"account":{"connected":false}}"#
+            case "/v1/integrations": body = #"{"telegram":{"configured":false,"running":false,"linkedChats":[]}}"#
+            default: body = "{}"
+            }
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(body.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+    override func stopLoading() {}
 }
 
 private final class CredentialReadGate: @unchecked Sendable {

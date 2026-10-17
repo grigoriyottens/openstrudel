@@ -2,8 +2,8 @@ import SwiftUI
 import AVFoundation
 import CryptoKit
 
-/// One bounded recording on the viewing device. Audio stays local; a draft is
-/// retained if recognition fails or the user switches conversations.
+/// One bounded recording on the viewing device. Recognition follows the selected
+/// provider; the local draft survives a failure or a conversation switch.
 @MainActor final class VoiceCapture: ObservableObject {
     enum Phase { case idle, preparing, recording, transcribing, saved }
     @Published private(set) var phase: Phase = .idle
@@ -17,6 +17,8 @@ import CryptoKit
     private var file: URL?
     private var context = ""
     private var deliver: ((String, Bool) -> Void)?
+    private var recognizer: ((URL) async throws -> String)?
+    private var recognitionDetail = ""
     nonisolated static let maximumDuration: TimeInterval = 300
     static let maximumLevels = 64
 
@@ -37,7 +39,7 @@ import CryptoKit
         let id = generation
         work = Task {
             do {
-                guard DictationAssets.shared.state == .ready else { throw DictationFailure.modelNeeded }
+                guard recognizer != nil || DictationAssets.shared.state == .ready else { throw DictationFailure.modelNeeded }
                 guard await AVCaptureDevice.requestAccess(for: .audio) else {
                     throw VoiceFailure(L("Разрешите доступ к микрофону в настройках системы."))
                 }
@@ -81,11 +83,14 @@ import CryptoKit
     func finish(send: Bool) {
         guard phase == .recording || phase == .saved, let file else { return }
         stopRecorder()
-        phase = .transcribing; detail = L("Распознаём на устройстве…")
+        phase = .transcribing; detail = recognizer == nil ? L("Распознаём на устройстве…") : recognitionDetail
         let id = generation
+        let recognize = recognizer
         work = Task {
             do {
-                let result = try await ParakeetTranscriber.shared.transcribe(file: file)
+                let result: String
+                if let recognize { result = try await recognize(file) }
+                else { result = try await ParakeetTranscriber.shared.transcribe(file: file) }
                 try Task.checkCancellation()
                 guard id == generation else { return }
                 guard !result.isEmpty else { throw VoiceFailure(L("Не удалось разобрать речь. Попробуйте ещё раз или запишите новое сообщение.")) }
@@ -109,7 +114,14 @@ import CryptoKit
 
     func detach() {
         generation = UUID(); work?.cancel(); meter?.cancel(); stopRecorder()
-        deliver = nil; phase = .idle; detail = ""; levels = []
+        deliver = nil; recognizer = nil; phase = .idle; detail = ""; levels = []
+    }
+
+    /// Captured for this recording, never silently changes provider mid-flight.
+    func useRecognizer(_ action: ((URL) async throws -> String)?, detail: String = "") {
+        guard phase == .idle || phase == .saved else { return }
+        recognizer = action
+        recognitionDetail = detail.isEmpty ? L("Распознаём…") : detail
     }
 
     private func stopRecorder() {
@@ -139,6 +151,9 @@ private struct VoiceFailure: LocalizedError {
 struct DictationSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var assets = DictationAssets.shared
+    @EnvironmentObject private var client: HomeClient
+    @State private var settings: SpeechSettings?
+    @State private var editingSettings = false
     let record: () -> Void
 
     var body: some View {
@@ -175,12 +190,13 @@ struct DictationSetupView: View {
                 // On the Mac a single-page sheet carries its title in its content, on the text's edge.
                 Text(L("Dictation")).font(AppTypography.title)
                 #endif
-                Text(L("Speak naturally. Your language is recognized automatically, on this device."))
+                Text(L("Надиктуйте сообщение, проверьте текст и отправьте."))
                     .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
-                Text(L("25 languages, including English, Russian, French and Spanish. Hebrew is not supported."))
-                    .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
             }
-            DictationModelStatus()
+            if client.health?.speechVersion == 1 {
+                SpeechSettingsView(compact: true, onEditingChange: { editingSettings = $0 }, onLoad: { settings = $0 })
+            }
+            if !editingSettings && settings?.provider != "elevenlabs" { DictationModelStatus() }
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(24)
@@ -188,13 +204,14 @@ struct DictationSetupView: View {
 
     /// One button whose title and action follow the model.
     private var primaryAction: some View {
-        let needsModel = assets.state == .available || assets.state == .failed
+        let cloud = settings?.provider == "elevenlabs" && settings?.connected == true
+        let needsModel = !cloud && (assets.state == .available || assets.state == .failed)
         return Button(needsModel ? L("Download model") : L("Start dictating")) {
             if needsModel { assets.download(); return }
             UserDefaults.standard.set(true, forKey: "openstrudel.dictationIntroduced")
             dismiss(); record()
         }
-        .disabled(!needsModel && assets.state != .ready)
+        .disabled(editingSettings || (client.health?.speechVersion == 1 && settings == nil) || (!cloud && !needsModel && assets.state != .ready))
         .accessibilityIdentifier(needsModel ? "downloadDictationModel" : "startLocalDictation")
     }
 }

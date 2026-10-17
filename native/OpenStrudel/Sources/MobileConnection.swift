@@ -51,10 +51,19 @@ struct MobileInvitation: Decodable {
     let url: URL
     let expiresAt: String
 
+    /// HTTPS is recognized by Camera, Telegram and browsers. The one-use key
+    /// stays in the fragment, so neither the website nor its logs receives it.
+    var shareURL: URL {
+        guard url.scheme == "openstrudel" else { return url }
+        var link = URLComponents(string: "https://waiwai.is/openstrudel/connect.html")!
+        link.percentEncodedFragment = url.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
+        return link.url!
+    }
+
     func remainingSeconds(at date: Date) -> Int {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let expiry = formatter.date(from: expiresAt) else { return 0 }
+        guard let expiry = formatter.date(from: expiresAt) ?? ISO8601DateFormatter().date(from: expiresAt) else { return 0 }
         return max(0, Int(ceil(expiry.timeIntervalSince(date))))
     }
     /// A Mac invites with its ".local" name, which only its own network can reach.
@@ -96,7 +105,8 @@ struct MacPairing: Identifiable {
     let name: String
 
     init(url: URL) throws {
-        guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+        let invitation = try Self.invitationURL(from: url)
+        guard let parts = URLComponents(url: invitation, resolvingAgainstBaseURL: false),
               parts.scheme == "openstrudel", parts.host == "connect",
               parts.path.isEmpty, parts.fragment == nil, parts.user == nil,
               parts.password == nil, parts.port == nil else { throw HomeClientError.invalidURL }
@@ -120,6 +130,19 @@ struct MacPairing: Identifiable {
         let name = encodedName?.replacingOccurrences(of: "+", with: " ").removingPercentEncoding?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.name = deviceTitle(String((name.isEmpty ? host.replacingOccurrences(of: ".local", with: "") : name).prefix(80)))
+    }
+
+    private static func invitationURL(from url: URL) throws -> URL {
+        guard url.absoluteString.count <= 4096 else { throw HomeClientError.invalidURL }
+        if url.scheme == "openstrudel" { return url }
+        guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              parts.scheme == "https", parts.host == "waiwai.is",
+              parts.path == "/openstrudel/connect.html", parts.query == nil,
+              parts.user == nil, parts.password == nil, parts.port == nil || parts.port == 443,
+              let fragment = parts.percentEncodedFragment?.removingPercentEncoding,
+              let invitation = URL(string: fragment), invitation.scheme == "openstrudel"
+        else { throw HomeClientError.invalidURL }
+        return invitation
     }
 }
 

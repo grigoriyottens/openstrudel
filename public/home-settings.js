@@ -179,7 +179,7 @@ async function openHomeSettings() {
   const page=modalPage(t("Настройки"),t("Сотрудники и переписка находятся на этом устройстве."));
   languageField(page,async()=>{await openHomeSettings();$('interface-language').focus();});
   const via=(label,fn)=>()=>{state.back={label:t("Настройки"),open:openHomeSettings,row:label};return fn();};
-  const entries=state.owner ? [[t("Устройства"),openDevices],[t("Настройки сотрудника"),openCurrentAgent],[t("Аккаунты и лимиты"),openAccounts],[t("Модель и скорость"),()=>openModelSettings()],[t("Резервная копия"),openSettings],['Telegram',openTelegramSettings]] : [[t("Аккаунты и лимиты"),openAccounts]];
+  const entries=state.owner ? [[t("Устройства"),openDevices],[t("Настройки сотрудника"),openCurrentAgent],[t("Аккаунты и лимиты"),openAccounts],[t("Модель и скорость"),()=>openModelSettings()],[t("Голос"),()=>openSpeechSettings()],[t("Резервная копия"),openSettings],['Telegram',openTelegramSettings]] : [[t("Аккаунты и лимиты"),openAccounts]];
   const list=group(page.content);
   for(const [label,fn] of entries) row(list,label,via(label,fn));
   if(state.hostingOrigin) {
@@ -199,11 +199,18 @@ async function openDevices() {
     for(const device of data.devices) row(list,device.name,null,{detail:t("{0} · Сотрудников: {1}",device.online?t("На связи"):t("Не на связи"),device.agents)});
     if(control.operations?.length) { const moves=group(page.content); for(const operation of control.operations) row(moves,t("Проверить перенос сотрудника"),sub(()=>watchAgentMove(operation.id))); }
     if(state.owner) {
-      action(page,t("Открыть на другом устройстве"),async()=>{
-        const invite=await api('/v1/mobile/pairing',{method:'POST',body:JSON.stringify({owner:true})});
-        state.back=here; const next=modalPage(t("Подключение устройства"),t("На другом Mac откройте Настройки → Устройства → Подключить устройство и вставьте эту ссылку. Она действует сутки."));
-        const text=field(next.content,t("Личная ссылка подключения"),'password'); text.value=invite.url; text.readOnly=true;
-        action(next,t("Скопировать ссылку"),async()=>{await navigator.clipboard.writeText(invite.url);next.error.textContent=t("Ссылка скопирована. Продолжите на другом устройстве.");},true);
+      action(page,t("Поделиться доступом…"),async()=>{
+        state.back=here; const next=modalPage(t("Кому дать доступ?"),t("На своём устройстве вы сохраните все права. Коллега сможет работать с сотрудниками, но не управлять аккаунтами и доступом."));
+        const choices=group(next.content);
+        for(const [owner,title] of [[true,t("Моему устройству")],[false,t("Коллеге")]]) row(choices,title,async()=>{
+          try {
+            const invite=await api('/v1/mobile/pairing',{method:'POST',body:JSON.stringify({owner})});
+            const url=invite.shareUrl||'https://waiwai.is/openstrudel/connect.html#'+encodeURIComponent(invite.url);
+            next.content.replaceChildren(element('p',t("Ссылка действует сутки и подключает одно устройство.")));
+            const text=field(next.content,t("Ссылка подключения"),'password');text.value=url;text.readOnly=true;
+            action(next,t("Скопировать ссылку"),async()=>{await navigator.clipboard.writeText(url);next.error.textContent=t("Ссылка скопирована. Продолжите на другом устройстве.");},true);
+          } catch(e) { next.report(e); }
+        });
       },true);
     }
   } catch(e) { page.report(e); }
@@ -648,6 +655,42 @@ async function openModelSettings(agent, deviceId) {
     speeds(data.selection.serviceTier||data.defaults.serviceTier,true);model.disabled=!data.canManage;
     model.onchange=()=>{status.textContent='';speeds(!model.value&&agent?data.defaults.serviceTier:speed.value);};speed.onchange=reasoning.onchange=()=>{status.textContent='';update();};
   }catch(e){status.textContent='';page.report(e);action(page,t("Повторить"),()=>openModelSettings(agent,deviceId));}
+}
+
+async function openSpeechSettings(deviceId) {
+  const page=modalPage(t("Голос"),t("Для сотрудников и Telegram-бота на выбранном устройстве."));
+  try {
+    const control=await api('/v1/home');deviceId ||= control.home.nodeId;
+    if(control.devices.length>1) {
+      const label=element('label',t("Устройство")), device=element('select','','field');label.append(device);
+      for(const item of control.devices){const option=element('option',item.name);option.value=item.id;device.append(option);}
+      device.value=deviceId;device.onchange=()=>void openSpeechSettings(device.value);page.content.append(label);
+    }
+    const path='/v1/settings/speech?'+new URLSearchParams({deviceId});
+    const data=await api(path);
+    const providerLabel=element('label',t("Распознавание")), provider=element('select','','field');provider.id='speech-provider';providerLabel.append(provider);
+    for(const [value,title] of [['local',t("На устройстве")],['elevenlabs','ElevenLabs']]){const option=element('option',title);option.value=value;provider.append(option);}
+    provider.value=data.provider;provider.disabled=!data.canManage;page.content.append(providerLabel);
+    const cloud=element('div');page.content.append(cloud);
+    cloud.append(element('p',t("Аудио отправляется в ElevenLabs. Ключ хранится на устройстве сотрудника."),'hint'));
+    const keyLabel=element('label',data.connected?t("Новый ключ ElevenLabs"):t("API-ключ ElevenLabs")), key=element('input','','field');
+    key.type='password';key.autocomplete='new-password';key.id='speech-key';key.disabled=!data.canManage;keyLabel.append(key);cloud.append(keyLabel);
+    if(data.connected)cloud.append(element('p',t("ElevenLabs подключён"),'hint'));
+    let voice;
+    if(data.connected&&data.voices.length){
+      const label=element('label',t("Голос для озвучивания"));voice=element('select','','field');label.append(voice);voice.disabled=!data.canManage;
+      for(const item of data.voices){const option=element('option',item.name);option.value=item.id;voice.append(option);}
+      voice.value=data.voiceId;page.content.append(label,element('p',t("Сотрудник озвучит ответ, когда вы попросите. Используется ElevenLabs."),'hint'));
+    }
+    const local=element('p',t("На Mac используется OpenRamble, на сервере — встроенное распознавание. Аудио остаётся на устройстве."),'hint');page.content.append(local);
+    const save=action(page,t("Применить"),async()=>{
+      const body={provider:provider.value};if(key.value.trim())body.key=key.value.trim();if(voice&&voice.value!==data.voiceId)body.voiceId=voice.value;
+      await api(path,{method:'POST',body:JSON.stringify(body)});key.value='';await openSpeechSettings(deviceId);
+    },true);
+    const update=()=>{cloud.hidden=provider.value!=='elevenlabs';local.hidden=!cloud.hidden;save.disabled=!data.canManage||(provider.value==='elevenlabs'&&!data.connected&&!key.value.trim())||(provider.value===data.provider&&!key.value.trim()&&(!voice||voice.value===data.voiceId));};
+    provider.onchange=key.oninput=update;if(voice)voice.onchange=update;update();
+    if(data.connected&&data.canManage)action(page,t("Удалить ключ ElevenLabs"),async()=>{await api(path,{method:'POST',body:JSON.stringify({removeKey:true})});await openSpeechSettings(deviceId);},'destructive');
+  }catch(error){page.report(error);action(page,t("Повторить"),()=>openSpeechSettings(deviceId));}
 }
 
 async function openComputerSettings() {

@@ -108,6 +108,9 @@ struct OpenStrudelApp: App {
                 }
                 library.preparePairing(url)
             }
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                if let url = activity.webpageURL { library.preparePairing(url) }
+            }
             .environmentObject(client)
             .environmentObject(library)
     }

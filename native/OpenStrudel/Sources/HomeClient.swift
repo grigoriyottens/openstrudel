@@ -1679,6 +1679,14 @@ final class HomeClient: ObservableObject, Identifiable {
         try await management("/v1/providers/" + id + "/" + action + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: method)
     }
 
+    func transcribeRecording(_ file: URL) async throws -> String {
+        let data = try Data(contentsOf: file)
+        guard !data.isEmpty, data.count <= 20_000_000 else { throw HomeClientError.server(L("Для распознавания выберите аудио или видео до 20 МБ.")) }
+        struct Transcript: Decodable { let text: String }
+        let result: Transcript = try await management("/v1/speech/transcribe", method: "POST", payload: ["name": file.lastPathComponent, "contentBase64": data.base64EncodedString()])
+        return result.text
+    }
+
     func management<T: Decodable>(_ path: String, method: String = "GET", payload: [String: Any]? = nil) async throws -> T {
         try await request(path, method: method, body: payload.map { try JSONSerialization.data(withJSONObject: $0) })
     }
@@ -1734,7 +1742,7 @@ final class HomeClient: ObservableObject, Identifiable {
         request.httpBody = body
         // Codex can search, edit files and work for several minutes. Keep one
         // simple request path and let the native client wait for that turn.
-        request.timeoutInterval = path == "/health" ? 10 : path.hasPrefix("/v1/agents/archive") || path.hasPrefix("/v1/employee-transfer/") ? 300 : 60
+        request.timeoutInterval = path == "/health" ? 10 : path.hasPrefix("/v1/agents/archive") || path.hasPrefix("/v1/employee-transfer/") ? 300 : path.hasPrefix("/v1/speech/") ? 200 : 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let ifNoneMatch { request.setValue(ifNoneMatch, forHTTPHeaderField: "If-None-Match") }
         if method != "GET" { request.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key") }

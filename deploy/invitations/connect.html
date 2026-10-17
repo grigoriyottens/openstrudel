@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Подключиться — OpenStrudel</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100svh;display:grid;place-items:center;background:#faf9f7;color:#171717;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:32px}main{width:100%;max-width:540px}.brand{font-size:18px;letter-spacing:-.6px;margin:0 0 64px}h1{font-size:clamp(38px,8vw,62px);font-weight:450;letter-spacing:-2.5px;line-height:1.05;overflow-wrap:anywhere;margin:0 0 24px}p{color:#62605d;font-size:18px;line-height:1.5;margin:0 0 28px}.button{display:block;width:fit-content;background:#171717;color:white;border-radius:14px;text-decoration:none;padding:18px 26px;font-size:17px;font-weight:550}.download{margin:32px 0 0;font-size:15px}.download a{color:inherit;text-underline-offset:4px}a:focus-visible{outline:3px solid #777;outline-offset:6px}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<p class="brand">OpenStrudel</p>
+<h1 id="title">Подключиться к OpenStrudel</h1>
+<p id="status" role="status">Откройте приглашение на устройстве, которое хотите подключить.</p>
+<a class="button" id="open" hidden>Открыть OpenStrudel</a>
+<p class="download"><a href="https://waiwai.is/openstrudel">Установить OpenStrudel</a></p>
+<noscript>Для подключения включите JavaScript и откройте приглашение ещё раз.</noscript>
+</main>
+<script>
+const open = document.getElementById('open');
+const title = document.getElementById('title');
+const status = document.getElementById('status');
+function connect() {
+open.hidden = true;
+const fragment = location.hash.slice(1);
+history.replaceState(null, '', location.pathname);
+try {
+  const invitation = decodeURIComponent(fragment);
+  const url = new URL(invitation);
+  const query = url.searchParams;
+  const port = Number(query.get('port'));
+  const host = query.get('host') || '';
+  if (invitation.length > 4096 || url.protocol !== 'openstrudel:' || url.hostname !== 'connect' || url.port || url.username || url.password || url.pathname || url.hash || host.length > 253 || !host.split('.').every(part => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(part)) || !Number.isInteger(port) || port < 1 || port > 65535 || ['key', 'pin'].some(key => !/^[a-f0-9]{64}$/.test(query.get(key) || '')) || (query.has('keyPin') && !/^[a-f0-9]{64}$/.test(query.get('keyPin'))) || new Set(query.keys()).size !== [...query.keys()].length) throw new Error('Invalid invitation');
+  open.href = invitation;
+  open.hidden = false;
+  title.textContent = 'Подключиться к ' + (query.get('name') || 'OpenStrudel');
+  status.textContent = 'Приложение покажет, к какому устройству вы подключаетесь. Доступ появится после вашего подтверждения.';
+} catch {
+  title.textContent = 'Нужна ссылка-приглашение';
+  status.textContent = 'Попросите новую ссылку у того, кто пригласил вас.';
+}
+}
+addEventListener('hashchange', connect);
+connect();
+</script>
+</body>
+</html>

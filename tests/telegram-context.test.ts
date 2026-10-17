@@ -45,7 +45,7 @@ it("lets new groups answer unmentioned text and native voice while retaining con
   expect(store.db.prepare("SELECT context_only FROM messages WHERE external_id='-100:2'").get()?.context_only).toBe(0);
   const sent = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/sendMessage"))
     .map(([, init]) => JSON.parse(String(init!.body)).text);
-  expect(sent).toEqual(["51", "Привет"]);
+  expect(sent).toEqual(["51", '📝 Можешь ответить "Привет"?', "Привет"]);
   expect(store.listMessages(chat.conversationId!).some(message => message.text === "NO_REPLY")).toBe(false);
 });
 

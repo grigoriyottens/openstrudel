@@ -54,7 +54,8 @@ const engine: CodexEngine = {
   },
   async connect() { return { url: `${controlURL}/connect` }; },
 };
-const runtime = new OpenStrudelRuntime({ rootDirectory: directory, dbPath: ":memory:", engine, startTelegram: false });
+const runtime = new OpenStrudelRuntime({ rootDirectory: directory, dbPath: ":memory:", engine, startTelegram: false, mobilePort: 0 });
+Object.assign((runtime.api.mobile as any).options, { host: "127.0.0.1", hostname: "127.0.0.1" });
 runtime.account.read = async () => ({ connected: true, email: "preview@example.com", managed: true, planType: "plus" });
 runtime.account.startLogin = async () => {
   loginStarts++;

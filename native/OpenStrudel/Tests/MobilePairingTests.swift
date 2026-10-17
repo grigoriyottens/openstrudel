@@ -41,6 +41,44 @@ struct MobilePairingTests {
         #expect(try MacPairing(url: #require(URL(string: named))).name == "Mac mini + iPhone")
     }
 
+    @Test func cameraAndPastedWebLinksKeepCredentialsOutOfTheWebsiteRequest() throws {
+        let native = try #require(URL(string: invitation() + "&keyPin=" + pin))
+        let item = MobileInvitation(url: native, expiresAt: "2026-10-17T12:00:00Z")
+        let web = item.shareURL
+        let components = try #require(URLComponents(url: web, resolvingAgainstBaseURL: false))
+        #expect(components.scheme == "https")
+        #expect(components.host == "waiwai.is")
+        #expect(components.path == "/openstrudel/connect.html")
+        #expect(components.query == nil)
+        #expect(components.percentEncodedFragment?.removingPercentEncoding == native.absoluteString)
+        let pairing = try MacPairing(url: web)
+        #expect(pairing.host == "home.local" && pairing.key == key && pairing.pin == "spki:" + pin)
+        #expect(pairing.name == "My OpenStrudel")
+        // Deployed browser handoff links predate universal links and remain valid.
+        let legacy = try #require(URL(string: "https://waiwai.is/openstrudel/connect.html#" + invitation().addingPercentEncoding(withAllowedCharacters: .alphanumerics)!))
+        #expect(try MacPairing(url: legacy).pin == pin)
+        let start = try Date.ISO8601FormatStyle().parse("2026-10-17T11:59:00Z")
+        #expect(item.remainingSeconds(at: start) == 60)
+    }
+
+    @Test func webLinksOnlyAcceptTheExactInvitationEndpointAndNativePayload() throws {
+        let item = try MobileInvitation(url: #require(URL(string: invitation())), expiresAt: "2026-10-17T12:00:00Z")
+        let original = item.shareURL.absoluteString
+        for value in [
+            original.replacingOccurrences(of: "waiwai.is/", with: "waiwai.is.evil.example/"),
+            original.replacingOccurrences(of: "https:", with: "http:"),
+            original.replacingOccurrences(of: "waiwai.is/", with: "user@waiwai.is/"),
+            original.replacingOccurrences(of: "waiwai.is/", with: "waiwai.is:8080/"),
+            original.replacingOccurrences(of: "connect.html#", with: "connect.html?key=leak#"),
+            original.replacingOccurrences(of: "connect.html#", with: "other.html#"),
+            "https://waiwai.is/openstrudel/connect.html#https%3A%2F%2Fevil.example",
+            "https://waiwai.is/openstrudel/connect.html#openstrudel%3A%2F%2Foauth%3Fcode%3Dtest"
+        ] {
+            let url = try #require(URL(string: value))
+            #expect(throws: (any Error).self) { try MacPairing(url: url) }
+        }
+    }
+
     @Test func expirationCountdownStopsAtZero() throws {
         let item = try MobileInvitation(url: #require(URL(string: invitation())), expiresAt: "2026-09-30T12:05:00.000Z")
         let start = try Date.ISO8601FormatStyle().parse("2026-09-30T12:00:00Z")

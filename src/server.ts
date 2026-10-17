@@ -26,6 +26,7 @@ import { ownerTimezone, saveOwnerTimezone } from "./timezone.js";
 import { notificationDestination, receiveNotification } from "./notification-hook.js";
 import { SERVICE_SIGN_IN_SECONDS } from "./service-oauth.js";
 import type { ServiceSignIn } from "./types.js";
+import { MAX_SPEECH_BYTES, isSpeechFile, saveSpeechSettings, speechSettings, transcribeRecording } from "./speech.js";
 
 const MAX_BODY_BYTES = 1_048_576;
 
@@ -70,7 +71,7 @@ export class HttpApi {
     if (this.token) store.setSetting("home.local_client_hash", digest(this.token));
     this.homeLink = new HomeLink(this.home, async request => {
       if (!this.localURL) throw new HomeError("Устройство ещё запускается.", 503);
-      return homeRequest({ url: this.localURL }, request.path, this.token ?? "", request, 30_000, { "x-openstrudel-executor": this.executorKey, "x-openstrudel-owner": request.owner ? "1" : "0" });
+      return homeRequest({ url: this.localURL }, request.path, this.token ?? "", request, request.path.startsWith("/v1/speech/") ? 190_000 : 30_000, { "x-openstrudel-executor": this.executorKey, "x-openstrudel-owner": request.owner ? "1" : "0" });
     }, async () => {
       const deadline = Date.now() + 15_000;
       while (this.activeWrites) {
@@ -199,7 +200,7 @@ export class HttpApi {
       const canManageAccount = localExecution ? request.headers["x-openstrudel-owner"] === "1" : webSession ? webSession.owner : !paired || owner;
       if (path.startsWith("/v1/extensions") && request.method !== "GET" && !canManageAccount) throw new HomeError("Расширения подключает владелец устройства.",403);
       if (path.startsWith("/v1/connections/") && request.method !== "GET" && !canManageAccount) throw new HomeError("Сервисы подключает владелец устройства.",403);
-      if (["/v1/settings/approvals", "/v1/settings/models", "/v1/settings/timezone"].includes(path) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
+      if (["/v1/settings/approvals", "/v1/settings/models", "/v1/settings/timezone", "/v1/settings/speech"].includes(path) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
       if (!localExecution && request.method !== "GET" && path !== "/v1/home/transfer" && path !== "/v1/home/poll") {
         if (this.home.state.role === "primary" && this.store.getSetting("home.transfer")) throw new HomeError("Передаём управление. Изменения будут доступны после завершения.", 409);
         this.activeWrites++; counted = true;
@@ -272,6 +273,22 @@ export class HttpApi {
         }
         this.send(response,200,{models,providers:providerSummaries(this.store).filter(p=>p.connected),recommended:{...recommendedModel(models.filter(m=>m.provider === automatic)),provider:automatic},
           selection:readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,undefined,models),effective:resolveModelSelection(this.store,agent,models),canManage:canManageAccount}); return;
+      }
+      if (path === "/v1/settings/speech" && ["GET", "POST"].includes(request.method ?? "")) {
+        const settings = request.method === "POST" ? await saveSpeechSettings(this.store, await this.body(request)) : speechSettings(this.store);
+        this.send(response, 200, { ...settings, canManage: canManageAccount }); return;
+      }
+      if (path === "/v1/speech/transcribe" && request.method === "POST") {
+        const input = await this.body(request, Math.ceil(MAX_SPEECH_BYTES * 4 / 3) + 4096);
+        if (typeof input.name !== "string" || !isSpeechFile(input.name) || typeof input.contentBase64 !== "string") throw new HomeError("Выберите аудио или видео для распознавания.");
+        const controller = new AbortController();
+        const disconnected = () => { if (!response.writableEnded) controller.abort(); };
+        response.once("close", disconnected);
+        try {
+          const text = await transcribeRecording(this.store, Buffer.from(input.contentBase64, "base64"), input.name, controller.signal);
+          this.send(response, 200, { text });
+        } finally { response.off("close", disconnected); }
+        return;
       }
       if (path === "/v1/providers" && request.method === "GET") { this.send(response, 200, { providers: providerSummaries(this.store), canManage: canManageAccount }); return; }
       const providerAction = path.match(/^\/v1\/providers\/([^/]+)$/);
@@ -385,7 +402,7 @@ export class HttpApi {
         this.send(response,200,{timezone:ownerTimezone(this.store),configured:Boolean(this.store.getSetting('owner.timezone'))}); return;
       }
       if (request.method === "GET" && path === "/health") {
-        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, ownerInvitesVersion: 1, subscriptionsVersion: 1, telegramPrivateChoiceVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
+        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, speechVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, ownerInvitesVersion: 1, subscriptionsVersion: 1, telegramPrivateChoiceVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
         return;
       }
       if (request.method === "GET" && path === "/v1/integrations") {

@@ -295,8 +295,9 @@ final class ReleaseScenariosUITests: XCTestCase {
         app.buttons["settingsSection"].tap()
         app.buttons["Устройства"].tap()
         app.openFirstDeviceDetails()
-        let pair = app.buttons["Получить ссылку подключения"].firstMatch
+        let pair = app.buttons["shareDeviceAccess"].firstMatch
         try reveal(pair, in: app); pair.tap()
+        app.buttons["Моему устройству"].tap()
         XCTAssertTrue(app.staticTexts["Продолжите на другом устройстве"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Новая ссылка"].exists)
         capture("owner-qr-invitation", app)

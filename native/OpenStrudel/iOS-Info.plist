@@ -43,7 +43,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Connect to your Mac or server to open your assistants and conversations.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Record speech and transcribe it on this device.</string>
+	<string>Record speech and transcribe it with your chosen service.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

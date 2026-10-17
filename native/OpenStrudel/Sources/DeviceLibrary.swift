@@ -20,6 +20,7 @@ final class DeviceLibrary: ObservableObject {
     @Published private(set) var collapsedDeviceIDs: Set<String>
     var fileDrafts: [String: [PickedFile]] = [:]
     private let defaults: UserDefaults
+    private let clientFactory: (String) -> HomeClient
     let employeeMoves: EmployeeMoves
     private var observations: [AnyCancellable] = []
 
@@ -62,8 +63,10 @@ final class DeviceLibrary: ObservableObject {
         }
     }
 
-    init(defaults: UserDefaults = .standard, clients supplied: [HomeClient]? = nil) {
+    init(defaults: UserDefaults = .standard, clients supplied: [HomeClient]? = nil, clientFactory: ((String) -> HomeClient)? = nil) {
         self.defaults = defaults
+        let factory = clientFactory ?? { $0 == "current" ? HomeClient(defaults: defaults) : Self.makeClient(id: $0) }
+        self.clientFactory = factory
         collapsedDeviceIDs = Set(defaults.stringArray(forKey: "openstrudel.collapsedDevices") ?? [])
         employeeMoves = EmployeeMoves(defaults: defaults)
         hiddenEmployees = defaults.dictionary(forKey: "openstrudel.hiddenEmployees") as? [String: [String]] ?? [:]
@@ -71,7 +74,7 @@ final class DeviceLibrary: ObservableObject {
             clients = supplied
         } else {
             let ids = defaults.stringArray(forKey: "openstrudel.deviceConnections") ?? ["current"]
-            clients = (ids.isEmpty ? ["current"] : ids).map { $0 == "current" ? HomeClient(defaults: defaults) : Self.makeClient(id: $0) }
+            clients = (ids.isEmpty ? ["current"] : ids).map(factory)
         }
         selectedID = defaults.string(forKey: "openstrudel.selectedDevice") ?? clients[0].id
         observeClients()
@@ -150,7 +153,7 @@ final class DeviceLibrary: ObservableObject {
         catch { active.errorMessage = error.localizedDescription }
     }
 
-    func newConnection() -> HomeClient { Self.makeClient(id: UUID().uuidString.lowercased()) }
+    func newConnection() -> HomeClient { clientFactory(UUID().uuidString.lowercased()) }
 
     func connection(for pairing: MacPairing) -> HomeClient {
         clients.first { $0.savedBaseURL == pairing.baseURL } ?? newConnection()
@@ -206,7 +209,9 @@ final class DeviceLibrary: ObservableObject {
         if let move = employeeMoves.operation, !move.phase.finished, [move.sourceID, move.targetID].contains(client.id) {
             client.errorMessage = L("Завершите или отмените перенос сотрудника перед отключением устройства."); return
         }
-        await client.signOutOnThisDevice()
+        // Persist the user's choice before waiting for a remote logout. iOS
+        // can suspend us during that request, and a fresh invitation must not
+        // reuse the client whose old credential is being revoked.
         clients.removeAll { $0 === client }
         if clients.isEmpty {
             let empty = newConnection()
@@ -219,6 +224,7 @@ final class DeviceLibrary: ObservableObject {
         defaults.set(clients.map(\.id), forKey: "openstrudel.deviceConnections")
         defaults.set(selectedID, forKey: "openstrudel.selectedDevice")
         observeClients()
+        await client.signOutOnThisDevice()
     }
 
     private func visibilityKey(_ client: HomeClient) -> String {

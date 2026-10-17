@@ -275,8 +275,11 @@ private struct DevicesPane: View {
                 )) {
                     // An action that cannot run would look tappable in this list, so it appears only when it can.
                     if device.canRenameDevice {
-                        Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
-                            .accessibilityIdentifier("renameDevice")
+                        HStack {
+                            Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
+                                .accessibilityIdentifier("renameDevice")
+                            Spacer()
+                        }
                     }
                     if device.health != nil, device.health?.deviceRenameVersion != 1, device.canManageOpenAI || device.canManageConnections {
                         Text(L("Обновите OpenStrudel на этом устройстве, чтобы переименовать его."))
@@ -291,6 +294,16 @@ private struct DevicesPane: View {
                     } else {
                         MobilePairingSettings().environmentObject(device)
                     }
+                    HStack {
+                        Button(L("Убрать подключение…"), role: .destructive) { removing = device }
+                        .foregroundStyle(AppTheme.destructive)
+                        .accessibilityIdentifier("signOutThisDevice")
+                        .accessibilityLabel(L("Убрать подключение к «\(device.displayName)»"))
+                        .sheet(item: Binding(get: { removing === device ? removing : nil }, set: { removing = $0 })) { device in
+                            DeviceSignOutView { removing = nil }.environmentObject(device).environmentObject(library)
+                        }
+                        Spacer()
+                    }
                 } label: {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
@@ -300,24 +313,20 @@ private struct DevicesPane: View {
                     } icon: {
                         Image(systemName: device.deviceSymbol)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { expandedDeviceID = expandedDeviceID == device.id ? nil : device.id }
+                    .accessibilityIdentifier("deviceDetails")
                     .sheet(item: Binding(get: { renaming?.client === device ? renaming : nil }, set: { renaming = $0 })) { NameEditor(target: $0) }
                 }
-                .accessibilityIdentifier("deviceDetails")
                 .contextMenu {
                     Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
                         .disabled(!device.canRenameDevice)
                 }
-                Button(L("Убрать подключение…"), role: .destructive) { removing = device }
-                    .foregroundStyle(AppTheme.destructive)
-                    .accessibilityIdentifier("signOutThisDevice")
-                    .accessibilityLabel(L("Убрать подключение к «\(device.displayName)»"))
-                    .sheet(item: Binding(get: { removing === device ? removing : nil }, set: { removing = $0 })) { device in
-                        DeviceSignOutView { removing = nil }.environmentObject(device).environmentObject(library)
-                    }
             }
         }
         Section {
-            Button(L("Подключить устройство…")) { adding = .device }
+            Button(L("Добавить Mac или сервер…")) { adding = .device }
                 .accessibilityIdentifier("addDevice")
                 .sheet(item: $adding, onDismiss: {
                     if let pairing { confirmingPairing = pairing; self.pairing = nil }
@@ -358,6 +367,7 @@ private struct GeneralPane: View {
     @AppStorage("openstrudel.showMenuBar") private var showMenuBar = true
     #endif
     @State private var relaunch = false
+    @State private var cloudSpeech = false
 
     var body: some View {
         Section {
@@ -375,7 +385,13 @@ private struct GeneralPane: View {
             ModelSettingsView().environmentObject(selected)
         }.id("models-" + selected.id)
         ApprovalSettingsView().environmentObject(selected).id("approvals-" + selected.id)
-        DictationSection()
+        if selected.health?.speechVersion == 1 {
+            Section(L("Голос")) {
+                SpeechSettingsView(onLoad: { cloudSpeech = $0.provider == "elevenlabs" },
+                                   onProviderChange: { cloudSpeech = $0 == "elevenlabs" }).environmentObject(selected)
+            }.id("speech-" + selected.id)
+        }
+        if !cloudSpeech { DictationSection() }
         #if os(macOS)
         UpdatesSection()
         HostingStoreSettings()
@@ -506,6 +522,7 @@ struct AddDeviceConfirmation: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(connected ? L("Готово") : L("Отмена")) { dismiss() }.disabled(busy)
+                        .accessibilityIdentifier("cancelMacPairing")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(connected ? L("Открыть сотрудников") : L("Подключить")) {

@@ -54,6 +54,10 @@ describe("iPhone pairing", () => {
       const port = runtime.api.mobile.port!;
       const first = await invite({ owner: false, label: "Юля" }), second = await invite({ owner: false });
       expect(first.id).not.toBe(second.id);
+      const shared = new URL(first.shareUrl);
+      expect(shared.origin + shared.pathname).toBe("https://waiwai.is/openstrudel/connect.html");
+      expect(shared.search).toBe("");
+      expect(decodeURIComponent(shared.hash.slice(1))).toBe(first.url);
       // Every waiting link is listed with its role and can be cancelled by its id.
       const waiting = await invite({ owner: true });
       expect((await local("/v1/mobile")).body.invitations.map((i: any) => i.role)).toEqual(["colleague", "colleague", "owner"]);

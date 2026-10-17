@@ -122,7 +122,7 @@ struct Sidebar: View {
                     NewEmployeeControl(beforeCreate: { query = "" }) {
                         Label(L("Новый сотрудник"), systemImage: "plus")
                     }
-                    Button(L("Подключить устройство…"), systemImage: "laptopcomputer.and.iphone") { addingDevice = true }
+                    Button(L("Добавить Mac или сервер…"), systemImage: "laptopcomputer.and.iphone") { addingDevice = true }
                         .accessibilityIdentifier("connectDevice")
                 } label: {
                     Label(L("Добавить"), systemImage: "plus")

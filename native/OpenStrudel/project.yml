@@ -30,6 +30,8 @@ targets:
       properties:
         keychain-access-groups:
           - $(AppIdentifierPrefix)$(PRODUCT_BUNDLE_IDENTIFIER)
+        com.apple.developer.associated-domains:
+          - applinks:waiwai.is
     info:
       path: iOS-Info.plist
       properties:
@@ -48,7 +50,7 @@ targets:
             CFBundleURLSchemes: [openstrudel]
         NSLocalNetworkUsageDescription: Connect to your Mac or server to open your assistants and conversations.
         NSCameraUsageDescription: Scan an OpenStrudel connection code to connect your devices.
-        NSMicrophoneUsageDescription: Record speech and transcribe it on this device.
+        NSMicrophoneUsageDescription: Record speech and transcribe it with your chosen service.
         NSAppTransportSecurity:
           # Self-hosted Homes use a certificate carried in the one-use invite.
           # PinnedHomeSession validates the exact host, port and certificate;
@@ -84,7 +86,7 @@ targets:
       ASSETCATALOG_COMPILER_APPICON_NAME: iOSAppIcon
       CODE_SIGN_STYLE: Manual
       CODE_SIGN_IDENTITY: Apple Development
-      PROVISIONING_PROFILE_SPECIFIER: OpenStrudel Development
+      PROVISIONING_PROFILE_SPECIFIER: OpenStrudel Development Links 20261017
       INFOPLIST_KEY_CFBundleDisplayName: OpenStrudel
       INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
       TARGETED_DEVICE_FAMILY: "1,2"
@@ -116,7 +118,7 @@ targets:
         CFBundleDisplayName: OpenStrudel
         SUFeedURL: https://waiwai.is/openstrudel/updates/appcast.xml
         NSLocalNetworkUsageDescription: Connect to your Mac or server to open your assistants and conversations.
-        NSMicrophoneUsageDescription: Record speech and transcribe it on this device.
+        NSMicrophoneUsageDescription: Record speech and transcribe it with your chosen service.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: is.openstrudel.team
             UTTypeDescription: OpenStrudel backup
@@ -176,6 +178,7 @@ targets:
       - path: Sources/AttachmentImport.swift
       - path: Sources/ComposerTextField.swift
       - path: Sources/VoiceCapture.swift
+      - path: Sources/SpeechSettingsView.swift
       - path: Sources/DictationAssets.swift
       - path: Sources/ParakeetModel.swift
       - path: Sources/ParakeetTranscriber.swift

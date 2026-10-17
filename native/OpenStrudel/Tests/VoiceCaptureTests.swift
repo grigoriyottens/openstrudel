@@ -4,6 +4,49 @@ import Testing
 
 @Suite("Voice drafts")
 @MainActor struct VoiceCaptureTests {
+    @Test func selectedRecognizerDeliversAnEditablePreviewAndRetainsFailedAudio() async throws {
+        let context = "speech-preview-" + UUID().uuidString
+        let file = VoiceCapture.draftURL(context: context)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("test recording".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let voice = VoiceCapture()
+        var delivered: String?, sent = false
+        voice.attach(context: context) { text, send in delivered = text; sent = send }
+        voice.useRecognizer { _ in throw URLError(.notConnectedToInternet) }
+        voice.finish(send: false)
+        for _ in 0..<100 where voice.phase == .transcribing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(voice.phase == .saved)
+        #expect(delivered == nil)
+        #expect(FileManager.default.fileExists(atPath: file.path))
+        voice.useRecognizer { url in #expect(url == file); return "Встреча завтра в 12" }
+        voice.finish(send: false)
+        for _ in 0..<100 where voice.phase == .transcribing { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(delivered == "Встреча завтра в 12")
+        #expect(!sent)
+        #expect(voice.phase == .idle)
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func switchingChatsDuringCloudRecognitionNeverDeliversIntoTheNewChat() async throws {
+        let context = "speech-switch-" + UUID().uuidString, file = VoiceCapture.draftURL(context: context)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("test recording".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let voice = VoiceCapture()
+        var resume: CheckedContinuation<String, Never>?
+        voice.attach(context: context) { _, _ in Issue.record("A detached recording must not be delivered") }
+        voice.useRecognizer { _ in await withCheckedContinuation { resume = $0 } }
+        voice.finish(send: true)
+        for _ in 0..<100 where resume == nil { try await Task.sleep(for: .milliseconds(5)) }
+        let continuation = try #require(resume)
+        voice.attach(context: context + "-new") { _, _ in Issue.record("The old recording must not cross audiences") }
+        continuation.resume(returning: "Old transcript")
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(voice.phase == .idle)
+        #expect(FileManager.default.fileExists(atPath: file.path))
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_LONG_FIXTURE"] != nil), .timeLimit(.minutes(3)))
     func recognizesFiveMinutesWithoutDroppingTheEnd() async throws {
         let path = try #require(ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_LONG_FIXTURE"])

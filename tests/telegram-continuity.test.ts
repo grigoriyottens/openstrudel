@@ -158,16 +158,52 @@ it("keeps group replies with its bound employee even when an old digest came fro
  expect(s.listConversations().filter(c=>c.externalId===`-100::employee::${baby.id}`)).toHaveLength(0);
  expect(s.getTelegramChat("-100")?.profileId).toBe(news.id);await m.close();
 });
-it.each(["voice", "video_note", "video"] as const)("transcribes %s before later text in the same chat",async(kind)=>{
+it.each(["voice", "audio", "video_note", "video", "document"] as const)("transcribes %s before later text in the same chat",async(kind)=>{
  const {a,run,m,s}=setup();let finish!:(v:string)=>void;
  s.bindTelegramChat("-100",s.createProfile({name:"Voice"}).id);
  a.transcribe=()=>new Promise(r=>{finish=r;});
  vi.stubGlobal("fetch",vi.fn(async(url:string)=>url.includes("/file/") ? new Response(new Uint8Array([1,2])) : Response.json({ok:true,result:url.endsWith("getFile")?{file_path:"voice/file.mp4",file_size:2}:{message_id:99}})));
- const first=a.processUpdate({update_id:3,message:{message_id:3,from:{id:7},chat:{id:-100,type:"group"},[kind]:{file_id:"voice",file_size:2}}});
+ const first=a.processUpdate({update_id:3,message:{message_id:3,from:{id:7},chat:{id:-100,type:"group"},[kind]:{file_id:"voice",file_size:2,...(kind==="document"?{file_name:"recording.m4a",mime_type:"audio/mp4"}:{})}}});
  await vi.waitFor(()=>expect(finish).toBeDefined());
  const second=a.processUpdate({update_id:4,message:{message_id:4,from:{id:7},chat:{id:-100,type:"group"},text:"Second"}});
  finish("First");await Promise.all([first,second]);
  expect(run.mock.calls.map(c=>c[0])).toEqual([expect.stringContaining("\n\nFirst"),expect.stringContaining("\n\nSecond")]);await m.close();
+});
+
+it("publishes the transcript before model work and still answers if its preview delivery is uncertain", async () => {
+ const {a,run,m,s}=setup();s.bindTelegramChat("-100",s.createProfile({name:"Voice"}).id);
+ a.transcribe=vi.fn(async()=>"Расшифровка записи");const events:string[]=[];
+ vi.stubGlobal("fetch",vi.fn(async(url:string,init:RequestInit)=>{
+   if(url.includes("/file/"))return new Response(new Uint8Array([1]));
+   if(url.endsWith("getFile"))return Response.json({ok:true,result:{file_path:"voice.ogg",file_size:1}});
+   const body=JSON.parse(String(init.body));events.push(body.text);
+   if(body.text.startsWith("📝"))throw new Error("Response lost after send");
+   return Response.json({ok:true,result:{message_id:99}});
+ }));
+ run.mockImplementation(async()=>{events.push("model started");return {threadId:"one",response:"Ответ",events:[]};});
+ const update={update_id:12,message:{message_id:12,from:{id:7},chat:{id:-100,type:"group"},voice:{file_id:"v",file_size:1}}};
+ await a.processUpdate(update);await a.processUpdate(update);
+ expect(events).toEqual(["📝 Расшифровка записи","model started","Ответ"]);
+ expect(a.transcribe).toHaveBeenCalledTimes(1);expect(run).toHaveBeenCalledTimes(1);
+ expect(s.listMessages(s.getTelegramChat("-100")!.conversationId!)[0]!.text).toBe("Расшифровка записи");
+ expect(s.getSetting("telegram.transcript.12")).toBeNull();await m.close();
+});
+
+it("keeps a context-only recording quiet and never previews into a changed audience", async()=>{
+ const {a,run,m,s}=setup();s.bindTelegramChat("-100",s.createProfile({name:"Voice"}).id);
+ s.setSetting("telegram.bot_username","core_bot");s.db.prepare("UPDATE telegram_chats SET replies='mentions'").run();
+ a.transcribe=vi.fn(async()=>"Слова для контекста");const sent:string[]=[];
+ vi.stubGlobal("fetch",vi.fn(async(url:string,init:RequestInit)=>{
+   if(url.includes("/file/"))return new Response(new Uint8Array([1]));
+   if(url.endsWith("getFile"))return Response.json({ok:true,result:{file_path:"voice.ogg",file_size:1}});
+   sent.push(JSON.parse(String(init.body)).text);return Response.json({ok:true,result:{message_id:99}});
+ }));
+ await a.processUpdate({update_id:13,message:{message_id:13,from:{id:7},chat:{id:-100,type:"group"},voice:{file_id:"v",file_size:1}}});
+ expect(sent).toEqual([]);expect(run).not.toHaveBeenCalled();
+ s.db.prepare("UPDATE telegram_chats SET replies='instructions'").run();
+ a.transcribe=async()=>{s.bindTelegramChat("-100",s.createProfile({name:"Changed"}).id);return "Private audio";};
+ await a.processUpdate({update_id:14,message:{message_id:14,from:{id:7},chat:{id:-100,type:"group"},voice:{file_id:"v2",file_size:1}}});
+ expect(sent).toEqual([]);expect(run).not.toHaveBeenCalled();await m.close();
 });
 
 it("delivers the bound employee's approval to its originating private chat", async () => {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -39,6 +39,38 @@ async function eventually(f: () => Promise<void> | void) {
 }
 
 describe("user-owned primary Home", () => {
+  it("relays speech settings without logging the key, transcribes on the selected Home and refuses member changes", async () => {
+    const actualFetch = fetch, secret = "test-elevenlabs-key-remote-only";
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input, init) => {
+      const url = String(input);
+      if (!url.startsWith("https://api.elevenlabs.io/")) return actualFetch(input, init);
+      expect(init.headers["xi-api-key"]).toBe(secret); calls.push(url);
+      return Response.json(url.endsWith("/voices") ? { voices: [{ voice_id: "test-voice", name: "Test voice" }] } : url.endsWith("/speech-to-text") ? { text: "From remote audio" } : []);
+    }));
+    try {
+      const primary = await node("Primary"), worker = await node("Speech Home");
+      await connect(primary, worker);
+      const logged: string[] = [], enqueue = primary.home.enqueue.bind(primary.home);
+      primary.home.enqueue = (nodeId, request, id) => { logged.push(Buffer.from(request.body ?? "", "base64").toString()); return enqueue(nodeId, request, id); };
+      const remote = "/v1/settings/speech?deviceId=" + worker.home.state.nodeId;
+      expect((await primary.api(remote, "POST", { provider: "elevenlabs", key: secret })).value).toMatchObject({ provider: "elevenlabs", connected: true, voiceId: "test-voice" });
+      expect(worker.runtime.store.getSetting("speech.elevenlabs.key")).toBe(secret);
+      expect(primary.runtime.store.getSetting("speech.elevenlabs.key")).toBeNull();
+      expect((await primary.api(remote)).value).not.toHaveProperty("key");
+      const transcript = await primary.api("/v1/speech/transcribe?deviceId=" + worker.home.state.nodeId, "POST", { name: "test.mp4", contentBase64: "AQID" });
+      expect(transcript).toEqual({ status: 200, value: { text: "From remote audio" } });
+      expect(calls.filter(p => p.endsWith("/speech-to-text"))).toHaveLength(1);
+      expect([...logged, JSON.stringify(primary.home.snapshot())].join("\n")).not.toContain(secret);
+      const member = await worker.runtime.api.homeLink.execute({ id: randomUUID(), request: { method: "POST", path: "/v1/settings/speech", owner: false, body: requestJSON({ removeKey: true }) } });
+      expect(member.status).toBe(403); expect(worker.runtime.store.getSetting("speech.elevenlabs.key")).toBe(secret);
+      await worker.runtime.api.homeLink.stop();
+      const late = { method: "POST", path: "/v1/settings/speech", owner: true, body: requestJSON({ key: secret }) };
+      await expect(primary.runtime.api.homeLink.call(worker.home.state.nodeId, late, undefined, 100)).rejects.toMatchObject({ status: 503 });
+      expect(primary.home.pending(worker.home.state.nodeId)).toEqual([]);
+      expect(logged.join("\n")).not.toContain(secret);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it("serves a bounded employee timeline through the primary Home while keeping ordinary message routes separate", async () => {
     const primary = await node("Primary"), worker = await node("Worker");
     const store = worker.runtime.store;

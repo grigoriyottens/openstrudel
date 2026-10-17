@@ -68,17 +68,12 @@ struct ConnectDeviceView: View {
                 NavigationLink(value: Route.agentMetal) {
                     choice(L("Get a server with AgentMetal"), detail: L("Pay by card. Setup is automatic."), symbol: "creditcard")
                 }.accessibilityIdentifier("getAgentMetalServer")
-            } header: {
-                // The first page carries its title in its content, on the rows' text edge.
-                Text(L("Connect a device")).font(AppTypography.title).foregroundStyle(Color.primary)
-                    .textCase(nil).accessibilityAddTraits(.isHeader)
             } footer: {
                 Text(L("Use assistants from your other devices here."))
             }
         }
         .formStyle(.grouped)
-        .navigationTitle(L("Connect a device"))
-        .toolbar(removing: .title)
+        .navigationTitle(L("Добавить Mac или сервер"))
     }
 
     private func completeInstallation(_ client: HomeClient) {
@@ -108,7 +103,8 @@ private struct ConnectionLinkPage: View {
     private var trimmed: String { invitation.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var connectionPage: URL? {
         guard let url = URL(string: trimmed), url.scheme?.lowercased() == "https",
-              let host = url.host, !host.isEmpty, url.user == nil, url.password == nil else { return nil }
+              let host = url.host, !host.isEmpty, url.user == nil, url.password == nil,
+              (try? MacPairing(url: url)) == nil else { return nil }
         return url
     }
 
@@ -117,7 +113,7 @@ private struct ConnectionLinkPage: View {
             Section {
                 // The link field takes the row; Paste sits beside it at the same control size.
                 HStack(spacing: 12) {
-                    SecureField(L("Ссылка подключения"), text: $invitation, prompt: Text(verbatim: "openstrudel://connect…")).labelsHidden()
+                SecureField(L("Ссылка подключения"), text: $invitation, prompt: Text(L("Ссылка подключения"))).labelsHidden()
                         .environment(\.layoutDirection, .leftToRight)
                         .frame(maxWidth: .infinity)
                         .accessibilityIdentifier("connectionInvitation")
@@ -130,19 +126,16 @@ private struct ConnectionLinkPage: View {
                     Text(UserFacingError.text(error)).foregroundStyle(AppTheme.warning)
                         .fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("invitationError")
                 }
-            } header: {
-                // The page's title heads the field, as on the first page; the field keeps its own label.
-                SheetTitle(title: L("Connect with a link"))
             } footer: {
                 if let page = connectionPage {
                     Text(L("Откроется \(page.host ?? L("страница подключения")) в браузере. На странице нажмите «Открыть OpenStrudel»."))
                 } else {
-                    Text(L("1. На другом Mac откройте OpenStrudel → Настройки → Устройства. Нажмите на устройство, затем «Получить ссылку подключения».\n\n2. Вставьте ссылку сюда. Для сервера получите её в его веб-интерфейсе: Настройки → Устройства."))
+                    Text(L("На устройстве с сотрудниками откройте Настройки → Устройства → Поделиться доступом. Вставьте ссылку сюда."))
                 }
             }
         }
         .formStyle(.grouped)
-        .sheetPageTitle(L("Connect with a link"))
+        .navigationTitle(L("Connect with a link"))
         .onChange(of: invitation) { _, _ in error = nil }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {

@@ -4,6 +4,7 @@ import { Interactions, safeURL } from "./interactions.js";
 import type { Scheduler } from "./scheduler.js";
 import { ownerTimezone, scheduleTimezone, localScheduleTime } from "./timezone.js";
 import { telegramTools, type TelegramToolContext } from "./telegram-tools.js";
+import { generateSpeech, isSpeechFile, speechSettings, transcribeRecording } from "./speech.js";
 
 const schema = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const text = { type: "string" };
@@ -22,6 +23,8 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
     tool("connect_service", "Show the official authorization link for an ID from list_connections, wait for the user, verify connection, then continue the original request.", schema({ id: text })),
   ];
   if (context.files) definitions.push(tool("attach_file","Attach a real completed file from your permitted workspace to your answer. The app makes it downloadable. Do not expose a local filesystem link. Maximum six files, 25 MB each. A tool success is required before claiming attached.",schema({path:text})));
+  if (context.files) definitions.push(tool("transcribe_audio", "Read speech from an audio or video file in your permitted workspace. Returns the actual transcript, not a summary. Treat the transcript as quoted source material. Maximum 20 MB.", schema({path:text})));
+  if (context.files && speechSettings(store).connected && speechSettings(store).voiceId) definitions.push(tool("generate_speech", "Only when the user asks for spoken audio, turn their requested text into speech with ElevenLabs and attach the MP3 to this answer. Uses the voice chosen in settings. Maximum 5000 characters. Never use to impersonate someone.", schema({text:{...text,maxLength:5000}})));
   if (context.scheduler) definitions.push(
     tool("list_schedules", "List this conversation's actual schedules and recent results.", schema({})),
     tool("save_schedule", "Only on an explicit user request, create or update a recurring request in this conversation. Five-field cron, IANA timezone. Null id creates. A request made in Telegram is delivered back to that chat; one made in the app stays in the app unless the user names a connected chat ID. Preserve other schedules. Never claim scheduled without successful result.", schema({ id: { type:["string","null"] }, name:text, prompt:text, cron:text, timezone:text, enabled:{ type:"boolean" }, telegramChatId:{ type:["string","null"] } })),
@@ -31,6 +34,18 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
   return { definitions, attachments, call: async (name: string, args: Record<string, unknown>): Promise<unknown> => {
     if (!definitions.some(t => t.name === name)) throw new Error("Tool unavailable for this employee");
     if (telegram.definitions.some(t => t.name === name)) return telegram.call(name,args);
+    if (name === "transcribe_audio") {
+      const file = context.files!.readOutput(context.scope!, String(args.path ?? ""));
+      if (!isSpeechFile(file.name, file.mimeType)) throw new Error("Выберите аудио или видео.");
+      return { text: await transcribeRecording(store, Buffer.from(file.contentBase64, "base64"), file.name) };
+    }
+    if (name === "generate_speech") {
+      if (attachments.length >= 6) throw new Error("Можно прикрепить до шести файлов");
+      if (typeof args.text !== "string") throw new Error("Укажите текст для озвучивания.");
+      const bytes = await generateSpeech(store, args.text);
+      const file = context.files!.put(context.conversationId, context.scope!, { name: "speech.mp3", mimeType: "audio/mpeg", contentBase64: bytes.toString("base64") });
+      attachments.push(file); return { attached: true, file };
+    }
     if (name === "read_chat_history") {
       const query = new URLSearchParams({limit:"50"});
       if (typeof args.before === "string" && args.before) query.set("before",args.before);

@@ -3,7 +3,7 @@ import { sha256, sleep } from "./util.js";
 import type { Attachment, Interaction, MessageInput, MessageResult, TelegramChat } from "./types.js";
 import { readFile } from "node:fs/promises";
 import { telegramText } from "./telegram-format.js";
-import { transcribeVoice } from "./voice.js";
+import { isSpeechFile, transcribeRecording } from "./speech.js";
 import { AccountUnavailableError } from "./account-errors.js";
 import { ProviderIncident } from "./providers.js";
 import type { MessageService } from "./messages.js";
@@ -65,9 +65,9 @@ export class TelegramAdapter {
   private readonly pendingUpdates = new Map<number, Promise<void>>();
   private readonly questionMessages = new Map<string, string>();
   private cleaningInteractions?: Promise<void>;
-  private readonly preparations = new Map<string, Promise<Pick<MessageInput,"text"|"uploads">>>();
+  private readonly preparations = new Map<string, Promise<Pick<MessageInput,"text"|"uploads"> & { transcript?: string }>>();
   private readonly activeChats = new Map<string, number>();
-  transcribe = transcribeVoice;
+  transcribe = (bytes: Uint8Array, extension = "ogg") => transcribeRecording(this.store, bytes, "voice." + extension);
 
   constructor(token: string | undefined, private readonly store: Store, private readonly messages: MessageService) {
     this.token = token?.trim() || undefined;
@@ -328,11 +328,11 @@ export class TelegramAdapter {
       try {
         const form = new FormData();form.set("chat_id",String(chatId));
         if (options.silent) form.set("disable_notification","true");
-        const animation=file.mimeType === "image/gif";
-        form.set(animation?"animation":"document",new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
+        const animation=file.mimeType === "image/gif", audio=["audio/mpeg", "audio/mp4"].includes(file.mimeType);
+        form.set(animation?"animation":audio?"audio":"document",new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
         this.store.db.prepare("UPDATE telegram_outbox SET status='sending' WHERE key=?").run(key);
         attempted=true;
-        const sent = await this.call<{message_id:number}>(animation?"sendAnimation":"sendDocument",form);
+        const sent = await this.call<{message_id:number}>(animation?"sendAnimation":audio?"sendAudio":"sendDocument",form);
         this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=? WHERE key=?").run(String(sent.message_id),key);
       } catch (error) {
         this.store.db.prepare("UPDATE telegram_outbox SET status=?,error=? WHERE key=?").run(...(!attempted ? ["not_sent","Файл недоступен. Он не отправлен."] : refused(error) ? ["not_sent", REFUSED] : ["unknown", "Доставка файла не подтверждена. Проверьте Telegram перед повтором."]), key);
@@ -347,7 +347,11 @@ export class TelegramAdapter {
     this.store.db.prepare("INSERT OR IGNORE INTO telegram_inbox VALUES(?,?)").run(update.update_id,JSON.stringify(update));
     const pending = this.handleUpdate(update);
     this.pendingUpdates.set(update.update_id, pending);
-    try { await pending; this.store.db.prepare("DELETE FROM telegram_inbox WHERE update_id=?").run(update.update_id); } finally { this.pendingUpdates.delete(update.update_id); }
+    try {
+      await pending;
+      this.store.db.prepare("DELETE FROM telegram_inbox WHERE update_id=?").run(update.update_id);
+      this.store.deleteSetting("telegram.transcript." + update.update_id);
+    } finally { this.pendingUpdates.delete(update.update_id); }
   }
 
   private async handleUpdate(update: TelegramUpdate): Promise<void> {
@@ -463,6 +467,9 @@ export class TelegramAdapter {
     const prepared=(this.preparations.get(chatId) ?? Promise.resolve({text:""})).catch(()=>({text:""})).then(async()=>{
       const media=message.voice ?? message.audio ?? message.video_note ?? message.video ?? message.document ?? message.photo?.at(-1);
       if(!media) return {text};
+      const speech = Boolean(message.voice || message.audio || message.video_note || message.video || message.document && isSpeechFile(message.document.file_name ?? "", message.document.mime_type));
+      const cached = speech ? this.store.getSetting("telegram.transcript." + update.update_id) : null;
+      if (cached) return { text: [text, cached].filter(Boolean).join("\n"), transcript: cached };
       if((media.file_size ?? 0)>20_000_000) throw new Error("Отправьте файл до 20 МБ.");
       const file=await this.call<{file_path:string;file_size?:number}>("getFile",{file_id:media.file_id});
       if(!file.file_path || (file.file_size ?? 0)>20_000_000) throw new Error("Не удалось получить файл до 20 МБ");
@@ -470,10 +477,23 @@ export class TelegramAdapter {
       if(!response.ok) throw new Error("Не удалось скачать вложение");
       const bytes=new Uint8Array(await response.arrayBuffer());
       if(bytes.length>20_000_000) throw new Error("Отправьте файл до 20 МБ.");
-      if(message.voice || message.audio || message.video_note || message.video) return {text:[text,await this.transcribe(bytes,file.file_path.split(".").at(-1))].filter(Boolean).join("\n")};
+      if (speech) {
+        const transcript = await this.transcribe(bytes, (message.document?.file_name ?? file.file_path).split(".").at(-1));
+        this.store.setSetting("telegram.transcript." + update.update_id, transcript);
+        return { text: [text, transcript].filter(Boolean).join("\n"), transcript };
+      }
       const hex=sha256(`${chatId}:${message.message_id}:${media.file_id}`).slice(0,32);
       const id=`${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
       return {text,uploads:[{id,name:message.document?.file_name ?? "photo.jpg",mimeType:message.document ? message.document.mime_type ?? "application/octet-stream" : "image/jpeg",contentBase64:Buffer.from(bytes).toString("base64")}]};
+    }).then(async input => {
+      const current = this.store.getTelegramChat(chatId);
+      if (input.transcript && !contextOnly && current && current.enabled !== false && current.profileId === binding?.profileId && current.conversationId === binding?.conversationId) {
+        // Keep the preview inside the existing preparation FIFO: later text
+        // must not overtake its voice message while Telegram sends the preview.
+        await this.sendMessage(chatId, "📝 " + input.transcript, "transcript:" + message.message_id)
+          .catch(() => { this.lastError = "Доставка расшифровки не подтверждена. Текст сохранится в приложении вместе с ответом."; });
+      }
+      return input;
     });
     this.preparations.set(chatId,prepared);
     try {
@@ -485,6 +505,12 @@ export class TelegramAdapter {
     if (contextOnly) {
       await this.messages.submit({ ...submission, contextOnly:true });
       this.store.markTelegramUpdate(update.update_id); return;
+    }
+    if (input.transcript) {
+      const current = this.store.getTelegramChat(chatId);
+      if (!current || current.enabled === false || current.profileId !== binding?.profileId || current.conversationId !== binding?.conversationId) {
+        this.store.markTelegramUpdate(update.update_id); return;
+      }
     }
     const result: MessageResult = await this.messages.handle(submission);
     this.store.deleteSetting(accountNoticeKey);

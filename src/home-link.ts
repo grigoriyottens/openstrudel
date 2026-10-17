@@ -5,7 +5,8 @@ import { validateSnapshot } from "./home-snapshot.js";
 import { AgentMoves } from "./agent-move.js";
 
 /** A provider key is relayed only while its device answers. It never waits in the command log, a backup or a transfer. */
-const carriesKey = (request: WireRequest) => request.method === "PUT" && request.path.startsWith("/v1/providers/");
+const carriesKey = (request: WireRequest) => request.method === "PUT" && request.path.startsWith("/v1/providers/")
+  || request.method === "POST" && /^\/v1\/settings\/speech(?:\?|$)/.test(request.path);
 const keyNotDelivered = "Устройство не подтвердило ключ. Проверьте, что оно на связи, и добавьте ключ ещё раз.";
 /** A Grok sign-in or sign-out runs only while its device answers; a late one would show a code nobody sees. */
 const signsIn = (request: WireRequest) => request.method !== "GET" && /^\/v1\/providers\/[^/?]+\/log(?:in|out)(?:[/?]|$)/.test(request.path);
@@ -35,6 +36,7 @@ export class HomeLink {
     }
     // A relayed key was lost with the restart, and a sign-in would start for nobody; neither is delivered later.
     home.store.db.prepare("UPDATE home_commands SET canceled=1 WHERE response IS NULL AND canceled=0 AND json_extract(request,'$.path') LIKE '/v1/providers/%' AND (json_extract(request,'$.method')='PUT' OR json_extract(request,'$.path') LIKE '/v1/providers/%/log%')").run();
+    home.store.db.prepare("UPDATE home_commands SET canceled=1 WHERE response IS NULL AND canceled=0 AND json_extract(request,'$.path') LIKE '/v1/settings/speech%' AND json_extract(request,'$.method')='POST'").run();
   }
   start() { if (!this.stopped) return; if (!this.initialized) { this.recoverPreparation(); this.initialized = true; } this.stopped = false; this.schedule(0); }
   async stop() { this.stopped = true; clearTimeout(this.timer); await this.polling; await Promise.allSettled(this.running.values()); }
@@ -154,7 +156,7 @@ export class HomeLink {
     return response;
   }
   /** Grok needs a moment to fetch its device code. */
-  async call(nodeId: string, request: WireRequest, id?: string, timeout = signsIn(request) ? 30_000 : 12_000): Promise<WireResponse> {
+  async call(nodeId: string, request: WireRequest, id?: string, timeout = request.path.startsWith("/v1/speech/") ? 190_000 : signsIn(request) || carriesKey(request) ? 30_000 : 12_000): Promise<WireResponse> {
     const key = carriesKey(request), signIn = signsIn(request);
     if ((key || signIn) && !this.home.nodes().find(n => n.id === nodeId)?.online) throw new HomeError(key ? keyNotDelivered : signInNotDelivered, 503);
     const commandId = this.home.enqueue(nodeId, key ? { ...request, body: undefined } : request, id);

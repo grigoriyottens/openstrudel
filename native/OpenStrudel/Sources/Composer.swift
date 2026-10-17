@@ -47,6 +47,7 @@ struct Composer: View {
     @State private var showPhotos = false
     @State private var photoSelection: [PhotosPickerItem] = []
     @State private var fileError: String?
+    @State private var dictationError: String?
     @State private var importTask: Task<Void, Never>?
     @State private var importID = UUID()
     @State private var importing = false
@@ -73,7 +74,7 @@ struct Composer: View {
             importProviders(providers); return true
         }
         // Sheets start from the system's direction, so they take the interface language again.
-        .sheet(isPresented: $showDictation) { DictationSetupView { voice.start() }.modifier(InterfaceLanguage()) }
+        .sheet(isPresented: $showDictation) { DictationSetupView { Task { await startDictation() } }.modifier(InterfaceLanguage()) }
         .sheet(item: $editingMessage) { message in QueuedMessageEditor(message: message).environmentObject(client).modifier(InterfaceLanguage()) }
         .photosPicker(isPresented: $showPhotos, selection: $photoSelection, maxSelectionCount: max(1, AttachmentImport.countLimit - files.count), matching: .images)
         .onChange(of: photoSelection) { _, selection in
@@ -117,6 +118,7 @@ struct Composer: View {
             #endif
         }
         .alert(L("Не удалось добавить файл"), isPresented: Binding(get: { fileError != nil }, set: { if !$0 { fileError = nil } })) { Button(L("Понятно"), role: .cancel) {} } message: { Text(fileError ?? "") }
+        .alert(L("Не удалось начать диктовку"), isPresented: Binding(get: { dictationError != nil }, set: { if !$0 { dictationError = nil } })) { Button(L("Понятно"), role: .cancel) {} } message: { Text(dictationError ?? "") }
     }
 
     private var composerContents: some View {
@@ -283,11 +285,7 @@ struct Composer: View {
             } else {
                 Button {
                     focused = true
-                    Task {
-                        await dictationAssets.check()
-                        if dictationAssets.state == .ready && UserDefaults.standard.bool(forKey: "openstrudel.dictationIntroduced") { voice.start() }
-                        else { showDictation = true }
-                    }
+                    Task { await startDictation() }
                 } label: { controlGlyph("mic") }
                     .buttonStyle(.borderless).accessibilityLabel(L("Голосовой ввод")).accessibilityIdentifier("voiceInput")
                 sendButton
@@ -319,6 +317,35 @@ struct Composer: View {
             focused = true
             if sendNow && client.isConfigured && !client.connectionNeedsPairing && client.openAIAccount?.connected != false { send(sendMode) }
         }
+        // A recovered draft resolves the selected Home's setting when retried.
+        // A fresh recording captures its provider below before the microphone starts.
+        voice.useRecognizer { file in
+            if client.health?.speechVersion == 1 {
+                let settings: SpeechSettings = try await client.management("/v1/settings/speech")
+                if settings.provider == "elevenlabs" { return try await client.transcribeRecording(file) }
+            }
+            return try await ParakeetTranscriber.shared.transcribe(file: file)
+        }
+    }
+
+    private func startDictation() async {
+        let context = contextID
+        do {
+            if client.health?.speechVersion == 1 {
+                let settings: SpeechSettings = try await client.management("/v1/settings/speech")
+                guard context == contextID else { return }
+                if settings.provider == "elevenlabs" {
+                    guard settings.connected else { showDictation = true; return }
+                    voice.useRecognizer({ file in try await client.transcribeRecording(file) }, detail: L("Распознаём в ElevenLabs…"))
+                    voice.start(); return
+                }
+            }
+            voice.useRecognizer(nil)
+            await dictationAssets.check()
+            guard context == contextID else { return }
+            if dictationAssets.state == .ready && UserDefaults.standard.bool(forKey: "openstrudel.dictationIntroduced") { voice.start() }
+            else { showDictation = true }
+        } catch { dictationError = UserFacingError.text(error.localizedDescription) }
     }
 
     private func importProviders(_ providers: [NSItemProvider]) {
