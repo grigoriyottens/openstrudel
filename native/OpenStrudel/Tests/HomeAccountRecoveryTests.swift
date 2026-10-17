@@ -4,6 +4,84 @@ import Testing
 
 @Suite(.serialized)
 @MainActor struct HomeAccountRecoveryTests {
+    @Test func voiceUploadKeepsTheConversationHostCapturedBeforeRecording() async throws {
+        let state = AccountFixtureState()
+        var uploadedQuery: String?
+        state.customResponse = { request in
+            guard request.url?.path == "/v1/speech/transcribe" else { return nil }
+            uploadedQuery = request.url?.query
+            let body = try! JSONSerialization.jsonObject(with: requestBody(request)) as! [String:Any]
+            #expect(body["name"] as? String == "voice.m4a")
+            #expect(body["contentBase64"] as? String == "AQID")
+            return (200, Data(#"{"text":"Проверенный текст"}"#.utf8))
+        }
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        await client.refreshConversation()
+        let scope = client.speechQuery
+        #expect(scope == "?conversationId=chat")
+        client.beginEmployee()
+        #expect(client.speechQuery != scope)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("voice.m4a")
+        try Data([1,2,3]).write(to: file)
+        let text = try await client.transcribeRecording(file, query: scope)
+        #expect(text == "Проверенный текст")
+        #expect(uploadedQuery == "conversationId=chat")
+    }
+
+    @Test func chatModelUsesItsProviderAccountAndRejectsAnOlderAccountReply() async throws {
+        let state = AccountFixtureState()
+        var provider = "chatgpt"
+        var accountQueries: [String] = []
+        state.customResponse = { request in
+            switch request.url?.path {
+            case "/health":
+                return (200, Data(#"{"ok":true,"service":"openstrudel","homeProtocol":1,"conversationModelsVersion":1}"#.utf8))
+            case "/v1/conversation":
+                var page = try! JSONSerialization.jsonObject(with: historyPage([], older: nil, newer: "m1")) as! [String: Any]
+                var chat = page["conversation"] as! [String: Any]
+                chat["effectiveModel"] = ["provider": provider, "model": provider == "chatgpt" ? "gpt-6-sol" : "claude-fable-5-1", "serviceTier": "default"]
+                page["conversation"] = chat
+                return (200, try! JSONSerialization.data(withJSONObject: page))
+            case "/v1/account":
+                accountQueries.append(request.url!.query ?? "")
+                return (200, try! JSONSerialization.data(withJSONObject: ["account": ["connected": provider != "chatgpt", "provider": provider, "providerName": provider == "chatgpt" ? "ChatGPT" : "Anthropic"], "canManage": true]))
+            default: return nil
+            }
+        }
+        let (client, session) = makeClient(state)
+        defer { session.invalidateAndCancel() }
+        await client.load()
+        #expect(client.conversationID == "chat")
+        #expect(client.conversationModel?.provider == "chatgpt")
+        #expect(client.openAIAccount?.connected == false)
+        #expect(accountQueries.allSatisfy { $0.contains("conversationId=chat") && !$0.contains("agentId=") })
+
+        // Capture the old account response before delaying its delivery. The new
+        // model stays in the same chat, so a connection/employee guard is insufficient.
+        AccountTestURLProtocol.setHandler { request in
+            let value = await MainActor.run { state.respond(request) }
+            if request.url?.path == "/v1/account", String(decoding: value.1, as: UTF8.self).contains("chatgpt") {
+                try? await Task.sleep(for: .milliseconds(150))
+            }
+            return value
+        }
+        let queriesBefore = accountQueries.count
+        let old = Task { await client.refreshOpenAIAccount() }
+        while accountQueries.count == queriesBefore { await Task.yield() }
+        provider = "anthropic"
+        await client.refreshConversation()
+        await client.refreshOpenAIAccount()
+        #expect(client.openAIAccount?.keyProviderName == "Anthropic")
+        #expect(client.openAIAccount?.connected == true)
+        await old.value
+        #expect(client.openAIAccount?.keyProviderName == "Anthropic")
+        #expect(client.openAIAccount?.connected == true)
+    }
+
     @Test func timezoneInitializationRetriesAfterFailureWithoutLosingOwnerAccess() async throws {
         let state = AccountFixtureState()
         var writes = 0

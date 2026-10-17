@@ -174,6 +174,12 @@ export class HomeApi {
     if (method === "GET" && !node.online) throw new HomeError(`«${node.name}» пока не на связи. Подключимся автоматически.`, 503);
     url.searchParams.delete("deviceId");
     if (body) delete body.deviceId;
+    // Older Homes ignore unknown query fields on device model settings. Send
+    // the scoped route so they return 404 instead of changing every employee.
+    if (path === "/v1/settings/models" && conversationId) {
+      url.pathname = "/v1/conversations/" + encodeURIComponent(String(conversationId)) + "/model";
+      url.searchParams.delete("conversationId");
+    }
     if (method === "PATCH" && agent && /^\/v1\/profiles\/[^/]+$/.test(path)) {
       // Homes before the name-only rename saved empty instructions when the field
       // was missing. Send the catalogue copy only as their fallback.

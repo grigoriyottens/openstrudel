@@ -74,7 +74,7 @@ struct Composer: View {
             importProviders(providers); return true
         }
         // Sheets start from the system's direction, so they take the interface language again.
-        .sheet(isPresented: $showDictation) { DictationSetupView { Task { await startDictation() } }.modifier(InterfaceLanguage()) }
+        .sheet(isPresented: $showDictation) { DictationSetupView(speechQuery: client.speechQuery) { Task { await startDictation() } }.modifier(InterfaceLanguage()) }
         .sheet(item: $editingMessage) { message in QueuedMessageEditor(message: message).environmentObject(client).modifier(InterfaceLanguage()) }
         .photosPicker(isPresented: $showPhotos, selection: $photoSelection, maxSelectionCount: max(1, AttachmentImport.countLimit - files.count), matching: .images)
         .onChange(of: photoSelection) { _, selection in
@@ -133,6 +133,15 @@ struct Composer: View {
                         .padding(.leading, ComposerMetrics.textEdge).padding(.trailing, ComposerMetrics.padding).padding(.top, 12)
                 }
                 inputRow.padding(ComposerMetrics.padding)
+                if client.health?.conversationModelsVersion == 1, !client.isEmployeeDraft, let conversationID = client.conversationID {
+                    HStack {
+                        Spacer(minLength: 0)
+                        ConversationModelControl(conversationID: conversationID)
+                            .id(conversationID)
+                    }
+                    .padding(.horizontal, ComposerMetrics.textEdge)
+                    .padding(.bottom, ComposerMetrics.padding)
+                }
             }
         }
     }
@@ -319,24 +328,25 @@ struct Composer: View {
         }
         // A recovered draft resolves the selected Home's setting when retried.
         // A fresh recording captures its provider below before the microphone starts.
+        let query = client.speechQuery
         voice.useRecognizer { file in
             if client.health?.speechVersion == 1 {
-                let settings: SpeechSettings = try await client.management("/v1/settings/speech")
-                if settings.provider == "elevenlabs" { return try await client.transcribeRecording(file) }
+                let settings: SpeechSettings = try await client.management("/v1/settings/speech" + query)
+                if settings.provider == "elevenlabs" { return try await client.transcribeRecording(file, query: query) }
             }
             return try await ParakeetTranscriber.shared.transcribe(file: file)
         }
     }
 
     private func startDictation() async {
-        let context = contextID
+        let context = contextID, query = client.speechQuery
         do {
             if client.health?.speechVersion == 1 {
-                let settings: SpeechSettings = try await client.management("/v1/settings/speech")
+                let settings: SpeechSettings = try await client.management("/v1/settings/speech" + query)
                 guard context == contextID else { return }
                 if settings.provider == "elevenlabs" {
                     guard settings.connected else { showDictation = true; return }
-                    voice.useRecognizer({ file in try await client.transcribeRecording(file) }, detail: L("Распознаём в ElevenLabs…"))
+                    voice.useRecognizer({ file in try await client.transcribeRecording(file, query: query) }, detail: L("Распознаём в ElevenLabs…"))
                     voice.start(); return
                 }
             }

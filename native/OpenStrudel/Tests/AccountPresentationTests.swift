@@ -2,6 +2,10 @@ import Foundation
 import Testing
 
 @Suite("Account identity") struct AccountPresentationTests {
+    @Test func newlyReportedProMaxPlanHasAHumanReadableName() throws {
+        let account = try JSONDecoder().decode(OpenAIAccount.self, from: Data(#"{"connected":true,"email":null,"planType":"promax","managed":true}"#.utf8))
+        #expect(account.planLabel == "ChatGPT Pro Max")
+    }
     @Test func accountNameIsConsistentAndEmailRemainsVisible() throws {
         let json = #"{"id":"work","name":"Studio","displayName":"Studio","account":{"connected":true,"email":"owner@example.com","planType":"plus","managed":true},"usage":{"checkedAt":"2026-10-13T00:00:00Z","windows":[]},"activeRuns":0,"loginPending":false}"#
         let account = try JSONDecoder().decode(ManagedCodexAccount.self, from: Data(json.utf8))

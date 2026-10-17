@@ -605,8 +605,8 @@ async function openModelSettings(agent, deviceId, conversationId) {
       device.onchange=()=>void openModelSettings(undefined,device.value);page.content.prepend(label);
       label.hidden=control.devices.length<2;
     }
-    const query=new URLSearchParams();if(conversationId)query.set('conversationId',conversationId);else if(agent)query.set('agentId',agent);if(deviceId)query.set('deviceId',deviceId);
-    const path='/v1/settings/models?'+query;
+    const query=new URLSearchParams();if(!conversationId&&agent)query.set('agentId',agent);if(deviceId)query.set('deviceId',deviceId);
+    const path=(conversationId?'/v1/conversations/'+encodeURIComponent(conversationId)+'/model':'/v1/settings/models')+'?'+query;
     const data=await api(path);status.textContent='';
     if(conversationId===state.conversationID) paintConversationModel(data);
     const modelLabel=element('label',t("Модель")), model=element('select','','field');model.id='model-choice';model.setAttribute('aria-label',t("Модель"));modelLabel.append(model);page.content.append(modelLabel);

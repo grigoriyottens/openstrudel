@@ -79,6 +79,7 @@
 		4A0104CC2C576E467EF78724 /* HostingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B99FD977A6DF945EF17152E /* HostingStore.swift */; };
 		4A762C4FFE602104033D53D8 /* ParakeetTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 303DDF0A98D7DC63FE0AC082 /* ParakeetTranscriber.swift */; };
 		4BBE0FBA7D96DAA5B6360783 /* OfflineDictationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08357FA8D528392355101259 /* OfflineDictationTests.swift */; };
+		4CA6BC98BDE36811CD8C7DB9 /* ConversationModelControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB44D63A2188D5AD8094E069 /* ConversationModelControl.swift */; };
 		4DB4F5AB41099807895716B3 /* MobileConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15270A8B1FADC16CBEE2AB86 /* MobileConnection.swift */; };
 		4E6B82BD6C972AB6EE32CAFE /* MessageContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9FCFCC5FBCE6D6D6D612458 /* MessageContent.swift */; };
 		4FB9729E59C1C87A7C17E8E4 /* DictationAssets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66CDD484876EBAD4367D26A0 /* DictationAssets.swift */; };
@@ -192,6 +193,7 @@
 		CB21A18C393157BE80B39A07 /* server-setup.sh in Resources */ = {isa = PBXBuildFile; fileRef = 0777C564FD073188D239E939 /* server-setup.sh */; };
 		CBD1A671A4CE5FD36D786CEB /* ParakeetModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A2D047BCE017BA5B3AE3827 /* ParakeetModel.swift */; };
 		CD75994175CD842296C958F9 /* HostingStoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCBC21712E63C28B07D8B114 /* HostingStoreView.swift */; };
+		CDBBF5A6BE8D7AA2CB10C67C /* ConversationModelControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB44D63A2188D5AD8094E069 /* ConversationModelControl.swift */; };
 		D24C4F8AD7FB5F62D4495C35 /* ChatClockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DA7A5FC9D1A46B7D5486153 /* ChatClockTests.swift */; };
 		D2B1B0617ED09760DD5C2BA4 /* DictationAssetsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08E6A923D429082A0E616493 /* DictationAssetsTests.swift */; };
 		D60AB99BD569C3F6E8F9D770 /* AgentMetalCloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B8E46F909140D82CDAC3536 /* AgentMetalCloud.swift */; };
@@ -327,6 +329,7 @@
 		A635A0DA48A1D907252A7BCB /* SetupViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupViews.swift; sourceTree = "<group>"; };
 		A6EBF07406C0F7BBD5F47800 /* AttachmentImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentImportTests.swift; sourceTree = "<group>"; };
 		AA60BC05AC5A3BB11BB30DF4 /* ParakeetRuntime */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ParakeetRuntime; path = ../Packages/ParakeetRuntime; sourceTree = SOURCE_ROOT; };
+		AB44D63A2188D5AD8094E069 /* ConversationModelControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationModelControl.swift; sourceTree = "<group>"; };
 		ACD91A75580ED25308693AB1 /* AgentAppearanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentAppearanceTests.swift; sourceTree = "<group>"; };
 		B097C78321B711C33AFCF4A4 /* ParakeetModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParakeetModelTests.swift; sourceTree = "<group>"; };
 		B0CBD021FD1A24305C3A9FC8 /* ModelSettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSettingsUITests.swift; sourceTree = "<group>"; };
@@ -437,6 +440,7 @@
 				F35580B8698D54DD1416DD25 /* ComposerTextField.swift */,
 				0D5BFE0BC5B186652ED8336B /* ComputerUseSettingsView.swift */,
 				BD7DB4FB17EFAAD759697818 /* ConnectDeviceView.swift */,
+				AB44D63A2188D5AD8094E069 /* ConversationModelControl.swift */,
 				72BB8D5B6A7142B466A1F45C /* ConversationView.swift */,
 				C89E66060821227C1F39AD78 /* DeviceLibrary.swift */,
 				72EEEC73D033EF5BC24DC309 /* DeviceSettingsView.swift */,
@@ -882,6 +886,7 @@
 				29226C16C0B45821737ED60A /* ComposerTextField.swift in Sources */,
 				BEE18A55BEC8FE37CAA7DBA9 /* ComputerUseSettingsView.swift in Sources */,
 				11F8A029839B77F1D31842CE /* ConnectDeviceView.swift in Sources */,
+				4CA6BC98BDE36811CD8C7DB9 /* ConversationModelControl.swift in Sources */,
 				2697D3BF257043AA8DE181AC /* ConversationView.swift in Sources */,
 				E57438BBC88134F35C3EA734 /* DeviceLibrary.swift in Sources */,
 				5FD6F6516DA25B7806FBE7A5 /* DeviceSettingsView.swift in Sources */,
@@ -952,6 +957,7 @@
 				C40940673F96131612347CEA /* ComposerTextField.swift in Sources */,
 				560FF57ABD82465699F6A934 /* ComputerUseSettingsView.swift in Sources */,
 				81CE9DB32E61957FA0825364 /* ConnectDeviceView.swift in Sources */,
+				CDBBF5A6BE8D7AA2CB10C67C /* ConversationModelControl.swift in Sources */,
 				05199F02199B2BC4E5C4E18C /* ConversationView.swift in Sources */,
 				BD536195DB95EA60861EF9AD /* DeviceLibrary.swift in Sources */,
 				AAE26D83AD3BF442576953F8 /* DeviceSettingsView.swift in Sources */,
@@ -1054,7 +1060,7 @@
 				CODE_SIGN_ENTITLEMENTS = iOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 48;
 				INFOPLIST_FILE = "iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = OpenStrudel;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -1095,7 +1101,7 @@
 				CODE_SIGN_ENTITLEMENTS = iOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 48;
 				INFOPLIST_FILE = "iOS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = OpenStrudel;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
@@ -1196,7 +1202,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 48;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = R4A779QVVY;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1294,7 +1300,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 48;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = R4A779QVVY;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

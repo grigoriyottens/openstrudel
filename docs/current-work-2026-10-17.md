@@ -259,3 +259,64 @@ iPhone Camera/microphone acceptance and inaccessible Homes remain separate gates
 
 Both finished native QA48 app processes were closed through their normal Quit
 action and verified absent. Production OpenStrudel and AiGid were untouched.
+
+## 17 October, 07:56 UTC — live conversation model acceptance
+
+- Main `ba4f1ad` is pushed. Wolf now runs its image after an isolated real-image
+  smoke, idle queue check, consistent backup, atomic source replacement and
+  exact-container restart. Health, Telegram, SQLite integrity and data counts
+  passed. Backup: `/root/openstrudel-upgrade-48-20261017T074933Z`.
+- Only the two-member QA chat temporarily selected GPT-6 Sol / Fast. A real
+  Telegram request without @mention (1679183) received the correct answer `215`
+  (1679184) six seconds later. The chat then returned to employee inheritance,
+  effective Astra / Ultra Fast, and the employee defaults were unchanged.
+  Receipt: `.data/voice-48/wolf-chat-model-live.json`.
+- ElevenLabs remains selected and connected after deployment. The live account
+  API now reports the authorized Pro Max plan. Model and speed availability
+  still comes from the actual Codex catalog, separately from the plan label.
+- Mini observation: 6.88 GiB free, normal memory pressure, 5,905 MiB swap used
+  (down from 7,089 MiB). No cleanup or new native build was started. AiGid still
+  owns the heavy-build and audio queue; native model acceptance is pending.
+
+
+## 17 October, native acceptance resumed
+
+- AiGid released the Mini build queue and restored its original audio settings.
+  Its archives, IPA, dSYM and QA evidence remain untouched.
+- Runtime regression suite: 573 passed, 2 packaged-app checks skipped pending
+  signed artifact. TypeScript and web JavaScript checks pass.
+- Native macOS: compiled successfully; all 336 tests pass. The catalogue test
+  now checks that the selected conversation was fetched rather than assuming
+  it must be the final request before the account refresh.
+- Native speech settings and transcription follow the conversation's actual
+  Home, including remote employees. The upload retains the host selected before
+  recording. Cross-Home runtime and native request tests pass.
+- Chat model writes use a scoped conversation endpoint. Relaying the legacy
+  query-style request also canonicalizes it; an older Home returns 404 rather
+  than accidentally changing device defaults. Regression was reproduced before
+  the fix and passed afterward. Web save/reload/inheritance passed via real UI.
+- The earlier real Telegram Sol response is independently confirmed by its
+  engine turn_context (gpt-6-sol, medium). Defaults were restored afterward.
+- iOS normal-size model persistence and device/employee inheritance passed.
+  Largest Dynamic Type exposed a real pairing problem: the primary “Open
+  assistants” toolbar action moved into overflow. Its iOS action now lives in
+  scrollable content. Acceptance continues; do not claim the large-text pass yet.
+- Build number is now 48; no build 48 has been published yet.
+
+## 17 October, 08:43 UTC — native UI accepted for build 48
+
+- All three iOS model UI scenarios passed, including maximum accessibility
+  text size, chat save/relaunch/cancel/inherit, and device/employee inheritance.
+  The pairing primary action now stays in scrollable iOS content. No physical
+  iPhone Camera or microphone result is implied by simulator coverage.
+  Evidence: `.data/voice-48/ios-models-v3.xcresult` and screenshots.
+- macOS Computer Use passed connection, model selection, and sending with the
+  selected Sol/Ultra Fast parameters against a disposable Home. Its engine is
+  synthetic; the independent real Telegram/engine evidence is recorded above.
+- Actual ElevenLabs recognition was also exercised through the native composer
+  using a recovered audio draft in that disposable Home. The transcript appeared
+  in the editable composer before sending; editing and sending then passed.
+  The proper noun was rendered as OpenStroodle, so this is not a perfect-accuracy
+  claim. Screenshot: `.data/voice-48/mac-elevenlabs-preview.png`.
+- Release macOS 48 compilation succeeded. Signed-package acceptance, deployment
+  and Apple processing are the next gates; no build 48 is public yet.

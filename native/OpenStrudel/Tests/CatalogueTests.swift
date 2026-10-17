@@ -186,8 +186,10 @@ import Testing
         #expect(client.employeeTelegramChats.isEmpty) // Root and specialist audiences remain separate.
         await client.selectProfile("employee")
         #expect(client.employeeTelegramChats.map(\.title) == ["Team"])
+        let previousRequests = fixture.requests.count
         await client.selectChat("group-chat")
-        #expect(fixture.requests.last?.url?.path == "/v1/conversations/group-chat")
+        #expect(fixture.requests.dropFirst(previousRequests).contains { $0.url?.path == "/v1/conversations/group-chat" })
+        #expect(client.selectedChatID == "group-chat")
         await client.selectProfile(nil)
         #expect(client.selectedChatID == nil)
         await client.selectProfile("employee")

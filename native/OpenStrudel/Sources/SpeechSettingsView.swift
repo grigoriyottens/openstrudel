@@ -13,6 +13,7 @@ struct SpeechSettings: Decodable {
 struct SpeechSettingsView: View {
     @EnvironmentObject private var client: HomeClient
     var compact = false
+    var query = ""
     var onEditingChange: (Bool) -> Void = { _ in }
     var onLoad: (SpeechSettings) -> Void = { _ in }
     var onProviderChange: (String) -> Void = { _ in }
@@ -67,7 +68,7 @@ struct SpeechSettingsView: View {
                 if settings == nil { Button(L("Повторить")) { Task { await load() } } }
             }
         }
-        .task(id: client.id) { await load() }
+        .task(id: client.id + query) { await load() }
         .onChange(of: changed) { _, value in onEditingChange(value) }
         .onChange(of: provider) { _, value in onProviderChange(value) }
     }
@@ -76,7 +77,7 @@ struct SpeechSettingsView: View {
         settings = value; provider = value.provider; voiceId = value.voiceId ?? ""; key = ""; error = nil; onLoad(value)
     }
     private func load() async {
-        do { apply(try await client.management("/v1/settings/speech")) }
+        do { apply(try await client.management("/v1/settings/speech" + query)) }
         catch { self.error = UserFacingError.text(error.localizedDescription) }
     }
     private func save(removeKey: Bool = false) async {
@@ -86,7 +87,7 @@ struct SpeechSettingsView: View {
             if !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { payload["key"] = key.trimmingCharacters(in: .whitespacesAndNewlines) }
             if voiceId != settings?.voiceId && !voiceId.isEmpty { payload["voiceId"] = voiceId }
         }
-        do { apply(try await client.management("/v1/settings/speech", method: "POST", payload: payload)) }
+        do { apply(try await client.management("/v1/settings/speech" + query, method: "POST", payload: payload)) }
         catch { self.error = UserFacingError.text(error.localizedDescription) }
     }
 }

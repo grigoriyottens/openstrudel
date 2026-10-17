@@ -154,6 +154,7 @@ struct DictationSetupView: View {
     @EnvironmentObject private var client: HomeClient
     @State private var settings: SpeechSettings?
     @State private var editingSettings = false
+    var speechQuery = ""
     let record: () -> Void
 
     var body: some View {
@@ -194,7 +195,7 @@ struct DictationSetupView: View {
                     .font(AppTypography.interface).foregroundStyle(AppTheme.secondaryText)
             }
             if client.health?.speechVersion == 1 {
-                SpeechSettingsView(compact: true, onEditingChange: { editingSettings = $0 }, onLoad: { settings = $0 })
+                SpeechSettingsView(compact: true, query: speechQuery, onEditingChange: { editingSettings = $0 }, onLoad: { settings = $0 })
             }
             if !editingSettings && settings?.provider != "elevenlabs" { DictationModelStatus() }
         }

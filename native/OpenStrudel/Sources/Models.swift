@@ -49,6 +49,7 @@ struct HomeHealth: Decodable {
     var deviceLogoutVersion: Int? = nil
     var turnControlVersion: Int? = nil
     var speechVersion: Int? = nil
+    var conversationModelsVersion: Int? = nil
     var queueControlVersion: Int? = nil
     var employeeTimelineVersion: Int? = nil
     var employeeRenameKeepsInstructions: Int? = nil
@@ -63,6 +64,7 @@ struct HomeHealth: Decodable {
 }
 
 struct HomeConversation: Decodable {
+    var effectiveModel: ModelSelection? = nil
     let id: String
     let channel: String
     let externalId: String?
@@ -454,7 +456,7 @@ struct ProviderKeyEntry {
     var ready: Bool { !busy && !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 }
 
-struct ModelSelection: Codable, Equatable {
+struct ModelSelection: Codable, Hashable {
     /// Nil from older Homes, and with a nil model: as on the device, or automatic for the device itself.
     var provider: String? = nil
     let model: String?
@@ -559,6 +561,7 @@ struct OpenAIAccount: Decodable, Equatable {
         switch planType?.lowercased() {
         case "plus": return "ChatGPT Plus"
         case "pro": return "ChatGPT Pro"
+        case "promax": return "ChatGPT Pro Max"
         case "prolite": return "ChatGPT Pro Lite"
         case "go": return "ChatGPT Go"
         case "team", "business", "self_serve_business_prolite", "self_serve_business_usage_based": return "ChatGPT Business"
@@ -570,7 +573,7 @@ struct OpenAIAccount: Decodable, Equatable {
     }
     var isWorkspace: Bool? {
         switch planType?.lowercased() {
-        case "free", "go", "plus", "pro", "prolite": false
+        case "free", "go", "plus", "pro", "prolite", "promax": false
         case "team", "business", "self_serve_business_prolite", "self_serve_business_usage_based",
              "enterprise", "ent26", "enterprise_cbp_automation", "enterprise_cbp_usage_based", "edu", "edu_plus", "edu_pro": true
         default: nil

@@ -50,7 +50,10 @@ describe("user-owned primary Home", () => {
     }));
     try {
       const primary = await node("Primary"), worker = await node("Speech Home");
+      const employee = worker.runtime.store.createProfile({name:"Remote dictation"});
+      const conversation = worker.runtime.store.profileConversation(employee.id);
       await connect(primary, worker);
+      await eventually(() => expect(primary.home.nodeFor("conversation", conversation.id)).toBe(worker.home.state.nodeId));
       const logged: string[] = [], enqueue = primary.home.enqueue.bind(primary.home);
       primary.home.enqueue = (nodeId, request, id) => { logged.push(Buffer.from(request.body ?? "", "base64").toString()); return enqueue(nodeId, request, id); };
       const remote = "/v1/settings/speech?deviceId=" + worker.home.state.nodeId;
@@ -58,7 +61,9 @@ describe("user-owned primary Home", () => {
       expect(worker.runtime.store.getSetting("speech.elevenlabs.key")).toBe(secret);
       expect(primary.runtime.store.getSetting("speech.elevenlabs.key")).toBeNull();
       expect((await primary.api(remote)).value).not.toHaveProperty("key");
-      const transcript = await primary.api("/v1/speech/transcribe?deviceId=" + worker.home.state.nodeId, "POST", { name: "test.mp4", contentBase64: "AQID" });
+      const settings = await primary.api("/v1/settings/speech?conversationId=" + conversation.id);
+      expect(settings.value).toMatchObject({provider:"elevenlabs",connected:true});
+      const transcript = await primary.api("/v1/speech/transcribe?conversationId=" + conversation.id, "POST", { name: "test.mp4", contentBase64: "AQID" });
       expect(transcript).toEqual({ status: 200, value: { text: "From remote audio" } });
       expect(calls.filter(p => p.endsWith("/speech-to-text"))).toHaveLength(1);
       expect([...logged, JSON.stringify(primary.home.snapshot())].join("\n")).not.toContain(secret);
@@ -218,6 +223,27 @@ describe("user-owned primary Home", () => {
     expect((await laptop.api("/v1/account?conversationId="+chat.id)).status).toBe(200);
     expect(status).toHaveBeenCalledWith(profile.id,false,chat.id);
   }, 15000);
+  it("never turns a chat model change into device defaults on an older Home", async () => {
+    const primary = await node("Current Home"), old = await node("Older Home");
+    const profile = old.runtime.store.createProfile({name:"Legacy employee"});
+    const chat = old.runtime.store.profileConversation(profile.id);
+    old.runtime.engine.models = async () => [{id:"model",name:"Model",description:"",isDefault:true,provider:"chatgpt",speeds:[{id:"default",name:"Обычная",description:""}]}];
+    const dispatch = (old.runtime.api.homeLink as any).dispatch.bind(old.runtime.api.homeLink);
+    const requests: string[] = [];
+    vi.spyOn(old.runtime.api.homeLink as any,"dispatch").mockImplementation((request: WireRequest) => {
+      requests.push(request.path);
+      if (request.path.startsWith("/v1/conversations/")) return Promise.resolve(wireJSON({error:"not_found"},404));
+      // Build 47 knows device/employee models only and ignores conversationId.
+      if (request.path.startsWith("/v1/settings/models")) request = {...request,path:"/v1/settings/models"};
+      return dispatch(request);
+    });
+    await connect(primary,old);
+    await eventually(() => expect(primary.home.nodeFor("conversation",chat.id)).toBe(old.home.state.nodeId));
+    const result = await primary.api("/v1/settings/models?conversationId="+chat.id,"POST",{model:"model",serviceTier:"default"});
+    expect(result.status).toBe(404);
+    expect(old.runtime.store.getSetting("models.defaults")).toBeNull();
+    expect(requests).toContain("/v1/conversations/"+chat.id+"/model");
+  });
   it("keeps an API key on the device it is added to, with owner-only writes", async () => {
     const provider = createServer((request, response) => response.writeHead(request.headers.authorization === "Bearer xai-remote" ? 200 : 401).end("{}"));
     await new Promise<void>(done => provider.listen(0, "127.0.0.1", done));

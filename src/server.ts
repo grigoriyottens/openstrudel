@@ -200,7 +200,7 @@ export class HttpApi {
       const canManageAccount = localExecution ? request.headers["x-openstrudel-owner"] === "1" : webSession ? webSession.owner : !paired || owner;
       if (path.startsWith("/v1/extensions") && request.method !== "GET" && !canManageAccount) throw new HomeError("Расширения подключает владелец устройства.",403);
       if (path.startsWith("/v1/connections/") && request.method !== "GET" && !canManageAccount) throw new HomeError("Сервисы подключает владелец устройства.",403);
-      if (["/v1/settings/approvals", "/v1/settings/models", "/v1/settings/timezone", "/v1/settings/speech"].includes(path) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
+      if ((["/v1/settings/approvals", "/v1/settings/models", "/v1/settings/timezone", "/v1/settings/speech"].includes(path) || /^\/v1\/conversations\/[^/]+\/model$/.test(path)) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
       if (!localExecution && request.method !== "GET" && path !== "/v1/home/transfer" && path !== "/v1/home/poll") {
         if (this.home.state.role === "primary" && this.store.getSetting("home.transfer")) throw new HomeError("Передаём управление. Изменения будут доступны после завершения.", 409);
         this.activeWrites++; counted = true;
@@ -256,8 +256,10 @@ export class HttpApi {
         }
         this.send(response,200,{mode:readApprovalMode(this.store.getSetting(approvalSetting)),canManage:canManageAccount}); return;
       }
-      if (path === "/v1/settings/models" && ["GET", "POST"].includes(request.method ?? "")) {
-        const conversationId = url.searchParams.get("conversationId") ?? undefined;
+      const conversationModel = path.match(/^\/v1\/conversations\/([^/]+)\/model$/);
+      if ((path === "/v1/settings/models" || conversationModel) && ["GET", "POST"].includes(request.method ?? "")) {
+        const conversationId = conversationModel ? decodeURIComponent(conversationModel[1]!) : url.searchParams.get("conversationId") ?? undefined;
+        if (conversationModel && url.searchParams.has("conversationId") && url.searchParams.get("conversationId") !== conversationId) throw new HomeError("Выберите один чат.",400);
         const conversation = conversationId ? this.store.getConversation(conversationId) : undefined;
         if (conversationId && !conversation) throw new HomeError("Чат не найден.",404);
         const requestedAgent = url.searchParams.get("agentId") ?? undefined;

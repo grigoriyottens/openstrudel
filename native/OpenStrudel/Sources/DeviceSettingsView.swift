@@ -497,58 +497,84 @@ struct AddDeviceConfirmation: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                Image(systemName: connected ? "checkmark.circle.fill" : "desktopcomputer")
-                    .font(.system(size: 48)).foregroundStyle(AppTheme.secondaryText)
-                    .padding(.bottom, 4)
-                    .accessibilityHidden(true)
-                Text(connected ? L("Устройство подключено") : L("Подключить «\(pairing.name)»?"))
-                    .font(AppTypography.title)
-                Text(connected ? (candidate?.homeUnreachable == true ? L("Подключение сохранено. Ждём ответа устройства — сотрудники появятся, когда оно выйдет на связь.") : L("Сотрудники этого устройства теперь доступны в списке чатов.")) : L("Вы сможете общаться с его сотрудниками и создавать новых. Они продолжат работать на «\(pairing.name)»."))
-                    .foregroundStyle(AppTheme.secondaryText)
-                if busy { ProgressView(L("Проверяем подключение…")).controlSize(.small) }
-                if let error {
-                    Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning).accessibilityIdentifier("pairingError")
-                }
+            #if os(iOS)
+            ScrollView {
+                content.frame(maxWidth: .infinity)
             }
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(24)
-            #if os(macOS)
-            .frame(width: 440)
-            #else
-            .frame(maxWidth: 440)
-            #endif
+            .scrollBounceBehavior(.basedOnSize)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(connected ? L("Готово") : L("Отмена")) { dismiss() }.disabled(busy)
-                        .accessibilityIdentifier("cancelMacPairing")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(connected ? L("Открыть сотрудников") : L("Подключить")) {
-                        if connected {
-                            if let candidate { library.select(candidate) }
-                            dismiss()
-                            #if os(macOS)
-                            openWindow(id: "home")
-                            #endif
-                            return
-                        }
-                        busy = true; error = nil
-                        let target = candidate ?? library.connection(for: pairing); candidate = target
-                        Task {
-                            if await target.connectToMac(pairing) { library.add(target, select: false); connected = true }
-                            else { error = target.pairingError }
-                            busy = false
-                        }
-                    }
-                    .disabled(busy)
-                    .accessibilityIdentifier(connected ? "openDeviceEmployees" : "confirmMacPairing")
-                }
+                ToolbarItem(placement: .cancellationAction) { cancelButton }
             }
+            #else
+            content
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { cancelButton }
+                    ToolbarItem(placement: .confirmationAction) { continueButton }
+                }
+            #endif
         }
         .interactiveDismissDisabled(busy)
         .presentationSizing(.fitted)
+    }
+
+    private var content: some View {
+        VStack(spacing: 12) {
+            Image(systemName: connected ? "checkmark.circle.fill" : "desktopcomputer")
+                .font(.system(size: 48)).foregroundStyle(AppTheme.secondaryText)
+                .padding(.bottom, 4)
+                .accessibilityHidden(true)
+            Text(connected ? L("Устройство подключено") : L("Подключить «\(pairing.name)»?"))
+                .font(AppTypography.title)
+            Text(connected ? (candidate?.homeUnreachable == true ? L("Подключение сохранено. Ждём ответа устройства — сотрудники появятся, когда оно выйдет на связь.") : L("Сотрудники этого устройства теперь доступны в списке чатов.")) : L("Вы сможете общаться с его сотрудниками и создавать новых. Они продолжат работать на «\(pairing.name)»."))
+                .foregroundStyle(AppTheme.secondaryText)
+            if busy { ProgressView(L("Проверяем подключение…")).controlSize(.small) }
+            if let error {
+                Text(L10n.serviceText(error)).foregroundStyle(AppTheme.warning).accessibilityIdentifier("pairingError")
+            }
+            #if os(iOS)
+            continueButton.buttonStyle(.borderedProminent).controlSize(.large)
+                .padding(.top, 12)
+            #endif
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(24)
+        #if os(macOS)
+        .frame(width: 440)
+        #else
+        .frame(maxWidth: 440)
+        #endif
+    }
+
+    private var cancelButton: some View {
+        Button(connected ? L("Готово") : L("Отмена")) { dismiss() }.disabled(busy)
+            .accessibilityIdentifier("cancelMacPairing")
+    }
+
+    private var continueButton: some View {
+        Button {
+            if connected {
+                if let candidate { library.select(candidate) }
+                dismiss()
+                #if os(macOS)
+                openWindow(id: "home")
+                #endif
+                return
+            }
+            busy = true; error = nil
+            let target = candidate ?? library.connection(for: pairing); candidate = target
+            Task {
+                if await target.connectToMac(pairing) { library.add(target, select: false); connected = true }
+                else { error = target.pairingError }
+                busy = false
+            }
+        } label: {
+            Text(connected ? L("Открыть сотрудников") : L("Подключить"))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .disabled(busy)
+        .accessibilityIdentifier(connected ? "openDeviceEmployees" : "confirmMacPairing")
     }
 }
 

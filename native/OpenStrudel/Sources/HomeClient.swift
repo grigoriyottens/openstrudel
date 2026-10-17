@@ -177,7 +177,9 @@ final class HomeClient: ObservableObject, Identifiable {
     @Published private(set) var openAILoginPending = false
     @Published private(set) var openAIErrorMessage: String?
     @Published private(set) var hasOpenedConversation = false
-    private var checkingOpenAIAccount = false
+    private struct AccountScope: Equatable { let generation: Int; let model: ModelSelection? }
+    private var accountScope: AccountScope { AccountScope(generation: refreshGeneration, model: conversationModel) }
+    private var checkingAccountScope: AccountScope?
     @Published private(set) var isLoading = false
     @Published private(set) var connectionState: HomeConnectionState = .idle
     @Published private(set) var isStartingLocalHome = false
@@ -227,6 +229,7 @@ final class HomeClient: ObservableObject, Identifiable {
     @Published private(set) var pendingMessages: [PendingHomeMessage] = []
     @Published var errorMessage: String?
     @Published private(set) var conversationID: String?
+    @Published private(set) var conversationModel: ModelSelection?
     @Published private(set) var selectedProfileID: String?
 
     private let defaults: UserDefaults
@@ -655,7 +658,7 @@ final class HomeClient: ObservableObject, Identifiable {
         telegram = nil; openAIAccount = nil; connections = []; schedules = []; scheduleRuns = []
         openAILogin = nil; openAILoginStatus = nil; isStartingOpenAILogin = false
         canManageOpenAI = false; openAILoginPending = false; openAIErrorMessage = nil
-        hasOpenedConversation = false; checkingOpenAIAccount = false
+        hasOpenedConversation = false; checkingAccountScope = nil
         errorMessage = nil; syncError = nil; homeUnreachable = false
         connectionNeedsPairing = false; connectionNeedsUnlock = false; isLoading = false
         canManageConnections = false; mobileConnections = 0; mobileClients = []; waitingInvitations = []; mobileInvitation = nil
@@ -769,13 +772,13 @@ final class HomeClient: ObservableObject, Identifiable {
             // Publish employees before waiting for provider state.
             let telegramRead = telegramGeneration
             async let integrations: TelegramEnvelope? = try? request("/v1/integrations")
-            async let account = loadOpenAIAccount()
-
             await refreshConversation()
+            let requestedAccountScope = accountScope
+            async let account = loadOpenAIAccount()
             let (value, loadedAccount) = try await (integrations, account)
             guard generation == connectionGeneration else { return }
             if let value, telegramRead == telegramGeneration { telegram = value.telegram }
-            applyOpenAIAccount(loadedAccount)
+            if requestedAccountScope == accountScope { applyOpenAIAccount(loadedAccount) }
         } catch {
             guard generation == connectionGeneration else { return }
             if error is CancellationError || (error as? URLError)?.code == .cancelled { return }
@@ -881,7 +884,9 @@ final class HomeClient: ObservableObject, Identifiable {
     private func loadOpenAIAccount(force: Bool = false) async throws -> OpenAIAccountEnvelope {
         do {
             var query = force ? "?refresh=true" : "?refresh=false"
-            if health?.homeProtocol == 1 { query += "&agentId=" + (isEmployeeDraft ? "main" : selectedProfileID ?? "main") }
+            if health?.conversationModelsVersion == 1, !isEmployeeDraft, let conversationID {
+                query += "&conversationId=" + conversationID
+            } else if health?.homeProtocol == 1 { query += "&agentId=" + (isEmployeeDraft ? "main" : selectedProfileID ?? "main") }
             let envelope: OpenAIAccountEnvelope = try await request("/v1/account" + query)
             return envelope
         } catch HomeClientError.authenticationExpired {
@@ -913,16 +918,16 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     func refreshOpenAIAccount(force: Bool = false) async {
-        guard health != nil, !checkingOpenAIAccount else { return }
-        let generation = connectionGeneration
-        checkingOpenAIAccount = true
-        defer { if generation == connectionGeneration { checkingOpenAIAccount = false } }
+        guard health != nil, checkingAccountScope != accountScope else { return }
+        let generation = connectionGeneration, scope = accountScope
+        checkingAccountScope = scope
+        defer { if generation == connectionGeneration, checkingAccountScope == scope { checkingAccountScope = nil } }
         do {
             let account = try await loadOpenAIAccount(force: force)
-            guard generation == connectionGeneration else { return }
+            guard generation == connectionGeneration, scope == accountScope else { return }
             applyOpenAIAccount(account)
         } catch {
-            guard generation == connectionGeneration else { return }
+            guard generation == connectionGeneration, scope == accountScope else { return }
             if case HomeClientError.authenticationExpired = error { connectionNeedsPairing = true; health = nil }
         }
     }
@@ -1119,6 +1124,7 @@ final class HomeClient: ObservableObject, Identifiable {
                 timelineSupport[profileID ?? "main"] = envelope.timeline == true
             }
             if conversationID != envelope.conversation.id { conversationID = envelope.conversation.id }
+            if conversationModel != envelope.conversation.effectiveModel { conversationModel = envelope.conversation.effectiveModel }
             if queuedMessages != envelope.queuedMessages ?? [] { queuedMessages = envelope.queuedMessages ?? [] }
             if let page = envelope.pagination {
                 if !pagedHistory { olderCursor = page.olderCursor; hasEarlierMessages = olderCursor != nil }
@@ -1213,6 +1219,7 @@ final class HomeClient: ObservableObject, Identifiable {
         messages = []
         interactions = []
         await refreshConversation()
+        await refreshOpenAIAccount()
     }
     func loadEarlierMessages() async {
         guard hasEarlierMessages, !isLoadingEarlier else { return }
@@ -1679,11 +1686,19 @@ final class HomeClient: ObservableObject, Identifiable {
         try await management("/v1/providers/" + id + "/" + action + (deviceID.map { "?deviceId=" + $0 } ?? ""), method: method)
     }
 
-    func transcribeRecording(_ file: URL) async throws -> String {
+    /// The recording follows its conversation's host, including a Home reached
+    /// through another device. Capture this before recording, not after upload.
+    var speechQuery: String {
+        if let conversationID { return "?conversationId=" + conversationID }
+        if isEmployeeDraft, !draftDeviceID.isEmpty { return "?deviceId=" + draftDeviceID }
+        return employeeDeviceQuery
+    }
+
+    func transcribeRecording(_ file: URL, query: String) async throws -> String {
         let data = try Data(contentsOf: file)
         guard !data.isEmpty, data.count <= 20_000_000 else { throw HomeClientError.server(L("Для распознавания выберите аудио или видео до 20 МБ.")) }
         struct Transcript: Decodable { let text: String }
-        let result: Transcript = try await management("/v1/speech/transcribe", method: "POST", payload: ["name": file.lastPathComponent, "contentBase64": data.base64EncodedString()])
+        let result: Transcript = try await management("/v1/speech/transcribe" + query, method: "POST", payload: ["name": file.lastPathComponent, "contentBase64": data.base64EncodedString()])
         return result.text
     }
 
@@ -1856,7 +1871,7 @@ final class HomeClient: ObservableObject, Identifiable {
         try saveCredential(String(decoding: JSONEncoder().encode(connection), as: UTF8.self), account: "home-connection")
         baseURLString = moved.url; defaults.set(moved.url, forKey: "openstrudel.homeURL")
         session = transport; committed = true
-        connectionGeneration += 1; isLoading = false; checkingOpenAIAccount = false
+        connectionGeneration += 1; isLoading = false; checkingAccountScope = nil
         health = verified; connectionState = .connected; homeUnreachable = false
         Task { await self.load(quiet: true) }
     }

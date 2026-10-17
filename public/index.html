@@ -796,7 +796,7 @@
       const key=id+JSON.stringify(state.conversationInfo?.effectiveModel||null);
       if(state.modelKey===key)return;
       state.modelKey=key;paintConversationModel(null);
-      try {const data=await api('/v1/settings/models?conversationId='+encodeURIComponent(id));if(state.modelKey===key)paintConversationModel(data);}
+      try {const data=await api('/v1/conversations/'+encodeURIComponent(id)+'/model');if(state.modelKey===key)paintConversationModel(data);}
       catch { /* The button still opens the settings page, which explains failures. */ }
     }
     $('conversation-model').onclick=()=>{state.back=null;void openModelSettings(undefined,undefined,state.conversationID);};

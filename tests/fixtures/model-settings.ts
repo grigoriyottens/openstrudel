@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { OpenStrudelRuntime } from '../../src/runtime.js';
-import { normalizeModels, readModelSelection } from '../../src/model-settings.js';
+import { normalizeModels, readModelSelection, saveModelSelection, saveConversationModelSelection } from '../../src/model-settings.js';
 
 const root = await mkdtemp(join(tmpdir(),'strudel-model-ui-'));
 let unavailable = false;
@@ -22,15 +22,22 @@ runtime.api.home.save({...runtime.api.home.state,name:'Mac · Проверка �
 runtime.account.read=async()=>({connected:true,email:'qa@example.invalid',managed:true,planType:'plus'});
 Object.assign((runtime.api.mobile as any).options,{hostname:'127.0.0.1',host:'127.0.0.1',directory:join(root,'mobile')});
 const profile=runtime.store.createProfile({name:'Редактор',instructions:'Пиши понятно.'});
+const conversation=runtime.store.profileConversation(profile.id);
 const address=await runtime.api.listen('127.0.0.1',0),url=`http://127.0.0.1:${address.port}`;
 runtime.api.home.setEndpoint({url});
 const controller=createServer(async(req,res)=>{
   res.setHeader('content-type','application/json');
+  if(req.url==='/reset'){
+    unavailable=false;recommended=true;
+    saveModelSelection(runtime.store,{provider:null,model:null,serviceTier:'default'});
+    for(const agent of ['main',profile.id])saveModelSelection(runtime.store,{provider:null,model:null,serviceTier:null},agent);
+    saveConversationModelSelection(runtime.store,conversation.id,{provider:null,model:null,serviceTier:null});
+  }
   if(req.url==='/invite'){res.end(JSON.stringify(await runtime.api.mobile.invite(true)));return;}
   if(req.url==='/web'){res.end(JSON.stringify({url:url+'/#invite='+runtime.api.web.invite(true).key}));return;}
   if(req.url?.startsWith('/unavailable'))unavailable=req.url.includes('value=1');
   if(req.url?.startsWith('/recommendation'))recommended=req.url.includes('value=1');
-  res.end(JSON.stringify({profile:runtime.store.getProfile(profile.id),defaults:readModelSelection(runtime.store),main:readModelSelection(runtime.store,'main')}));
+  res.end(JSON.stringify({profile:runtime.store.getProfile(profile.id),conversation:runtime.store.getConversation(conversation.id),defaults:readModelSelection(runtime.store),main:readModelSelection(runtime.store,'main')}));
 });
 await new Promise<void>(done=>controller.listen(0,'127.0.0.1',done));
 await writeFile(resolve(process.argv[2]!),JSON.stringify({url,browser:url+'/#invite='+runtime.api.web.invite(true).key,controller:`http://127.0.0.1:${(controller.address() as any).port}`,root}),{mode:0o600});

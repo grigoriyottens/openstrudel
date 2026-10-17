@@ -151,12 +151,13 @@ it('validates conversation model writes and derives the employee from the chat',
  const addr=await runtime.api.listen('127.0.0.1',0);
  const call=(path:string,method='GET',body?:any,headers:any={authorization:'Bearer owner'})=>fetch(`http://127.0.0.1:${addr.port}${path}`,{method,headers:{'content-type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});
  try {
-  const employee=runtime.store.createProfile({name:'QA'}),chat=runtime.store.profileConversation(employee.id),path='/v1/settings/models?conversationId='+chat.id;
+  const employee=runtime.store.createProfile({name:'QA'}),chat=runtime.store.profileConversation(employee.id),path='/v1/conversations/'+chat.id+'/model';
   saveModelSelection(runtime.store,{provider:'chatgpt',model:'m2',serviceTier:'ultra'},employee.id);
   expect((await (await call(path)).json()).defaults).toMatchObject({model:'m2',serviceTier:'ultra'});
   expect((await call(path,'POST',{model:'m1',serviceTier:'ultra'})).status).toBe(409);
   expect((await call(path,'POST',{model:'m1',serviceTier:'priority'})).status).toBe(200);
-  expect((await call(path+'&agentId=main')).status).toBe(409);
+  expect((await call(path+'?agentId=main')).status).toBe(409);
+  expect((await call(path+'?conversationId=other')).status).toBe(400);
   expect((await call('/v1/settings/models?conversationId=missing')).status).toBe(404);
   const session=await call('/auth/session','POST',{key:runtime.api.web.invite(false).key}),{csrf}=await session.json();
   const headers={cookie:session.headers.get('set-cookie')!.split(';')[0],'x-openstrudel-csrf':csrf};
