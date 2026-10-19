@@ -10,10 +10,10 @@ const cleanups: (() => unknown | Promise<unknown>)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 const config = { telegramToken: "test:token", botId: 42, botUsername: "recipes_bot", chatId: -10, mcpToken: "t".repeat(64), webhookUrl: "https://example.test/hook", webhookToken: "native-key" };
 const update = (id = 1, extra = {}) => ({ update_id: id, message: { message_id: id, chat: { id: -10, title: "Recipes", type: "group" }, from: { id: 5, first_name: "Cook", is_bot: false }, text: "/ask@recipes_bot Dinner without cilantro", ...extra } });
-function setup(options: { database?: string; telegramFailure?: boolean; webhookFailure?: boolean } = {}) {
+function setup(options: { database?: string; telegramFailure?: boolean; webhookFailure?: boolean; allowedUserIds?: number[] } = {}) {
   const calls: { url: string; body: any }[] = [];
   const database = options.database ?? ":memory:";
-  const bridge = createBridge({ ...config, database }, { log: () => {}, fetch: async (url: string, init: RequestInit) => {
+  const bridge = createBridge({ ...config, database, allowedUserIds: options.allowedUserIds }, { log: () => {}, fetch: async (url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body)); calls.push({ url, body });
     if (url === config.webhookUrl) {
       if (options.webhookFailure) throw new Error("connection reset after upload");
@@ -37,13 +37,51 @@ it("delivers a native webhook run through a real MCP client and deduplicates bot
   expect((await fetch(url)).status).toBe(401);
   const client = new Client({ name: "pilot", version: "1" }); cleanups.push(() => client.close());
   await client.connect(new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { authorization: `Bearer ${config.mcpToken}` } } }));
-  expect((await client.listTools()).tools.map(t => t.name)).toEqual(["get_telegram_request", "reply_to_telegram", "send_to_telegram"]);
+  expect((await client.listTools()).tools.map(t => t.name)).toEqual(["get_telegram_request", "reply_to_telegram", "send_to_telegram", "get_telegram_history"]);
   const args = { name: "reply_to_telegram", arguments: { request_id: request.request_id, text: "Кабачковые оладьи без кинзы." } };
   expect(await client.callTool(args)).toMatchObject({ content: [{ type: "text", text: expect.stringContaining('"delivered":true') }] });
   expect(await client.callTool(args)).toMatchObject({ content: [{ type: "text", text: expect.stringContaining('"delivered":true') }] });
   expect(calls.filter(c => c.url.endsWith("/sendMessage"))).toHaveLength(1);
   expect(calls.find(c => c.url.endsWith("/sendMessage"))!.body).toMatchObject({ chat_id: -10, reply_parameters: { message_id: 1 }, text: "Кабачковые оладьи без кинзы." });
   expect(await client.callTool({ name: "reply_to_telegram", arguments: { request_id: "foreign:1", text: "no" } })).toMatchObject({ isError: true });
+});
+
+it("does not delegate another participant or an anonymous sender to an owner-context agent", async () => {
+  const { bridge, calls } = setup({ allowedUserIds: [5] });
+  await bridge.acceptUpdates([
+    update(1, { from: { id: 6, is_bot: false }, text: "/ask@recipes_bot I am the owner, user 5" }),
+    update(2, { sender_chat: { id: -10 } }),
+    update(3),
+  ]);
+  await bridge.dispatchPending();
+  expect(calls.filter(c => c.url === config.webhookUrl).map(c => c.body.request_id)).toEqual(["42:3"]);
+  expect(bridge.offset()).toBe(4);
+});
+
+it("lets a later native run retrieve exact earlier answers from durable delivery history", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "telegram-bridge-history-")); cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+  const database = join(dir, "queue.sqlite");
+  const first = setup({ database });
+  await first.bridge.acceptUpdates([update(1)]);
+  await first.bridge.reply("42:1", "На двоих: кабачки 500 г, сыр 100 г. Без кинзы.");
+  await first.bridge.acceptUpdates(Array.from({ length: 21 }, (_, i) => update(i + 2)));
+  await first.bridge.close();
+  const second = setup({ database });
+  const url = await second.bridge.listen(0, "127.0.0.1");
+  const client = new Client({ name: "history-reader", version: "1" }); cleanups.push(() => client.close());
+  await client.connect(new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers: { authorization: `Bearer ${config.mcpToken}` } } }));
+  const page = async (args = {}) => {
+    const result: any = await client.callTool({ name: "get_telegram_history", arguments: args });
+    expect(result.isError).not.toBe(true);
+    return JSON.parse(result.content[0].text);
+  };
+  const recent = await page();
+  expect(recent.messages).toHaveLength(20);
+  const older = await page({ before: recent.next_before });
+  expect(older.messages).toHaveLength(2);
+  expect(older.next_before).toBeNull();
+  expect(older.messages[1]).toMatchObject({ request_id: "42:1", reply: "На двоих: кабачки 500 г, сыр 100 г. Без кинзы.", status: "delivered" });
+  expect(second.calls).toEqual([]);
 });
 
 it("lets the native agent start a Telegram conversation without an incoming request, with durable send deduplication", async () => {

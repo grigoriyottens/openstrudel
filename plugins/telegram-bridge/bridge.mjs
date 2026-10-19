@@ -10,11 +10,13 @@ const toolDefinitions = [
   { name: "get_telegram_request", description: "Read one incoming Telegram request and its delivery status. Only this bridge's connected chat is accessible.", inputSchema: { type: "object", properties: { request_id: { type: "string" } }, required: ["request_id"], additionalProperties: false } },
   { name: "reply_to_telegram", description: "Reply as the connected Telegram bot to an incoming request. Repeating the same request and text returns the existing receipt; it does not send twice. Never invent a request_id.", inputSchema: { type: "object", properties: { request_id: { type: "string" }, text: { type: "string", minLength: 1 } }, required: ["request_id", "text"], additionalProperties: false } },
   { name: "send_to_telegram", description: "Send a new message to the connected Telegram chat as its bot when the user asks from the native agent app. No incoming Telegram message is needed. Choose one unique delivery_key for this message and reuse it on retries; this prevents duplicate posts.", inputSchema: { type: "object", properties: { delivery_key: { type: "string", pattern: "^[a-zA-Z0-9_-]{1,128}$" }, text: { type: "string", minLength: 1 } }, required: ["delivery_key", "text"], additionalProperties: false } },
+  { name: "get_telegram_history", description: "Read the last 20 saved requests and exact replies in this bridge, newest first. Use when a follow-up needs an earlier recipe, quantity, decision or source; do not guess from memory. Follow next_before for older pages. This is the delivery archive, not the entire Telegram group history.", inputSchema: { type: "object", properties: { before: { type: "string", pattern: "^[1-9][0-9]*$" } }, additionalProperties: false } },
 ];
 
 /** One chat, one native agent webhook. The database is a delivery queue, not an AI memory. */
 export function createBridge(config, dependencies = {}) {
   if (!config.telegramToken || !config.mcpToken || !Number.isSafeInteger(config.chatId) || !Number.isSafeInteger(config.botId) || !config.botUsername) throw new Error("Missing Telegram identity, chat or MCP token");
+  if (config.allowedUserIds !== undefined && (!Array.isArray(config.allowedUserIds) || !config.allowedUserIds.every(id => Number.isSafeInteger(id) && id > 0))) throw new Error("allowedUserIds must contain Telegram user IDs");
   const fetcher = dependencies.fetch ?? fetch;
   const log = dependencies.log ?? (entry => console.log(JSON.stringify({ time: new Date().toISOString(), ...entry })));
   const dbPath = config.database ?? "./bridge.sqlite";
@@ -43,7 +45,8 @@ export function createBridge(config, dependencies = {}) {
   }
   function normalize(update) {
     const message = update.message;
-    if (!message || message.chat?.id !== config.chatId || message.from?.is_bot || !message.from?.id || !Number.isSafeInteger(message.message_id)) return;
+    if (!message || message.chat?.id !== config.chatId || message.sender_chat || message.from?.is_bot || !message.from?.id || !Number.isSafeInteger(message.message_id)) return;
+    if (config.allowedUserIds && !config.allowedUserIds.includes(message.from.id)) return;
     let text = message.text ?? message.caption;
     if (typeof text !== "string" || !text.trim()) return;
     const command = text.match(/^\/(\w+)(?:@([\w]+))?(?:\s|$)/);
@@ -52,7 +55,7 @@ export function createBridge(config, dependencies = {}) {
     const addressed = (command && ["ask", "start"].includes(command[1].toLowerCase())) || mention.test(text) || message.reply_to_message?.from?.id === config.botId;
     if (!addressed) return;
     if (command) text = text.slice(command[0].length).trim();
-    text = text.replace(mention, "").trim() || "Привет! Расскажи, чем можешь помочь с рецептами.";
+    text = text.replace(mention, "").trim() || "Привет! Расскажи, чем можешь помочь в этом чате.";
     const quoted = message.reply_to_message;
     return { request_id: `${config.botId}:${update.update_id}`, text,
       chat: { id: message.chat.id, title: message.chat.title }, message_id: message.message_id,
@@ -148,6 +151,12 @@ export function createBridge(config, dependencies = {}) {
       let result;
       if (name === "reply_to_telegram") result = await reply(args.request_id, args.text);
       else if (name === "send_to_telegram") result = await send(args.delivery_key, args.text);
+      else if (name === "get_telegram_history") {
+        const before = args.before === undefined ? Number.MAX_SAFE_INTEGER : Number(args.before);
+        if (!Number.isSafeInteger(before) || before < 1) throw new Error("Invalid history cursor");
+        const rows = db.prepare("SELECT rowid AS cursor,* FROM requests WHERE rowid<? ORDER BY rowid DESC LIMIT 21").all(before);
+        result = { messages: rows.slice(0, 20).map(row => ({ ...JSON.parse(row.payload), reply: row.reply, status: row.state, created_at: new Date(row.created).toISOString() })), next_before: rows.length > 20 ? String(rows[19].cursor) : null };
+      }
       else if (name === "get_telegram_request") {
         const row = get(args.request_id); if (!row) throw new Error("Unknown Telegram request");
         result = { ...JSON.parse(row.payload), status: row.state, error: row.error, message_ids: JSON.parse(row.receipts) };

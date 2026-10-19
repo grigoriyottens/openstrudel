@@ -5,11 +5,14 @@ A small standalone transport for an existing agent. Telegram long polling sends 
 Requires Node 24+ and a public HTTPS reverse proxy. Run `node bridge.mjs /private/config.json` using `config.example.json` as the configuration shape. Add `--serve-only` during MCP setup to keep Telegram polling paused. Keep this file private; never commit real keys. Back up the SQLite queue along with configuration. Only one process may poll a bot token.
 
 1. Create a Telegram bot with BotFather and add it to the intended group. Obtain the exact bot and chat IDs from `getMe` and an addressed `getUpdates` message.
-2. Create a native agent with a webhook routine. Record the routine's URL and key in the private bridge config. HTTP 200 only means the native run started.
+2. Create a native agent with a webhook routine. Record the routine's URL and key in the private bridge config. HTTP 200 only means the native run started. For a personal agent whose webhook uses the owner's apps and memory, set `allowedUserIds` to that owner's numeric Telegram ID. Other participants and anonymous senders must not inherit owner access. Omit this allowlist only when the native destination already enforces the intended shared permissions.
 3. Connect the HTTPS `/mcp` endpoint using the bridge's bearer token. The plugin manifest, `mcp.json` and skill describe this connection for clients supporting Cursor-format plugins; custom remote MCP setup works without installing the package.
 4. Tell the native routine to answer the webhook's `request_id` using `reply_to_telegram`. Confirm that the actual tools are available before polling Telegram.
 5. Send `/ask@your_recipes_bot ...` in the group, then reply to the bot's answer. Check both Telegram and the native conversation.
 6. In the native app, ask the agent to send a message to Telegram. It uses `send_to_telegram` with a unique delivery key; repeated calls and restarts preserve the same receipt. Native scheduled posts use this tool too, so the bridge needs no scheduler.
+7. For an exact earlier answer, use `get_telegram_history` and follow `next_before` if needed. This reads the existing delivery archive in pages of 20, including saved reply text, without sending the whole history on every webhook. It contains only exchanges handled by this bridge; it is not an import of the group's archive or a replacement for native memory.
+
+If the agent already has authorized access to the group's history or files through another connector, let the routine use that connector for reading and this bridge for sending. Keep that group's instructions in its Bot or routine: account-wide connector instructions also affect unrelated Bots. An empty bridge archive does not mean an older group document is missing.
 
 Privacy Mode can stay on: bot commands and replies to the bot work. Plain mentions depend on Telegram's Privacy Mode. Existing bots and scheduled posts remain independent. Incoming images, voice and files are not transported by this pilot.
 

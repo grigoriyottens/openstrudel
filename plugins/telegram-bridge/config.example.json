@@ -3,6 +3,7 @@
   "botId": 123456789,
   "botUsername": "your_recipes_bot",
   "chatId": -123456789,
+  "allowedUserIds": [123456789],
   "mcpToken": "RANDOM_PRIVATE_TOKEN",
   "webhookUrl": "https://native-agent.example/webhook",
   "webhookToken": "NATIVE_ROUTINE_KEY",
