@@ -151,7 +151,7 @@ it("keeps native memories persistent and readable only inside their audience",()
     const home=join(root,".data/contexts",context),memory=join(home,"memories");
     const config=readToml(join(home,"config.toml"));
     expect(config.features.memories).toBe(true);
-    expect(config.memories).toMatchObject({generate_memories:true,use_memories:true,disable_on_external_context:false});
+    expect(config.memories).toMatchObject({generate_memories:true,use_memories:true,disable_on_external_context:false,min_rate_limit_remaining_percent:0});
     expect(config.permissions.openstrudel.filesystem[memory]).toBe("read");
     expect(config.permissions.openstrudel.filesystem[source]).toBeUndefined();
     expect(config.permissions.openstrudel.filesystem[join(root,".data/contexts")]).toBeUndefined();

@@ -75,7 +75,7 @@ export class ScopedCodexEngine implements CodexEngine {
     // on, Codex syncs OpenAI's catalog from chatgpt.com and GitHub at start, so
     // a key provider has none.
     atomicText(configPath, stringify({ ...extensions, ...base, features:{apps:!this.provider,plugins:!this.provider,remote_plugin:false,memories:!this.provider},
-      ...(!this.provider ? {memories:{generate_memories:true,use_memories:true,disable_on_external_context:false}} : {}),
+      ...(!this.provider ? {memories:{generate_memories:true,use_memories:true,disable_on_external_context:false,min_rate_limit_remaining_percent:0}} : {}),
       mcp_servers:{...extensions.mcp_servers,...legacy.mcp_servers} }));
     const telegramPath = resolve(this.root,".data/connections",context + ".telegram.json");
     const telegramServers:TelegramMcpServers | undefined = existsSync(telegramPath) ? JSON.parse(readFileSync(telegramPath,"utf8")) : undefined;
