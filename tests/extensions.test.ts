@@ -107,6 +107,41 @@ it("preserves employee extensions across scoped restarts and isolates another au
   scoped.close();
 });
 
+it("keeps native initialization and pending requests busy, then releases the idle runtime",async()=>{
+  const {home,cwd}=fixture();
+  const engine=new CodexEngineAdapter({codexHome:home,workingDirectory:cwd,scoped:true});
+  try {
+    const opening=(engine as any).client() as Promise<CodexRpc>;
+    expect(engine.busy).toBe(true);
+    const rpc=await opening;
+    expect(engine.busy).toBe(false);
+    const reading=rpc.request("config/read",{includeLayers:false});
+    expect(engine.busy).toBe(true);
+    await reading;
+    expect(engine.busy).toBe(false);
+  } finally {engine.close();}
+});
+
+it("releases least-recent idle audiences without stopping active work or losing saved context",()=>{
+  const {root}=fixture(),source=join(root,"source");mkdirSync(source);
+  const scoped=new ScopedCodexEngine(root,source);
+  const first=scoped.forContext("personal") as CodexEngineAdapter;
+  const firstClose=vi.spyOn(first,"close");
+  const active=scoped.forContext("work") as CodexEngineAdapter;
+  vi.spyOn(active,"busy","get").mockReturnValue(true);
+  const activeClose=vi.spyOn(active,"close");
+  const memory=join(root,".data/contexts/personal/memories");mkdirSync(memory,{recursive:true});writeFileSync(join(memory,"MEMORY.md"),"Retained fact");
+  const workspace=join(root,".data/workspace/personal/result.txt");writeFileSync(workspace,"Retained file");
+  for(let i=0;i<8;i++)scoped.forContext("agent-"+i.toString(16).padStart(32,"0"));
+  expect(firstClose).toHaveBeenCalledOnce();
+  expect(activeClose).not.toHaveBeenCalled();
+  expect(scoped.forContext("work")).toBe(active);
+  expect(scoped.forContext("personal")).not.toBe(first);
+  expect(readFileSync(join(memory,"MEMORY.md"),"utf8")).toBe("Retained fact");
+  expect(readFileSync(workspace,"utf8")).toBe("Retained file");
+  scoped.close();
+});
+
 it("keeps native memories persistent and readable only inside their audience",()=>{
   const {root}=fixture(),source=join(root,"source");mkdirSync(source);
   const scoped=new ScopedCodexEngine(root,source);

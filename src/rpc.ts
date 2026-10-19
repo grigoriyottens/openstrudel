@@ -13,6 +13,7 @@ export class CodexRpc {
   private readonly pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
   private nextId = 1;
   closed = false;
+  get busy(): boolean { return this.pending.size > 0; }
 
   constructor(codexHome?: string, private readonly onNotification?: (m: RpcMessage) => void,
     private readonly onRequest?: (method: string, params: any) => Promise<unknown>,

@@ -48,7 +48,7 @@ export class CodexEngineAdapter implements CodexEngine {
   private running = 0;
   private signingIn = new Map<string, () => void>();
   constructor(private readonly options: CodexEngineOptions = {}) { this.codexHome = options.codexHome; }
-  get busy() { return this.running>0 || this.extensionManager?.updating === true; }
+  get busy() { return this.running>0 || this.extensionManager?.updating === true || Boolean(this.initializing || this.connectionLoading || this.modelReading || this.rpc?.busy || this.signingIn.size); }
 
   extensions(): CodexExtensions {
     if (!this.options.scoped || !this.codexHome || !this.options.workingDirectory) throw new Error("Расширения доступны после входа в OpenAI на устройстве сотрудника.");
@@ -85,7 +85,8 @@ export class CodexEngineAdapter implements CodexEngine {
       }
       catch (error) { rpc.close(); throw error; }
     })();
-    try {return await this.initializing;}catch(error){this.initializing=undefined;throw error;}
+    const initializing = this.initializing;
+    try {return await initializing;}finally{if(this.initializing === initializing)this.initializing=undefined;}
   }
 
   async models(refresh = false): Promise<ModelChoice[]> {

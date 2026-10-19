@@ -30,9 +30,21 @@ export class ScopedCodexEngine implements CodexEngine {
     const current = this.contexts.get(context);
     const extensions = existsSync(sharedExtensionsPath) ? readToml(sharedExtensionsPath) : extensionConfig(home);
     if (current) {
-      if (JSON.stringify(extensions) === JSON.stringify(extensionConfig(home))) return current;
+      if (JSON.stringify(extensions) === JSON.stringify(extensionConfig(home))) {
+        this.contexts.delete(context); this.contexts.set(context,current);
+        return current;
+      }
       if (current.busy) throw new HomeError("Сервисы обновлены. Дождитесь текущего ответа, чтобы продолжить.",409);
       current.close(); this.contexts.delete(context);
+    }
+    // Each native runtime owns several OS threads. Keeping every audience
+    // loaded exhausted Home's process limit after browsing its service lists.
+    // Retain four recent runtimes; active turns, requests and sign-ins stay.
+    // Codex resumes evicted threads from disk, including history and memories.
+    for (const [name,engine] of this.contexts) {
+      if (this.contexts.size < 4) break;
+      if (engine.busy) continue;
+      engine.close(); this.contexts.delete(name);
     }
     mkdirSync(cwd,{recursive:true,mode:0o700}); mkdirSync(home,{recursive:true,mode:0o700});
     const source = this.sourceHome && resolve(this.sourceHome,"auth.json");
