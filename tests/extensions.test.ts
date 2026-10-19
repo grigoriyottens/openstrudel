@@ -107,6 +107,31 @@ it("preserves employee extensions across scoped restarts and isolates another au
   scoped.close();
 });
 
+it("keeps native memories persistent and readable only inside their audience",()=>{
+  const {root}=fixture(),source=join(root,"source");mkdirSync(source);
+  const scoped=new ScopedCodexEngine(root,source);
+  const group="group-"+"a".repeat(64);
+  for(const context of ["personal","work",group]) {
+    scoped.forContext(context);
+    const home=join(root,".data/contexts",context),memory=join(home,"memories");
+    const config=readToml(join(home,"config.toml"));
+    expect(config.features.memories).toBe(true);
+    expect(config.memories).toMatchObject({generate_memories:true,use_memories:true,disable_on_external_context:false});
+    expect(config.permissions.openstrudel.filesystem[memory]).toBe("read");
+    expect(config.permissions.openstrudel.filesystem[source]).toBeUndefined();
+    expect(config.permissions.openstrudel.filesystem[join(root,".data/contexts")]).toBeUndefined();
+    for(const other of ["personal","work",group].filter(value=>value!==context))
+      expect(config.permissions.openstrudel.filesystem[join(root,".data/contexts",other,"memories")]).toBeUndefined();
+    mkdirSync(memory,{recursive:true});writeFileSync(join(memory,"MEMORY.md"),context);
+  }
+  scoped.close();
+  for(const context of ["personal","work",group]) {
+    scoped.forContext(context);
+    expect(readFileSync(join(root,".data/contexts",context,"memories/MEMORY.md"),"utf8")).toBe(context);
+  }
+  scoped.close();
+});
+
 it("keeps a key provider's Codex away from chatgpt.com and GitHub, even where a local plugin is enabled",async()=>{
   const {root}=fixture(),source=join(root,"source"),contexts=join(root,"provider");mkdirSync(source);
   mkdirSync(join(root,".data/extensions/personal"),{recursive:true});
@@ -114,10 +139,11 @@ it("keeps a key provider's Codex away from chatgpt.com and GitHub, even where a 
   // Codex syncs OpenAI's plugin catalog from chatgpt.com and GitHub at start whenever plugins are on.
   const keyed=new ScopedCodexEngine(root,undefined,undefined,contexts,{info:providerInfo("xai")!,key:()=>"xai-key"});
   const engine=keyed.forContext("personal") as CodexEngineAdapter;
-  expect(readToml(join(contexts,"personal/config.toml")).features).toEqual({apps:false,plugins:false,remote_plugin:false});
+  expect(readToml(join(contexts,"personal/config.toml")).features).toEqual({apps:false,plugins:false,remote_plugin:false,memories:false});
+  expect(readToml(join(contexts,"personal/config.toml")).memories).toBeUndefined();
   await expect(engine.extensions().prepare()).resolves.toBeUndefined();
   const chatgpt=new ScopedCodexEngine(root,source);chatgpt.forContext("personal");
-  expect(readToml(join(root,".data/contexts/personal/config.toml")).features).toEqual({apps:true,plugins:true,remote_plugin:false});
+  expect(readToml(join(root,".data/contexts/personal/config.toml")).features).toEqual({apps:true,plugins:true,remote_plugin:false,memories:true});
   keyed.close();chatgpt.close();
 });
 

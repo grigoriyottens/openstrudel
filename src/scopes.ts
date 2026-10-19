@@ -50,6 +50,10 @@ export class ScopedCodexEngine implements CodexEngine {
     const authStorage = this.authTokens ? 'cli_auth_credentials_store = "ephemeral"\n' : "";
     const settings = `${authStorage}default_permissions = "openstrudel"\n[features]\napps = true\n[permissions.openstrudel.filesystem]\n":minimal" = "read"\n${JSON.stringify(cwd)} = "write"\n${JSON.stringify(resolve(home,"plugins/cache"))} = "read"\n${JSON.stringify(resolve(home,"skills/.system"))} = "read"\n${helpers}[permissions.openstrudel.network]\nenabled = true\n[apps._default]\nenabled = false\n`;
     const base = parse(settings + granted.map(id=>`\n[apps.${id}]\nenabled = true\n`).join(""));
+    // Native memories belong to this audience's Codex home, just like its
+    // threads. Allow reading that recall store without exposing credentials,
+    // other audiences or the account-wide history. Codex owns generation.
+    if (!this.provider) (base as any).permissions.openstrudel.filesystem[resolve(home,"memories")] = "read";
     const legacy = readToml(connections);
     const computer = computerUseReadPaths(extensions.mcp_servers?.cua_repl);
     for (const path of computer) (base as any).permissions.openstrudel.filesystem[path] = "read";
@@ -58,7 +62,8 @@ export class ScopedCodexEngine implements CodexEngine {
     // account-wide remote plugin collection into a Telegram group. With plugins
     // on, Codex syncs OpenAI's catalog from chatgpt.com and GitHub at start, so
     // a key provider has none.
-    atomicText(configPath, stringify({ ...extensions, ...base, features:{apps:!this.provider,plugins:!this.provider,remote_plugin:false},
+    atomicText(configPath, stringify({ ...extensions, ...base, features:{apps:!this.provider,plugins:!this.provider,remote_plugin:false,memories:!this.provider},
+      ...(!this.provider ? {memories:{generate_memories:true,use_memories:true,disable_on_external_context:false}} : {}),
       mcp_servers:{...extensions.mcp_servers,...legacy.mcp_servers} }));
     const telegramPath = resolve(this.root,".data/connections",context + ".telegram.json");
     const telegramServers:TelegramMcpServers | undefined = existsSync(telegramPath) ? JSON.parse(readFileSync(telegramPath,"utf8")) : undefined;
