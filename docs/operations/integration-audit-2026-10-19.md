@@ -19,9 +19,16 @@ were changed.
   account previews succeeded through the live Wolf employee. Preview did not
   create a meeting.
 - The WAI task identified the separate video delay: an internal five-upload daily
-  budget had already been consumed by older recordings. That task owns the
-  video-worker repair and the requested Storage Box playback. Neither video
-  availability nor completion of that separate deployment is certified here.
+  budget had already been consumed by older recordings. It deployed the
+  video-worker repair and direct playback from the existing private Storage Box.
+  This task independently rechecked the original card: HTTP 200, one native
+  video element and one YouTube link. The video route returned HEAD 200 with
+  `video/mp4`, length 718,112,007 bytes and byte-range support; a 256-byte range
+  returned HTTP 206 with the matching full length.
+- The WAI task separately verified browser playback and seeking at 23:58 and
+  1:50:32, and reported the YouTube copy as VERIFIED. Storage Box playback no
+  longer waits for the YouTube queue. The original card and notification event
+  were retained.
 
 No notification was replayed, no second collector was installed and no owner
 credential was copied into another audience.
