@@ -439,6 +439,11 @@ export class TelegramAdapter {
     if (message?.chat.title) this.store.renameTelegramGroup(String(message.chat.id), message.chat.title);
     if (!message || (!message.text?.trim() && !message.voice && !message.audio && !message.video_note && !message.video && !message.document && !message.photo?.length)) { this.store.markTelegramUpdate(update.update_id); return; }
     const chatId = String(message.chat.id); let text = (message.text ?? message.caption)?.trim() ?? "";
+    const username = this.bot?.username ?? this.store.getSetting("telegram.bot_username");
+    const commandRecipient = text.match(/^\/\w+@([\w]+)(?:\s|$)/)?.[1];
+    if (commandRecipient && commandRecipient.toLowerCase() !== username?.toLowerCase()) {
+      this.store.markTelegramUpdate(update.update_id); return;
+    }
     const groupStart = text.match(/^\/start@([\w]+)\s+choose$/i);
     if (groupStart && Number(chatId) < 0 && groupStart[1]!.toLowerCase() === (this.bot?.username ?? this.store.getSetting("telegram.bot_username"))?.toLowerCase()) {
       const previous = this.membershipEvent(chatId);
@@ -475,9 +480,12 @@ export class TelegramAdapter {
       this.store.markTelegramUpdate(update.update_id); return;
     }
     const replyAuthor = message.reply_to_message?.from;
-    const username = this.bot?.username ?? this.store.getSetting("telegram.bot_username");
     const replyToBot = Boolean(replyAuthor && (replyAuthor.id === this.bot?.id || replyAuthor.is_bot && username && replyAuthor.username?.toLowerCase() === username.toLowerCase()));
-    const contextOnly = Number(chatId) < 0 && binding?.replies === "mentions" && !replyToBot && !(username && new RegExp(`@${username}(?![\\w])`, "i").test(text));
+    const mentioned = Boolean(username && new RegExp(`@${username}(?![\\w])`, "i").test(text));
+    if (Number(chatId) < 0 && replyAuthor?.is_bot && !replyToBot && !mentioned) {
+      this.store.markTelegramUpdate(update.update_id); return;
+    }
+    const contextOnly = Number(chatId) < 0 && binding?.replies === "mentions" && !replyToBot && !mentioned;
     const replyKey = chatId + ":" + message.reply_to_message?.message_id;
     const cardId = this.questionMessages.get(replyKey);
     const card = cardId ? this.messages.interactions.get(cardId) : undefined;

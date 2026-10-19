@@ -1,0 +1,226 @@
+#!/usr/bin/env node
+import { createServer } from "node:http";
+import { timingSafeEqual } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const toolDefinitions = [
+  { name: "get_telegram_request", description: "Read one incoming Telegram request and its delivery status. Only this bridge's connected chat is accessible.", inputSchema: { type: "object", properties: { request_id: { type: "string" } }, required: ["request_id"], additionalProperties: false } },
+  { name: "reply_to_telegram", description: "Reply as the connected Telegram bot to an incoming request. Repeating the same request and text returns the existing receipt; it does not send twice. Never invent a request_id.", inputSchema: { type: "object", properties: { request_id: { type: "string" }, text: { type: "string", minLength: 1 } }, required: ["request_id", "text"], additionalProperties: false } },
+  { name: "send_to_telegram", description: "Send a new message to the connected Telegram chat as its bot when the user asks from the native agent app. No incoming Telegram message is needed. Choose one unique delivery_key for this message and reuse it on retries; this prevents duplicate posts.", inputSchema: { type: "object", properties: { delivery_key: { type: "string", pattern: "^[a-zA-Z0-9_-]{1,128}$" }, text: { type: "string", minLength: 1 } }, required: ["delivery_key", "text"], additionalProperties: false } },
+];
+
+/** One chat, one native agent webhook. The database is a delivery queue, not an AI memory. */
+export function createBridge(config, dependencies = {}) {
+  if (!config.telegramToken || !config.mcpToken || !Number.isSafeInteger(config.chatId) || !Number.isSafeInteger(config.botId) || !config.botUsername) throw new Error("Missing Telegram identity, chat or MCP token");
+  const fetcher = dependencies.fetch ?? fetch;
+  const log = dependencies.log ?? (entry => console.log(JSON.stringify({ time: new Date().toISOString(), ...entry })));
+  const dbPath = config.database ?? "./bridge.sqlite";
+  if (dbPath !== ":memory:") mkdirSync(dirname(resolve(dbPath)), { recursive: true, mode: 0o700 });
+  const db = new DatabaseSync(dbPath);
+  db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
+    CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, payload TEXT NOT NULL, state TEXT NOT NULL,
+      created INTEGER NOT NULL, updated INTEGER NOT NULL, next_attempt INTEGER NOT NULL DEFAULT 0,
+      reply TEXT, receipts TEXT NOT NULL DEFAULT '[]', error TEXT);
+    UPDATE requests SET state='dispatch_unknown', error='Process stopped during dispatch' WHERE state='dispatching';
+    UPDATE requests SET state='delivery_unknown', error='Process stopped during delivery' WHERE state='delivering';`);
+  let server, closed = false, running = false, pollController, typingTimer, pollPromise, lastPoll = null, lastPollError = null;
+  const inFlight = new Set();
+  const get = id => db.prepare("SELECT * FROM requests WHERE id=?").get(id);
+  const state = (id, value, error = null) => {
+    db.prepare("UPDATE requests SET state=?, error=?, updated=? WHERE id=?").run(value, error, Date.now(), id);
+    log({ event: "request_state", request_id: id, state: value, ...(error ? { error } : {}) });
+  };
+  const offset = () => Number(db.prepare("SELECT value FROM meta WHERE key='offset'").get()?.value ?? 0);
+  async function telegram(method, body, signal = AbortSignal.timeout(45_000)) {
+    const response = await fetcher(`https://api.telegram.org/bot${config.telegramToken}/${method}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal });
+    const result = await response.json();
+    if (!result.ok) throw Object.assign(new Error(`Telegram ${result.error_code ?? response.status}`), { definite: true, retryAfter: result.parameters?.retry_after });
+    return result.result;
+  }
+  function normalize(update) {
+    const message = update.message;
+    if (!message || message.chat?.id !== config.chatId || message.from?.is_bot || !message.from?.id || !Number.isSafeInteger(message.message_id)) return;
+    let text = message.text ?? message.caption;
+    if (typeof text !== "string" || !text.trim()) return;
+    const command = text.match(/^\/(\w+)(?:@([\w]+))?(?:\s|$)/);
+    if (command?.[2] && command[2].toLowerCase() !== config.botUsername.toLowerCase()) return;
+    const mention = new RegExp(`@${config.botUsername}\\b`, "i");
+    const addressed = (command && ["ask", "start"].includes(command[1].toLowerCase())) || mention.test(text) || message.reply_to_message?.from?.id === config.botId;
+    if (!addressed) return;
+    if (command) text = text.slice(command[0].length).trim();
+    text = text.replace(mention, "").trim() || "Привет! Расскажи, чем можешь помочь с рецептами.";
+    const quoted = message.reply_to_message;
+    return { request_id: `${config.botId}:${update.update_id}`, text,
+      chat: { id: message.chat.id, title: message.chat.title }, message_id: message.message_id,
+      ...(message.message_thread_id ? { message_thread_id: message.message_thread_id } : {}),
+      sender: { id: message.from.id, name: [message.from.first_name, message.from.last_name].filter(Boolean).join(" ") },
+      ...(quoted ? { reply_context: { message_id: quoted.message_id, text: quoted.text ?? quoted.caption ?? "", from_bot: quoted.from?.id === config.botId } } : {}),
+    };
+  }
+  async function acceptUpdates(updates) {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      let next = offset();
+      for (const update of updates) {
+        if (!Number.isSafeInteger(update.update_id)) continue;
+        const payload = normalize(update);
+        if (payload) db.prepare("INSERT OR IGNORE INTO requests(id,payload,state,created,updated) VALUES (?,?,'queued',?,?)").run(payload.request_id, JSON.stringify(payload), Date.now(), Date.now());
+        next = Math.max(next, update.update_id + 1);
+      }
+      db.prepare("INSERT INTO meta(key,value) VALUES ('offset',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(String(next));
+      db.exec("COMMIT");
+    } catch (error) { db.exec("ROLLBACK"); throw error; }
+  }
+  async function dispatchPending() {
+    if (!config.webhookUrl || !config.webhookToken) return;
+    for (const row of db.prepare("SELECT * FROM requests WHERE state='queued' AND next_attempt<=? ORDER BY created").all(Date.now())) {
+      if (inFlight.has(row.id)) continue;
+      inFlight.add(row.id); state(row.id, "dispatching");
+      try {
+        const response = await fetcher(config.webhookUrl, { method: "POST", redirect: "error", headers: { "content-type": "application/json", authorization: `Bearer ${config.webhookToken}` }, body: row.payload, signal: AbortSignal.timeout(30_000) });
+        if (response.status === 200) {
+          // A fast native callback may already have delivered the answer.
+          if (get(row.id).state === "dispatching") state(row.id, "accepted");
+        } else if (response.status === 429 || response.status >= 500) {
+          const retry = Number(response.headers.get("retry-after")) || 60;
+          db.prepare("UPDATE requests SET next_attempt=? WHERE id=?").run(Date.now() + Math.max(1, retry) * 1000, row.id);
+          state(row.id, "queued", `Webhook HTTP ${response.status}; retry scheduled`);
+        } else state(row.id, "failed", `Webhook HTTP ${response.status}; run not accepted`);
+        await response.body?.cancel();
+      } catch {
+        if (get(row.id).state === "dispatching") state(row.id, "dispatch_unknown", "Webhook outcome uncertain; inspect native run before retrying");
+      } finally { inFlight.delete(row.id); }
+    }
+  }
+  async function reply(id, text) {
+    const row = get(id);
+    if (!row) throw new Error("Unknown Telegram request");
+    if (typeof text !== "string" || !text.trim()) throw new Error("Reply text is required");
+    if (row.reply && row.reply !== text) throw new Error("This request already has a different reply");
+    if (row.state === "delivered") return { delivered: true, request_id: id, message_ids: JSON.parse(row.receipts) };
+    if (["delivery_unknown", "delivering"].includes(row.state)) throw new Error("Delivery uncertain; inspect the Telegram chat before any retry");
+    const payload = JSON.parse(row.payload), receipts = JSON.parse(row.receipts), pieces = [];
+    for (let start = 0; start < text.length;) {
+      let end = Math.min(start + 4096, text.length);
+      if (end < text.length && /[\uD800-\uDBFF]/.test(text[end - 1])) end--;
+      pieces.push(text.slice(start, end)); start = end;
+    }
+    db.prepare("UPDATE requests SET reply=? WHERE id=?").run(text, id);
+    state(id, "delivering");
+    for (let index = receipts.length; index < pieces.length; index++) {
+      try {
+        const result = await telegram("sendMessage", { chat_id: payload.chat.id, text: pieces[index],
+          ...(payload.message_thread_id ? { message_thread_id: payload.message_thread_id } : {}),
+          ...(payload.message_id ? { reply_parameters: { message_id: payload.message_id } } : {}), link_preview_options: { is_disabled: true } });
+        receipts.push(result.message_id);
+        db.prepare("UPDATE requests SET receipts=?, updated=? WHERE id=?").run(JSON.stringify(receipts), Date.now(), id);
+      } catch (error) {
+        state(id, error.definite ? "accepted" : "delivery_unknown", error.definite ? error.message : "Telegram delivery uncertain; check chat before retrying");
+        throw new Error(error.definite ? `${error.message}${error.retryAfter ? `; retry after ${error.retryAfter}s` : ""}` : "Telegram delivery uncertain; check chat before retrying");
+      }
+    }
+    state(id, "delivered");
+    return { delivered: true, request_id: id, message_ids: receipts };
+  }
+  async function send(key, text) {
+    if (typeof key !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(key)) throw new Error("A unique delivery_key is required (letters, numbers, underscores or hyphens)");
+    if (typeof text !== "string" || !text.trim()) throw new Error("Message text is required");
+    const id = `${config.botId}:native:${key}`;
+    db.prepare("INSERT OR IGNORE INTO requests(id,payload,state,created,updated) VALUES (?,?,'accepted',?,?)").run(id, JSON.stringify({ request_id: id, chat: { id: config.chatId }, source: "native" }), Date.now(), Date.now());
+    return reply(id, text);
+  }
+  const health = () => ({ configured: Boolean(config.webhookUrl && config.webhookToken), polling: running, last_poll: lastPoll, last_poll_error: lastPollError,
+    states: Object.fromEntries(db.prepare("SELECT state,COUNT(*) AS n FROM requests GROUP BY state").all().map(r => [r.state, r.n])),
+    oldest_pending: db.prepare("SELECT MIN(created) AS oldest FROM requests WHERE state NOT IN ('delivered','failed')").get().oldest });
+  async function handle(message) {
+    if (["initialize", "tools/list", "tools/call"].includes(message.method)) log({ event: "mcp_request", method: message.method,
+      ...(toolDefinitions.some(t => t.name === message.params?.name) ? { tool: message.params.name } : {}) });
+    if (message.method === "initialize") return { protocolVersion: message.params?.protocolVersion ?? "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "telegram-bridge", version: "0.1.0" } };
+    if (message.method === "ping") return {};
+    if (message.method === "tools/list") return { tools: toolDefinitions };
+    if (message.method !== "tools/call") throw Object.assign(new Error("Method not found"), { code: -32601 });
+    try {
+      const { name, arguments: args = {} } = message.params ?? {};
+      let result;
+      if (name === "reply_to_telegram") result = await reply(args.request_id, args.text);
+      else if (name === "send_to_telegram") result = await send(args.delivery_key, args.text);
+      else if (name === "get_telegram_request") {
+        const row = get(args.request_id); if (!row) throw new Error("Unknown Telegram request");
+        result = { ...JSON.parse(row.payload), status: row.state, error: row.error, message_ids: JSON.parse(row.receipts) };
+      } else throw new Error("Unknown tool");
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    } catch (error) { return { isError: true, content: [{ type: "text", text: error.message }] }; }
+  }
+  async function listen(port = 8091, host = "127.0.0.1") {
+    const expected = Buffer.from(`Bearer ${config.mcpToken}`);
+    server = createServer(async (req, res) => {
+      const send = (status, body) => res.writeHead(status, { "content-type": "application/json" }).end(body === undefined ? undefined : JSON.stringify(body));
+      if (req.url === "/health") return send(200, { ok: true, configured: Boolean(config.webhookUrl && config.webhookToken) });
+      if (req.url !== "/mcp" && req.url !== "/status") return send(404);
+      const auth = Buffer.from(req.headers.authorization ?? "");
+      if (auth.length !== expected.length || !timingSafeEqual(auth, expected)) return send(401);
+      if (req.url === "/status") return send(200, health());
+      if (req.method !== "POST") return send(405);
+      let message;
+      try {
+        const chunks = []; let size = 0;
+        for await (const chunk of req) { size += chunk.length; if (size > 1 << 20) { send(413); return; } chunks.push(chunk); }
+        message = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      } catch { return send(400, { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Invalid JSON" } }); }
+      if (message?.id === undefined) return send(202);
+      try { send(200, { jsonrpc: "2.0", id: message.id, result: await handle(message) }); }
+      catch (error) { send(200, { jsonrpc: "2.0", id: message.id, error: { code: error.code ?? -32603, message: error.message } }); }
+    });
+    await new Promise((resolve, reject) => { server.once("error", reject); server.listen(port, host, resolve); });
+    return `http://${host}:${server.address().port}/mcp`;
+  }
+  async function typing() {
+    if (closed) return;
+    const active = db.prepare("SELECT payload FROM requests WHERE state IN ('queued','dispatching','accepted') LIMIT 1").get();
+    if (active) {
+      const payload = JSON.parse(active.payload);
+      try { await telegram("sendChatAction", { chat_id: config.chatId, action: "typing", ...(payload.message_thread_id ? { message_thread_id: payload.message_thread_id } : {}) }, AbortSignal.timeout(4_000)); }
+      catch { /* Delivery state remains visible through authenticated /status. */ }
+    }
+  }
+  function start() {
+    if (running) return;
+    running = true;
+    typingTimer = setInterval(() => void typing(), 4000); typingTimer.unref();
+    pollPromise = (async () => {
+      while (running) {
+        pollController = new AbortController();
+        try {
+          const updates = await telegram("getUpdates", { offset: offset(), timeout: 25, allowed_updates: ["message", "my_chat_member"] }, AbortSignal.any([pollController.signal, AbortSignal.timeout(35_000)]));
+          lastPoll = Date.now(); lastPollError = null;
+          await acceptUpdates(updates); await typing(); await dispatchPending();
+        } catch {
+          if (!running) break;
+          lastPollError = "Telegram polling unavailable"; log({ event: "poll_error", error: lastPollError });
+          await new Promise(resolve => { const timer = setTimeout(resolve, 5000); pollController.signal.addEventListener("abort", () => { clearTimeout(timer); resolve(); }, { once: true }); });
+        }
+      }
+    })();
+  }
+  async function close() {
+    if (closed) return;
+    closed = true; running = false; clearInterval(typingTimer); pollController?.abort(); await pollPromise;
+    if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
+    db.close();
+  }
+  return { acceptUpdates, dispatchPending, reply, send, offset, health, listen, start, close };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  process.umask(0o077);
+  if (!process.argv[2]) throw new Error("Usage: node bridge.mjs /private/config.json");
+  const config = JSON.parse(readFileSync(process.argv[2], "utf8"));
+  const bridge = createBridge(config);
+  await bridge.listen(config.port ?? 8091, config.host ?? "127.0.0.1");
+  if (!process.argv.includes("--serve-only")) bridge.start();
+  for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => void bridge.close());
+}

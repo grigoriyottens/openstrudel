@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "telegram-bridge": {
+      "url": "${BRIDGE_URL}",
+      "headers": { "Authorization": "Bearer ${BRIDGE_TOKEN}" }
+    }
+  }
+}

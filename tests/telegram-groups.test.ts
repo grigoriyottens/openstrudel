@@ -21,6 +21,19 @@ function setup() {
 }
 const message = (id: number, text: string, chatId = -100, sender = 42, extra: Record<string, unknown> = {}): TelegramUpdate => ({ update_id: id, message: { message_id: id, text, chat: { id: chatId, type: chatId < 0 ? "group" : "private", title: "Test group" }, from: { id: sender }, ...extra } });
 
+it("leaves commands and replies addressed to another bot alone even in an instruction-driven group", async () => {
+  const { store, adapter, profile, run } = setup();
+  store.linkTelegramChat({ chatId: "-100", title: "Recipes", allowedSenders: ["42"] });
+  store.bindTelegramChat("-100", profile.id);
+  const otherBotReply = { reply_to_message: { message_id: 80, from: { id: 999, is_bot: true, username: "recipes_bridge_bot" } } };
+  await adapter.processUpdate(message(1, "/ask@recipes_bridge_bot Dinner for two"));
+  await adapter.processUpdate(message(2, "Double it", -100, 42, otherBotReply));
+  expect(run).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
+  await adapter.processUpdate(message(3, "/ask@STRUDEL_BOT Dinner for two"));
+  await adapter.processUpdate(message(4, "@strudel_bot check this recipe", -100, 42, otherBotReply));
+  expect(run).toHaveBeenCalledTimes(2);
+});
+
 it("creates independent, one-use links scoped to a group and employee", async () => {
   const { store, adapter, profile } = setup();
   const other = store.createProfile({ name: "Researcher" });

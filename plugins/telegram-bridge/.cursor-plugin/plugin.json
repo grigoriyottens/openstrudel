@@ -1,0 +1,15 @@
+{
+  "name": "telegram-bridge",
+  "version": "0.1.0",
+  "description": "Connect a Telegram chat to an existing agent. Keep reasoning and memory in that agent.",
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "BRIDGE_URL": { "type": "string", "description": "HTTPS URL of the bridge, ending in /mcp" },
+      "BRIDGE_TOKEN": { "type": "string", "description": "Private access token for this chat's bridge" }
+    },
+    "required": ["BRIDGE_URL", "BRIDGE_TOKEN"]
+  }
+}
