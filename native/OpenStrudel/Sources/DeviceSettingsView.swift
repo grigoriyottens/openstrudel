@@ -585,7 +585,11 @@ struct AddDeviceConfirmation: View {
             #endif
         }
         .interactiveDismissDisabled(busy)
+        #if os(macOS)
         .presentationSizing(.fitted)
+        #else
+        .presentationSizing(.form)
+        #endif
     }
 
     private var content: some View {
