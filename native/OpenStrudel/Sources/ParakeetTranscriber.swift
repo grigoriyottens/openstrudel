@@ -147,7 +147,6 @@ final class ParakeetTranscriber: @unchecked Sendable {
         let file = try AVAudioFile(forReading: url)
         let source = file.processingFormat
         guard source.sampleRate > 0, file.length > 0,
-              Double(file.length) / source.sampleRate <= VoiceCapture.maximumDuration + 1,
               let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false),
               let converter = AVAudioConverter(from: source, to: target),
               let input = AVAudioPCMBuffer(pcmFormat: source, frameCapacity: 16_384),

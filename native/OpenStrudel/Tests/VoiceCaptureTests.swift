@@ -48,7 +48,7 @@ import Testing
     }
 
     @Test(.enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_LONG_FIXTURE"] != nil), .timeLimit(.minutes(3)))
-    func recognizesFiveMinutesWithoutDroppingTheEnd() async throws {
+    func recognizesLongRecordingWithoutDroppingTheEnd() async throws {
         let path = try #require(ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_LONG_FIXTURE"])
         let started = ContinuousClock.now
         let transcriber = ParakeetTranscriber()
@@ -57,8 +57,11 @@ import Testing
         var usage = rusage()
         getrusage(RUSAGE_SELF, &usage)
         print("Long local dictation: \(text.count) characters, \(meetings) meetings, \(started.duration(to: .now)), peak resident \(usage.ru_maxrss / 1_048_576) MiB")
-        // The real English fixture is repeated throughout all five minutes.
+        // The speech fixture repeats throughout the recording; the optional final marker proves the tail was read.
         #expect(meetings >= 25, "Long recordings must not silently truncate")
+        if let marker = ProcessInfo.processInfo.environment["OPENSTRUDEL_VOICE_LONG_MARKER"] {
+            #expect(text.suffix(500).localizedCaseInsensitiveContains(marker), "The final phrase must survive chunking")
+        }
     }
 
     @Test func switchingConversationsRetainsOnlyThatConversationsRecording() throws {

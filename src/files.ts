@@ -51,7 +51,7 @@ export class ConversationFiles {
     return r ? {id:r.id,conversationId:r.conversation_id,name:r.name,mimeType:r.mime_type,size:r.size,path:r.path} : null;
   }
   forMessage(conversationId: string, ids: string[] = []): StoredFile[] {
-    if (!Array.isArray(ids) || ids.length > 6 || ids.some(id=>typeof id !== "string")) throw new Error("Можно прикрепить до шести файлов");
+    if (!Array.isArray(ids) || ids.some(id=>typeof id !== "string")) throw new Error("Проверьте вложения");
     return [...new Set(ids)].map(id=>{const file=this.get(id);if(!file || file.conversationId !== conversationId) throw new Error("Файл недоступен этому чату");return file;});
   }
   public(file: StoredFile): Attachment { const {path: _,...metadata}=file; return metadata; }

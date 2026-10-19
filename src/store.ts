@@ -519,7 +519,7 @@ export class Store {
 
   createProfile(input: { name?: string; defaultName?: string; instructions?: string; capabilities?: string[]; provider?: string; model?: string; serviceTier?: string; tokenLimit?: number; domain?: EmployeeProfile["domain"]; purpose?: string; appearance?: AgentAppearance }): EmployeeProfile {
     const base = input.name?.trim() || input.defaultName?.trim() || "New assistant";
-    if (base.length > 80 || (input.instructions?.length ?? 0) > 12000) throw new Error("Слишком длинное имя или характер");
+    if (base.length > 80) throw new Error("Слишком длинное имя");
     let name = base;
     if (!input.name?.trim()) {
       for (let n = 2; this.getProfile(name); n++) {
@@ -581,7 +581,7 @@ export class Store {
   updateProfile(profileId: string, input: { name: string; instructions: string; purpose?: string; appearance?: AgentAppearance }): EmployeeProfile {
     const name = input.name.trim();
     const instructions = input.instructions.trim();
-    if (!name || name.length > 80 || instructions.length > 12000) throw new Error("Проверьте имя и длину характера");
+    if (!name || name.length > 80) throw new Error("Проверьте имя");
     if (input.purpose !== undefined && input.purpose.length > 240) throw new Error("Опишите роль короче");
     const named = this.getProfile(name);
     if (named && named.id !== profileId) throw new Error("Сотрудник с таким именем уже есть");

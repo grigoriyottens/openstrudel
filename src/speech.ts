@@ -1,13 +1,15 @@
 import type { Store } from "./store.js";
+import { MAX_FILE_BYTES } from "./files.js";
 import { transcribeVoice } from "./voice.js";
 import { HomeError } from "./home.js";
 import { recordDiagnostic, type DiagnosticReason } from "./diagnostics.js";
 
 const origin = "https://api.elevenlabs.io";
 const keySetting = "speech.elevenlabs.key";
-export const MAX_SPEECH_BYTES = 20_000_000;
+export const MAX_SPEECH_BYTES = MAX_FILE_BYTES;
 export const transcriptionModel = "scribe_v2";
 export const voiceModel = "eleven_v4";
+export const MAX_SPEECH_TEXT = 10_000; // Eleven v4 API character limit.
 type Voice = { id: string; name: string };
 
 /** Speech is configured on the Home that does the work, like its model accounts.
@@ -61,7 +63,7 @@ export async function saveSpeechSettings(store: Store, input: Record<string, unk
     voices = [];
     try {
       const data = await (await request(key, "/v1/voices")).json() as { voices?: Array<{voice_id?: string; name?: string}> };
-      voices = (data.voices ?? []).filter(v => v.voice_id && v.name).slice(0, 100).map(v => ({ id: v.voice_id!, name: v.name! }));
+      voices = (data.voices ?? []).filter(v => v.voice_id && v.name).map(v => ({ id: v.voice_id!, name: v.name! }));
     } catch {}
   }
   if (input.provider === "elevenlabs" && !key) throw new HomeError("Добавьте API-ключ ElevenLabs.");
@@ -106,8 +108,8 @@ export async function transcribeRecording(store: Store, bytes: Uint8Array, name 
 
 async function recognizeRecording(store: Store, bytes: Uint8Array, name: string, signal?: AbortSignal): Promise<string> {
   if (!bytes.length) throw new HomeError("Запись пустая. Запишите её ещё раз.");
-  if (bytes.length > MAX_SPEECH_BYTES) throw new HomeError("Для распознавания выберите аудио или видео до 20 МБ.", 413);
-  if (speechSettings(store).provider === "local") return transcribeVoice(bytes, name.split(".").at(-1));
+  if (bytes.length > MAX_SPEECH_BYTES) throw new HomeError("Для распознавания выберите аудио или видео до 25 МБ.", 413);
+  if (speechSettings(store).provider === "local") return transcribeVoice(bytes, name.split(".").at(-1), signal);
   const key = store.getSetting(keySetting);
   if (!key) throw new HomeError("Добавьте API-ключ ElevenLabs в настройках голоса.");
   const form = new FormData();
@@ -131,7 +133,7 @@ async function recognizeRecording(store: Store, bytes: Uint8Array, name: string,
 export async function generateSpeech(store: Store, text: string): Promise<Buffer> {
   const settings = speechSettings(store), key = store.getSetting(keySetting);
   if (!key || !settings.voiceId) throw new HomeError("Подключите ElevenLabs и выберите голос в настройках.");
-  if (!text.trim() || text.length > 5000) throw new HomeError("Для озвучивания нужен текст до 5000 символов.");
+  if (!text.trim() || text.length > MAX_SPEECH_TEXT) throw new HomeError("Для озвучивания нужен текст до 10000 символов.");
   const response = await request(key, "/v1/text-to-speech/" + encodeURIComponent(settings.voiceId) + "?output_format=mp3_44100_128", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, model_id: voiceModel }),
   });

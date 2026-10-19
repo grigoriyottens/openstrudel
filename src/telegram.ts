@@ -68,6 +68,7 @@ export class TelegramAdapter {
   private cleaningInteractions?: Promise<void>;
   private readonly preparations = new Map<string, Promise<Pick<MessageInput,"text"|"uploads"> & { transcript?: string }>>();
   private readonly activeChats = new Map<string, number>();
+  private readonly typing = new Map<string, { users: number; timer: ReturnType<typeof setInterval> }>();
   transcribe = (bytes: Uint8Array, extension = "ogg") => transcribeRecording(this.store, bytes, "voice." + extension);
 
   constructor(token: string | undefined, private readonly store: Store, private readonly messages: MessageService) {
@@ -205,13 +206,40 @@ export class TelegramAdapter {
     void this.poll();
   }
 
-  stop(): void { this.running = false; this.controller?.abort(); this.controller = null; }
+  stop(): void {
+    this.running = false; this.controller?.abort(); this.controller = null;
+    for (const entry of this.typing.values()) clearInterval(entry.timer);
+    this.typing.clear();
+  }
+
+  private startTyping(chatId: string, topic?: number): () => void {
+    const key = `${chatId}:${topic ?? ""}`;
+    const existing = this.typing.get(key);
+    if (existing) existing.users++;
+    else {
+      const token = this.token;
+      let sending = false;
+      const pulse = async () => {
+        if (sending || this.token !== token || !this.typing.has(key)) return;
+        sending = true;
+        try { await this.call("sendChatAction", {chat_id:chatId,action:"typing",...(topic ? {message_thread_id:topic} : {})}, token, 3500); }
+        catch { /* Presence is best-effort; it must never block the actual reply. */ }
+        finally { sending = false; }
+      };
+      const timer = setInterval(() => void pulse(), 4000); timer.unref();
+      this.typing.set(key,{users:1,timer}); void pulse();
+    }
+    return () => {
+      const entry = this.typing.get(key);
+      if (entry && --entry.users === 0) {clearInterval(entry.timer);this.typing.delete(key);}
+    };
+  }
 
   /** An explicit app reply never runs the assistant or changes its audience. */
   async replyFromApp(input: { conversationId: string; replyToId: string; text: string; externalId: string; attachments?: string[] }) {
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(input.externalId)) throw new Error("Не удалось определить отправку. Откройте ответ заново.");
     const text = input.text.trim();
-    if (!text || text.length > 32_000) throw new Error("Введите ответ до 32 000 символов.");
+    if (!text) throw new Error("Введите ответ.");
     const files = this.messages.files.forMessage(input.conversationId, input.attachments ?? []).map(file => this.messages.files.public(file));
     const previous = this.store.findMessageByExternal("telegram", input.externalId);
     if (previous) {
@@ -463,6 +491,7 @@ export class TelegramAdapter {
     const replyConversation=message.reply_to_message ? this.replyConversation(chatId,message.reply_to_message.message_id) : null;
     const conversation = replyConversation ?? (binding?.conversationId ? this.store.getConversation(binding.conversationId) : null) ?? this.store.getOrCreateConversation({ channel: "telegram", externalId: chatId, title: message.chat.title ?? "Telegram " + chatId });
     this.activeChats.set(chatId, (this.activeChats.get(chatId) ?? 0) + 1);
+    const stopTyping = contextOnly ? () => {} : this.startTyping(chatId, message.message_thread_id);
     const externalId = chatId + ":" + String(message.message_id), author = [message.from?.first_name,message.from?.last_name].filter(Boolean).join(" ") || undefined;
     let received = false;
     const prepared=(this.preparations.get(chatId) ?? Promise.resolve({text:""})).catch(()=>({text:""})).then(async()=>{
@@ -550,6 +579,7 @@ export class TelegramAdapter {
         await this.sendMessage(message.chat.id, error instanceof Error ? error.message : "Не удалось завершить ответ",`error:${update.update_id}`).catch(notice => { if (!recorded) throw notice; });
       }
     } finally {
+      stopTyping();
       if(this.preparations.get(chatId)===prepared) this.preparations.delete(chatId);
       const remaining = (this.activeChats.get(chatId) ?? 1) - 1;
       if (remaining) this.activeChats.set(chatId, remaining); else this.activeChats.delete(chatId);

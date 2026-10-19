@@ -260,7 +260,7 @@ export function validateArchive(input: unknown): AgentArchive {
   const profiles: Profile[] = array(a.profiles, 1000).map(v => {
     const p = object(v), name = string(p.name, 80);
     if (!name.trim() || name !== name.trim()) fail();
-    return { appearance: p.appearance === undefined ? defaultAppearance(identifier(p.id)) : parseAppearance(p.appearance), id: identifier(p.id), context: identifier(p.context), name, instructions: string(p.instructions, 12000), capabilities: array(p.capabilities, 100).map(c => string(c, 200)), provider: p.provider == null ? null : optional(p.provider, 80), model: optional(p.model, 200), serviceTier: p.serviceTier == null ? null : optional(p.serviceTier,80), ...(p.reasoningEffort == null ? {} : {reasoningEffort:optional(p.reasoningEffort,40)}), tokenLimit: p.tokenLimit === null ? null : number(p.tokenLimit), createdAt: date(p.createdAt), domain: choice(p.domain ?? "personal", ["personal", "work"]) as "personal" | "work", purpose: string(p.purpose ?? "", 240) };
+    return { appearance: p.appearance === undefined ? defaultAppearance(identifier(p.id)) : parseAppearance(p.appearance), id: identifier(p.id), context: identifier(p.context), name, instructions: string(p.instructions, 8 * 1024 * 1024), capabilities: array(p.capabilities, 100).map(c => string(c, 200)), provider: p.provider == null ? null : optional(p.provider, 80), model: optional(p.model, 200), serviceTier: p.serviceTier == null ? null : optional(p.serviceTier,80), ...(p.reasoningEffort == null ? {} : {reasoningEffort:optional(p.reasoningEffort,40)}), tokenLimit: p.tokenLimit === null ? null : number(p.tokenLimit), createdAt: date(p.createdAt), domain: choice(p.domain ?? "personal", ["personal", "work"]) as "personal" | "work", purpose: string(p.purpose ?? "", 240) };
   });
   if (!profiles.length) fail();
   const people = unique(profiles);
@@ -324,7 +324,7 @@ export function validateArchive(input: unknown): AgentArchive {
   for (const m of messages) if (m.replyToId && history.get(m.replyToId)?.conversationId !== m.conversationId) fail();
   const schedules: Schedule[] = array(a.schedules, 10000).map(v => {
     const s = object(v), conversationId = identifier(s.conversationId); if (!chats.has(conversationId)) fail();
-    const cron = string(s.cron, 200), timezone = string(s.timezone, 100), name = string(s.name, 120), prompt = string(s.prompt, 12000);
+    const cron = string(s.cron, 200), timezone = string(s.timezone, 100), name = string(s.name, 120), prompt = string(s.prompt, 8 * 1024 * 1024);
     if (!name.trim() || !prompt.trim()) fail();
     try { scheduleTiming(cron, timezone); } catch { fail(); }
     return { id: identifier(s.id), conversationId, name, prompt, cron, timezone, enabled: bool(s.enabled), delivery: choice(s.delivery, ["app", "telegram", "bound"]), destination: optional(s.destination, 2000), backupOf: optional(s.backupOf, 100) };

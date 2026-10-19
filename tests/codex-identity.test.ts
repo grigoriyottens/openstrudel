@@ -8,7 +8,31 @@ vi.mock("../src/rpc.js", () => ({ CodexRpc: class {
   close() { this.closed = true; }
 } }));
 import { CodexEngineAdapter } from "../src/codex.js";
-afterEach(() => wire.request.mockReset());
+afterEach(() => {wire.request.mockReset();vi.useRealTimers();});
+
+it("releases a silent turn after native tool exhaustion without timing out ordinary long work",async()=>{
+  vi.useFakeTimers();
+  wire.request.mockImplementation(async(method:string)=>{
+    if(method==="configRequirements/read")return {requirements:null};
+    if(method==="model/list")return {data:[]};
+    if(method==="thread/start")return {thread:{id:"resource-thread"}};
+    if(method==="turn/start")return {turn:{id:"t"}};
+    if(method==="turn/interrupt")return {};
+    throw Error(method);
+  });
+  const engine=new CodexEngineAdapter();
+  const pending=engine.run("read a file");
+  const rejected=expect(pending).rejects.toThrow("ресурсов");
+  await vi.waitFor(()=>expect(wire.request.mock.calls.some(([m])=>m==="turn/start")).toBe(true));
+  await vi.advanceTimersByTimeAsync(600_000);
+  expect(engine.busy).toBe(true);
+  wire.notify?.({method:"item/completed",params:{threadId:"resource-thread",item:{type:"commandExecution",exitCode:1,aggregatedOutput:"bwrap: Creating new namespace failed: Resource temporarily unavailable"}}});
+  await vi.advanceTimersByTimeAsync(120_000);
+  await rejected;
+  expect(engine.busy).toBe(false);
+  expect(wire.request.mock.calls.some(([m])=>m==="turn/interrupt")).toBe(true);
+  engine.close();
+});
 
 it("uses the account default and refreshes it without changing explicit choices",async()=>{
   let catalog:any[]=[{model:'recommended',isDefault:true,defaultReasoningEffort:'high'},{model:'explicit',defaultReasoningEffort:'low'}];

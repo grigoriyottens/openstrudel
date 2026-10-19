@@ -37,7 +37,7 @@ export class Scheduler {
   }
   save(input: ScheduleInput, now = new Date()): Schedule {
     if (!this.store.getConversation(input.conversationId)) throw new Error("Чат не найден");
-    if (!input.name?.trim() || !input.prompt?.trim() || input.name.length > 120 || input.prompt.length > 12000) throw new Error("Укажите название и поручение");
+    if (!input.name?.trim() || !input.prompt?.trim() || input.name.length > 120) throw new Error("Укажите название и поручение");
     const timing = scheduleTiming(input.cron, input.timezone, now), next = timing.nextRunAt;
     if (timing.once && input.enabled !== false && new Date(next) <= now) throw new Error("Время напоминания уже прошло. Укажите новое время.");
     if (input.telegramChatId && !this.store.getTelegramChat(input.telegramChatId)) throw new Error("Сначала подключите этот Telegram-чат");

@@ -20,6 +20,19 @@ struct AttachmentImportTests {
         #expect(files[0].data == data)
     }
 
+    @Test @MainActor func importsSevenDroppedFilesWithoutAnArtificialCountLimit() async throws {
+        let folder = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let urls = try (1...7).map { index in
+            let url = folder.appendingPathComponent("File-\(index).txt")
+            try Data("Content \(index)".utf8).write(to: url)
+            return url
+        }
+        let files = try await AttachmentImport.providers(urls.map { NSItemProvider(item: $0 as NSURL, typeIdentifier: UTType.fileURL.identifier) })
+        #expect(files.map(\.name) == urls.map(\.lastPathComponent))
+        #expect(files.last?.data == Data("Content 7".utf8))
+    }
+
     @Test func rejectsEmptyFilesAndDirectories() async throws {
         let folder = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: folder) }

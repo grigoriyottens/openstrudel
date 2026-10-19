@@ -76,7 +76,7 @@ struct Composer: View {
         // Sheets start from the system's direction, so they take the interface language again.
         .sheet(isPresented: $showDictation) { DictationSetupView(speechQuery: client.speechQuery) { Task { await startDictation() } }.modifier(InterfaceLanguage()) }
         .sheet(item: $editingMessage) { message in QueuedMessageEditor(message: message).environmentObject(client).modifier(InterfaceLanguage()) }
-        .photosPicker(isPresented: $showPhotos, selection: $photoSelection, maxSelectionCount: max(1, AttachmentImport.countLimit - files.count), matching: .images)
+        .photosPicker(isPresented: $showPhotos, selection: $photoSelection, maxSelectionCount: nil, matching: .images)
         .onChange(of: photoSelection) { _, selection in
             guard !selection.isEmpty else { return }
             let (id, context) = beginImport()
@@ -101,9 +101,6 @@ struct Composer: View {
                 defer { if importID == id { importing = false } }
                 do {
                     let urls = try result.get()
-                    guard files.count + urls.count <= AttachmentImport.countLimit else {
-                        fileError = L("Можно прикрепить до шести файлов. Уберите лишние файлы и попробуйте ещё раз."); return
-                    }
                     let selection = try await AttachmentImport.files(at: urls)
                     completeImport(selection, id: id, context: context)
                 } catch { reportImportError(error, id: id, context: context) }
@@ -238,8 +235,8 @@ struct Composer: View {
         } label: { controlGlyph("plus") }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
             .accessibilityLabel(L("Прикрепить фото или файл"))
-            .help(files.count >= AttachmentImport.countLimit ? L("Можно прикрепить до шести файлов") : L("Прикрепить фото или файл до 25 МБ"))
-            .disabled(importing || files.count >= AttachmentImport.countLimit)
+            .help(L("Прикрепить фото или файл до 25 МБ"))
+            .disabled(importing)
     }
 
     /// In a draft the composer is the screen's only action, so it asks for the role like the sidebar row.
@@ -360,7 +357,6 @@ struct Composer: View {
 
     private func importProviders(_ providers: [NSItemProvider]) {
         guard !providers.isEmpty, !importing, voice.phase == .idle else { return }
-        guard files.count + providers.count <= AttachmentImport.countLimit else { fileError = L("Можно прикрепить до шести файлов."); return }
         let (id, context) = beginImport()
         importTask = Task {
             defer { if importID == id { importing = false } }
@@ -379,9 +375,6 @@ struct Composer: View {
 
     private func completeImport(_ selection: [PickedFile], id: UUID, context: String) {
         guard importID == id, contextID == context, !Task.isCancelled else { return }
-        guard files.count + selection.count <= AttachmentImport.countLimit else {
-            fileError = L("Можно прикрепить до шести файлов."); return
-        }
         files.append(contentsOf: selection)
     }
 

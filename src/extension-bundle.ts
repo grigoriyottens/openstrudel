@@ -14,7 +14,7 @@ export async function readExtensionBundle(input: string): Promise<ExtensionFile[
       for(const entry of await readdir(path)) { if(entry === ".git" || entry === ".DS_Store") continue; await visit(join(path,entry),name ? name+"/"+entry : entry); }
     } else {
       bytes += info.size;
-      if(bytes>10*1024*1024 || files.length>=300) throw new HomeError("Пакет должен содержать не более 300 файлов и занимать до 10 МБ.");
+      if(bytes>10*1024*1024) throw new HomeError("Пакет должен занимать до 10 МБ.");
       files.push({path:name,contentBase64:(await readFile(path)).toString("base64"),executable:Boolean(info.mode & 0o100)});
     }
   };

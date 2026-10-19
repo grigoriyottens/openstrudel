@@ -20,7 +20,7 @@ describe("Telegram ownership and delivery", () => {
     await adapter.processUpdate({ update_id: 3, message: { message_id: 3, text: "hello", chat: { id: 42, type: "private" } } });
     expect(handle).toHaveBeenCalledWith(expect.objectContaining({ text: "hello", conversationId: store.getOrCreateConversation({ channel: "telegram", externalId: "42" }).id }));
     expect(adapter.status().linkedChats).toEqual(["42"]);
-    expect(calls.length).toBe(3);
+    expect(calls.filter(url => !url.endsWith("/sendChatAction"))).toHaveLength(3);
     adapter.stop();
   });
 

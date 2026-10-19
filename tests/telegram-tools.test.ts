@@ -222,13 +222,12 @@ it("rechecks membership, pause and owner access at tool time",async()=>{
   expect(sent).toEqual([]);
 });
 
-it("rejects outside files, symlinks and empty or oversized sends before contacting Telegram",async()=>{
+it("rejects outside files, symlinks and empty sends before contacting Telegram",async()=>{
   const {tools,messages,context,root,sent}=setup();
   const workspace=messages.files.workspace(context.scope!);mkdirSync(workspace,{recursive:true});
   const secret=join(root,"secret.txt");writeFileSync(secret,"private");symlinkSync(secret,join(workspace,"link.txt"));
   for (const paths of [[secret],[join(workspace,"link.txt")]]) await expect(tools().call("send_telegram_message",{chatId:"-1001",text:"",paths})).rejects.toThrow("рабочей области");
   await expect(tools().call("send_telegram_message",{chatId:"-1001",text:" ",paths:[]})).rejects.toThrow("текст или файл");
-  await expect(tools().call("send_telegram_message",{chatId:"-1001",text:"x".repeat(32001),paths:[]})).rejects.toThrow();
   expect(sent).toEqual([]);
 });
 

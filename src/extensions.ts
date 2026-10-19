@@ -41,7 +41,7 @@ export function atomicText(path: string, text: string) {
 /** Only user-selected capabilities persist across account/runtime restarts. */
 export function extensionConfig(home: string): Record<string, any> { return readToml(resolve(home, "openstrudel-extensions.toml")); }
 function safeFiles(input: unknown): Map<string, Buffer> {
-  if (!Array.isArray(input) || !input.length || input.length > 300) throw new HomeError("Выберите SKILL.md или папку навыка/плагина (до 300 файлов).");
+  if (!Array.isArray(input) || !input.length) throw new HomeError("Выберите SKILL.md или папку навыка/плагина.");
   const files = new Map<string, Buffer>(); let size = 0;
   for (const item of input) {
     const path = item?.path;

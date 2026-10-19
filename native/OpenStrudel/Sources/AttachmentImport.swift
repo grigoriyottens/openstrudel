@@ -8,15 +8,13 @@ import AppKit
 /// Read outside the UI actor, with a hard limit even if the file changes while reading.
 enum AttachmentImport {
     static let byteLimit = 25 * 1024 * 1024
-    static let countLimit = 6
 
     enum Failure: LocalizedError, Equatable {
-        case empty, tooLarge, tooMany, oversizedImage, notAFile, unreadableImage
+        case empty, tooLarge, oversizedImage, notAFile, unreadableImage
         var errorDescription: String? {
             switch self {
             case .empty: L("Этот файл пуст. Выберите другой файл.")
             case .tooLarge: L("Файл больше 25 МБ. Выберите файл меньшего размера.")
-            case .tooMany: L("Attach up to 6 files at a time.")
             case .oversizedImage: L("This image is too large. Choose one up to 40 megapixels.")
             case .notAFile: L("Выберите файл. Чтобы отправить папку, сначала сохраните её как ZIP-архив.")
             case .unreadableImage: L("This image couldn’t be opened. Try copying it again or choose the original file.")
@@ -57,10 +55,9 @@ enum AttachmentImport {
         return try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
     }
 
-    /// File picker, drag/drop and paste share the same size and count limits.
+    /// File picker, drag/drop and paste share the same per-file size limit.
     /// Provider temporary URLs are read inside their callback, before expiry.
     @MainActor static func providers(_ providers: [NSItemProvider]) async throws -> [PickedFile] {
-        guard providers.count <= countLimit else { throw Failure.tooMany }
         var files: [PickedFile] = []
         for provider in providers {
             try Task.checkCancellation()

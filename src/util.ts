@@ -35,10 +35,6 @@ export function parseJson<T>(value: string | null | undefined, fallback: T): T {
   }
 }
 
-export function clampText(value: string, max = 16_000): string {
-  return value.length <= max ? value : `${value.slice(0, max)}\n… [truncated]`;
-}
-
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {

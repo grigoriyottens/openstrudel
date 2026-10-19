@@ -321,7 +321,7 @@ private struct TelegramReplySheet: View {
                         }
                     }
                     Button(L("Прикрепить файл…"), systemImage: "paperclip") { choosingFiles = true }
-                        .disabled(importing || files.count >= AttachmentImport.countLimit)
+                        .disabled(importing)
                 } footer: { Text(L("Ответ будет опубликован в этой группе от имени бота.")) }
                 if let error { Text(error).foregroundStyle(AppTheme.warning) }
             }
@@ -332,7 +332,7 @@ private struct TelegramReplySheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     // The sheet names the group; a long title would hide the action in the overflow menu.
                     Button(L("Отправить")) { send() }
-                        .disabled(importing || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 32_000)
+                        .disabled(importing || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("sendTelegramReply")
                 }
             }
@@ -348,7 +348,6 @@ private struct TelegramReplySheet: View {
                 importing = true; defer { importing = false }
                 do {
                     let urls = try result.get()
-                    guard urls.count + files.count <= AttachmentImport.countLimit else { throw AttachmentImport.Failure.tooMany }
                     files += try await AttachmentImport.files(at: urls)
                     error = nil
                 } catch { if !AttachmentImport.isCancellation(error) { self.error = error.localizedDescription } }

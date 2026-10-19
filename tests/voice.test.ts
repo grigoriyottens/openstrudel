@@ -68,7 +68,7 @@ describe("offline voice", () => {
 
   it("rejects empty and oversized audio before starting a process", async () => {
     await expect(transcribeVoice(new Uint8Array())).rejects.toThrow("пустое");
-    await expect(transcribeVoice(new Uint8Array(20_000_001))).rejects.toThrow("20 МБ");
+    await expect(transcribeVoice(new Uint8Array(25 * 1024 * 1024 + 1))).rejects.toThrow("25 МБ");
     expect(mocks.run).not.toHaveBeenCalled();
   });
 
@@ -78,12 +78,19 @@ describe("offline voice", () => {
     expect(mocks.run).not.toHaveBeenCalled();
   });
 
-  it("rejects unknown or long duration before decoding and cleans up", async () => {
-    for (const duration of ["N/A", "NaN", "0", "-1", "301"]) {
+  it("rejects unknown duration before decoding and cleans up", async () => {
+    for (const duration of ["N/A", "NaN", "0", "-1"]) {
       mocks.run.mockResolvedValueOnce({ stdout: JSON.stringify({ format: { duration } }) });
-      await expect(transcribeVoice(new Uint8Array([1]))).rejects.toThrow(duration === "301" ? "5 минут" : "прочитать");
+      await expect(transcribeVoice(new Uint8Array([1]))).rejects.toThrow("прочитать");
     }
     expect(mocks.run.mock.calls.every(([binary]) => binary.endsWith("ffprobe"))).toBe(true);
+  });
+
+  it("recognizes a long recording without the old five-minute rejection",async()=>{
+    mocks.run.mockResolvedValueOnce({stdout:JSON.stringify({format:{duration:"654"}})});
+    expect(await transcribeVoice(new Uint8Array([1]))).toBe("Привет, мир.");
+    const call=mocks.run.mock.calls.find(([binary])=>binary.endsWith("ffmpeg"))!;
+    expect(Number(call[1][call[1].indexOf("-t")+1])).toBeGreaterThan(654);
   });
 
   it("hides decoder internals and removes uploaded audio on failure", async () => {
@@ -97,7 +104,7 @@ describe("offline voice", () => {
       if (binary.endsWith("ffmpeg")) await writeFile(args.at(-1)!, new Uint8Array(301 * 32_000));
       return { stdout: "" };
     });
-    await expect(transcribeVoice(new Uint8Array([1]))).rejects.toThrow("5 минут");
+    await expect(transcribeVoice(new Uint8Array([1]))).rejects.toThrow("прочитать");
     expect(mocks.run).toHaveBeenCalledTimes(2);
   });
 

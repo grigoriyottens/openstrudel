@@ -21,7 +21,7 @@ it("keeps local recognition local even when an ElevenLabs key was saved", async 
   const s = store(true); s.setSetting("speech.provider", "local");
   vi.stubGlobal("fetch", vi.fn());
   expect(await transcribeRecording(s, new Uint8Array([1, 2]), "clip.m4a")).toBe("Local transcript");
-  expect(transcribeVoice).toHaveBeenCalledWith(new Uint8Array([1, 2]), "m4a");
+  expect(transcribeVoice).toHaveBeenCalledWith(new Uint8Array([1, 2]), "m4a", undefined);
   expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -66,7 +66,7 @@ it.each(["voice.ogg", "audio.mp3", "recording.m4a", "clip.mp4", "movie.mov", "so
 it("bounds recordings before upload, rejects silence and never silently falls back after cloud failure", async () => {
   const s = store(true); vi.stubGlobal("fetch", vi.fn(async () => Response.json({ text: "   " })));
   await expect(transcribeRecording(s, new Uint8Array())).rejects.toThrow("пустая");
-  await expect(transcribeRecording(s, new Uint8Array(20_000_001))).rejects.toThrow("20 МБ");
+  await expect(transcribeRecording(s, new Uint8Array(25 * 1024 * 1024 + 1))).rejects.toThrow("25 МБ");
   expect(fetch).not.toHaveBeenCalled();
   await expect(transcribeRecording(s, new Uint8Array([1]))).rejects.toThrow("Речь не распознана");
   vi.stubGlobal("fetch", vi.fn(async () => new Response(key, { status: 429 })));
@@ -139,4 +139,12 @@ it("does not expose a malformed provider response to the user or diagnostics", a
   vi.stubGlobal("fetch", vi.fn(async () => new Response("private provider content")));
   await expect(transcribeRecording(s, new Uint8Array([1]))).rejects.toThrow("ElevenLabs сейчас не отвечает");
   expect(JSON.stringify(diagnosticReport(s))).not.toContain("private");
+});
+
+
+it("accepts speech text beyond the old 5000-character cap up to the selected model's real bound",async()=>{
+ const s=store(true);s.setSetting("speech.elevenlabs.voice","fixture-voice");
+ vi.stubGlobal("fetch",vi.fn(async()=>new Response(new Uint8Array([1,2,3]))));
+ expect(await generateSpeech(s,"a".repeat(6000))).toEqual(Buffer.from([1,2,3]));
+ await expect(generateSpeech(s,"a".repeat(10001))).rejects.toThrow("10000");
 });

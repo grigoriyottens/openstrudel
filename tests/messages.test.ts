@@ -34,6 +34,15 @@ class RecoveryProbeEngine implements CodexEngine {
 }
 
 describe("MessageService", () => {
+  it("preserves a full long response and accepts more than six uploaded files",async()=>{
+    const store=new Store(":memory:"),text="A".repeat(20000);
+    const messages=new MessageService(store,{async run(){return{threadId:"long",response:text,events:[]};}});
+    try {
+      const result=await messages.handle({channel:"api",text:"read",uploads:Array.from({length:7},(_,i)=>({name:`${i}.txt`,contentBase64:Buffer.from("file").toString("base64")}))});
+      expect(result.text).toBe(text);
+      expect(store.listMessages(result.conversationId)[0]?.attachments).toHaveLength(7);
+    }finally{await messages.close();store.close();}
+  });
   it("shows a readable startup timeout and keeps its receipt without replaying the request", async () => {
     const store = new Store(":memory:");
     const run = vi.fn(async () => { throw new Error("Codex не ответил на thread/start"); });

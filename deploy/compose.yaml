@@ -23,6 +23,5 @@ services:
       - data:/data
     mem_limit: ${OPENSTRUDEL_MEMORY:-2g}
     cpus: ${OPENSTRUDEL_CPUS:-2}
-    pids_limit: 512
 volumes:
   data:

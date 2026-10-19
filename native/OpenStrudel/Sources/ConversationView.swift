@@ -223,9 +223,6 @@ struct ConversationView: View {
                     ForEach(previousDrafts, id: \.key) { saved in
                         Button(L("Вставить в сообщение: \(saved.title)")) {
                             let oldFiles = library.fileDrafts[saved.key] ?? []
-                            guard pickedFiles.count + oldFiles.count <= AttachmentImport.countLimit else {
-                                client.errorMessage = AttachmentImport.Failure.tooMany.localizedDescription; return
-                            }
                             draft = [draft, library.draft(for: saved.key)].filter { !$0.isEmpty }.joined(separator: "\n\n")
                             pickedFiles += oldFiles
                             library.saveDraft("", for: saved.key); library.fileDrafts[saved.key] = nil

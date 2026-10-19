@@ -962,7 +962,7 @@ final class HomeClient: ObservableObject, Identifiable {
             throw HomeClientError.server(L("Подключение этой группы изменилось. Откройте её в Telegram."))
         }
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty, value.count <= 32_000 else { return }
+        guard !value.isEmpty else { return }
         let pending = PendingHomeMessage(text: value, profileID: selectedProfileID, conversationID: message.conversationId,
                                          files: files, telegramReplyToID: message.id, telegramChatTitle: message.origin?.title)
         // Persist before publishing/clearing the sheet's draft.
@@ -1708,7 +1708,7 @@ final class HomeClient: ObservableObject, Identifiable {
 
     func transcribeRecording(_ file: URL, query: String) async throws -> String {
         let data = try Data(contentsOf: file)
-        guard !data.isEmpty, data.count <= 20_000_000 else { throw HomeClientError.server(L("Для распознавания выберите аудио или видео до 20 МБ.")) }
+        guard !data.isEmpty, data.count <= AttachmentImport.byteLimit else { throw HomeClientError.server(L("Для распознавания выберите аудио или видео до 25 МБ.")) }
         struct Transcript: Decodable { let text: String }
         let result: Transcript = try await management("/v1/speech/transcribe" + query, method: "POST", payload: ["name": file.lastPathComponent, "contentBase64": data.base64EncodedString()])
         return result.text

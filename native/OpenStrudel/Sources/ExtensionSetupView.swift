@@ -316,8 +316,8 @@ enum ExtensionBundleReader {
                 }
             } else {
                 bytes += values.fileSize ?? 0
-                guard values.isRegularFile == true, bytes <= 10 * 1024 * 1024, files.count < 300 else {
-                    throw HomeClientError.server(L("Пакет должен содержать не более 300 файлов и занимать до 10 МБ."))
+                guard values.isRegularFile == true, bytes <= 10 * 1024 * 1024 else {
+                    throw HomeClientError.server(L("Пакет должен занимать до 10 МБ."))
                 }
                 let data = try Data(contentsOf: item)
                 let mode = (try manager.attributesOfItem(atPath: item.path)[.posixPermissions] as? NSNumber)?.intValue ?? 0

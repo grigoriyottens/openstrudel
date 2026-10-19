@@ -19,7 +19,6 @@ import CryptoKit
     private var deliver: ((String, Bool) -> Void)?
     private var recognizer: ((URL) async throws -> String)?
     private var recognitionDetail = ""
-    nonisolated static let maximumDuration: TimeInterval = 300
     static let maximumLevels = 64
 
     func attach(context: String, deliver: @escaping (String, Bool) -> Void) {
@@ -58,7 +57,7 @@ import CryptoKit
                     AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64000
                 ])
                 recorder.isMeteringEnabled = true
-                guard recorder.record(forDuration: Self.maximumDuration) else { throw VoiceFailure(L("Не удалось начать запись. Проверьте микрофон.")) }
+                guard recorder.record() else { throw VoiceFailure(L("Не удалось начать запись. Проверьте микрофон.")) }
                 self.recorder = recorder
                 phase = .recording; levels = []; seconds = 0; detail = ""
                 meter = Task { [weak self] in

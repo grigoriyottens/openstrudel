@@ -28,6 +28,7 @@ import { SERVICE_SIGN_IN_SECONDS } from "./service-oauth.js";
 import type { ServiceSignIn } from "./types.js";
 import { MAX_SPEECH_BYTES, isSpeechFile, saveSpeechSettings, speechSettings, transcribeRecording } from "./speech.js";
 import { diagnosticReport, recordDiagnostic, saveDiagnosticLevel } from "./diagnostics.js";
+import { runtimeIssues } from "./operations.js";
 
 const MAX_BODY_BYTES = 1_048_576;
 
@@ -291,7 +292,7 @@ export class HttpApi {
       if (path === "/v1/diagnostics" && ["GET", "POST"].includes(request.method ?? "")) {
         if (!canManageAccount) throw new HomeError("Диагностика доступна владельцу устройства.", 403);
         if (request.method === "POST") saveDiagnosticLevel(this.store, (await this.body(request)).level);
-        this.send(response, 200, { ...diagnosticReport(this.store), speech: { provider: speechSettings(this.store).provider, connected: speechSettings(this.store).connected }, telegram: { running: this.telegram.status().running, lastCheckedAt: this.telegram.status().lastCheckedAt } }); return;
+        this.send(response, 200, { ...diagnosticReport(this.store), issues:runtimeIssues(this.store), speech: { provider: speechSettings(this.store).provider, connected: speechSettings(this.store).connected }, telegram: { running: this.telegram.status().running, lastCheckedAt: this.telegram.status().lastCheckedAt } }); return;
       }
       if (path === "/v1/speech/transcribe" && request.method === "POST") {
         const input = await this.body(request, Math.ceil(MAX_SPEECH_BYTES * 4 / 3) + 4096);

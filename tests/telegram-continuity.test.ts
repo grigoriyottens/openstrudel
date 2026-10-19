@@ -11,6 +11,7 @@ import { MockCodexEngine } from "../src/codex.js";
 import { AccountUnavailableError } from "../src/account-errors.js";
 import { ProviderKeyError, providerFailure, providerInfo, providerNotConnected } from "../src/providers.js";
 const stores:Store[]=[];
+const deliveryCalls=()=>vi.mocked(fetch).mock.calls.filter(([url])=>!String(url).endsWith("/sendChatAction"));
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();for(const s of stores.splice(0))s.close();});
 function setup() {
  const s=new Store(":memory:");stores.push(s);const run=vi.fn(async()=>({threadId:"one",response:"**Done**",events:[]}));
@@ -25,26 +26,26 @@ it("keeps ordinary group chatter quiet during an account incident and sends one 
  run.mockRejectedValue(new AccountUnavailableError("limits"));
  const update=(id:number,text:string)=>({update_id:id,message:{message_id:id,from:{id:7},chat:{id:-100,type:"group"},text}});
  await a.processUpdate(update(1,"ordinary conversation"));
- expect(fetch).not.toHaveBeenCalled();
+ expect(deliveryCalls()).toHaveLength(0);
  await a.processUpdate(update(2,"@core_bot check"));
  await a.processUpdate(update(3,"@core_bot second attachment"));
- expect(fetch).toHaveBeenCalledTimes(1);
- expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]![1]!.body)).text).toContain("Лимит");
+ expect(deliveryCalls()).toHaveLength(1);
+ expect(JSON.parse(String(deliveryCalls()[0]![1]!.body)).text).toContain("Лимит");
  expect(s.listMessages(s.getTelegramChat("-100")!.conversationId!).filter(m=>m.status==="failed")).toHaveLength(3);
  // Restart retains the incident; successful processing resets it.
  const restarted=new TelegramAdapter("123:test",s,m);
- await restarted.processUpdate(update(4,"@core_bot still waiting"));expect(fetch).toHaveBeenCalledTimes(1);
+ await restarted.processUpdate(update(4,"@core_bot still waiting"));expect(deliveryCalls()).toHaveLength(1);
  run.mockResolvedValue({threadId:"one",response:"NO_REPLY",events:[]});
  await restarted.processUpdate(update(5,"ordinary conversation after recovery"));
  run.mockRejectedValue(new AccountUnavailableError("sign_in_required"));
- await restarted.processUpdate(update(6,"@core_bot hello"));expect(fetch).toHaveBeenCalledTimes(2);
+ await restarted.processUpdate(update(6,"@core_bot hello"));expect(deliveryCalls()).toHaveLength(2);
  await m.close();
 });
 it("announces a key provider incident in a group once, like an account incident",async()=>{
  const {s,m,a,run}=setup();s.setSetting("telegram.bot_username","core_bot");
  s.bindTelegramChat("-100",s.createProfile({name:"Core"}).id);
  const update=(id:number,text:string)=>({update_id:id,message:{message_id:id,from:{id:7},chat:{id:-100,type:"group"},text}});
- const sent=()=>vi.mocked(fetch).mock.calls.map(c=>JSON.parse(String(c[1]!.body)).text);
+ const sent=()=>deliveryCalls().map(c=>JSON.parse(String(c[1]!.body)).text);
  run.mockRejectedValue(new ProviderKeyError(providerInfo("anthropic")!));
  await a.processUpdate(update(1,"ordinary conversation"));
  await a.processUpdate(update(2,"@core_bot check"));
@@ -101,7 +102,7 @@ it("does not offer confirmation for truncated action details in Telegram", async
  const input=s.addMessage({conversationId:c,channel:"telegram",direction:"inbound",text:"test",externalId:"-100:20"});
  const result=m.interactions.ask({conversationId:c,messageId:input.id,title:"Approve?",detail:"A".repeat(5000),questions:[{id:"decision",question:"",options:["Разрешить","Отказать"]}]});
  await vi.waitFor(()=>expect(fetch).toHaveBeenCalled());
- const body=JSON.parse(String(vi.mocked(fetch).mock.calls[0]![1]!.body));
+ const body=JSON.parse(String(deliveryCalls()[0]![1]!.body));
  expect(body.text).toContain("Полное описание");expect(body.reply_markup.inline_keyboard).toEqual([]);
  m.interactions.cancelMessage(input.id);await expect(result).rejects.toThrow();await m.close();
 });
@@ -109,7 +110,7 @@ it("does not resend a delivery whose response was lost",async()=>{
  const {a}=setup();vi.stubGlobal("fetch",vi.fn(async()=>{throw new Error("connection lost");}));
  await expect(a.sendMessage(-100,"Hello","same-reply")).rejects.toThrow();
  await expect(a.sendMessage(-100,"Hello","same-reply")).rejects.toThrow();
- expect(fetch).toHaveBeenCalledTimes(1);
+ expect(deliveryCalls()).toHaveLength(1);
 });
 it("keeps NO_REPLY internal in groups, including replay after restart", async () => {
  const {s,m,a,run}=setup();
@@ -117,10 +118,10 @@ it("keeps NO_REPLY internal in groups, including replay after restart", async ()
  run.mockResolvedValue({threadId:"one",response:"NO_REPLY",events:[]});
  const update={update_id:42,message:{message_id:42,from:{id:7,first_name:"Dasha"},chat:{id:-100,type:"group",title:"Core"},text:"See you on Monday"}};
  await a.processUpdate(update);
- expect(fetch).not.toHaveBeenCalled();
+ expect(deliveryCalls()).toHaveLength(0);
  expect(s.listMessages(s.getTelegramChat("-100")!.conversationId!).map(m=>m.text)).toEqual(["See you on Monday"]);
  await a.processUpdate(update);
- expect(run).toHaveBeenCalledTimes(1); expect(fetch).not.toHaveBeenCalled();
+ expect(run).toHaveBeenCalledTimes(1); expect(deliveryCalls()).toHaveLength(0);
  expect(run.mock.calls[0]?.[1]).toMatchObject({profile:expect.stringContaining('Telegram group "Core"')});
  await m.close();
 });
@@ -130,7 +131,7 @@ it("recognizes a reply to the same bot from before the migration", async () => {
  await a.processUpdate({update_id:43,message:{message_id:43,from:{id:7},chat:{id:-100,type:"group"},text:"Yes",reply_to_message:{message_id:11,from:{id:123,is_bot:true,username:"core_bot"}}}});
  expect(run.mock.calls[0]?.[0]).toContain('"replyToAssistant":true');
  expect(run.mock.calls[0]?.[1]).toMatchObject({telegramActor:{userId:"7",chatId:"-100",messageId:"-100:43"}});
- expect(fetch).toHaveBeenCalledTimes(1); await m.close();
+ expect(deliveryCalls()).toHaveLength(1); await m.close();
 });
 it("retries a confirmed Telegram rate rejection after retry_after",async()=>{
  const {a,s}=setup();vi.useFakeTimers();
@@ -176,6 +177,7 @@ it("publishes the transcript before model work and still answers if its preview 
  vi.stubGlobal("fetch",vi.fn(async(url:string,init:RequestInit)=>{
    if(url.includes("/file/"))return new Response(new Uint8Array([1]));
    if(url.endsWith("getFile"))return Response.json({ok:true,result:{file_path:"voice.ogg",file_size:1}});
+   if(url.endsWith("sendChatAction"))return Response.json({ok:true,result:true});
    const body=JSON.parse(String(init.body));events.push(body.text);
    if(body.text.startsWith("📝"))throw new Error("Response lost after send");
    return Response.json({ok:true,result:{message_id:99}});
@@ -196,6 +198,7 @@ it("keeps a context-only recording quiet and never previews into a changed audie
  vi.stubGlobal("fetch",vi.fn(async(url:string,init:RequestInit)=>{
    if(url.includes("/file/"))return new Response(new Uint8Array([1]));
    if(url.endsWith("getFile"))return Response.json({ok:true,result:{file_path:"voice.ogg",file_size:1}});
+   if(url.endsWith("sendChatAction"))return Response.json({ok:true,result:true});
    sent.push(JSON.parse(String(init.body)).text);return Response.json({ok:true,result:{message_id:99}});
  }));
  await a.processUpdate({update_id:13,message:{message_id:13,from:{id:7},chat:{id:-100,type:"group"},voice:{file_id:"v",file_size:1}}});

@@ -134,7 +134,7 @@ struct DiagnosticsView: View {
         case "timeout": L("Время ожидания истекло")
         case "cancelled": L("Отменено")
         case "invalid_audio", "empty_audio": L("Не удалось прочитать речь")
-        case "file_too_large": L("Файл больше 20 МБ")
+        case "file_too_large": L("Файл больше допустимого размера")
         case "local_recognition": L("Ошибка распознавания на устройстве")
         default: L("Сервис временно недоступен")
         }
