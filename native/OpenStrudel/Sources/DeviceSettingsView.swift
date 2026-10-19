@@ -232,6 +232,7 @@ private struct DevicePickerSection: View {
 
 private struct DevicesPane: View {
     @EnvironmentObject private var library: DeviceLibrary
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     #if os(macOS)
     @ObservedObject private var serverSetup = ServerSetupFlow.shared
     #endif
@@ -248,6 +249,12 @@ private struct DevicesPane: View {
     @State private var renaming: RenameTarget?
     @State private var diagnostics: HomeClient?
     @State private var speech: HomeClient?
+
+    private var actionLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout())
+    }
 
     // A Form gives a modifier on several rows to each row, and duplicate presenters of one sheet
     // dismiss it and Settings with it. So each sheet hangs on exactly one row.
@@ -275,11 +282,11 @@ private struct DevicesPane: View {
                     get: { expandedDeviceID == device.id },
                     set: { expandedDeviceID = $0 ? device.id : nil }
                 )) {
-                    HStack {
+                    actionLayout {
                         Button(L("Проверить связь"), systemImage: "arrow.clockwise") { Task { await device.load() } }
                             .disabled(device.isLoading || !device.isConfigured)
                             .accessibilityIdentifier("reconnectDevice")
-                        Spacer()
+                        if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                         Button(L("Диагностика…"), systemImage: "waveform.path.ecg") { diagnostics = device }
                             .accessibilityIdentifier("deviceDiagnostics")
                     }

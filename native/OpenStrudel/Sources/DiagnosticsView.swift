@@ -3,6 +3,7 @@ import SwiftUI
 struct DiagnosticsView: View {
     @ObservedObject var client: HomeClient
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var report: DeviceDiagnosticReport?
     @State private var connectionEvents: [ConnectionDiagnosticEvent] = []
     @State private var detailed = false
@@ -20,11 +21,12 @@ struct DiagnosticsView: View {
                     }
                     Toggle(L("Подробный журнал"), isOn: Binding(get: { detailed }, set: { value in Task { await setDetailed(value) } }))
                         .settingsSwitch().disabled(loading).accessibilityIdentifier("detailedDiagnostics")
-                    HStack {
+                    rowLayout {
                         Button(L("Обновить")) { Task { await load() } }.disabled(loading)
-                        Spacer()
+                        if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                         ShareLink(item: export) { Label(L("Экспорт журнала"), systemImage: "square.and.arrow.up") }.disabled(export.isEmpty)
                     }
+                    .fixedSize(horizontal: false, vertical: true)
                 } footer: {
                     Text(L("Сохраняем состояния связи и результаты распознавания. Подробный режим добавляет начало операций и время запросов. Ключи, записи и текст разговоров в журнал не попадают."))
                 }
@@ -63,11 +65,17 @@ struct DiagnosticsView: View {
         .task { detailed = client.connectionJournal.detailed; await load() }
     }
 
+    private var rowLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+    }
+
     private func eventRow(_ title: String, time: Date, detail: String, failed: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
+            rowLayout {
                 Text(title).foregroundStyle(failed ? AppTheme.warning : Color.primary)
-                Spacer(minLength: 12)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 12) }
                 Text(time, format: .dateTime.day().month().hour().minute().second()).foregroundStyle(AppTheme.secondaryText)
             }
             if !detail.isEmpty { Text(detail).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText) }
