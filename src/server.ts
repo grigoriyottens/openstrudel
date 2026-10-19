@@ -27,6 +27,7 @@ import { notificationDestination, receiveNotification } from "./notification-hoo
 import { SERVICE_SIGN_IN_SECONDS } from "./service-oauth.js";
 import type { ServiceSignIn } from "./types.js";
 import { MAX_SPEECH_BYTES, isSpeechFile, saveSpeechSettings, speechSettings, transcribeRecording } from "./speech.js";
+import { diagnosticReport, recordDiagnostic, saveDiagnosticLevel } from "./diagnostics.js";
 
 const MAX_BODY_BYTES = 1_048_576;
 
@@ -107,6 +108,7 @@ export class HttpApi {
     const address = this.server.address() as AddressInfo;
     this.localURL = `http://127.0.0.1:${address.port}`;
     this.homeLink.start();
+    recordDiagnostic(this.store, "service.started");
     return address;
   }
 
@@ -286,6 +288,11 @@ export class HttpApi {
         const settings = request.method === "POST" ? await saveSpeechSettings(this.store, await this.body(request)) : speechSettings(this.store);
         this.send(response, 200, { ...settings, canManage: canManageAccount }); return;
       }
+      if (path === "/v1/diagnostics" && ["GET", "POST"].includes(request.method ?? "")) {
+        if (!canManageAccount) throw new HomeError("Диагностика доступна владельцу устройства.", 403);
+        if (request.method === "POST") saveDiagnosticLevel(this.store, (await this.body(request)).level);
+        this.send(response, 200, { ...diagnosticReport(this.store), speech: { provider: speechSettings(this.store).provider, connected: speechSettings(this.store).connected }, telegram: { running: this.telegram.status().running, lastCheckedAt: this.telegram.status().lastCheckedAt } }); return;
+      }
       if (path === "/v1/speech/transcribe" && request.method === "POST") {
         const input = await this.body(request, Math.ceil(MAX_SPEECH_BYTES * 4 / 3) + 4096);
         if (typeof input.name !== "string" || !isSpeechFile(input.name) || typeof input.contentBase64 !== "string") throw new HomeError("Выберите аудио или видео для распознавания.");
@@ -410,7 +417,7 @@ export class HttpApi {
         this.send(response,200,{timezone:ownerTimezone(this.store),configured:Boolean(this.store.getSetting('owner.timezone'))}); return;
       }
       if (request.method === "GET" && path === "/health") {
-        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, speechVersion: 1, conversationModelsVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, ownerInvitesVersion: 1, subscriptionsVersion: 1, telegramPrivateChoiceVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
+        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, speechVersion: 1, diagnosticsVersion: 1, conversationModelsVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, ownerInvitesVersion: 1, subscriptionsVersion: 1, telegramPrivateChoiceVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
         return;
       }
       if (request.method === "GET" && path === "/v1/integrations") {

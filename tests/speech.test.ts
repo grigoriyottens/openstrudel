@@ -1,3 +1,4 @@
+import { diagnosticReport } from "../src/diagnostics.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { Store } from "../src/store.js";
 import { generateSpeech, saveSpeechSettings, speechSettings, transcribeRecording } from "../src/speech.js";
@@ -112,4 +113,30 @@ it("shows an attachment transcript before the answer, keeps retry identity, and 
     expect(run).toHaveBeenCalledTimes(1); expect(fetch).toHaveBeenCalledTimes(2);
     expect(s.listMessages(c.id).filter(m => m.kind === "notice")).toHaveLength(1);
   } finally { await service.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+
+it("records the actual provider failure and successful retry without retaining audio or text", async () => {
+  const s = store(true);
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("secret provider response", { status: 429 })));
+  await expect(transcribeRecording(s, new Uint8Array([1, 2, 3]), "private-name.ogg")).rejects.toThrow("лимит");
+  expect(diagnosticReport(s).events[0]).toMatchObject({ event: "speech.failed", provider: "elevenlabs", status: 429, reason: "provider_limit", bytes: 3 });
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ text: "private spoken words" })));
+  await transcribeRecording(s, new Uint8Array([1, 2, 3]), "private-name.ogg");
+  expect(diagnosticReport(s).events[0]).toMatchObject({ event: "speech.completed", provider: "elevenlabs", bytes: 3 });
+  expect(JSON.stringify(diagnosticReport(s))).not.toMatch(/secret|private|spoken/);
+});
+
+it("distinguishes a provider timeout from network failure", async () => {
+  const s = store(true);
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new DOMException("private request", "TimeoutError"); }));
+  await expect(transcribeRecording(s, new Uint8Array([1]))).rejects.toThrow("не успел");
+  expect(diagnosticReport(s).events[0]).toMatchObject({ event: "speech.failed", reason: "timeout" });
+});
+
+it("does not expose a malformed provider response to the user or diagnostics", async () => {
+  const s = store(true);
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("private provider content")));
+  await expect(transcribeRecording(s, new Uint8Array([1]))).rejects.toThrow("ElevenLabs сейчас не отвечает");
+  expect(JSON.stringify(diagnosticReport(s))).not.toContain("private");
 });

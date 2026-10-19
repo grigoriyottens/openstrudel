@@ -1,3 +1,4 @@
+import { recordDiagnostic } from "./diagnostics.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import { sha256, sleep } from "./util.js";
 import type { Attachment, Interaction, MessageInput, MessageResult, TelegramChat } from "./types.js";
@@ -622,6 +623,7 @@ export class TelegramAdapter {
       try {
         const updates = await this.call<TelegramUpdate[]>("getUpdates", { offset: this.offset, timeout: 20, allowed_updates: ["message", "callback_query", "my_chat_member"] });
         if (!this.running || controller !== this.controller) return;
+        if (this.connectionError) recordDiagnostic(this.store, "telegram.connected");
         this.connectionError = null;
         this.lastCheckedAt = new Date().toISOString();
         void this.cleanupInteractions().catch(() => undefined);
@@ -631,7 +633,9 @@ export class TelegramAdapter {
         }
       } catch (error) {
         if (!this.running || controller !== this.controller) return;
-        this.connectionError = { message: telegramConnectionError(error), code: error instanceof TelegramRequestError ? error.code : undefined };
+        const code = error instanceof TelegramRequestError ? error.code : undefined;
+        if (!this.connectionError || this.connectionError.code !== code) recordDiagnostic(this.store, "telegram.disconnected", { status: code, reason: "network" });
+        this.connectionError = { message: telegramConnectionError(error), code };
         console.error("[telegram] " + this.connectionError.message); await sleep(2_000, controller?.signal).catch(() => undefined);
       }
     }

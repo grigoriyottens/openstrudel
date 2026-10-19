@@ -411,12 +411,16 @@ private final class CredentialReadGate: @unchecked Sendable {
         let checks = fixture.healthChecks
         await client.refreshCatalogue()
         #expect(fixture.healthChecks == checks, "A device that stays online is not asked for its health on every poll")
+        let library = DeviceLibrary(clients: [client])
         fixture.offline = true
         await client.refreshCatalogue()
         #expect(client.homeUnreachable)
+        #expect(library.visibleClients.contains { $0 === client }, "Loss of reachability must never remove a saved server")
+        #expect(client.connectionJournal.events.contains { $0.kind == .unavailable })
         fixture.offline = false; fixture.flags["deviceRenameVersion"] = 1
         await client.refreshCatalogue()
         #expect(!client.homeUnreachable)
+        #expect(client.connectionJournal.events.first?.kind == .connected)
         #expect(client.canRenameDevice, "The returning Home's abilities, not the ones from before its update")
     }
 

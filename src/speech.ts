@@ -1,6 +1,7 @@
 import type { Store } from "./store.js";
 import { transcribeVoice } from "./voice.js";
 import { HomeError } from "./home.js";
+import { recordDiagnostic, type DiagnosticReason } from "./diagnostics.js";
 
 const origin = "https://api.elevenlabs.io";
 const keySetting = "speech.elevenlabs.key";
@@ -20,11 +21,15 @@ export function speechSettings(store: Store) {
   };
 }
 
+class SpeechFailure extends HomeError {
+  constructor(message: string, status: number, readonly reason: DiagnosticReason, readonly providerStatus?: number) { super(message, status); }
+}
+
 function problem(status: number): Error {
-  if (status === 401 || status === 403) return new HomeError("ElevenLabs не принял ключ или его разрешения. Проверьте ключ в настройках голоса.", 400);
-  if (status === 402 || status === 429) return new HomeError("ElevenLabs временно недоступен или закончился лимит. Проверьте баланс и повторите позже.", 503);
-  if (status === 400 || status === 422) return new HomeError("ElevenLabs не смог обработать запись. Проверьте формат файла и наличие речи.", 400);
-  return new HomeError("ElevenLabs сейчас не отвечает. Попробуйте ещё раз.", 503);
+  if (status === 401 || status === 403) return new SpeechFailure("ElevenLabs не принял ключ или его разрешения. Проверьте ключ в настройках голоса.", 400, "provider_auth", status);
+  if (status === 402 || status === 429) return new SpeechFailure("ElevenLabs временно недоступен или закончился лимит. Проверьте баланс и повторите позже.", 503, "provider_limit", status);
+  if (status === 400 || status === 422) return new SpeechFailure("ElevenLabs не смог обработать запись. Проверьте формат файла и наличие речи.", 400, "invalid_audio", status);
+  return new SpeechFailure("ElevenLabs сейчас не отвечает. Попробуйте ещё раз.", 503, "provider_unavailable", status);
 }
 
 async function request(key: string, path: string, init: RequestInit = {}, signal?: AbortSignal) {
@@ -37,7 +42,8 @@ async function request(key: string, path: string, init: RequestInit = {}, signal
   } catch (error) {
     if (error instanceof HomeError || signal?.aborted) throw error;
     // Provider errors can contain request details. Return only our own text.
-    throw new HomeError("Не удалось связаться с ElevenLabs. Запись можно распознать повторно.", 503);
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    throw new SpeechFailure(timedOut ? "ElevenLabs не успел распознать запись. Попробуйте ещё раз." : "Не удалось связаться с ElevenLabs. Запись можно распознать повторно.", 503, timedOut ? "timeout" : "network");
   }
 }
 
@@ -83,6 +89,22 @@ export function isSpeechFile(name: string, mimeType?: string): boolean {
 }
 
 export async function transcribeRecording(store: Store, bytes: Uint8Array, name = "voice.ogg", signal?: AbortSignal): Promise<string> {
+  const provider = speechSettings(store).provider as "local" | "elevenlabs", started = Date.now();
+  recordDiagnostic(store, "speech.started", { provider, bytes: bytes.length });
+  try {
+    const text = await recognizeRecording(store, bytes, name, signal);
+    recordDiagnostic(store, "speech.completed", { provider, bytes: bytes.length, durationMs: Date.now() - started });
+    return text;
+  } catch (error) {
+    const reason = signal?.aborted ? "cancelled" : !bytes.length ? "empty_audio" : bytes.length > MAX_SPEECH_BYTES ? "file_too_large"
+      : error instanceof SpeechFailure ? error.reason : provider === "local" ? "local_recognition" : "invalid_audio";
+    recordDiagnostic(store, "speech.failed", { provider, bytes: bytes.length, durationMs: Date.now() - started, reason,
+      ...(error instanceof SpeechFailure && error.providerStatus ? { status: error.providerStatus } : {}) });
+    throw error;
+  }
+}
+
+async function recognizeRecording(store: Store, bytes: Uint8Array, name: string, signal?: AbortSignal): Promise<string> {
   if (!bytes.length) throw new HomeError("Запись пустая. Запишите её ещё раз.");
   if (bytes.length > MAX_SPEECH_BYTES) throw new HomeError("Для распознавания выберите аудио или видео до 20 МБ.", 413);
   if (speechSettings(store).provider === "local") return transcribeVoice(bytes, name.split(".").at(-1));
@@ -93,7 +115,14 @@ export async function transcribeRecording(store: Store, bytes: Uint8Array, name 
   form.set("tag_audio_events", "false");
   form.set("timestamps_granularity", "none");
   form.set("file", new Blob([new Uint8Array(bytes)]), name.replace(/[^\p{L}\p{N}._ -]/gu, "_").slice(-180) || "voice.ogg");
-  const result = await (await request(key, "/v1/speech-to-text", { method: "POST", body: form }, signal)).json() as {text?: string};
+  const response = await request(key, "/v1/speech-to-text", { method: "POST", body: form }, signal);
+  let result: { text?: string };
+  try { result = await response.json() as { text?: string }; }
+  catch (error) {
+    if (signal?.aborted) throw error;
+    throw new SpeechFailure("ElevenLabs сейчас не отвечает. Попробуйте ещё раз.", 503,
+      error instanceof Error && error.name === "TimeoutError" ? "timeout" : "provider_unavailable");
+  }
   if (typeof result.text !== "string" || !result.text.trim()) throw new HomeError("Речь не распознана. Попробуйте записать сообщение ещё раз.");
   return result.text.trim();
 }

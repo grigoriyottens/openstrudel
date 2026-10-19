@@ -39,6 +39,18 @@ async function eventually(f: () => Promise<void> | void) {
 }
 
 describe("user-owned primary Home", () => {
+  it("keeps diagnostics owner-only, persists the level on the selected device and serves no secrets", async () => {
+    const primary = await node("Primary"), worker = await node("Worker");
+    await connect(primary, worker);
+    worker.runtime.store.setSetting("speech.elevenlabs.key", "private-key-value");
+    const route = "/v1/diagnostics?deviceId=" + worker.home.state.nodeId;
+    expect((await primary.api(route, "POST", { level: "detailed" })).status).toBe(200);
+    expect((await primary.api(route)).value).toMatchObject({ level: "detailed", speech: { provider: "local", connected: true } });
+    expect(primary.runtime.store.getSetting("diagnostics.level")).toBeNull();
+    const member = await worker.runtime.api.homeLink.execute({ id: randomUUID(), request: { method: "GET", path: "/v1/diagnostics", owner: false } });
+    expect(member.status).toBe(403);
+    expect(JSON.stringify((await primary.api(route)).value)).not.toContain("private-key-value");
+  });
   it("relays speech settings without logging the key, transcribes on the selected Home and refuses member changes", async () => {
     const actualFetch = fetch, secret = "test-elevenlabs-key-remote-only";
     const calls: string[] = [];

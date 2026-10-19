@@ -10050,5 +10050,257 @@
     "es": "Omitido",
     "he": "דולג",
     "ru": "Пропущено"
+  },
+  "Диагностика": {
+    "en": "Diagnostics",
+    "fr": "Diagnostic",
+    "es": "Diagnóstico",
+    "he": "אבחון",
+    "ru": "Диагностика"
+  },
+  "Диагностика…": {
+    "en": "Diagnostics…",
+    "fr": "Diagnostic…",
+    "es": "Diagnóstico…",
+    "he": "אבחון…",
+    "ru": "Диагностика…"
+  },
+  "Подключённые устройства": {
+    "en": "Connected devices",
+    "fr": "Appareils connectés",
+    "es": "Dispositivos conectados",
+    "he": "מכשירים מחוברים",
+    "ru": "Подключённые устройства"
+  },
+  "Голос и распознавание": {
+    "en": "Voice and transcription",
+    "fr": "Voix et transcription",
+    "es": "Voz y transcripción",
+    "he": "קול ותמלול",
+    "ru": "Голос и распознавание"
+  },
+  "Голос и распознавание…": {
+    "en": "Voice and transcription…",
+    "fr": "Voix et transcription…",
+    "es": "Voz y transcripción…",
+    "he": "קול ותמלול…",
+    "ru": "Голос и распознавание…"
+  },
+  "Подключите устройство снова": {
+    "en": "Reconnect this device",
+    "fr": "Reconnectez cet appareil",
+    "es": "Vuelve a conectar este dispositivo",
+    "he": "יש לחבר מחדש את המכשיר",
+    "ru": "Подключите устройство снова"
+  },
+  "Подключаемся…": {
+    "en": "Connecting…",
+    "fr": "Connexion…",
+    "es": "Conectando…",
+    "he": "מתחבר…",
+    "ru": "Подключаемся…"
+  },
+  "Подробный журнал": {
+    "en": "Detailed logging",
+    "fr": "Journal détaillé",
+    "es": "Registro detallado",
+    "he": "רישום מפורט",
+    "ru": "Подробный журнал"
+  },
+  "Экспорт журнала": {
+    "en": "Export log",
+    "fr": "Exporter le journal",
+    "es": "Exportar registro",
+    "he": "ייצוא יומן",
+    "ru": "Экспорт журнала"
+  },
+  "События на устройстве": {
+    "en": "Device events",
+    "fr": "Événements de l’appareil",
+    "es": "Eventos del dispositivo",
+    "he": "אירועי המכשיר",
+    "ru": "События на устройстве"
+  },
+  "Связь с этого приложения": {
+    "en": "Connection from this app",
+    "fr": "Connexion depuis cette app",
+    "es": "Conexión desde esta app",
+    "he": "החיבור מהיישום הזה",
+    "ru": "Связь с этого приложения"
+  },
+  "Событий пока нет.": {
+    "en": "No events yet.",
+    "fr": "Aucun événement pour le moment.",
+    "es": "Aún no hay eventos.",
+    "he": "עדיין אין אירועים.",
+    "ru": "Событий пока нет."
+  },
+  "Распознавание началось": {
+    "en": "Transcription started",
+    "fr": "Transcription démarrée",
+    "es": "Transcripción iniciada",
+    "he": "התמלול התחיל",
+    "ru": "Распознавание началось"
+  },
+  "Запись распознана": {
+    "en": "Recording transcribed",
+    "fr": "Enregistrement transcrit",
+    "es": "Grabación transcrita",
+    "he": "ההקלטה תומללה",
+    "ru": "Запись распознана"
+  },
+  "Не удалось распознать запись": {
+    "en": "Transcription failed",
+    "fr": "Échec de la transcription",
+    "es": "Error de transcripción",
+    "he": "התמלול נכשל",
+    "ru": "Не удалось распознать запись"
+  },
+  "Связь с Telegram восстановлена": {
+    "en": "Telegram reconnected",
+    "fr": "Connexion à Telegram rétablie",
+    "es": "Conexión con Telegram restablecida",
+    "he": "החיבור לטלגרם שוחזר",
+    "ru": "Связь с Telegram восстановлена"
+  },
+  "Нет связи с Telegram": {
+    "en": "Telegram disconnected",
+    "fr": "Telegram déconnecté",
+    "es": "Telegram desconectado",
+    "he": "אין חיבור לטלגרם",
+    "ru": "Нет связи с Telegram"
+  },
+  "OpenStrudel запущен": {
+    "en": "OpenStrudel started",
+    "fr": "OpenStrudel démarré",
+    "es": "OpenStrudel iniciado",
+    "he": "OpenStrudel הופעל",
+    "ru": "OpenStrudel запущен"
+  },
+  "Связь установлена": {
+    "en": "Connected",
+    "fr": "Connecté",
+    "es": "Conectado",
+    "he": "מחובר",
+    "ru": "Связь установлена"
+  },
+  "Подключение удалено на этом устройстве": {
+    "en": "Connection removed on this device",
+    "fr": "Connexion supprimée sur cet appareil",
+    "es": "Conexión eliminada en este dispositivo",
+    "he": "החיבור הוסר מהמכשיר הזה",
+    "ru": "Подключение удалено на этом устройстве"
+  },
+  "Запрос не выполнен": {
+    "en": "Request failed",
+    "fr": "Échec de la requête",
+    "es": "Error en la solicitud",
+    "he": "הבקשה נכשלה",
+    "ru": "Запрос не выполнен"
+  },
+  "Запрос выполнен": {
+    "en": "Request completed",
+    "fr": "Requête terminée",
+    "es": "Solicitud completada",
+    "he": "הבקשה הושלמה",
+    "ru": "Запрос выполнен"
+  },
+  "Проверьте ключ ElevenLabs": {
+    "en": "Check the ElevenLabs key",
+    "fr": "Vérifiez la clé ElevenLabs",
+    "es": "Comprueba la clave de ElevenLabs",
+    "he": "יש לבדוק את מפתח ElevenLabs",
+    "ru": "Проверьте ключ ElevenLabs"
+  },
+  "Лимит ElevenLabs": {
+    "en": "ElevenLabs limit reached",
+    "fr": "Limite ElevenLabs atteinte",
+    "es": "Límite de ElevenLabs alcanzado",
+    "he": "הגעת למגבלה של ElevenLabs",
+    "ru": "Лимит ElevenLabs"
+  },
+  "Ошибка сети": {
+    "en": "Network error",
+    "fr": "Erreur réseau",
+    "es": "Error de red",
+    "he": "שגיאת רשת",
+    "ru": "Ошибка сети"
+  },
+  "Время ожидания истекло": {
+    "en": "Request timed out",
+    "fr": "Délai dépassé",
+    "es": "Tiempo de espera agotado",
+    "he": "תם הזמן הקצוב לבקשה",
+    "ru": "Время ожидания истекло"
+  },
+  "Отменено": {
+    "en": "Cancelled",
+    "fr": "Annulé",
+    "es": "Cancelado",
+    "he": "בוטל",
+    "ru": "Отменено"
+  },
+  "Не удалось прочитать речь": {
+    "en": "Could not read the speech",
+    "fr": "Impossible de lire la parole",
+    "es": "No se pudo leer el audio",
+    "he": "לא ניתן היה לקרוא את הדיבור",
+    "ru": "Не удалось прочитать речь"
+  },
+  "Файл больше 20 МБ": {
+    "en": "File exceeds 20 MB",
+    "fr": "Le fichier dépasse 20 Mo",
+    "es": "El archivo supera los 20 MB",
+    "he": "הקובץ גדול מ־20 MB",
+    "ru": "Файл больше 20 МБ"
+  },
+  "Ошибка распознавания на устройстве": {
+    "en": "Local transcription failed",
+    "fr": "Échec de la transcription locale",
+    "es": "Error en la transcripción local",
+    "he": "התמלול המקומי נכשל",
+    "ru": "Ошибка распознавания на устройстве"
+  },
+  "Сервис временно недоступен": {
+    "en": "Service temporarily unavailable",
+    "fr": "Service temporairement indisponible",
+    "es": "Servicio temporalmente no disponible",
+    "he": "השירות אינו זמין זמנית",
+    "ru": "Сервис временно недоступен"
+  },
+  "Выберите обычный или подробный журнал.": {
+    "en": "Choose standard or detailed logging.",
+    "fr": "Choisissez un journal normal ou détaillé.",
+    "es": "Elige registro normal o detallado.",
+    "he": "יש לבחור רישום רגיל או מפורט.",
+    "ru": "Выберите обычный или подробный журнал."
+  },
+  "Диагностика доступна владельцу устройства.": {
+    "en": "Diagnostics are available to the device owner.",
+    "fr": "Le diagnostic est réservé au propriétaire de l’appareil.",
+    "es": "El diagnóstico está disponible para el propietario del dispositivo.",
+    "he": "האבחון זמין לבעל המכשיר.",
+    "ru": "Диагностика доступна владельцу устройства."
+  },
+  "ElevenLabs не успел распознать запись. Попробуйте ещё раз.": {
+    "en": "ElevenLabs timed out while transcribing. Try again.",
+    "fr": "Le délai de transcription ElevenLabs a expiré. Réessayez.",
+    "es": "ElevenLabs agotó el tiempo de transcripción. Inténtalo de nuevo.",
+    "he": "תם הזמן הקצוב לתמלול ב־ElevenLabs. יש לנסות שוב.",
+    "ru": "ElevenLabs не успел распознать запись. Попробуйте ещё раз."
+  },
+  "Обновите OpenStrudel на этом устройстве, чтобы видеть журнал распознавания.": {
+    "en": "Update OpenStrudel on this device to view transcription logs.",
+    "fr": "Mettez OpenStrudel à jour sur cet appareil pour voir le journal de transcription.",
+    "es": "Actualiza OpenStrudel en este dispositivo para ver el registro de transcripción.",
+    "he": "יש לעדכן את OpenStrudel במכשיר כדי לראות את יומן התמלול.",
+    "ru": "Обновите OpenStrudel на этом устройстве, чтобы видеть журнал распознавания."
+  },
+  "Сохраняем состояния связи и результаты распознавания. Подробный режим добавляет начало операций и время запросов. Ключи, записи и текст разговоров в журнал не попадают.": {
+    "en": "Connection states and transcription outcomes are saved. Detailed mode adds operation starts and request timing. Keys, recordings and conversation text are never logged.",
+    "fr": "Les états de connexion et les résultats de transcription sont conservés. Le mode détaillé ajoute le début des opérations et la durée des requêtes. Les clés, enregistrements et conversations ne sont jamais journalisés.",
+    "es": "Se guardan los estados de conexión y los resultados de transcripción. El modo detallado añade el inicio y la duración de las solicitudes. No se registran claves, grabaciones ni conversaciones.",
+    "he": "מצבי החיבור ותוצאות התמלול נשמרים. במצב מפורט נרשמים גם תחילת פעולות וזמני בקשות. מפתחות, הקלטות ותוכן שיחות אינם נרשמים.",
+    "ru": "Сохраняем состояния связи и результаты распознавания. Подробный режим добавляет начало операций и время запросов. Ключи, записи и текст разговоров в журнал не попадают."
   }
 }

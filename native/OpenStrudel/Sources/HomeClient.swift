@@ -181,7 +181,18 @@ final class HomeClient: ObservableObject, Identifiable {
     private var accountScope: AccountScope { AccountScope(generation: refreshGeneration, model: conversationModel) }
     private var checkingAccountScope: AccountScope?
     @Published private(set) var isLoading = false
-    @Published private(set) var connectionState: HomeConnectionState = .idle
+    @Published private(set) var connectionState: HomeConnectionState = .idle {
+        didSet {
+            guard oldValue != connectionState else { return }
+            switch connectionState {
+            case .connecting: connectionJournal.record(.connecting)
+            case .connected: connectionJournal.record(.connected)
+            case .unavailable: connectionJournal.record(.unavailable)
+            case .idle: break
+            }
+        }
+    }
+    var connectionJournal: ConnectionJournal { ConnectionJournal(defaults: defaults) }
     @Published private(set) var isStartingLocalHome = false
     @Published private(set) var homeUnreachable = false
     @Published private(set) var interactions: [ChatInteraction] = []
@@ -619,6 +630,7 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     func signOutOnThisDevice() async {
+        connectionJournal.record(.removed)
         guard !isSigningOut else { return }
         isSigningOut = true
         let generation = connectionGeneration
@@ -1766,11 +1778,25 @@ final class HomeClient: ObservableObject, Identifiable {
         }
         let data: Data
         let response: URLResponse
-        if let progress {
-            (data, response) = try await Self.receiveArchive(request, session: session, progress: progress)
-        } else { (data, response) = try await session.data(for: request) }
+        let started = Date()
+        do {
+            if let progress {
+                (data, response) = try await Self.receiveArchive(request, session: session, progress: progress)
+            } else { (data, response) = try await session.data(for: request) }
+        } catch {
+            if generation == connectionGeneration, (error as? URLError)?.code != .cancelled,
+               connectionState != .unavailable || connectionJournal.detailed {
+                connectionJournal.record(.requestFailed, category: .route(path), code: (error as? URLError)?.errorCode,
+                                         durationMs: Int(Date().timeIntervalSince(started) * 1000))
+            }
+            throw error
+        }
         guard generation == connectionGeneration, acceptsOperations else { throw CancellationError() }
         guard let http = response as? HTTPURLResponse else { throw HomeClientError.invalidResponse }
+        if http.statusCode >= 400 || connectionJournal.detailed {
+            connectionJournal.record(http.statusCode >= 400 ? .requestFailed : .requestCompleted, category: .route(path),
+                                     status: http.statusCode, durationMs: Int(Date().timeIntervalSince(started) * 1000))
+        }
         if http.statusCode == 304, ifNoneMatch != nil {
             responseETag?(http.value(forHTTPHeaderField: "ETag") ?? ifNoneMatch)
             return Data()

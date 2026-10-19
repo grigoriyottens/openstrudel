@@ -60,6 +60,12 @@ export class Store {
         value TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS diagnostic_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        time TEXT NOT NULL,
+        event TEXT NOT NULL,
+        details TEXT NOT NULL
+      );
     `);
     // Profiles from the short-lived local-model experiment stay usable on
     // the single Codex engine; their obsolete provider override is cleared.

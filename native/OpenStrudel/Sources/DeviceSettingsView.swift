@@ -145,8 +145,8 @@ struct SettingsView: View {
         TabView(selection: $tab) {
             ForEach(Section.allCases, id: \.self) { section in
                 Tab(section.tabTitle, systemImage: section.symbol, value: section) {
-                    // Devices presents Connect a device, a 560 × 480 sheet with its bars.
-                    SettingsPane(minHeight: section == .devices ? 560 : 360) { pane(section) }
+                    // Keep the device list compact; its sheets size themselves.
+                    SettingsPane(minHeight: section == .devices ? 440 : 360) { pane(section) }
                 }
             }
         }
@@ -194,7 +194,7 @@ struct SettingsView: View {
 /// A Settings window pane: a grouped Form 600 wide whose height follows its rows up to 720,
 /// so the window fits each tab and scrolls only when a pane is long.
 private struct SettingsPane<Content: View>: View {
-    /// 360, or 560 for a pane whose sheets need the room: the window must hold its tallest sheet.
+    /// A compact minimum; longer panes scroll after 720 points.
     var minHeight: CGFloat = 360
     @ViewBuilder let content: Content
     @State private var height: CGFloat = 360
@@ -246,6 +246,8 @@ private struct DevicesPane: View {
     @State private var expandedDeviceID: String?
     @State private var removing: HomeClient?
     @State private var renaming: RenameTarget?
+    @State private var diagnostics: HomeClient?
+    @State private var speech: HomeClient?
 
     // A Form gives a modifier on several rows to each row, and duplicate presenters of one sheet
     // dismiss it and Settings with it. So each sheet hangs on exactly one row.
@@ -267,12 +269,28 @@ private struct DevicesPane: View {
             }
         }
         #endif
-        ForEach(library.visibleClients) { device in
-            Section {
+        Section(L("Подключённые устройства")) {
+            ForEach(library.visibleClients) { device in
                 DisclosureGroup(isExpanded: Binding(
                     get: { expandedDeviceID == device.id },
                     set: { expandedDeviceID = $0 ? device.id : nil }
                 )) {
+                    HStack {
+                        Button(L("Проверить связь"), systemImage: "arrow.clockwise") { Task { await device.load() } }
+                            .disabled(device.isLoading || !device.isConfigured)
+                            .accessibilityIdentifier("reconnectDevice")
+                        Spacer()
+                        Button(L("Диагностика…"), systemImage: "waveform.path.ecg") { diagnostics = device }
+                            .accessibilityIdentifier("deviceDiagnostics")
+                    }
+                    .sheet(item: Binding(get: { diagnostics === device ? diagnostics : nil }, set: { diagnostics = $0 })) { DiagnosticsView(client: $0) }
+                    if device.health?.speechVersion == 1 {
+                        Button(L("Голос и распознавание…"), systemImage: "waveform") { speech = device }
+                            .accessibilityIdentifier("deviceSpeechSettings")
+                            .sheet(item: Binding(get: { speech === device ? speech : nil }, set: { speech = $0 })) { selected in
+                                DeviceSpeechSettings(client: selected)
+                            }
+                    }
                     // An action that cannot run would look tappable in this list, so it appears only when it can.
                     if device.canRenameDevice {
                         HStack {
@@ -305,20 +323,26 @@ private struct DevicesPane: View {
                         Spacer()
                     }
                 } label: {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(device.displayName)
-                            Text(status(device)).font(AppTypography.meta).monospacedDigit().foregroundStyle(AppTheme.secondaryText)
-                        }
-                    } icon: {
+                    HStack(spacing: 12) {
                         Image(systemName: device.deviceSymbol)
+                            .font(.system(size: 21, weight: .regular))
+                            .foregroundStyle(AppTheme.secondaryText)
+                            .frame(width: 36, height: 36)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(device.displayName).fontWeight(.medium)
+                            HStack(spacing: 5) {
+                                Circle().fill(device.connectionState == .connected ? Color.green : device.homeUnreachable || device.connectionNeedsPairing ? Color.orange : Color.secondary)
+                                    .frame(width: 6, height: 6).accessibilityHidden(true)
+                                Text(status(device)).font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                            }
+                        }
+                        Spacer(minLength: 12)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { expandedDeviceID = expandedDeviceID == device.id ? nil : device.id }
+                    .padding(.vertical, 5)
                     .accessibilityIdentifier("deviceDetails")
                     .sheet(item: Binding(get: { renaming?.client === device ? renaming : nil }, set: { renaming = $0 })) { NameEditor(target: $0) }
                 }
+                .disclosureGroupStyle(DeviceDisclosureStyle())
                 .contextMenu {
                     Button(L("Переименовать…"), systemImage: "pencil") { renaming = RenameTarget(client: device) }
                         .disabled(!device.canRenameDevice)
@@ -326,7 +350,8 @@ private struct DevicesPane: View {
             }
         }
         Section {
-            Button(L("Добавить Mac или сервер…")) { adding = .device }
+            Button(L("Добавить Mac или сервер…"), systemImage: "plus.circle") { adding = .device }
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("addDevice")
                 .sheet(item: $adding, onDismiss: {
                     if let pairing { confirmingPairing = pairing; self.pairing = nil }
@@ -341,10 +366,10 @@ private struct DevicesPane: View {
             HiddenEmployeesButton(prominent: true)
             #if os(macOS)
             if !library.visibleClients.contains(where: \.isLocalConnection), LocalHome.isAvailable {
-                Button(localStarting ? L("Запускаем этот Mac…") : L("Работать также на этом Mac")) {
+                Button(localStarting ? L("Запускаем этот Mac…") : L("Работать также на этом Mac"), systemImage: "laptopcomputer") {
                     localStarting = true
                     Task { await library.openLocal(); localStarting = false }
-                }.disabled(localStarting)
+                }.buttonStyle(.plain).disabled(localStarting)
             }
             #endif
         } footer: {
@@ -354,9 +379,48 @@ private struct DevicesPane: View {
 
     private func status(_ device: HomeClient) -> String {
         let state = device.connectionNeedsUnlock ? L("Unlock connection")
+            : device.connectionNeedsPairing ? L("Подключите устройство снова")
+            : device.isConnecting ? L("Подключаемся…")
             : device.homeUnreachable || device.health == nil ? L("Нет связи · попробуем снова")
             : L("На связи · сотрудников: \(device.profiles.count)")
         return library.addressDetail(for: device).map { state + " · " + $0 } ?? state
+    }
+}
+
+private struct DeviceDisclosureStyle: DisclosureGroupStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button { configuration.isExpanded.toggle() } label: {
+                HStack(spacing: 12) {
+                    configuration.label
+                    Image(systemName: configuration.isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .frame(width: 16, height: 16)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(configuration.isExpanded ? L("Развёрнуто") : L("Свёрнуто"))
+            if configuration.isExpanded { configuration.content }
+        }
+    }
+}
+
+private struct DeviceSpeechSettings: View {
+    let client: HomeClient
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            Form { Section { SpeechSettingsView().environmentObject(client) } header: { Text(client.displayName) } }
+                .formStyle(.grouped)
+                .navigationTitle(L("Голос и распознавание"))
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } } }
+        }
+        #if os(macOS)
+        .frame(width: 560, height: 480)
+        #endif
     }
 }
 
