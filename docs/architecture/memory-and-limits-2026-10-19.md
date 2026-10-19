@@ -12,7 +12,7 @@ Enable `features.memories`, `memories.generate_memories` and `memories.use_memor
 
 | Option | What it provides | Decision for these servers |
 | --- | --- | --- |
-| [Codex native memories](https://learn.chatgpt.com/docs/customization/memories) | Selective background extraction/consolidation and recall alongside native chat history and tools | Adopt. Already the execution runtime; verified configuration on the pinned CLI. Generation observed on Wolf. A generated summary on every other server is not yet claimed. |
+| [Codex native memories](https://learn.chatgpt.com/docs/customization/memories) | Selective background extraction/consolidation and recall alongside native chat history and tools | Adopt. Already the execution runtime; verified configuration on the pinned CLI. Extraction outputs and generated summaries observed on all three servers after enabling the available-quota setting. |
 | [Mem0 OSS](https://docs.mem0.ai/open-source/overview) | Memory add/search/update service with LLM, embeddings, vector storage and optional graph storage | Do not duplicate native memory now. Would add another authority for facts, ingestion, provider calls and storage to operate. Reconsider only for a demonstrated cross-runtime requirement. |
 | [Letta](https://docs.letta.com/configuration/memory) | Agent runtime with persistent memory/files and background memory workflows | Not adopted alongside Codex. Its integrated runtime is useful when choosing that stack; adding both does not solve the observed filesystem/process failures. |
 | [Graphiti](https://help.getzep.com/graphiti/getting-started/quick-start) | Temporal knowledge graph, hybrid retrieval, graph backend and extraction models | Defer. No measured temporal relationship query requires this machinery here. Preserve source facts so such an index can be built later without a migration of the source of truth. |
@@ -36,6 +36,7 @@ QMD smoke evaluation used eight synthetic English/Russian documents, five querie
 
 - Telegram per-message, download and API throttling constraints are upstream requirements; they are handled by chunking, explicit errors and `retry_after`.
 - Input/body, individual-file, plugin-package and archive byte bounds protect the existing whole-buffer/base64 transfer paths and 2 GiB processes. Unlimited bytes would require streaming rather than deleting validation. Whole archives and ordinary messages have different transport bounds.
+- Archive/catalog entry counts bound metadata as well as file bytes in those same whole-buffer paths. They do not prune stored history or files; exceeding an export bound produces an explicit error.
 - Short names and labels have UI/storage validation; pagination bounds the returned page, not retained history. Context previews are bounded and explicitly link to the full original history. Generated memory is selective by design.
 - CPU/RAM allocation, idle-runtime eviction, log retention, image pixel limits and offline-recognizer serialization protect observed resource budgets. These do not delete user documents or reject a job merely because another is running.
 - Account/service quotas, native tool approval, audience separation, filesystem scope, authenticated connections, idempotent sending and uncertain-delivery checks remain. They protect the requested operation and its destination, not arbitrary product usage quotas.
