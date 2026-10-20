@@ -1,11 +1,12 @@
 import type { Store } from "./store.js";
-import type { EngineEvent } from "./types.js";
+import type { EngineEvent, Message } from "./types.js";
 
 export const problemText = {
   resources: "Не хватило системных ресурсов для запуска инструмента. Результат задачи не подтверждён.",
   tools: "Не удалось запустить необходимый инструмент или плагин. Результат задачи не подтверждён.",
   connection: "Соединение с исполнителем прервалось. Перед повтором нужно проверить результат действий.",
   account: "Аккаунт требует внимания: вход или доступный лимит. Проверьте настройки аккаунтов.",
+  delivery: "Ответ сохранён, но доставка не подтверждена. Проверьте Telegram перед повтором.",
   execution: "Задача завершилась с ошибкой. Подробности сохранены в исходном чате.",
 } as const;
 export type ProblemCode = keyof typeof problemText;
@@ -45,7 +46,7 @@ export function toolRecovered(event:EngineEvent):boolean {
 
 export function errorProblem(error:unknown):ProblemCode {
   const text=error instanceof Error?error.message:String(error);
-  return infrastructureProblem(text) ?? (/лимит|войдите|аккаунт|unauthorized|quota|rate limit/i.test(text)?"account":/связь|соединение|Codex не ответил/i.test(text)?"connection":"execution");
+  return (Object.entries(problemText).find(([,message])=>message===text)?.[0] as ProblemCode|undefined) ?? infrastructureProblem(text) ?? (/лимит|войдите|аккаунт|unauthorized|quota|rate limit/i.test(text)?"account":/связь|соединение|Codex не ответил/i.test(text)?"connection":"execution");
 }
 
 export function runtimeIssues(store:Store):RuntimeIssue[] {
@@ -54,18 +55,20 @@ export function runtimeIssues(store:Store):RuntimeIssue[] {
   });
 }
 
-export function reportIssue(store:Store,conversationId:string,messageId:string,code:ProblemCode):void {
+export function reportIssue(store:Store,conversationId:string,messageId:string,code:ProblemCode):Message|undefined {
   const conversation=store.getConversation(conversationId);if(!conversation)return;
   const previous=store.getSetting(prefix+conversationId);
   const title=conversation.title ?? "Чат";
   store.setSetting(prefix+conversationId,JSON.stringify({conversationId,messageId,title,code,time:new Date().toISOString()}));
   const root=store.primaryConversation();
-  if(root.id!==conversationId && (!previous || JSON.parse(previous).code!==code))store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${problemText[code]}`});
+  if(!previous || JSON.parse(previous).code!==code)return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${problemText[code]}`});
 }
 
-export function resolveIssue(store:Store,conversationId:string):void {
-  if(!store.getSetting(prefix+conversationId))return;
+export function resolveIssue(store:Store,conversationId:string):Message|undefined {
+  const previous=store.getSetting(prefix+conversationId);
+  // A later successful model turn does not prove an earlier delivery arrived.
+  if(!previous || JSON.parse(previous).code==="delivery")return;
   store.deleteSetting(prefix+conversationId);
   const root=store.primaryConversation();
-  if(root.id!==conversationId)store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Восстановлено · ${store.getConversation(conversationId)?.title ?? "Чат"}\nНовая задача выполнена успешно.`});
+  return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Восстановлено · ${store.getConversation(conversationId)?.title ?? "Чат"}\nНовая задача выполнена успешно.`});
 }

@@ -5,6 +5,7 @@ import type { MessageService } from "./messages.js";
 import type { Attachment } from "./types.js";
 import { agentTransfer } from "./agent-move.js";
 import { scheduleTiming } from "./schedule-timing.js";
+import { errorProblem } from "./operations.js";
 
 export interface ScheduleInput {
   id?: string; conversationId: string; name: string; prompt: string; cron: string; timezone: string;
@@ -145,7 +146,7 @@ export class Scheduler {
         text:`Scheduled request: ${schedule.name}\nScheduled for: ${scheduledFor} (${schedule.timezone}). Current time: ${new Date().toISOString()}.\n${schedule.prompt}\n${deliveryInstructions} Do not create another schedule. If verification fails, state what is unavailable; never invent news or sources.` });
       this.store.db.prepare("UPDATE schedule_runs SET status='ready',message_id=? WHERE id=?").run(result.messageId,runId);
       await this.finish(runId,schedule.conversationId,result.messageId,schedule.telegramChatId,schedule.delivery);
-    } catch (error) { this.fail(runId,error); }
+    } catch (error) { await this.fail(runId,error); }
   }
   private async finish(runId: string, conversationId: string, messageId: string, chatId?: string | null, delivery = "app"): Promise<void> {
     let deliveryAttempted = false;
@@ -165,14 +166,21 @@ export class Scheduler {
       }
       this.store.db.prepare("UPDATE schedule_runs SET status='completed',error=NULL WHERE id=?").run(runId);
     } catch (error) {
-      if (deliveryAttempted) this.store.db.prepare("UPDATE schedule_runs SET status='uncertain',error=? WHERE id=?").run("Ответ сохранён. Подтверждение Telegram не получено; проверьте чат перед повтором.",runId);
-      else this.fail(runId,error);
+      if (deliveryAttempted) {
+        this.store.db.prepare("UPDATE schedule_runs SET status='uncertain',error=? WHERE id=?").run("Ответ сохранён. Подтверждение Telegram не получено; проверьте чат перед повтором.",runId);
+        await this.messages.reportProblem(conversationId,messageId,"delivery");
+      } else await this.fail(runId,error);
     }
   }
   private destination(conversationId: string, chatId?: string | null, delivery = "app"): string | null {
     return delivery === "app" ? null : chatId ?? (delivery === "bound" ? this.store.telegramChats().find(c => c.conversationId === conversationId)?.chatId ?? null : null);
   }
-  private fail(id: string, error: unknown): void {
+  private async fail(id: string, error: unknown): Promise<void> {
     this.store.db.prepare("UPDATE schedule_runs SET status='failed',error=? WHERE id=?").run(error instanceof Error ? error.message : String(error),id);
+    const run=this.store.db.prepare("SELECT conversation_id,message_id FROM schedule_runs WHERE id=?").get(id);
+    // Accepted turns already report their failures and suppress owner cancellations.
+    if(run && (run.message_id || !this.store.findMessageByExternal("api","schedule:"+id))) {
+      await this.messages.reportProblem(String(run.conversation_id),String(run.message_id ?? id),errorProblem(error));
+    }
   }
 }

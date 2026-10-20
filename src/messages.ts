@@ -42,6 +42,11 @@ export class MessageService {
 
   async handle(input: MessageInput): Promise<MessageResult> { return (await this.submit(input)).completion; }
 
+  async reportProblem(conversationId:string,messageId:string,code:ProblemCode,exceptChatId?:string):Promise<void> {
+    const notice=reportIssue(this.store,conversationId,messageId,code);
+    if(notice)await this.telegram?.notifyOwner(notice,exceptChatId);
+  }
+
   async submit(input: MessageInput): Promise<{ receipt: MessageResult; completion: Promise<MessageResult> }> {
     if (this.closing) throw new Error("OpenStrudel завершает работу");
     const text = input.text.trim();
@@ -189,7 +194,7 @@ export class MessageService {
             onEvent: event => {
               if (event.type === "thread.started") { running.threadId = (event.payload as { threadId: string }).threadId; this.store.setConversationThread(current.id, running.threadId); }
               const failure=toolProblem(event);
-              if(failure){problem=failure;reportIssue(this.store,current.id,inbound.id,failure);}
+              if(failure)problem=failure;
               else if(toolRecovered(event))problem=undefined;
             },
           });
@@ -199,13 +204,16 @@ export class MessageService {
         const outbound = this.store.addMessage({ conversationId: current.id, channel: input.channel, direction: "outbound", replyToId: inbound.id, text: result.response,attachments:tools.attachments });
         if ((input.scheduled || groupContext && input.channel === "telegram") && result.response.trim() === "NO_REPLY") this.store.db.prepare("UPDATE messages SET hidden=1 WHERE id=?").run(outbound.id);
         this.store.setMessageStatus(inbound.id, "completed");
-        if(text!=="/help")resolveIssue(this.store,current.id);
+        if(text!=="/help") {
+          const notice=resolveIssue(this.store,current.id);
+          if(notice)await this.telegram?.notifyOwner(notice);
+        }
         return { ...receipt, messageId: outbound.id, text: outbound.text, attachments: outbound.attachments };
       } catch (error) {
         if (isOpenAIAuthenticationError(error)) this.onAuthenticationError?.();
         const message = friendlyError(error);
         this.store.setMessageStatus(inbound.id, "failed", message);
-        if (!this.active.get(conversation.id)?.abort.signal.aborted) reportIssue(this.store,conversation.id,inbound.id,problem ?? errorProblem(error));
+        if (!this.active.get(conversation.id)?.abort.signal.aborted) await this.reportProblem(conversation.id,inbound.id,problem ?? errorProblem(error),input.channel==="telegram" ? input.externalChatId : undefined);
         if (error instanceof AccountUnavailableError || error instanceof ProviderIncident) throw error;
         if (isOpenAIAuthenticationError(error)) throw new AccountUnavailableError("sign_in_required");
         throw new Error(message);

@@ -1,10 +1,61 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { Store } from "../src/store.js";
 import { MessageService } from "../src/messages.js";
+import { TelegramAdapter } from "../src/telegram.js";
+import { Scheduler } from "../src/scheduler.js";
 import { runtimeIssues, toolProblem, toolRecovered } from "../src/operations.js";
 
 const stores:Store[]=[];
-afterEach(()=>stores.splice(0).forEach(s=>s.close()));
+afterEach(()=>{vi.unstubAllGlobals();stores.splice(0).forEach(s=>s.close());});
+
+it.each([true,false])("delivers one failure and recovery to the paired owner, including root failures (%s)",async(rootFailure)=>{
+ const store=new Store(":memory:");stores.push(store);
+ store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
+ store.linkTelegramChat({chatId:"-100",title:"Team",allowedSenders:["42"]});
+ store.linkTelegramChat({chatId:"55",title:"Unpaired",allowedSenders:[]});
+ const conversation=rootFailure ? store.primaryConversation() : store.profileConversation(store.createProfile({name:"News",instructions:"news"}).id);
+ let fail=true;
+ const messages=new MessageService(store,{async run(){if(fail)throw Error("quota exceeded PRIVATE_SECRET");return{threadId:"t",response:"done",events:[]};}});
+ const sent:any[]=[];
+ vi.stubGlobal("fetch",vi.fn(async(_url,init)=>{sent.push(JSON.parse(init.body));return Response.json({ok:true,result:{message_id:sent.length}});}));
+ const telegram=new TelegramAdapter("123:test",store,messages);messages.telegram=telegram;
+ try {
+  for(let i=0;i<2;i++)await expect(messages.handle({channel:"api",conversationId:conversation.id,text:"check",externalId:"fail-"+i})).rejects.toThrow();
+  expect(sent).toHaveLength(1);expect(sent[0].chat_id).toBe("42");expect(sent[0].text).toContain("Аккаунт");expect(sent[0].text).not.toContain("PRIVATE_SECRET");
+  fail=false;await messages.handle({channel:"api",conversationId:conversation.id,text:"check again"});
+  expect(sent).toHaveLength(2);expect(sent[1].text).toContain("Восстановлено");
+  expect(runtimeIssues(store)).toEqual([]);
+ }finally{telegram.stop();await messages.close();}
+});
+
+it("reports an uncertain scheduled delivery without replaying it or losing the saved answer",async()=>{
+ const store=new Store(":memory:");stores.push(store);
+ const messages=new MessageService(store,{async run(){return{threadId:"t",response:"Ready edition",events:[]};}});
+ const root=store.primaryConversation(),scheduler=new Scheduler(store,messages);
+ store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
+ scheduler.deliver=vi.fn(async()=>{throw Error("Lost acknowledgement");});
+ scheduler.save({conversationId:root.id,name:"Daily",prompt:"Read sources",cron:"0 9 * * *",timezone:"Europe/Moscow",delivery:"telegram",telegramChatId:"42"},new Date("2026-10-20T05:00:00Z"));
+ try {
+  await scheduler.tick(new Date("2026-10-20T06:00:00Z"));await scheduler.idle();
+  expect(scheduler.runs(root.id)[0]?.status).toBe("uncertain");expect(runtimeIssues(store)[0]?.code).toBe("delivery");
+  expect(store.listMessages(root.id).some(m=>m.text==="Ready edition")).toBe(true);
+  await scheduler.tick(new Date("2026-10-20T06:01:00Z"));await scheduler.idle();expect(scheduler.deliver).toHaveBeenCalledTimes(1);
+ }finally{await messages.close();}
+});
+
+it("does not report an owner-cancelled schedule as an outage",async()=>{
+ const store=new Store(":memory:");stores.push(store);const root=store.primaryConversation();
+ let started!:()=>void;const ready=new Promise<void>(resolve=>started=resolve);
+ const messages=new MessageService(store,{run:async(_text,options)=>new Promise((_resolve,reject)=>{options!.signal!.addEventListener("abort",()=>reject(Error("cancelled")),{once:true});started();})});
+ const scheduler=new Scheduler(store,messages);
+ scheduler.save({conversationId:root.id,name:"Daily",prompt:"Read sources",cron:"0 9 * * *",timezone:"Europe/Moscow"},new Date("2026-10-20T05:00:00Z"));
+ try {
+  await scheduler.tick(new Date("2026-10-20T06:00:00Z"));await ready;
+  const inbound=store.db.prepare("SELECT id FROM messages WHERE direction='inbound' ORDER BY rowid DESC LIMIT 1").get()!;
+  messages.cancel(root.id,String(inbound.id));await scheduler.idle();
+  expect(scheduler.runs(root.id)[0]?.status).toBe("failed");expect(runtimeIssues(store)).toEqual([]);
+ }finally{await messages.close();}
+});
 
 it("recognizes sandbox exhaustion inside native code-mode outputs without treating ordinary grep misses as outages",()=>{
   expect(toolProblem({type:"item/completed",payload:{item:{type:"functionCallOutput",name:"exec",output:[{type:"input_text",text:JSON.stringify({exit_code:1,output:"bwrap: Creating new namespace failed: Resource temporarily unavailable"})}]}}})).toBe("resources");

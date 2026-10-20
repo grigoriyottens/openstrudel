@@ -92,6 +92,16 @@ export class TelegramAdapter {
 
   enabled(): boolean { return Boolean(this.token); }
 
+  /** Operational notices use the existing outbox and only explicitly paired owners. */
+  async notifyOwner(notice: {id:string;text:string}, exceptChatId?: string): Promise<void> {
+    if(!this.token)return;
+    for(const chat of this.store.telegramChats()) {
+      if(chat.chatId===exceptChatId || !this.isOwner(Number(chat.chatId)) || chat.enabled===false || this.store.getSetting("telegram.paused."+chat.chatId)==="true")continue;
+      try {await this.sendMessage(chat.chatId,notice.text,"operation:"+notice.id);}
+      catch {this.lastError="Не удалось подтвердить доставку уведомления владельцу. Оно сохранено в главном чате.";}
+    }
+  }
+
   status(): TelegramIntegrationStatus {
     return {
       configured: Boolean(this.token), running: this.running,
