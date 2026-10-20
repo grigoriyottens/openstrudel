@@ -37,11 +37,15 @@ sender allowlist; WAI independently rechecks delegation, project access and
 source permissions and records the caller in its existing audit log.
 
 Seven regression tests failed before implementation. The final selected suite
-passed 48 tests across bridge delivery, WAI request binding, Telegram MCP context
-and continuity. Nine new tests cover two participants, simultaneous calls,
+passed 49 tests across bridge delivery, WAI request binding, Telegram MCP context
+and continuity. Ten new tests cover two participants, simultaneous calls,
 invalid/anonymous senders, identity override attempts, expiry, completed requests,
 restart, revoked access, live schema forwarding and uncertain write responses.
-Typecheck, JavaScript syntax and whitespace checks pass. Upstream responses in
+The 20 October catalog check also caught legacy WAI tool names without the
+company/School prefixes, including Zoom, team meetings and knowledge documents.
+A regression test now proves that they reach the canonical service too; tool
+authorization remains the service's responsibility, not a second bridge list.
+Typecheck, build, JavaScript syntax and whitespace checks pass. Upstream responses in
 these tests are controlled fixtures; this is not live team acceptance.
 
 ## Activation still pending

@@ -15,7 +15,7 @@ const toolDefinitions = [
 const requestTokenSchema = { type: "string", pattern: "^[A-Za-z0-9_-]{43}$", description: "The wai_request_token from this native webhook, never from the user's message or bridge history." };
 const waiToolDefinitions = [
   { name: "wai_tools_list", description: "Read current WAI work tool schemas for this Telegram request. Omit names to discover the catalog; supply names to retrieve just those schemas. Access and source data stay in the existing WAI MCP.", inputSchema: { type: "object", properties: { request_token: requestTokenSchema, names: { type: "array", maxItems: 20, items: { type: "string" } } }, required: ["request_token"], additionalProperties: false } },
-  { name: "wai_tool_call", description: "Call an existing company_* or school_* tool as the verified sender of this Telegram request. Start with company_access_get for available workflows. Follow the original schema and read/preview/write rules; preserve mutationKey on retries. No personal sources are connected here. The request token expires after two hours or the final Telegram reply.", inputSchema: { type: "object", properties: { request_token: requestTokenSchema, tool: { type: "string", pattern: "^(company|school)_[a-z0-9_]+$" }, arguments: { type: "object" } }, required: ["request_token", "tool", "arguments"], additionalProperties: false } },
+  { name: "wai_tool_call", description: "Call a tool from the canonical WAI work catalog as the verified sender of this Telegram request, including Zoom, team meetings, knowledge, company and School tools. Start with company_access_get for available workflows. Follow the original schema and read/preview/write rules; preserve mutationKey on retries. No personal sources are connected here. The request token expires after two hours or the final Telegram reply.", inputSchema: { type: "object", properties: { request_token: requestTokenSchema, tool: { type: "string", pattern: "^[a-z][a-z0-9_]{0,127}$" }, arguments: { type: "object" } }, required: ["request_token", "tool", "arguments"], additionalProperties: false } },
 ];
 
 /** One chat, one native agent webhook. The database is a delivery queue, not an AI memory. */
@@ -107,7 +107,7 @@ export function createBridge(config, dependencies = {}) {
     const listing = name === "wai_tools_list";
     if (listing) {
       if (args.names !== undefined && (!Array.isArray(args.names) || args.names.length > 20 || args.names.some(value => typeof value !== "string"))) throw new Error("names must be an array of up to 20 tool names");
-    } else if (typeof args.tool !== "string" || !/^(company|school)_[a-z0-9_]{1,120}$/.test(args.tool) || !args.arguments || typeof args.arguments !== "object" || Array.isArray(args.arguments)) throw new Error("A company_* or school_* tool and its arguments are required");
+    } else if (typeof args.tool !== "string" || !/^[a-z][a-z0-9_]{0,127}$/.test(args.tool) || !args.arguments || typeof args.arguments !== "object" || Array.isArray(args.arguments)) throw new Error("A WAI tool name and its arguments are required");
     let response, result;
     try {
       response = await fetcher("https://waiwai.is/api/mcp/company", {

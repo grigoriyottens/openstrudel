@@ -64,6 +64,16 @@ it("keeps work capabilities out of history, request lookup, status and logs", as
   }
 });
 
+it("forwards the canonical Zoom, team, knowledge and meeting names as well as company and School tools", async () => {
+  const { client, calls, request } = await setup(), incoming = await request(1);
+  const names = ["zoom_meeting_preview", "team_meetings_list", "knowledge_document_get", "meeting_confirmation_link", "school_lessons_today", "company_access_get"];
+  for (const tool of names) {
+    const result = await client.callTool({ name: "wai_tool_call", arguments: { request_token: incoming.wai_request_token, tool, arguments: {} } });
+    expect(result.isError).not.toBe(true);
+  }
+  expect(calls.filter(c => c.url === endpoint).map(c => c.body.params.name)).toEqual(names);
+});
+
 it("rejects forged, guessed, expired and completed capabilities without calling WAI", async () => {
   const { client, calls, request, bridge } = await setup();
   const incoming = await request(1);
@@ -107,7 +117,7 @@ it("retrieves live schemas without copying the WAI catalog, and rejects identity
   expect(result.isError).not.toBe(true);
   expect(JSON.parse(result.content[0].text).tools).toEqual([{ name: "company_tasks_list", inputSchema: { type: "object" } }]);
   const valid = { request_token: incoming.wai_request_token, tool: "company_access_get", arguments: {} };
-  for (const extra of [{ headers: { "x-hermes-user-id": "999" } }, { user_id: "999" }, { url: "https://mikwiseman.com/api/mcp/personal" }, { tool: "personal_meetings_list" }]) {
+  for (const extra of [{ headers: { "x-hermes-user-id": "999" } }, { user_id: "999" }, { url: "https://mikwiseman.com/api/mcp/personal" }, { tool: "../personal" }]) {
     expect(await client.callTool({ name: "wai_tool_call", arguments: { ...valid, ...extra } })).toMatchObject({ isError: true });
   }
   expect(calls.filter(c => c.url === endpoint)).toHaveLength(1);
