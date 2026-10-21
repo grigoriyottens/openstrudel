@@ -98,8 +98,13 @@ It preserved the source's relative date and correctly declined to treat
 "Closed & In Pipeline" as realized monthly revenue. The source instructions now
 start with Alliance Launches and follow discovered links.
 
-The next ordinary News review was accepted by the existing scheduler for
-09:45 UTC; no new schedule was needed. Public third-party pages can still fail
-or return incomplete text, as observed with the general YC feed and some direct
-Alliance opens. The verified path is source discovery, following primary links,
-and stating any remaining gap rather than synthesizing missing facts.
+The next ordinary News review, scheduled for 09:45 UTC, completed and published
+Flora at 09:46:37 and Unitree H2-X at 09:47:07. Both messages were independently
+read in Telegram; the shared ledger retained Bot API receipts 10152 and 10153.
+The schedule ended `quiet` because the editor's final `NO_REPLY` suppresses an
+extra status message after its actual publications. No new schedule was needed.
+
+Public third-party pages can still fail or return incomplete text, as observed
+with the general YC feed and some direct Alliance opens. The verified path is
+source discovery, following primary links, and stating any remaining gap rather
+than synthesizing missing facts.
