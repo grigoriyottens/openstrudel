@@ -143,7 +143,7 @@ export class Scheduler {
         ? `Return the completed edition here; the application handles delivery to Telegram chat ${destination}. Only if the saved request explicitly requires separate messages, use send_telegram_message for that destination and return NO_REPLY to avoid an extra automatic post. Check each delivery receipt; never repeat an unknown or partial delivery. Do not send to another chat.`
         : "Return the completed edition here; it stays in the app. Do not send it to Telegram.";
       const result = await this.messages.handle({ channel:"api",conversationId:schedule.conversationId,externalId:`schedule:${runId}`,scheduled:true,scheduleTelegramChatId:destination,
-        text:`Scheduled request: ${schedule.name}\nScheduled for: ${scheduledFor} (${schedule.timezone}). Current time: ${new Date().toISOString()}.\n${schedule.prompt}\n${deliveryInstructions} Do not create another schedule. If verification fails, state what is unavailable; never invent news or sources.` });
+        text:`Scheduled request: ${schedule.name}\nScheduled for: ${scheduledFor} (${schedule.timezone}). Current time: ${new Date().toISOString()}.\n${schedule.prompt}\n${deliveryInstructions} Do not create another schedule. Follow the saved request's rules for a quiet run. Never invent facts or sources.` });
       this.store.db.prepare("UPDATE schedule_runs SET status='ready',message_id=? WHERE id=?").run(result.messageId,runId);
       await this.finish(runId,schedule.conversationId,result.messageId,schedule.telegramChatId,schedule.delivery);
     } catch (error) { await this.fail(runId,error); }
