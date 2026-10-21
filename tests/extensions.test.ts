@@ -107,6 +107,22 @@ it("preserves employee extensions across scoped restarts and isolates another au
   scoped.close();
 });
 
+it("keeps an explicitly enabled app when the same audience switches accounts",async()=>{
+  const {root}=fixture(),source=join(root,"source");mkdirSync(source);
+  const first=new ScopedCodexEngine(root,source);first.forContext("personal");
+  const home=join(root,".data/contexts/personal"),shared=join(root,".data/extensions/personal/config.toml");
+  const extensions=new CodexExtensions({home,cwd:join(root,".data/workspace/personal"),sharedConfigPath:shared,
+    client:async()=>{throw Error("Not needed to save a grant");},changed:async()=>{},idle:()=>true});
+  await extensions.enableApp("connector_calendar");
+  first.close();
+  const second=new ScopedCodexEngine(root,source,undefined,join(root,"second-account"));
+  second.forContext("personal");second.forContext("work");
+  expect(readToml(join(root,"second-account/personal/config.toml")).apps.connector_calendar.enabled).toBe(true);
+  expect(readToml(join(root,"second-account/work/config.toml")).apps.connector_calendar).toBeUndefined();
+  expect(readToml(shared).apps).toEqual({connector_calendar:{enabled:true}});
+  second.close();
+});
+
 it("keeps native initialization and pending requests busy, then releases the idle runtime",async()=>{
   const {home,cwd}=fixture();
   const engine=new CodexEngineAdapter({codexHome:home,workingDirectory:cwd,scoped:true});

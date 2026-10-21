@@ -149,10 +149,20 @@ export class CodexExtensions {
   private persist() {
     const config = readToml(this.configPath), saved: Record<string, any> = {};
     for (const key of ["plugins", "marketplaces", "skills"]) if (config[key]) saved[key] = config[key];
+    const apps=Object.fromEntries(Object.entries(config.apps ?? {}).filter(([id,value])=>id!=="_default" && /^[a-zA-Z0-9_-]+$/.test(id) && typeof (value as any)?.enabled==="boolean").map(([id,value])=>[id,{enabled:(value as any).enabled}]));
+    if(Object.keys(apps).length)saved.apps=apps;
     const servers = Object.fromEntries(Object.entries(config.mcp_servers ?? {}).filter(([name]) => !this.options.reservedServers?.includes(name)));
     if (Object.keys(servers).length) saved.mcp_servers = servers;
     atomicText(resolve(this.options.home, "openstrudel-extensions.toml"), stringify(saved));
     if (this.options.sharedConfigPath) atomicText(this.options.sharedConfigPath,stringify(saved));
+  }
+  async enableApp(id:string) {
+    if(id==="_default" || !/^[a-zA-Z0-9_-]+$/.test(id))throw new HomeError("Сервис не найден в Codex");
+    await this.mutate(async()=>{
+      const config=readToml(this.configPath);
+      config.apps={...config.apps,[id]:{...config.apps?.[id],enabled:true}};
+      atomicText(this.configPath,stringify(config));
+    });
   }
   private async mutate<T>(operation: (transaction: { undo: Array<() => void | Promise<void>>; commit: Array<() => void> }) => Promise<T>): Promise<T> {
     const scope=this.options.sharedConfigPath ?? this.configPath;

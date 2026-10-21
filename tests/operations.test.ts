@@ -8,6 +8,58 @@ import { runtimeIssues, toolProblem, toolRecovered } from "../src/operations.js"
 const stores:Store[]=[];
 afterEach(()=>{vi.unstubAllGlobals();stores.splice(0).forEach(s=>s.close());});
 
+it("reports an unresolved native connector failure to root and Telegram while preserving a partial answer",async()=>{
+ const store=new Store(":memory:");stores.push(store);const root=store.primaryConversation();
+ store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
+ const profile=store.createProfile({name:"Daily",instructions:"brief"});
+ let failed=true,tool="list_events";
+ const messages=new MessageService(store,{async run(_text,options){
+  options!.onEvent!({type:"item/completed",payload:{item:{type:"mcpToolCall",server:"calendar",tool,status:failed?"failed":"completed",error:null,result:{content:[{type:"text",text:failed?'PRIVATE_SECRET upstream_failure':'ok'}]}}}});
+  return{threadId:"t",response:"CRM available; calendar unavailable",events:[]};
+ }});
+ const sent:any[]=[];vi.stubGlobal("fetch",vi.fn(async(_url,init)=>{sent.push(JSON.parse(init.body));return Response.json({ok:true,result:{message_id:sent.length}});}));
+ const telegram=new TelegramAdapter("123:test",store,messages);messages.telegram=telegram;
+ try {
+  for(let i=0;i<2;i++)expect((await messages.handle({channel:"api",profile:profile.id,text:"check"})).text).toContain("CRM available");
+  expect(sent).toHaveLength(1);expect(sent[0].text).toContain("calendar.list_events");expect(sent[0].text).not.toContain("PRIVATE_SECRET");
+  expect(store.listMessages(root.id)).toHaveLength(1);expect(runtimeIssues(store)[0]?.code).toBe("connector");
+  failed=false;tool="read_crm";await messages.handle({channel:"api",profile:profile.id,text:"unrelated success"});
+  expect(runtimeIssues(store)).toHaveLength(1);expect(sent).toHaveLength(1);
+  tool="list_events";await messages.handle({channel:"api",profile:profile.id,text:"retry read"});
+  expect(runtimeIssues(store)).toEqual([]);expect(sent).toHaveLength(2);expect(sent[1].text).toContain("Восстановлено");
+ }finally{telegram.stop();await messages.close();}
+});
+
+it("lets Codex recover a connector in the same turn and ignores declined actions",async()=>{
+ const store=new Store(":memory:");stores.push(store);
+ const messages=new MessageService(store,{async run(_text,options){
+  for(const item of [
+   {server:"calendar",tool:"list_events",status:"failed",error:null},
+   {server:"calendar",tool:"list_events",status:"completed",error:null},
+   {server:"calendar",tool:"delete_event",status:"failed",error:{message:"user rejected MCP tool call"}},
+  ])options!.onEvent!({type:"item/completed",payload:{item:{type:"mcpToolCall",...item}}});
+  return{threadId:"t",response:"ok",events:[]};
+ }});
+ try{await messages.handle({channel:"api",text:"check"});expect(runtimeIssues(store)).toEqual([]);}finally{await messages.close();}
+});
+
+it("retries an operational notice after Telegram recovers without replaying ordinary messages",async()=>{
+ const store=new Store(":memory:");stores.push(store);
+ store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
+ const messages=new MessageService(store,{async run(){throw Error("quota exceeded");}});
+ const telegram=new TelegramAdapter("123:test",store,messages);messages.telegram=telegram;
+ let offline=true;const sent:any[]=[];
+ vi.stubGlobal("fetch",vi.fn(async(_url,init)=>{if(offline)throw Error("network timeout");sent.push(JSON.parse(init.body));return Response.json({ok:true,result:{message_id:sent.length}});}));
+ try{
+  await expect(messages.handle({channel:"api",text:"check"})).rejects.toThrow();
+  await expect(telegram.sendMessage("42","Business message","ordinary")).rejects.toThrow();
+  offline=false;await telegram.flushOwnerNotices();await telegram.flushOwnerNotices();
+  expect(sent).toHaveLength(1);expect(sent[0].text).toContain("Аккаунт");
+  expect(store.db.prepare("SELECT status FROM telegram_outbox WHERE key='42:ordinary:0'").get()?.status).toBe("unknown");
+  expect(store.listMessages(store.primaryConversation().id).filter(m=>m.kind==="notice")).toHaveLength(1);
+ }finally{telegram.stop();await messages.close();}
+});
+
 it.each([true,false])("delivers one failure and recovery to the paired owner, including root failures (%s)",async(rootFailure)=>{
  const store=new Store(":memory:");stores.push(store);
  store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});

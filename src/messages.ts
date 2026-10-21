@@ -17,7 +17,7 @@ import { providerInfo, ProviderIncident } from "./providers.js";
 import type { TelegramAdapter } from "./telegram.js";
 import { readFile } from "node:fs/promises";
 import { isSpeechFile, transcribeRecording } from "./speech.js";
-import { errorProblem, problemText, reportIssue, resolveIssue, runtimeIssues, toolProblem, toolRecovered, type ProblemCode } from "./operations.js";
+import { connectorOutcome, reportConnectorIssues, errorProblem, problemText, reportIssue, resolveIssue, runtimeIssues, toolProblem, toolRecovered, type ProblemCode } from "./operations.js";
 import { ownerKnowledge } from "./knowledge.js";
 
 type QueuedMessage = { id: string; channel: string; run: () => Promise<MessageResult>; resolve: (result: MessageResult) => void; reject: (error: unknown) => void };
@@ -127,6 +127,7 @@ export class MessageService {
     }
     const completion = this.enqueue(conversation.id, inbound.id, input.channel, async () => {
       let problem:ProblemCode|undefined;
+      const connectors=new Map<string,boolean>();
       try {
         // Read at execution time: a waiting message may have been edited.
         const text = this.store.getMessage(conversation.id, inbound.id)?.text.trim() ?? inbound.text.trim();
@@ -196,6 +197,8 @@ export class MessageService {
               const failure=toolProblem(event);
               if(failure)problem=failure;
               else if(toolRecovered(event))problem=undefined;
+              const connector=connectorOutcome(event);
+              if(connector)connectors.set(connector.tool,connector.failed);
             },
           });
         if (result.threadId) this.store.setConversationThread(current.id, result.threadId);
@@ -204,6 +207,8 @@ export class MessageService {
         const outbound = this.store.addMessage({ conversationId: current.id, channel: input.channel, direction: "outbound", replyToId: inbound.id, text: result.response,attachments:tools.attachments });
         if ((input.scheduled || groupContext && input.channel === "telegram") && result.response.trim() === "NO_REPLY") this.store.db.prepare("UPDATE messages SET hidden=1 WHERE id=?").run(outbound.id);
         this.store.setMessageStatus(inbound.id, "completed");
+        const connectorNotice=reportConnectorIssues(this.store,current.id,inbound.id,connectors);
+        if(connectorNotice)await this.telegram?.notifyOwner(connectorNotice);
         if(text!=="/help") {
           const notice=resolveIssue(this.store,current.id);
           if(notice)await this.telegram?.notifyOwner(notice);

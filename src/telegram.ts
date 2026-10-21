@@ -58,6 +58,7 @@ export class TelegramAdapter {
   private running = false;
   private offset = 0;
   private controller: AbortController | null = null;
+  private flushingOwnerNotices?:Promise<void>;
   private bot: TelegramBot | null = null;
   private lastError: string | null = null;
   private connectionError: { message: string; code?: number } | null = null;
@@ -100,6 +101,26 @@ export class TelegramAdapter {
       try {await this.sendMessage(chat.chatId,notice.text,"operation:"+notice.id);}
       catch {this.lastError="Не удалось подтвердить доставку уведомления владельцу. Оно сохранено в главном чате.";}
     }
+  }
+
+  /** Status notices may repeat after a lost acknowledgement; business actions never do. */
+  async flushOwnerNotices():Promise<void> {
+    if(!this.token)return;
+    if(this.flushingOwnerNotices)return this.flushingOwnerNotices;
+    this.flushingOwnerNotices=(async()=>{
+      const rows=this.store.db.prepare("SELECT key,chat_id FROM telegram_outbox WHERE status IN ('pending','unknown','not_sent') AND key LIKE '%:operation:%' ORDER BY rowid").all();
+      const attempted=new Set<string>();
+      for(const row of rows){
+        const match=String(row.key).match(/^\d+:operation:([a-f0-9-]+):\d+$/),chat=this.store.getTelegramChat(String(row.chat_id));
+        if(!match || !chat || !this.isOwner(Number(chat.chatId)) || chat.enabled===false || this.store.getSetting("telegram.paused."+chat.chatId)==="true")continue;
+        const notice=this.store.db.prepare("SELECT id,text FROM messages WHERE id=? AND kind='notice'").get(match[1]!);
+        const delivery=chat.chatId+":"+match[1];if(!notice || attempted.has(delivery))continue;attempted.add(delivery);
+        this.store.db.prepare("UPDATE telegram_outbox SET status='pending' WHERE chat_id=? AND key LIKE ? AND status IN ('unknown','not_sent')").run(chat.chatId,chat.chatId+":operation:"+match[1]+":%");
+        try{await this.sendMessage(chat.chatId,String(notice.text),"operation:"+notice.id);}
+        catch{this.lastError="Уведомление сохранено в главном чате. Повторим доставку при восстановлении Telegram.";break;}
+      }
+    })().finally(()=>{this.flushingOwnerNotices=undefined;});
+    return this.flushingOwnerNotices;
   }
 
   status(): TelegramIntegrationStatus {
@@ -675,6 +696,7 @@ export class TelegramAdapter {
         this.connectionError = null;
         this.lastCheckedAt = new Date().toISOString();
         void this.cleanupInteractions().catch(() => undefined);
+        void this.flushOwnerNotices().catch(() => undefined);
         for (const update of updates) {
           void this.processUpdate(update).catch(() => { this.lastError = "Входящее сообщение не завершено; оно сохранено для восстановления"; });
           this.offset = Math.max(this.offset, update.update_id + 1); this.store.setSetting("telegram.offset",String(this.offset));

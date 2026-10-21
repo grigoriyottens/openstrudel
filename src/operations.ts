@@ -8,10 +8,37 @@ export const problemText = {
   account: "Аккаунт требует внимания: вход или доступный лимит. Проверьте настройки аккаунтов.",
   delivery: "Ответ сохранён, но доставка не подтверждена. Проверьте Telegram перед повтором.",
   execution: "Задача завершилась с ошибкой. Подробности сохранены в исходном чате.",
+  connector: "Не удалось выполнить запрос к подключённому сервису. Доступные результаты сохранены в исходном чате.",
 } as const;
 export type ProblemCode = keyof typeof problemText;
-type RuntimeIssue = { conversationId:string; messageId:string; title:string; code:ProblemCode; time:string };
+type RuntimeIssue = { conversationId:string; messageId:string; title:string; code:ProblemCode; time:string; tools?:string[] };
 const prefix="runtime.issue.";
+
+/** Native MCP receipts are emitted even for calls made inside code mode. */
+export function connectorOutcome(event:EngineEvent):{tool:string;failed:boolean}|undefined {
+  const item=(event.payload as any)?.item;
+  if(event.type!=="item/completed" || item?.type!=="mcpToolCall" || !["failed","completed"].includes(item.status))return;
+  if(![item.server,item.tool].every(v=>typeof v==="string" && /^[a-zA-Z0-9_.:-]+$/.test(v)))return;
+  if(/user rejected MCP tool call/i.test(item.error?.message ?? ""))return;
+  return{tool:item.server+"."+item.tool,failed:item.status==="failed" || Boolean(item.error) || item.result?.isError===true};
+}
+
+/** Keep partial answers. Only a successful call to the failed tool resolves its incident. */
+export function reportConnectorIssues(store:Store,conversationId:string,messageId:string,outcomes:Map<string,boolean>):Message|undefined {
+  if(!outcomes.size)return;
+  const key=prefix+"connector."+conversationId,previous=JSON.parse(store.getSetting(key) ?? "null") as RuntimeIssue|null;
+  const tools=new Set(previous?.tools ?? []);
+  for(const [tool,failed] of outcomes)if(failed)tools.add(tool);else tools.delete(tool);
+  const names=[...tools].sort();
+  if(JSON.stringify(names)===JSON.stringify(previous?.tools ?? []))return;
+  const title=store.getConversation(conversationId)?.title ?? "Чат",root=store.primaryConversation();
+  if(!names.length){
+    store.deleteSetting(key);
+    return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Восстановлено · ${title}\nСервисы снова отвечают: ${previous!.tools!.join(", ")}.`});
+  }
+  store.setSetting(key,JSON.stringify({conversationId,messageId,title,code:"connector",tools:names,time:new Date().toISOString()}));
+  return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${problemText.connector}\n${names.join(", ")}`});
+}
 
 function infrastructureProblem(text:string):ProblemCode|undefined {
   if (/resource temporarily unavailable|failed to fork|os error 11|spawn.*EAGAIN|not enough memory|cannot allocate memory/i.test(text)) return "resources";

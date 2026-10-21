@@ -370,7 +370,10 @@ export class CodexEngineAdapter implements CodexEngine {
   async connect(id: string, options?: { callbackURL: string }): Promise<ServiceSignIn> {
     const connection = (await this.connections()).find(c => c.id === id);
     if (!connection) throw new Error("Сервис не найден в Codex");
-    if (connection.connected) return { url: null };
+    if (connection.connected) {
+      if(connection.kind==="app" && this.options.scoped && this.codexHome && this.options.workingDirectory && !extensionConfig(this.codexHome).apps?.[id]?.enabled)await this.extensions().enableApp(id);
+      return { url: null };
+    }
     if (connection.kind === "app" && connection.status === "unknown") {
       this.connectionCache = undefined;
       const checked = (await this.connections(true)).find(c => c.id === id);
@@ -409,11 +412,13 @@ export class CodexEngineAdapter implements CodexEngine {
       return { url: result.authorizationUrl };
     }
     if (this.options.scoped) {
-      const rpc = await this.client();
-      await rpc.request("config/value/write",{keyPath:`apps.${id}.enabled`,value:true,mergeStrategy:"replace",expectedVersion:null,filePath:null});
-      this.options.config = {...this.options.config,[`apps.${id}.enabled`]:true};
-      // Existing turns keep their permissions; the following turn resumes with
-      // the user's new explicit grant, without launching a competing writer.
+      if(this.codexHome && this.options.workingDirectory)await this.extensions().enableApp(id);
+      else {
+        const rpc = await this.client();
+        await rpc.request("config/value/write",{keyPath:`apps.${id}.enabled`,value:true,mergeStrategy:"replace",expectedVersion:null,filePath:null});
+        this.options.config = {...this.options.config,[`apps.${id}.enabled`]:true};
+      }
+      // The audience keeps its explicit grant when the subscription changes.
       this.loaded.clear(); this.connectionCache=undefined; this.appCatalog=undefined;
       if (await this.isConnected(id)) return {url:null};
     }

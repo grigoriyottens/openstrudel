@@ -51,7 +51,7 @@ export class ScopedCodexEngine implements CodexEngine {
     if (!this.authTokens && source && existsSync(source)) { copyFileSync(source,resolve(home,"auth.json")); chmodSync(resolve(home,"auth.json"),0o600); }
     const connections = resolve(this.root,".data/connections",context + ".toml");
     const configPath=resolve(home,"config.toml");
-    const granted = Object.entries(readToml(configPath).apps ?? {}).filter(([id,value])=>id!=="_default" && /^[a-zA-Z0-9_-]+$/.test(id) && (value as any)?.enabled === true).map(([id])=>id);
+    const granted = Object.entries({...readToml(configPath).apps,...extensions.apps}).filter(([id,value])=>id!=="_default" && /^[a-zA-Z0-9_-]+$/.test(id) && (value as any)?.enabled === true).map(([id])=>id);
     // Nothing from a broad account config is silently inherited. Scoped MCPs
     // are provisioned by the installer; subscriptions still use native OAuth.
     // Linux executes the sandbox helper through a CODEX_HOME/tmp alias into
