@@ -190,6 +190,17 @@ describe("API key providers", () => {
     expect(engines.run.mock.calls[3]![2]).toBe("And now?");
     await messages.close();
   });
+  it("keeps who said what, and their files, when another provider picks up a chat", async () => {
+    const { store, pool } = fixture(), conversation = store.primaryConversation();
+    store.setSetting("providers.anthropic.key", "ant-key");
+    store.addMessage({ channel: "telegram", conversationId: conversation.id, direction: "inbound", text: "Позвоню Веронике да!", author: "Darya" });
+    store.addMessage({ channel: "telegram", conversationId: conversation.id, direction: "inbound", text: "", author: "G. O.", attachments: [{ id: "a", conversationId: conversation.id, name: "screen.png", mimeType: "image/png", size: 1 }] });
+    store.addMessage({ channel: "telegram", conversationId: conversation.id, direction: "outbound", text: "", attachments: [{ id: "b", conversationId: conversation.id, name: "snoop.gif", mimeType: "image/gif", size: 1 }] });
+    store.addMessage({ channel: "api", conversationId: conversation.id, direction: "inbound", text: "Без автора" });
+    engines.run.mockResolvedValue({ threadId: "t", response: "ok", events: [] });
+    await pool.run("Что дальше?", { conversationId: conversation.id, provider: "anthropic" });
+    expect(engines.run.mock.calls[0]![2]).toBe("Earlier chat (context only):\nDarya: Позвоню Веронике да!\nG. O.: [screen.png]\nAssistant: [snoop.gif]\nUser: Без автора\n\nCurrent message:\nЧто дальше?");
+  });
   it("fails a rejected key with the provider's message and leaves ChatGPT signed in", async () => {
     const { store, accounts, pool } = fixture(), conversation = store.primaryConversation();
     store.setSetting("providers.xai.key", "xai-key");
