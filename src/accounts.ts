@@ -267,8 +267,10 @@ export class AccountEngines implements CodexEngine {
           if (checkpointKey && options?.messageId) this.accounts.store.setSetting(checkpointKey, options.messageId);
           return result;
         } catch (error) {
-          // Grok no longer knows the saved session: a new one starts, seeded with the chat, once.
-          if (error instanceof AcpSessionLost && saved) { this.accounts.store.deleteSetting(threadKey!); return run(input, options); }
+          // Grok no longer knows the saved session, or Claude failed before writing it:
+          // a new one starts, seeded with the chat, once.
+          const lost = error instanceof AcpSessionLost || keyed?.info.engine === "claude" && /No conversation found with session ID/.test(error instanceof Error ? error.message : "");
+          if (lost && saved) { this.accounts.store.deleteSetting(threadKey!); return run(input, options); }
           // A lost sign-in needs the owner; Accounts offers it again.
           if (error instanceof ProviderSignInError) this.accounts.store.deleteSetting(`providers.${provider}.signedIn`);
           if (keyed) throw providerFailure(keyed.info, error);
