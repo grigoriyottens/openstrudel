@@ -13,7 +13,7 @@ export type ExtensionFile = { path: string; contentBase64: string; executable?: 
 export type ExtensionItem = { id: string; name: string; description: string; kind: "skill" | "plugin"; enabled: boolean; removable: boolean; };
 export type ExtensionsState = { items: ExtensionItem[]; notice?: string; };
 export type ExtensionPreview = { kind: "skill" | "plugin"; name: string; description: string; files: number; bytes: number; digest: string; services: string[]; hasHooks: boolean; replaces?: string; };
-type Options = { home: string; cwd: string; sharedConfigPath?: string; reservedServers?: string[]; client: () => Promise<CodexRpc>; changed: () => Promise<void>; idle: () => boolean; };
+type Options = { home: string; cwd: string; sharedConfigPath?: string; reservedServers?: string[]; inheritedApps?: string[]; client: () => Promise<CodexRpc>; changed: () => Promise<void>; idle: () => boolean; };
 const execute = promisify(execFile);
 const changingScopes = new Set<string>();
 const runningScopes = new Map<string, number>();
@@ -40,6 +40,29 @@ export function atomicText(path: string, text: string) {
 
 /** Only user-selected capabilities persist across account/runtime restarts. */
 export function extensionConfig(home: string): Record<string, any> { return readToml(resolve(home, "openstrudel-extensions.toml")); }
+
+/** The owner's choice to use the main chat's services in every chat on this Home. */
+const allChatsPath = (root: string) => resolve(root, ".data/extensions/all-chats.json");
+export function sharedWithAllChats(root: string): boolean {
+  try { return JSON.parse(readFileSync(allChatsPath(root), "utf8")).enabled === true; } catch { return false; }
+}
+export function shareWithAllChats(root: string, enabled: boolean) { atomicText(allChatsPath(root), JSON.stringify({ enabled }) + "\n"); }
+const endpoint = (url: unknown) => { try { const u = new URL(String(url)); return u.origin + u.pathname.replace(/\/+$/, ""); } catch { return undefined; } };
+/** What another chat receives from the owner's main chat. The chat's own services,
+ * and a group's verified-sender service for the same address, take precedence.
+ * A service signed in through OAuth keeps its tokens in one Codex home, and
+ * Computer Use belongs to one machine, so both stay where they were connected. */
+export function inheritedIntegrations(root: string, context: string, own: { servers: Record<string, any>; apps?: Record<string, any>; telegram?: Record<string, { url: string }> }): { servers: Record<string, any>; apps: string[] } {
+  if (context === "personal" || !sharedWithAllChats(root)) return { servers: {}, apps: [] };
+  const owner = readToml(resolve(root, ".data/extensions/personal/config.toml"));
+  // One service per address: the chat's own or verified-sender service replaces the owner's key.
+  const taken = new Set([...Object.values(own.servers), ...Object.values(own.telegram ?? {})].map((s: any) => endpoint(s?.url)).filter(Boolean));
+  const servers = Object.entries({ ...owner.mcp_servers, ...readToml(resolve(root, ".data/connections/personal.toml")).mcp_servers }).filter(([name, s]: [string, any]) =>
+    !(name in own.servers) && !(name in (own.telegram ?? {})) && name !== "cua_repl" && s?.enabled !== false
+    && Boolean(s?.command || s?.http_headers || s?.env_http_headers || s?.bearer_token_env_var) && !(s?.url && taken.has(endpoint(s.url))));
+  const apps = Object.entries(owner.apps ?? {}).filter(([id, value]: [string, any]) => id !== "_default" && /^[a-zA-Z0-9_-]+$/.test(id) && value?.enabled === true && own.apps?.[id]?.enabled !== false).map(([id]) => id);
+  return { servers: Object.fromEntries(servers), apps };
+}
 function safeFiles(input: unknown): Map<string, Buffer> {
   if (!Array.isArray(input) || !input.length) throw new HomeError("Выберите SKILL.md или папку навыка/плагина.");
   const files = new Map<string, Buffer>(); let size = 0;
@@ -149,12 +172,26 @@ export class CodexExtensions {
   private persist() {
     const config = readToml(this.configPath), saved: Record<string, any> = {};
     for (const key of ["plugins", "marketplaces", "skills"]) if (config[key]) saved[key] = config[key];
-    const apps=Object.fromEntries(Object.entries(config.apps ?? {}).filter(([id,value])=>id!=="_default" && /^[a-zA-Z0-9_-]+$/.test(id) && typeof (value as any)?.enabled==="boolean").map(([id,value])=>[id,{enabled:(value as any).enabled}]));
+    // Apps from the owner's main chat are not this chat's own grants. Its own
+    // "off" never reaches config.toml, so it is kept from the chat's own file.
+    const own=extensionConfig(this.options.home).apps ?? {};
+    const apps=Object.fromEntries([...Object.entries(own).filter(([,value])=>(value as any)?.enabled===false).map(([id])=>[id,{enabled:false}]),...Object.entries(config.apps ?? {}).filter(([id,value])=>id!=="_default" && /^[a-zA-Z0-9_-]+$/.test(id) && typeof (value as any)?.enabled==="boolean" && (!this.options.inheritedApps?.includes(id) || id in own)).map(([id,value])=>[id,{enabled:(value as any).enabled}])]);
     if(Object.keys(apps).length)saved.apps=apps;
     const servers = Object.fromEntries(Object.entries(config.mcp_servers ?? {}).filter(([name]) => !this.options.reservedServers?.includes(name)));
     if (Object.keys(servers).length) saved.mcp_servers = servers;
     atomicText(resolve(this.options.home, "openstrudel-extensions.toml"), stringify(saved));
     if (this.options.sharedConfigPath) atomicText(this.options.sharedConfigPath,stringify(saved));
+  }
+  /** Adding one app grant needs no reload, so the turn that asked for it may save it. */
+  grantApp(id:string) {
+    if(id==="_default" || !/^[a-zA-Z0-9_-]+$/.test(id))throw new HomeError("Сервис не найден в Codex");
+    const scope=this.options.sharedConfigPath ?? this.configPath;
+    if(changingScopes.has(scope))throw new HomeError("Обновляем сервисы и навыки. Повторите через несколько секунд.",409);
+    const saved=this.options.sharedConfigPath && existsSync(this.options.sharedConfigPath) ? readToml(this.options.sharedConfigPath) : extensionConfig(this.options.home);
+    if(saved.apps?.[id]?.enabled===true)return;
+    saved.apps={...saved.apps,[id]:{enabled:true}};
+    atomicText(resolve(this.options.home,"openstrudel-extensions.toml"),stringify(saved));
+    if(this.options.sharedConfigPath)atomicText(this.options.sharedConfigPath,stringify(saved));
   }
   async enableApp(id:string) {
     if(id==="_default" || !/^[a-zA-Z0-9_-]+$/.test(id))throw new HomeError("Сервис не найден в Codex");

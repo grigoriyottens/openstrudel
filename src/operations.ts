@@ -9,6 +9,7 @@ export const problemText = {
   delivery: "Ответ сохранён, но доставка не подтверждена. Проверьте Telegram перед повтором.",
   execution: "Задача завершилась с ошибкой. Подробности сохранены в исходном чате.",
   connector: "Не удалось выполнить запрос к подключённому сервису. Доступные результаты сохранены в исходном чате.",
+  voice: "Голосовое не распознано: ElevenLabs отказал. Проверьте лимит и ключ в настройках голоса.",
 } as const;
 export type ProblemCode = keyof typeof problemText;
 type RuntimeIssue = { conversationId:string; messageId:string; title:string; code:ProblemCode; time:string; tools?:string[] };
@@ -73,7 +74,7 @@ export function toolRecovered(event:EngineEvent):boolean {
 
 export function errorProblem(error:unknown):ProblemCode {
   const text=error instanceof Error?error.message:String(error);
-  return (Object.entries(problemText).find(([,message])=>message===text)?.[0] as ProblemCode|undefined) ?? infrastructureProblem(text) ?? (/лимит|войдите|аккаунт|unauthorized|quota|rate limit/i.test(text)?"account":/связь|соединение|Codex не ответил/i.test(text)?"connection":"execution");
+  return (Object.entries(problemText).find(([,message])=>message===text)?.[0] as ProblemCode|undefined) ?? infrastructureProblem(text) ?? (/ElevenLabs|распозна/i.test(text)?"voice":/лимит|войдите|аккаунт|unauthorized|quota|rate limit/i.test(text)?"account":/связь|соединение|Codex не ответил/i.test(text)?"connection":"execution");
 }
 
 export function runtimeIssues(store:Store):RuntimeIssue[] {

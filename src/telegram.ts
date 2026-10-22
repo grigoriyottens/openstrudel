@@ -5,8 +5,7 @@ import type { Attachment, Interaction, MessageInput, MessageResult, TelegramChat
 import { readFile } from "node:fs/promises";
 import { telegramText } from "./telegram-format.js";
 import { isSpeechFile, transcribeRecording } from "./speech.js";
-import { AccountUnavailableError } from "./account-errors.js";
-import { ProviderIncident } from "./providers.js";
+import { errorProblem } from "./operations.js";
 import type { MessageService } from "./messages.js";
 import type { Store } from "./store.js";
 import { agentTransfer, assertAgentWritable } from "./agent-move.js";
@@ -506,7 +505,6 @@ export class TelegramAdapter {
     }
     const binding = this.store.getTelegramChat(chatId);
     if (binding?.enabled === false) { this.store.markTelegramUpdate(update.update_id); return; }
-    const accountNoticeKey = `telegram.accountNotice.${chatId}.${binding?.profileId ?? "main"}`;
     if (Number(chatId) < 0 && !binding?.conversationId) {
       this.store.markTelegramUpdate(update.update_id); return;
     }
@@ -582,7 +580,6 @@ export class TelegramAdapter {
       }
     }
     const result: MessageResult = await this.messages.handle(submission);
-    this.store.deleteSetting(accountNoticeKey);
     const currentBinding = this.store.getTelegramChat(chatId);
     try {
       // The chat changed hands during the turn. Record that nothing was sent.
@@ -604,18 +601,13 @@ export class TelegramAdapter {
         this.store.setMessageStatus(failed.id, "failed", error instanceof TelegramRequestError ? "Не удалось получить файл до 20 МБ" : error instanceof Error ? error.message : "Не удалось скачать вложение");
         this.store.markTelegramUpdate(update.update_id);
       }
-      if ((error instanceof AccountUnavailableError || error instanceof ProviderIncident) && Number(chatId) < 0) {
-        // A group may send an album or carry on talking during an account or
-        // key outage. Keep each failed input in Home, but announce one incident
-        // only when addressed. A successful turn ends the incident.
-        const addressed = replyToBot || Boolean(username && new RegExp(`@${username}(?![\\w])`, "i").test(text));
-        if (addressed && this.store.getSetting(accountNoticeKey) !== error.reason) {
-          this.store.setSetting(accountNoticeKey, error.reason);
-          await this.sendMessage(message.chat.id, error.message, `error:${update.update_id}`);
-        }
-      } else {
+      if (Number(chatId) > 0 && this.isOwner(message.from?.id)) {
         // A lost notice leaves a recorded request as it is.
         await this.sendMessage(message.chat.id, error instanceof Error ? error.message : "Не удалось завершить ответ",`error:${update.update_id}`).catch(notice => { if (!recorded) throw notice; });
+      } else {
+        // Groups and other people never see technical failures. The owner gets
+        // one private notice per incident instead; the request stays in Home.
+        await this.messages.reportProblem(conversation.id, `telegram:${update.update_id}`, errorProblem(error));
       }
     } finally {
       stopTyping();

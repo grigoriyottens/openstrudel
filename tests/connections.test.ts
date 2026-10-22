@@ -66,3 +66,28 @@ it("keeps working native integrations visible when the OpenAI app directory is u
   try { expect(await engine.connections(true)).toEqual([{id:"mcp:wai_personal",name:"WAI",detail:"Личные документы",kind:"mcp",connected:true,url:null,status:"ready",toolCount:1,removable:false}]); }
   finally { engine.close(); }
 });
+it("never waits for a slow app directory and reuses the Home's copy once it arrives", async () => {
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const root = mkdtempSync(join(tmpdir(), "strudel-catalog-")), catalogPath = join(root, "app-catalog.json");
+  let deliver!: (value: unknown) => void;
+  request.mockImplementation(async (method: string) => {
+    if (method === "app/installed") return { apps: [{ id: "calendar", runtimeName: "Google Calendar", enabled: true, callable: true }] };
+    if (method === "app/list") return new Promise(resolve => deliver = resolve);
+    if (method === "mcpServerStatus/list") return { data: [] };
+    throw new Error(method);
+  });
+  const engine = new CodexEngineAdapter({ catalogPath }), later = new CodexEngineAdapter({ catalogPath });
+  try {
+    const started = Date.now();
+    expect((await engine.connections()).map(c => c.id)).toEqual(["calendar"]);
+    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(engine.connectionNotice).toBeUndefined();
+    deliver({ data: [{ id: "gmail", name: "Gmail", installUrl: "https://example.test/gmail" }], nextCursor: null });
+    await vi.waitFor(() => expect(request.mock.calls.filter(([m]) => m === "app/list")).toHaveLength(1));
+    await vi.waitFor(async () => expect((await later.connections(true)).find(c => c.id === "gmail")).toMatchObject({ status: "sign_in", url: "https://example.test/gmail" }));
+    // The second runtime used the saved copy instead of downloading the directory again.
+    expect(request.mock.calls.filter(([m]) => m === "app/list")).toHaveLength(1);
+  } finally { engine.close(); later.close(); rmSync(root, { recursive: true, force: true }); }
+});

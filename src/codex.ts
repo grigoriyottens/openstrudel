@@ -1,5 +1,5 @@
 import { normalizeModels, recommendedModel, validateModelSelection, modelReasoning, type ModelChoice } from "./model-settings.js";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { CodexRpc, type RpcMessage } from "./rpc.js";
 import { problemText, toolProblem, toolRecovered, type ProblemCode } from "./operations.js";
@@ -7,12 +7,16 @@ import type { CodexAuthTokens } from "./account.js";
 import type { CodexEngine, CodexRunResult, Connection, EngineEvent } from "./types.js";
 import { telegramMcpConfig, type TelegramMcpServers } from "./telegram-mcp.js";
 import { createHash } from "node:crypto";
-import { CodexExtensions, extensionConfig, beginExtensionRun, readToml } from "./extensions.js";
+import { CodexExtensions, extensionConfig, beginExtensionRun, readToml, atomicText } from "./extensions.js";
 import { nativeApprovalConfig, nativeApprovalPolicy } from "./approval-mode.js";
 import { employeeRoleConfig, routingInstructions } from "./employee-routing.js";
 import { codexProviderId, providerModels, type ProviderInfo } from "./providers.js";
 import { serviceOAuth } from "./service-oauth.js";
 import type { ServiceSignIn } from "./types.js";
+
+type CatalogApp = { id: string; name: string; installUrl: string | null };
+/** Directory refresh attempts per Home, shared by its runtimes. */
+const catalogTries = new Map<string, number>();
 
 export const INSTRUCTIONS = `You are OpenStrudel, a personal assistant in a minimal chat app.
 Be useful, concise and truthful. Use Codex's native tools, memory, skills and connectors.
@@ -26,7 +30,7 @@ Follow Codex's native approval policy for tool actions. Do not invent an extra c
 
 type RunOptions = NonNullable<Parameters<CodexEngine["run"]>[1]>;
 type ActiveTurn = { options: RunOptions; events: EngineEvent[]; response: string; startedAt: number; children: Set<string>; turnId?: string; runtimeProblem?:ProblemCode; recoveryTimer?:ReturnType<typeof setTimeout>; resolve: (r: CodexRunResult) => void; reject: (e: Error) => void };
-export interface CodexEngineOptions { model?: string; workingDirectory?: string; codexHome?: string; sharedExtensionsPath?: string; mode?: "codex" | "mock"; scoped?: boolean; config?: Record<string, unknown>; telegramServers?: TelegramMcpServers; reservedServers?: string[]; authTokens?: (refresh?: boolean) => Promise<CodexAuthTokens>;
+export interface CodexEngineOptions { model?: string; workingDirectory?: string; codexHome?: string; sharedExtensionsPath?: string; mode?: "codex" | "mock"; scoped?: boolean; config?: Record<string, unknown>; telegramServers?: TelegramMcpServers; reservedServers?: string[]; inheritedApps?: string[]; catalogPath?: string; authTokens?: (refresh?: boolean) => Promise<CodexAuthTokens>;
   /** A Codex key provider, defined per thread. Its key is read for every thread start and resume. */
   provider?: { info: ProviderInfo; key: () => string | null }; }
 
@@ -43,7 +47,9 @@ export class CodexEngineAdapter implements CodexEngine {
   private codexHome?: string;
   private connectionCache?: { at: number; value: Connection[] };
   private connectionLoading?: Promise<Connection[]>;
-  private appCatalog?: Array<{ id: string; name: string; installUrl: string | null }>;
+  private appCatalog?: CatalogApp[];
+  private catalogAt = 0;
+  private catalogFetch?: Promise<CatalogApp[]>;
   connectionNotice?: string;
   private extensionManager?: CodexExtensions;
   private running = 0;
@@ -54,7 +60,7 @@ export class CodexEngineAdapter implements CodexEngine {
   extensions(): CodexExtensions {
     if (!this.options.scoped || !this.codexHome || !this.options.workingDirectory) throw new Error("Расширения доступны после входа в OpenAI на устройстве сотрудника.");
     return this.extensionManager ??= new CodexExtensions({home:this.codexHome,cwd:this.options.workingDirectory,sharedConfigPath:this.options.sharedExtensionsPath,
-      reservedServers:[...(this.options.reservedServers ?? []),...Object.keys(this.options.telegramServers ?? {}),"codex_apps","codex_app","node_repl"],
+      reservedServers:[...(this.options.reservedServers ?? []),...Object.keys(this.options.telegramServers ?? {}),"codex_apps","codex_app","node_repl"],inheritedApps:this.options.inheritedApps,
       client:()=>this.client(), idle:()=>this.running===0, changed:async()=>{
         // Native unsubscribe unloads only after an inactivity grace period.
         // Reloading meanwhile reapplies old per-thread approval overrides and
@@ -303,21 +309,7 @@ export class CodexEngineAdapter implements CodexEngine {
       // catalog must not hide apps already authorized on the account.
       const installedRequest = rpc.request("app/installed", { forceRefresh: refresh, threadId }, 12_000)
         .catch(() => { installedUnavailable = true; return {apps: []}; });
-      const catalogRequest = async () => {
-        if (this.appCatalog && !refresh) return this.appCatalog;
-        const catalog: Array<{id: string; name: string; installUrl: string | null}> = [];
-        let cursor: string | null = null;
-        do {
-          const page: any = await rpc.request("app/list", { limit: 500, cursor, threadId, forceRefetch: refresh }, 4_000);
-          catalog.push(...(page.data ?? [])); cursor = page.nextCursor;
-        } while (cursor);
-        this.appCatalog = catalog;
-        return catalog;
-      };
-      const [installed, catalog] = await Promise.all([installedRequest, catalogRequest().catch(() => {
-        this.connectionNotice = "Каталог OpenAI сейчас недоступен. Можно добавить сервис по адресу MCP.";
-        return this.appCatalog ?? [];
-      })]);
+      const [installed, catalog] = await Promise.all([installedRequest, this.catalog(rpc, threadId, refresh)]);
       const callable = new Set((installed.apps ?? []).filter((a: any) => a.callable).map((a: any) => a.id));
       if (installedUnavailable) this.connectionNotice = "Не удалось проверить подключения OpenAI. Обновите список.";
       const names: Record<string,string> = {google_calendar:"Google Calendar",google_drive:"Google Drive",gmail:"Gmail",github:"GitHub",notion:"Notion",slack:"Slack"};
@@ -358,6 +350,31 @@ export class CodexEngineAdapter implements CodexEngine {
     return result;
   }
 
+  /** The public app directory is about 7 MB and often slow or blocked from servers.
+   * Status never waits for it: a Home keeps one copy, refreshed in the background. */
+  private catalog(rpc: CodexRpc, threadId: string | undefined, refresh: boolean): Promise<CatalogApp[]> {
+    const path = this.options.catalogPath;
+    if (!this.appCatalog && path) try { const saved = JSON.parse(readFileSync(path, "utf8")); this.appCatalog = saved.apps; this.catalogAt = saved.at; } catch {}
+    const age = Date.now() - this.catalogAt, tried = path ? catalogTries.get(path) ?? 0 : 0;
+    if (!this.catalogFetch && !(this.appCatalog && age < (refresh ? 600_000 : 86_400_000)) && Date.now() - tried > 600_000) {
+      if (path) catalogTries.set(path, Date.now());
+      this.catalogFetch = (async () => {
+        const catalog: CatalogApp[] = [];
+        let cursor: string | null = null;
+        do {
+          const page: any = await rpc.request("app/list", { limit: 500, cursor, threadId, forceRefetch: refresh }, 120_000);
+          catalog.push(...(page.data ?? []).map((a: any) => ({ id: a.id, name: a.name, installUrl: a.installUrl ?? null }))); cursor = page.nextCursor;
+        } while (cursor);
+        this.appCatalog = catalog; this.catalogAt = Date.now();
+        if (path) atomicText(path, JSON.stringify({ at: this.catalogAt, apps: catalog }));
+        return catalog;
+      })().catch(() => this.appCatalog ?? []).finally(() => { this.catalogFetch = undefined; });
+    }
+    // A quick directory answers in time for this list; a slow one is ready next time.
+    const known = this.appCatalog ?? [];
+    return this.catalogFetch ? Promise.race([this.catalogFetch, new Promise<CatalogApp[]>(done => setTimeout(() => done(known), 1_500).unref())]) : Promise.resolve(known);
+  }
+
   async isConnected(id: string): Promise<boolean> {
     const rpc = await this.client();
     if (!id.startsWith("mcp:")) {
@@ -371,7 +388,7 @@ export class CodexEngineAdapter implements CodexEngine {
     const connection = (await this.connections()).find(c => c.id === id);
     if (!connection) throw new Error("Сервис не найден в Codex");
     if (connection.connected) {
-      if(connection.kind==="app" && this.options.scoped && this.codexHome && this.options.workingDirectory && !extensionConfig(this.codexHome).apps?.[id]?.enabled)await this.extensions().enableApp(id);
+      if(connection.kind==="app" && this.options.scoped && this.codexHome && this.options.workingDirectory && !this.options.inheritedApps?.includes(id) && !extensionConfig(this.codexHome).apps?.[id]?.enabled)this.extensions().grantApp(id);
       return { url: null };
     }
     if (connection.kind === "app" && connection.status === "unknown") {
@@ -412,14 +429,13 @@ export class CodexEngineAdapter implements CodexEngine {
       return { url: result.authorizationUrl };
     }
     if (this.options.scoped) {
-      if(this.codexHome && this.options.workingDirectory)await this.extensions().enableApp(id);
-      else {
-        const rpc = await this.client();
-        await rpc.request("config/value/write",{keyPath:`apps.${id}.enabled`,value:true,mergeStrategy:"replace",expectedVersion:null,filePath:null});
-        this.options.config = {...this.options.config,[`apps.${id}.enabled`]:true};
-      }
-      // The audience keeps its explicit grant when the subscription changes.
-      this.loaded.clear(); this.connectionCache=undefined; this.appCatalog=undefined;
+      const rpc = await this.client();
+      await rpc.request("config/value/write",{keyPath:`apps.${id}.enabled`,value:true,mergeStrategy:"replace",expectedVersion:null,filePath:null});
+      this.options.config = {...this.options.config,[`apps.${id}.enabled`]:true};
+      // The audience keeps its explicit grant when the subscription changes,
+      // also when the grant comes from the turn that needs it.
+      if(this.codexHome && this.options.workingDirectory)this.extensions().grantApp(id);
+      this.loaded.clear(); this.connectionCache=undefined;
       if (await this.isConnected(id)) return {url:null};
     }
     if (!connection.url) throw new Error("Codex пока не предоставил ссылку подключения этого сервиса");

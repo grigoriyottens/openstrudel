@@ -52,7 +52,8 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
       return { messages:page.messages.map(m=>({id:m.id,date:m.createdAt,author:m.author,role:m.direction==="inbound"?"user":"assistant",text:m.text,
         files:context.files && context.scope ? context.files.forMessage(context.conversationId,(m.attachments ?? []).map(f=>f.id)).map(f=>({name:f.name,mimeType:f.mimeType,path:f.path})) : m.attachments})), olderCursor:page.pagination.olderCursor };
     }
-    if (context.scope?.startsWith("group-") && ["update_employee","create_employee","connect_service"].includes(name)) throw new Error("Характер и новые подключения меняются в личном чате владельца. У группы свой разговор и доступ.");
+    if (context.scope?.startsWith("group-") && name === "connect_service") throw new Error("Сервисы для группы подключает владелец в приложении OpenStrudel: эта группа → «Сервисы и навыки». Если он делится сервисами главного чата со всеми чатами, их достаточно подключить там.");
+    if (context.scope?.startsWith("group-") && ["update_employee","create_employee"].includes(name)) throw new Error("Характер меняется в личном чате владельца. У группы свой разговор и доступ.");
     if (name === "attach_file") {
       const file=context.files!.output(context.conversationId,context.scope!,String(args.path ?? ""));
       attachments.push(file); return {attached:true,file};
@@ -92,7 +93,10 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
       if (!connection || !engine.connect) throw new Error("This service is not available in Codex");
       if (connection.connected) return { connected: true, name: connection.name };
       if (context.scheduled) throw new Error("Подключите сервис в чате, затем повторите выпуск.");
+      if (!context.byOwner) throw new Error("Сервисы подключает владелец устройства в приложении OpenStrudel: «Сервисы и навыки».");
       const { url } = await engine.connect(id);
+      // An app already authorized on the account is granted at once, without a link.
+      if (!url && (engine.isConnected ? await engine.isConnected(id) : true)) return { connected: true, name: connection.name };
       if (!url) throw new Error("No connection URL available");
       const answer = await interactions.ask({ conversationId: context.conversationId, messageId: context.messageId, title: `Подключить ${connection.name}`, url: safeURL(url), questions: [{ id: "decision", question: "Войдите в сервис, затем продолжите", options: ["Продолжить", "Отмена"] }] }, async answers => {
         if (answers.decision === "Продолжить" && !(engine.isConnected ? await engine.isConnected(id) : (await engine.connections?.(true))?.find(c => c.id === id)?.connected)) throw new Error("Подключение пока не подтверждено сервисом. Завершите вход в браузере.");

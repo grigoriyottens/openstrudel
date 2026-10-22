@@ -25,6 +25,7 @@ import { approvalSetting, isApprovalMode, readApprovalMode } from "./approval-mo
 import { ownerTimezone, saveOwnerTimezone } from "./timezone.js";
 import { notificationDestination, receiveNotification } from "./notification-hook.js";
 import { SERVICE_SIGN_IN_SECONDS } from "./service-oauth.js";
+import { sharedWithAllChats, shareWithAllChats } from "./extensions.js";
 import type { ServiceSignIn } from "./types.js";
 import { MAX_SPEECH_BYTES, isSpeechFile, saveSpeechSettings, speechSettings, transcribeRecording } from "./speech.js";
 import { diagnosticReport, recordDiagnostic, saveDiagnosticLevel } from "./diagnostics.js";
@@ -633,6 +634,15 @@ export class HttpApi {
       }
       if (path === "/v1/extensions" || path.startsWith("/v1/extensions/")) {
         const body = request.method === "POST" ? await this.body(request, 15 * 1024 * 1024) : {};
+        if (path === "/v1/extensions/all-chats") {
+          // The owner's choice: services of the main chat also work in every other chat on this Home.
+          if (!this.accounts) throw new HomeError("Обновите OpenStrudel на этом устройстве.",501);
+          if (request.method === "POST") {
+            if (typeof body.enabled !== "boolean") throw new HomeError("Укажите, делиться ли сервисами.");
+            shareWithAllChats(this.accounts.root, body.enabled);
+          } else if (request.method !== "GET") throw new HomeError("Действие не найдено.",404);
+          this.send(response,200,{enabled:sharedWithAllChats(this.accounts.root)}); return;
+        }
         const conversationId = String(body.conversationId ?? url.searchParams.get("conversationId") ?? "");
         const conversation = this.store.getConversation(conversationId);
         if (!conversation) throw new HomeError("Откройте чат сотрудника, для которого добавляете расширение.",404);
