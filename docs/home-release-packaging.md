@@ -14,3 +14,7 @@ Before publication, run both extractors against the final artifact as well. Pres
 Acceptance must install the newly published archive on a clean supported server, not an earlier Home release. Confirm authenticated HTTPS from the Mac app, remote assistant persistence and recovery after restarting the server. A successful download or Docker build is insufficient.
 
 An interrupted installation pins its original release digest. Changing the public alias does not repair that pending attempt. Never silently replace its identity, checksum or existing data to call it recovered. Record a clean-install retest separately from a recovery test.
+
+## Upgrading a running server
+
+An upgrade keeps a full rollback snapshot in `/root/openstrudel-upgrade-<release>-<UTC stamp>` and writes `healthy.json` there once the new Home passes its health and data checks. Run `python3 scripts/prune-server-rollbacks.py` on the server before taking a new snapshot and again after the health check. It keeps the two newest healthy snapshots, anything newer, the images they can roll back to and the running image. Older snapshots, unused image tags and old staging folders are removed. The data volume is never touched. `--dry-run` prints the plan without changing anything.
