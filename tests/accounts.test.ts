@@ -257,6 +257,20 @@ describe("Grok subscription", () => {
     expect(await grok()).toEqual(grokModels);
     expect(engines.models.mock.calls).toEqual([["grok"], ["grok"]]);
   });
+  it("starts over once when Claude never saved the session it was asked to resume", async () => {
+    const { store, pool } = fixture(), conversation = store.primaryConversation();
+    store.setSetting("providers.anthropic.key", "ant-key");
+    store.addMessage({ channel: "api", conversationId: conversation.id, direction: "outbound", text: "Remember this context" });
+    store.setSetting("codex.thread.provider-anthropic." + conversation.id, "s-lost");
+    engines.run.mockImplementation(async (_route, _context, _input, options) => {
+      if (options.threadId) throw new Error("Claude Code returned an error result: No conversation found with session ID: s-lost");
+      return { threadId: "s-new", response: "ok", events: [] };
+    });
+    await pool.run("Next", { conversationId: conversation.id, provider: "anthropic", byOwner: true });
+    expect(engines.run.mock.calls.map(call => call[3].threadId)).toEqual(["s-lost", undefined]);
+    expect(engines.run.mock.calls[1]?.[2]).toContain("Remember this context");
+    expect(store.getSetting("codex.thread.provider-anthropic." + conversation.id)).toBe("s-new");
+  });
   it("lists the agent's own models, starts over once when Grok lost the session, and forgets a lost sign-in", async () => {
     const { store, accounts, pool } = fixture(), conversation = store.primaryConversation(); signedIn(store);
     store.addMessage({ channel: "api", conversationId: conversation.id, direction: "outbound", text: "Remember this context" });
