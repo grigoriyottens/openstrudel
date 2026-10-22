@@ -140,3 +140,92 @@ it("does not record strangers, paused groups or another group's context", async 
   const tools=employeeTools(store,{run},new MessageService(store,{run}).interactions,{profile:null,conversationId:chat.conversationId!,messageId:"test",channel:"telegram"});
   await expect(tools.call("read_chat_history",{before:secret.id})).rejects.toThrow("История изменилась");
 });
+
+it("tells the model which message a group reply targets, also one Home never stored", async () => {
+  const { run, adapter, update } = setup("instructions");
+  const reply = (id: number, target: Record<string, unknown>, quote?: string) => { const u = update(id, "Мне вот этот нравится");
+    return { ...u, message: { ...u.message, reply_to_message: target, ...(quote ? { quote: { text: quote } } : {}) } }; };
+  // An album the bot posted straight through the Bot API, outside Home's history.
+  await adapter.processUpdate(reply(2392, { message_id: 2366, from: { id: 123, is_bot: true, username: "strudel_bot" }, caption: "01 · Loft Factory: Новорязанская, 26с1", photo: [{ file_id: "p" }] }));
+  await adapter.processUpdate(reply(2393, { message_id: 50, from: { id: 9, first_name: "Darya" }, photo: [{ file_id: "p" }] }));
+  await adapter.processUpdate(reply(2394, { message_id: 51, from: { id: 9, first_name: "Darya" }, document: { file_id: "d", file_name: "bbf.pdf" } }));
+  await adapter.processUpdate(reply(2395, { message_id: 52, from: { id: 9, first_name: "Darya" }, text: "Варианты: 4 ноября или 17 ноября" }, "17 ноября"));
+  const prompts = run.mock.calls.map(call => String(call[0]));
+  expect(prompts[0]).toContain('"replyToAssistant":true,"replyTo":{"messageId":2366,"author":"assistant","text":"01 · Loft Factory: Новорязанская, 26с1"}');
+  expect(prompts[1]).toContain('"replyTo":{"messageId":50,"author":"Darya","text":"[photo]"}');
+  expect(prompts[2]).toContain('"replyTo":{"messageId":51,"author":"Darya","text":"[bbf.pdf]"}');
+  expect(prompts[3]).toContain('"replyTo":{"messageId":52,"author":"Darya","text":"17 ноября"}');
+  expect(run.mock.calls[0]![1].profile).toContain("replyTo is the exact message being answered");
+});
+
+it("threads a group answer to the message it answers and leaves private answers unthreaded", async () => {
+  const { store, adapter, update } = setup("instructions");
+  store.linkTelegramChat({ chatId: "7", title: "Owner", allowedSenders: ["7"] });
+  await adapter.processUpdate(update(41, "@strudel_bot билеты есть?"));
+  await adapter.processUpdate({ update_id: 42, message: { message_id: 42, from: { id: 7, first_name: "Mik" }, chat: { id: 7, type: "private" }, text: "Привет" } });
+  const sent = vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith("/sendMessage")).map(([, init]) => JSON.parse(String(init!.body)));
+  expect(sent[0]).toMatchObject({ chat_id: -100, reply_parameters: { message_id: 41, allow_sending_without_reply: true } });
+  expect(sent[1]!.chat_id).toBe(7);
+  expect(sent[1]).not.toHaveProperty("reply_parameters");
+});
+
+/** Holds the first model turn open so later updates wait in the queue. */
+function hold(run: ReturnType<typeof setup>["run"]) {
+  let release!: () => void;
+  run.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve({ threadId: "test", response: "NO_REPLY", events: [] }); }));
+  return () => release();
+}
+const queued = (store: Store) => Number(store.db.prepare("SELECT count(*) n FROM messages WHERE status='queued'").get()!.n);
+
+it("shows a queued group turn the newer messages that already arrived", async () => {
+  const { store, run, adapter, update } = setup("instructions");
+  const release = hold(run);
+  const first = adapter.processUpdate(update(1, "@dzhuykova когда у нас Китай? 20?"));
+  await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+  const rest = [adapter.processUpdate(update(2, "22/11", 9)), adapter.processUpdate(update(3, "18.11 ещё TechWeek"))];
+  await vi.waitFor(() => expect(queued(store)).toBe(2));
+  release(); await Promise.all([first, ...rest]);
+  const [, second, third] = run.mock.calls.map(call => String(call[0]));
+  expect(second).toContain("Newer messages in this chat");
+  expect(second).toContain('{"author":"Grisha","text":"18.11 ещё TechWeek"}');
+  expect(second).toContain("NO_REPLY");
+  expect(third).not.toContain("Newer messages in this chat");
+});
+
+it("applies an edit to a request still waiting its turn, and never to an answered one", async () => {
+  const { store, run, adapter, update } = setup("instructions");
+  const release = hold(run);
+  const first = adapter.processUpdate(update(1, "@strudel_bot билеты есть соответствующие?"));
+  await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+  const second = adapter.processUpdate(update(2, "в расписании"));
+  await vi.waitFor(() => expect(queued(store)).toBe(1));
+  await adapter.processUpdate({ update_id: 9, edited_message: update(2, "в продаже").message });
+  release(); await Promise.all([first, second]);
+  expect(run).toHaveBeenCalledTimes(2);
+  expect(run.mock.calls[1]![0]).toContain("в продаже");
+  expect(run.mock.calls[1]![0]).not.toContain("в расписании");
+  await adapter.processUpdate({ update_id: 10, edited_message: update(1, "изменено потом").message });
+  expect(store.findMessageByExternal("telegram", "-100:1")!.text).toBe("@strudel_bot билеты есть соответствующие?");
+  expect(run).toHaveBeenCalledTimes(2);
+  // Telegram sends edits only to a bot that asks for them.
+  void adapter.start();
+  await vi.waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/getUpdates"))).toBe(true));
+  adapter.stop();
+  const poll = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith("/getUpdates"))!;
+  expect(JSON.parse(String(poll[1]!.body)).allowed_updates).toContain("edited_message");
+});
+
+it("gives a captionless group file as context, and keeps a private one a request", async () => {
+  const { store, run, adapter, update } = setup("instructions");
+  const file = (id: number, chat: { id: number; type: string }) => ({ update_id: id, message: { message_id: id, from: { id: 7, first_name: "Grisha" }, chat, document: { file_id: "file", file_name: "proposal.txt", mime_type: "text/plain" } } });
+  await adapter.processUpdate(file(1, { id: -100, type: "group" }));
+  const group = String(run.mock.calls[0]![0]);
+  expect(group).toContain('"attachmentOnly":true');
+  expect(group).toContain("proposal.txt");
+  expect(group).not.toContain("Посмотри вложение");
+  await adapter.processUpdate(update(2, "@strudel_bot что в файле?"));
+  expect(String(run.mock.calls[1]![0])).not.toContain("attachmentOnly");
+  store.linkTelegramChat({ chatId: "7", title: "Owner", allowedSenders: ["7"] });
+  await adapter.processUpdate(file(3, { id: 7, type: "private" }));
+  expect(String(run.mock.calls[2]![0])).toContain("Посмотри вложение.");
+});
