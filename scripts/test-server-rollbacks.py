@@ -35,5 +35,11 @@ class Retention(unittest.TestCase):
         os.utime(old, (1792000000, 1792000000)); os.utime(running, (1792000000, 1792000000))
         self.assertEqual(prune.stale_stages([old, running, new], kept, '55-bbb'), [old])
 
+    def test_keeps_an_image_built_by_a_deployment_in_progress(self):
+        kept = [self.snapshot('openstrudel-upgrade-54-20261021T000000Z', True), self.snapshot('openstrudel-upgrade-55-20261022T000000Z', True)]
+        created = {'openstrudel:52-aaa': 1792000000, 'openstrudel:before54-20261021T000000Z': 1792000000,
+                   'openstrudel:55-bbb': 1792000000, 'openstrudel:56-ccc': 1793000000}
+        self.assertEqual(prune.stale_images(created, {'openstrudel:55-bbb'}, kept), ['openstrudel:52-aaa'])
+
 if __name__ == '__main__':
     unittest.main()

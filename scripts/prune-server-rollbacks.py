@@ -28,12 +28,22 @@ def plan(snapshots, keep=2):
     removed = [s for s in ordered if stamp(s) < oldest_kept]
     return [s for s in ordered if s not in removed], removed
 
+def cutoff(kept):
+    """Anything created after the oldest kept snapshot may belong to a deployment in progress."""
+    return datetime.datetime.strptime(min(stamp(s) for s in kept), '%Y%m%dT%H%M%SZ').replace(tzinfo=datetime.timezone.utc).timestamp()
+
 def stale_stages(stages, kept, running_tag):
-    """Staging folders older than the oldest kept snapshot, except the running release's.
-    A folder created by a deployment in progress is newer, so it stays."""
+    """Staging folders older than the oldest kept snapshot, except the running release's."""
     if not kept: return []
-    cutoff = datetime.datetime.strptime(min(stamp(s) for s in kept), '%Y%m%dT%H%M%SZ').replace(tzinfo=datetime.timezone.utc).timestamp()
-    return [p for p in stages if not p.name.endswith(running_tag) and p.stat().st_mtime < cutoff]
+    return [p for p in stages if not p.name.endswith(running_tag) and p.stat().st_mtime < cutoff(kept)]
+
+def stale_images(created, needed, kept):
+    """Image tags older than the oldest kept snapshot that nothing kept can roll back to.
+    A before-* tag marks the image an upgrade replaced; it stays while its snapshot exists."""
+    if not kept: return []
+    stamps = {stamp(s) for s in kept}
+    return [t for t, at in created.items() if t not in needed and at < cutoff(kept)
+            and not (t.split(':', 1)[1].startswith('before') and stamp(pathlib.Path(t)) in stamps)]
 
 def docker(*args):
     return subprocess.run(['docker', *args], check=True, capture_output=True, text=True).stdout
@@ -55,10 +65,9 @@ def main():
     for snapshot in kept:
         try: needed.add(json.loads((snapshot / 'container.json').read_text())['Config']['Image'])
         except (OSError, ValueError, KeyError): pass
-    kept_stamps = {stamp(s) for s in kept}
     tags = [t for t in docker('images', '--format', '{{.Repository}}:{{.Tag}}', 'openstrudel').split() if t.startswith('openstrudel:')]
-    # A before-* tag marks the image an upgrade replaced; keep it while its snapshot exists.
-    stale_tags = [t for t in tags if t not in needed and not (t.split(':', 1)[1].startswith('before') and stamp(pathlib.Path(t)) in kept_stamps)]
+    created = {t: datetime.datetime.fromisoformat(docker('image', 'inspect', '--format', '{{.Created}}', t).strip()[:19] + '+00:00').timestamp() for t in tags}
+    stale_tags = stale_images(created, needed, kept)
     stages = [p for p in args.stages.glob('openstrudel-stage-*') if p.is_dir() and not p.is_symlink()]
     old_stages = stale_stages(stages, kept, current.split(':', 1)[1]) if removed else []
     result = {'keep': [str(p) for p in kept], 'remove': [str(p) for p in removed], 'removeTags': stale_tags,
