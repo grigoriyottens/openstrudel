@@ -73,6 +73,8 @@ A subscription is used only the way its vendor documents for other apps. OpenStr
 - "Approve all" runs service tools without asking. It refuses commands outside the sandbox and reads or changes outside the workspace, and the turn fails when the sandbox is not available.
 - Group chats get no commands and no file changes.
 
+**Sandbox on servers.** Claude Code's sandbox on Linux needs `bubblewrap` and `socat`; the Home image includes both. Without them every private and employee chat fails, while group chats, which run no commands, still answer.
+
 **Services on Claude providers.** The Claude engine loads the context's MCP services from the same files as Codex: the employee's services, the services the installer set up, and the Telegram group services for a verified sender only. It does not load SKILL.md skills, Codex plugins, ChatGPT apps or Computer Use. Browser sign-in for a service is not available there, so the owner adds such a service with an access key. The Services and skills screen still lists skills and plugins for these employees and says that they apply only on Codex providers.
 
 **Codex key providers.** No ChatGPT apps, no `serviceTier` (OpenAI API keeps it), web search only where the registry allows it, and the registry's context window per thread (`model_context_window`, `model_auto_compact_token_limit`). The OpenAI API catalog is Codex's own `model/list` with its reasoning efforts; xAI models run with medium effort.
