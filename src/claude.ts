@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { basename, dirname, resolve, sep } from "node:path";
 import { z } from "zod";
 import { INSTRUCTIONS } from "./codex.js";
-import { readToml } from "./extensions.js";
+import { readToml, inheritedIntegrations } from "./extensions.js";
 import { ProviderKeyError, exhaustedPlan, providerNotConnected, providerModels, type ProviderInfo } from "./providers.js";
 import { modelReasoning, reasoningChoices, type ModelChoice } from "./model-settings.js";
 import { contextPattern } from "./scopes.js";
@@ -183,11 +183,13 @@ export class ClaudeEngine implements CodexEngine {
   }
 }
 
-/** The same services as the Codex scope: shared, then installer-provisioned, then Telegram's for the verified sender only. */
+/** The same services as the Codex scope: the owner's when shared with every chat, then shared, installer-provisioned, and Telegram's for the verified sender only. */
 export function contextServers(root: string, context: string, options: Pick<RunOptions, "telegramActor" | "conversationId">): Record<string, McpServerConfig> {
-  const servers = extensionServers({ ...readToml(resolve(root, ".data/extensions", context, "config.toml")).mcp_servers, ...readToml(resolve(root, ".data/connections", context + ".toml")).mcp_servers });
+  const own = { ...readToml(resolve(root, ".data/extensions", context, "config.toml")).mcp_servers, ...readToml(resolve(root, ".data/connections", context + ".toml")).mcp_servers };
   const telegram = resolve(root, ".data/connections", context + ".telegram.json");
-  for (const [key, s] of Object.entries(telegramMcpConfig(existsSync(telegram) ? JSON.parse(readFileSync(telegram, "utf8")) : undefined, options.telegramActor, options.conversationId)) as Array<[string, any]>)
+  const verified = existsSync(telegram) ? JSON.parse(readFileSync(telegram, "utf8")) : undefined;
+  const servers = extensionServers({ ...inheritedIntegrations(root, context, { servers: own, telegram: verified }).servers, ...own });
+  for (const [key, s] of Object.entries(telegramMcpConfig(verified, options.telegramActor, options.conversationId)) as Array<[string, any]>)
     if (s.enabled) servers[key.slice("mcp_servers.".length)] = { type: "http", url: s.url, headers: s.http_headers };
   return servers;
 }

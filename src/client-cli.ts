@@ -104,7 +104,9 @@ export async function clientCommand(command: string, args: string[]): Promise<bo
   };
   const [action = "list", id, extra] = clean;
   const readJSON = async () => JSON.parse(await readInput());
-  if (["services","skills","plugins"].includes(command)) {
+  if (command === "services" && action === "all-chats") {
+    output(await call("/v1/extensions/all-chats", id === "on" || id === "off" ? "POST" : "GET", id === "on" || id === "off" ? {enabled:id === "on"} : undefined));
+  } else if (["services","skills","plugins"].includes(command)) {
     const option = (key:string) => { const n=clean.indexOf(key); if(n<0)return; if(!clean[n+1] || clean[n+1]!.startsWith("--"))throw new HomeError("Укажите значение после "+key); return clean[n+1]; };
     const agent = option("--agent");
     const conversationId = option("--chat") ?? (await call(!agent || agent === "main" ? "/v1/conversation" : "/v1/agents/"+encodeURIComponent(agent)+"/conversation")).conversation.id;
@@ -121,7 +123,7 @@ export async function clientCommand(command: string, args: string[]): Promise<bo
       if(preview.kind!==(command === "skills" ? "skill" : "plugin"))throw new HomeError("Тип пакета не совпадает с командой. Используйте skills для навыка или plugins для плагина.");
       output(action === "preview" ? preview : await call("/v1/extensions/install","POST",{files,digest:preview.digest,replaces:preview.replaces,conversationId}));
     } else if(command !== "services" && ["enable","disable","remove"].includes(action) && id) output(await call("/v1/extensions/change","POST",{id,conversationId,...(action === "remove" ? {} : {enabled:action === "enable"})}));
-    else throw new HomeError("Сервисы: list, add NAME (JSON через stdin), connect ID, remove NAME. Навыки и плагины: list, preview PATH, install PATH, enable ID, disable ID, remove ID. --agent выбирает сотрудника; --chat — его группу.");
+    else throw new HomeError("Сервисы: list, add NAME (JSON через stdin), connect ID, remove NAME, all-chats [on|off]. Навыки и плагины: list, preview PATH, install PATH, enable ID, disable ID, remove ID. --agent выбирает сотрудника; --chat — его группу.");
   } else if (command === "devices") {
     if (action === "list") output(await call("/v1/devices"));
     else if (action === "invite") output(await call("/v1/devices/invitation", "POST", {}));

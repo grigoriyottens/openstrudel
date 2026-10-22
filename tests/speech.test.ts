@@ -148,3 +148,16 @@ it("accepts speech text beyond the old 5000-character cap up to the selected mod
  expect(await generateSpeech(s,"a".repeat(6000))).toEqual(Buffer.from([1,2,3]));
  await expect(generateSpeech(s,"a".repeat(10001))).rejects.toThrow("10000");
 });
+it("says an exhausted ElevenLabs quota is a limit, not a rejected key, and tells the owner it is about voice", async () => {
+  const s = store(true);
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ detail: { status: "quota_exceeded", message: `This request exceeds your quota. ${key}` } }, { status: 401 })));
+  const failure = await transcribeRecording(s, new Uint8Array([1, 2]), "voice.ogg").catch(error => error);
+  expect(failure.message).toMatch(/закончился лимит/);
+  expect(failure.message).not.toContain(key);
+  expect(failure.reason).toBe("provider_limit");
+  const { errorProblem, problemText } = await import("../src/operations.js");
+  expect(errorProblem(failure)).toBe("voice");
+  expect(problemText.voice).toMatch(/ElevenLabs/);
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ detail: { status: "invalid_api_key" } }, { status: 401 })));
+  expect((await transcribeRecording(s, new Uint8Array([1, 2]), "voice.ogg").catch(error => error)).reason).toBe("provider_auth");
+});

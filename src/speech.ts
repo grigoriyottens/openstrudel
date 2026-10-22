@@ -27,7 +27,9 @@ class SpeechFailure extends HomeError {
   constructor(message: string, status: number, readonly reason: DiagnosticReason, readonly providerStatus?: number) { super(message, status); }
 }
 
-function problem(status: number): Error {
+function problem(status: number, code?: unknown): Error {
+  // ElevenLabs answers an exhausted quota with 401 too; its error code tells them apart.
+  if (code === "quota_exceeded") return new SpeechFailure("У ElevenLabs закончился лимит. Пополните баланс ElevenLabs или дождитесь его обновления.", 503, "provider_limit", status);
   if (status === 401 || status === 403) return new SpeechFailure("ElevenLabs не принял ключ или его разрешения. Проверьте ключ в настройках голоса.", 400, "provider_auth", status);
   if (status === 402 || status === 429) return new SpeechFailure("ElevenLabs временно недоступен или закончился лимит. Проверьте баланс и повторите позже.", 503, "provider_limit", status);
   if (status === 400 || status === 422) return new SpeechFailure("ElevenLabs не смог обработать запись. Проверьте формат файла и наличие речи.", 400, "invalid_audio", status);
@@ -39,7 +41,10 @@ async function request(key: string, path: string, init: RequestInit = {}, signal
     const timeout = AbortSignal.timeout(180_000);
     const response = await fetch(origin + path, { ...init, redirect: "error", headers: { ...init.headers, "xi-api-key": key },
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
-    if (!response.ok) { await response.body?.cancel(); throw problem(response.status); }
+    if (!response.ok) {
+      const code = await response.json().then((body: any) => body?.detail?.status, () => undefined);
+      throw problem(response.status, code);
+    }
     return response;
   } catch (error) {
     if (error instanceof HomeError || signal?.aborted) throw error;

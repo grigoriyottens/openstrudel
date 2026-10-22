@@ -20,42 +20,45 @@ function setup() {
  vi.stubGlobal("fetch",vi.fn(async()=>Response.json({ok:true,result:{message_id:99}})));
  return {s,m,a,run};
 }
-it("keeps ordinary group chatter quiet during an account incident and sends one actionable notice until recovery", async () => {
- const {s,m,a,run}=setup();s.setSetting("telegram.bot_username","core_bot");
+it("never shows a group an account incident and tells the owner privately once until recovery", async () => {
+ const {s,m,a,run}=setup();s.setSetting("telegram.bot_username","core_bot");m.telegram=a;
+ s.linkTelegramChat({chatId:"42",title:"Mik",allowedSenders:["42"]});
  s.bindTelegramChat("-100",s.createProfile({name:"Core"}).id);
  run.mockRejectedValue(new AccountUnavailableError("limits"));
- const update=(id:number,text:string)=>({update_id:id,message:{message_id:id,from:{id:7},chat:{id:-100,type:"group"},text}});
+ const update=(id:number,text:string,chat=-100,from=7)=>({update_id:id,message:{message_id:id,from:{id:from},chat:{id:chat,type:chat<0?"group":"private"},text}});
+ const sent=()=>deliveryCalls().map(c=>JSON.parse(String(c[1]!.body))).map(b=>({chat:String(b.chat_id),text:String(b.text)}));
  await a.processUpdate(update(1,"ordinary conversation"));
- expect(deliveryCalls()).toHaveLength(0);
  await a.processUpdate(update(2,"@core_bot check"));
  await a.processUpdate(update(3,"@core_bot second attachment"));
- expect(deliveryCalls()).toHaveLength(1);
- expect(JSON.parse(String(deliveryCalls()[0]![1]!.body)).text).toContain("Лимит");
+ expect(sent().filter(x=>x.chat==="-100")).toEqual([]);
+ expect(sent()).toHaveLength(1);
+ expect(sent()[0]).toMatchObject({chat:"42",text:expect.stringContaining("Требует внимания")});
  expect(s.listMessages(s.getTelegramChat("-100")!.conversationId!).filter(m=>m.status==="failed")).toHaveLength(3);
- // Restart retains the incident; successful processing resets it.
- const restarted=new TelegramAdapter("123:test",s,m);
- await restarted.processUpdate(update(4,"@core_bot still waiting"));expect(deliveryCalls()).toHaveLength(1);
+ // The owner's own chat still shows its failure directly, without a duplicate notice.
+ await a.processUpdate(update(4,"hello",42,42));
+ expect(sent().filter(x=>x.chat==="42").map(x=>x.text)).toEqual([expect.stringContaining("Требует внимания"),expect.stringContaining("Лимит")]);
  run.mockResolvedValue({threadId:"one",response:"NO_REPLY",events:[]});
- await restarted.processUpdate(update(5,"ordinary conversation after recovery"));
+ await a.processUpdate(update(5,"ordinary conversation after recovery"));
  run.mockRejectedValue(new AccountUnavailableError("sign_in_required"));
- await restarted.processUpdate(update(6,"@core_bot hello"));expect(deliveryCalls()).toHaveLength(2);
+ await a.processUpdate(update(6,"@core_bot hello"));
+ expect(sent().filter(x=>x.chat==="-100").map(x=>x.text)).toEqual([]);
  await m.close();
 });
-it("announces a key provider incident in a group once, like an account incident",async()=>{
- const {s,m,a,run}=setup();s.setSetting("telegram.bot_username","core_bot");
+it("keeps a key provider incident out of the group and out of other people's private chats",async()=>{
+ const {s,m,a,run}=setup();s.setSetting("telegram.bot_username","core_bot");m.telegram=a;
+ s.linkTelegramChat({chatId:"42",title:"Mik",allowedSenders:["42"]});
  s.bindTelegramChat("-100",s.createProfile({name:"Core"}).id);
  const update=(id:number,text:string)=>({update_id:id,message:{message_id:id,from:{id:7},chat:{id:-100,type:"group"},text}});
- const sent=()=>deliveryCalls().map(c=>JSON.parse(String(c[1]!.body)).text);
+ const sent=()=>deliveryCalls().map(c=>JSON.parse(String(c[1]!.body))).map(b=>({chat:String(b.chat_id),text:String(b.text)}));
  run.mockRejectedValue(new ProviderKeyError(providerInfo("anthropic")!));
  await a.processUpdate(update(1,"ordinary conversation"));
  await a.processUpdate(update(2,"@core_bot check"));
- await a.processUpdate(update(3,"@core_bot again"));
- expect(sent()).toEqual(["Anthropic не принял ключ. Замените его в настройках аккаунтов."]);
  run.mockRejectedValue(providerFailure(providerInfo("anthropic")!,new Error("429 rate_limit_error")));
- await a.processUpdate(update(4,"@core_bot limits"));await a.processUpdate(update(5,"@core_bot limits again"));
+ await a.processUpdate(update(3,"@core_bot limits"));
  run.mockRejectedValue(providerNotConnected("anthropic"));
- await a.processUpdate(update(6,"ordinary conversation"));await a.processUpdate(update(7,"@core_bot moved"));
- expect(sent()).toEqual(["Anthropic не принял ключ. Замените его в настройках аккаунтов.","У ключа Anthropic закончился лимит или баланс. Проверьте оплату у провайдера или повторите позже.","Подключите Anthropic на этом устройстве или выберите другую модель."]);
+ await a.processUpdate(update(4,"@core_bot moved"));
+ expect(sent().filter(x=>x.chat!=="42")).toEqual([]);
+ expect(sent().length).toBeGreaterThan(0);
  await m.close();
 });
 it("restricts a linked group to its approved senders",async()=>{

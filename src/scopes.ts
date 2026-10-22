@@ -6,7 +6,7 @@ import { CodexEngineAdapter, type CodexEngineOptions } from "./codex.js";
 import type { CodexEngine } from "./types.js";
 import type { CodexAuthTokens } from "./account.js";
 import type { TelegramMcpServers } from "./telegram-mcp.js";
-import { extensionConfig, readToml, atomicText } from "./extensions.js";
+import { extensionConfig, readToml, atomicText, inheritedIntegrations } from "./extensions.js";
 import { parse, stringify } from "smol-toml";
 import { HomeError } from "./home.js";
 
@@ -15,8 +15,23 @@ export const contextPattern = /^(personal|work|group-[a-f0-9]{64}|(?:import|agen
 
 /** One lazy Codex runtime per audience, never one always-on process per employee.
  * With a key provider there is no ChatGPT credential and no ChatGPT apps. */
+/** Order-independent text of parsed configuration, for change detection. */
+const stable = (value: unknown): string => JSON.stringify(value, (_, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v) ?? "";
+/** Before build 55 an app grant could live only in one account's Codex home.
+ * Copy such grants once into the chat's shared file, which then decides alone. */
+function migrateAppGrants(home: string, shared: string) {
+  const marker = resolve(home, "openstrudel-apps.migrated");
+  if (existsSync(marker)) return;
+  const old = Object.entries(readToml(resolve(home, "config.toml")).apps ?? {}).filter(([id, value]: [string, any]) => id !== "_default" && /^[a-zA-Z0-9_-]+$/.test(id) && value?.enabled === true).map(([id]) => id);
+  const saved = existsSync(shared) ? readToml(shared) : extensionConfig(home);
+  const missing = old.filter(id => saved.apps?.[id] === undefined);
+  if (missing.length) atomicText(shared, stringify({ ...saved, apps: { ...saved.apps, ...Object.fromEntries(missing.map(id => [id, { enabled: true }])) } }));
+  mkdirSync(home, { recursive: true, mode: 0o700 }); writeFileSync(marker, "");
+}
+
 export class ScopedCodexEngine implements CodexEngine {
   private readonly contexts = new Map<string, CodexEngineAdapter>();
+  private readonly sources = new Map<string, string>();
   constructor(private readonly root: string, private sourceHome?: string,
     private readonly authTokens?: (refresh?: boolean) => Promise<CodexAuthTokens>, private readonly contextsRoot?: string, private readonly provider?: CodexEngineOptions["provider"]) {}
   setCodexHome(home?: string): void { this.close(); this.sourceHome = home; }
@@ -27,14 +42,22 @@ export class ScopedCodexEngine implements CodexEngine {
     const cwd = resolve(this.root, ".data/workspace",context);
     const home = resolve(this.contextsRoot ?? resolve(this.root, ".data/contexts"), context);
     const sharedExtensionsPath=resolve(this.root,".data/extensions",context,"config.toml");
-    const current = this.contexts.get(context);
+    const connections = resolve(this.root,".data/connections",context + ".toml");
+    const telegramPath = resolve(this.root,".data/connections",context + ".telegram.json");
+    migrateAppGrants(home, sharedExtensionsPath);
     const extensions = existsSync(sharedExtensionsPath) ? readToml(sharedExtensionsPath) : extensionConfig(home);
+    const legacy = readToml(connections);
+    const telegramServers:TelegramMcpServers | undefined = existsSync(telegramPath) ? JSON.parse(readFileSync(telegramPath,"utf8")) : undefined;
+    const inherited = inheritedIntegrations(this.root, context, { servers:{...extensions.mcp_servers,...legacy.mcp_servers}, apps:extensions.apps, telegram:telegramServers });
+    // A runtime keeps its configuration while it works. Once idle, any change
+    // to this chat's, the owner's or the installer's files starts a fresh one.
+    const sources = stable({ legacy, telegramServers, inherited });
+    const current = this.contexts.get(context);
     if (current) {
-      if (JSON.stringify(extensions) === JSON.stringify(extensionConfig(home))) {
+      if (current.busy || (stable(extensions) === stable(extensionConfig(home)) && this.sources.get(context) === sources)) {
         this.contexts.delete(context); this.contexts.set(context,current);
         return current;
       }
-      if (current.busy) throw new HomeError("Сервисы обновлены. Дождитесь текущего ответа, чтобы продолжить.",409);
       current.close(); this.contexts.delete(context);
     }
     // Each native runtime owns several OS threads. Keeping every audience
@@ -49,11 +72,11 @@ export class ScopedCodexEngine implements CodexEngine {
     mkdirSync(cwd,{recursive:true,mode:0o700}); mkdirSync(home,{recursive:true,mode:0o700});
     const source = this.sourceHome && resolve(this.sourceHome,"auth.json");
     if (!this.authTokens && source && existsSync(source)) { copyFileSync(source,resolve(home,"auth.json")); chmodSync(resolve(home,"auth.json"),0o600); }
-    const connections = resolve(this.root,".data/connections",context + ".toml");
     const configPath=resolve(home,"config.toml");
-    const granted = Object.entries({...readToml(configPath).apps,...extensions.apps}).filter(([id,value])=>id!=="_default" && /^[a-zA-Z0-9_-]+$/.test(id) && (value as any)?.enabled === true).map(([id])=>id);
+    const granted = [...new Set([...Object.entries(extensions.apps ?? {}).filter(([id,value])=>id!=="_default" && /^[a-zA-Z0-9_-]+$/.test(id) && (value as any)?.enabled === true).map(([id])=>id), ...inherited.apps])];
     // Nothing from a broad account config is silently inherited. Scoped MCPs
-    // are provisioned by the installer; subscriptions still use native OAuth.
+    // are provisioned by the installer, or come from the owner's main chat
+    // when the owner shares it with every chat; subscriptions use native OAuth.
     // Linux executes the sandbox helper through a CODEX_HOME/tmp alias into
     // the platform Codex package. Both must remain readable inside the sandbox;
     // granting the entire Codex home would also expose credentials and history.
@@ -66,7 +89,6 @@ export class ScopedCodexEngine implements CodexEngine {
     // threads. Allow reading that recall store without exposing credentials,
     // other audiences or the account-wide history. Codex owns generation.
     if (!this.provider) (base as any).permissions.openstrudel.filesystem[resolve(home,"memories")] = "read";
-    const legacy = readToml(connections);
     const computer = computerUseReadPaths(extensions.mcp_servers?.cua_repl);
     for (const path of computer) (base as any).permissions.openstrudel.filesystem[path] = "read";
     atomicText(resolve(home,"openstrudel-extensions.toml"),stringify(extensions));
@@ -76,12 +98,12 @@ export class ScopedCodexEngine implements CodexEngine {
     // a key provider has none.
     atomicText(configPath, stringify({ ...extensions, ...base, features:{apps:!this.provider,plugins:!this.provider,remote_plugin:false,memories:!this.provider},
       ...(!this.provider ? {memories:{generate_memories:true,use_memories:true,disable_on_external_context:false,min_rate_limit_remaining_percent:0}} : {}),
-      mcp_servers:{...extensions.mcp_servers,...legacy.mcp_servers} }));
-    const telegramPath = resolve(this.root,".data/connections",context + ".telegram.json");
-    const telegramServers:TelegramMcpServers | undefined = existsSync(telegramPath) ? JSON.parse(readFileSync(telegramPath,"utf8")) : undefined;
-    const options: CodexEngineOptions = { workingDirectory:cwd,codexHome:home,sharedExtensionsPath,scoped:true,authTokens:this.authTokens,telegramServers,reservedServers:Object.keys(legacy.mcp_servers ?? {}),provider:this.provider };
+      mcp_servers:{...inherited.servers,...extensions.mcp_servers,...legacy.mcp_servers} }));
+    const options: CodexEngineOptions = { workingDirectory:cwd,codexHome:home,sharedExtensionsPath,scoped:true,authTokens:this.authTokens,telegramServers,
+      reservedServers:[...Object.keys(legacy.mcp_servers ?? {}),...Object.keys(inherited.servers)],inheritedApps:inherited.apps,provider:this.provider,
+      catalogPath:resolve(this.root,".data/app-catalog.json") };
     const engine = new CodexEngineAdapter(options);
-    this.contexts.set(context,engine);
+    this.contexts.set(context,engine); this.sources.set(context,sources);
     return engine;
   }
   run: CodexEngine["run"] = (input,options) => this.forContext("personal").run(input,options);
