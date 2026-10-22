@@ -17,6 +17,12 @@ export interface TelegramToolContext {
   scope?: string;
 }
 
+/** The adapter's verified sender is the paired owner, whatever the chat. Never from model arguments. */
+export function ownerSender(store: Store, context: TelegramToolContext): boolean {
+  const sender = context.channel === "telegram" ? context.telegramSenderId : undefined;
+  return !context.scheduled && Boolean(sender && store.getTelegramChat(sender)?.allowedSenders.includes(sender));
+}
+
 /** The already connected bot is a native capability, not another MCP sign-in. */
 export function telegramTools(store: Store, context: TelegramToolContext) {
   const definitions: DynamicTool[] = context.telegram ? [
@@ -26,9 +32,7 @@ export function telegramTools(store: Store, context: TelegramToolContext) {
       inputSchema:{type:"object",properties:{chatId:{type:"string"},text:{type:"string"},paths:{type:"array",items:{type:"string"}},silent:{type:["boolean","null"]},linkPreview:{type:["boolean","null"]}},required:["chatId","text","paths"],additionalProperties:false} },
   ] : [];
   const chats = () => {
-    // The sender identity comes from the adapter, never from model arguments.
-    const sender = context.channel === "telegram" ? context.telegramSenderId : undefined;
-    const owner = !context.scheduled && (context.byOwner === true || Boolean(sender && store.getTelegramChat(sender)?.allowedSenders.includes(sender)));
+    const owner = !context.scheduled && (context.byOwner === true || ownerSender(store, context));
     return store.telegramChats().filter(chat => chat.enabled !== false && (context.scheduled
       ? chat.chatId === context.scheduleTelegramChatId
       : owner || chat.conversationId === context.conversationId));
