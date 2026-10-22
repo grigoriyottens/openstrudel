@@ -179,7 +179,9 @@ export class MessageService {
             threadId: current.codexThreadId, conversationId: current.id, messageId: inbound.id, ...selection, signal: running.abort.signal,
             employees: this.store.listProfiles().filter(p => p.id !== currentProfile?.id && !agentTransfer(this.store, p.id) && !this.store.getSetting("employee.deleted." + p.id))
               .map(p => ({...p,...resolveModelSelection(this.store,p.id)})),
-            approvalMode: readApprovalMode(this.store.getSetting(approvalSetting)), groupContext, byOwner: input.byOwner === true, scheduled: input.scheduled === true,
+            approvalMode: readApprovalMode(this.store.getSetting(approvalSetting)), groupContext, byOwner: input.byOwner === true,
+            // The owner's pipelines (WAI News urgent batches) post "operations:" requests into their group: unattended owner work, sandboxed like a schedule.
+            scheduled: input.scheduled === true || input.channel === "api" && input.byOwner === true && Boolean(input.externalId?.startsWith("operations:")),
             readPaths:knowledge?.readPaths,
             telegramActor: input.channel === "telegram" && input.telegramSenderId && input.externalChatId && input.externalId
               ? {userId:input.telegramSenderId,chatId:input.externalChatId,messageId:input.externalId} : undefined,

@@ -229,3 +229,13 @@ it("gives a captionless group file as context, and keeps a private one a request
   await adapter.processUpdate(file(3, { id: 7, type: "private" }));
   expect(String(run.mock.calls[2]![0])).toContain("Посмотри вложение.");
 });
+
+it("runs the owner's pipeline operations in a group like its schedules; everything else there stays live", async () => {
+  const { chat, run, messages, adapter, update } = setup("instructions");
+  const api = (externalId: string, byOwner?: boolean) => messages.handle({ channel: "api", conversationId: chat.conversationId!, text: "Срочная пачка новостей", externalId, byOwner });
+  await api("operations:5b0c1d2e", true);
+  await api("operations:forged");
+  await api("app-message", true);
+  await adapter.processUpdate(update(1, "operations: сделай"));
+  expect(run.mock.calls.map(call => [call[1].groupContext, call[1].scheduled])).toEqual([[true, true], [true, false], [true, false], [true, false]]);
+});
