@@ -145,7 +145,8 @@ it("keeps approve-all writes in the workspace and never runs commands for a grou
   await engine("kimi", query).run("Hi", { approvalMode: "approve_all", onRequest });
   await engine("kimi", query).forContext("group-" + "a".repeat(64)).run("Hi", { approvalMode: "approve_all", groupContext: true, onRequest });
   await engine("kimi", query).run("Hi", { approvalMode: "ask" });
-  const [all, group, unattended] = calls as [Call, Call, Call];
+  await engine("kimi", query).forContext("group-" + "a".repeat(64)).run("Hi", { approvalMode: "approve_all", groupContext: true, scheduled: true });
+  const [all, group, unattended, scheduledGroup] = calls as [Call, Call, Call, Call];
   expect(all.options.sandbox).toEqual({ enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false, failIfUnavailable: true,
     filesystem: { denyRead: [realpathSync(join(root, ".data")), realpathSync(homedir())], allowRead: [realpathSync(join(root, ".data/workspace/personal"))] } });
   expect(await allow(all, "Bash", { command: "make" })).toMatchObject({ behavior: "allow" });
@@ -157,6 +158,10 @@ it("keeps approve-all writes in the workspace and never runs commands for a grou
   expect(await allow(group, "Write", { file_path: "a.md", content: "x" })).toMatchObject({ behavior: "deny" });
   expect(await allow(unattended, "Bash", { command: "ls" })).toMatchObject({ behavior: "deny" });
   expect(await allow(unattended, "AskUserQuestion", { questions: [] })).toMatchObject({ behavior: "deny" });
+  // The owner's schedule in a group runs its saved work like the owner's own chat, sandboxed.
+  expect(scheduledGroup.options.sandbox).toMatchObject({ enabled: true, allowUnsandboxedCommands: false, failIfUnavailable: true });
+  expect(await allow(scheduledGroup, "Bash", { command: "python3 scripts/news/wai-news.py claim" })).toMatchObject({ behavior: "allow" });
+  expect(await allow(scheduledGroup, "Write", { file_path: "state.json", content: "x" })).toMatchObject({ behavior: "allow" });
   expect(asked).toEqual([]);
 });
 

@@ -95,7 +95,8 @@ export class ClaudeEngine implements CodexEngine {
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1", ...provider.env });
     if (provider.id !== "anthropic") for (const name of aliases) env[name] = model;
 
-    const mode = options.approvalMode ?? "ask", group = options.groupContext === true, ask = options.onRequest;
+    // A group's live turns run no commands. The owner's schedule in a group runs its saved work like the owner's chat, sandboxed.
+    const mode = options.approvalMode ?? "ask", group = options.groupContext === true && options.scheduled !== true, ask = options.onRequest;
     const canUseTool: CanUseTool = async (name, input, { mcpServer }) => {
       const allow: PermissionResult = { behavior: "allow", updatedInput: input }, deny = (message: string): PermissionResult => ({ behavior: "deny", message });
       const path = input.file_path ?? input.notebook_path, edit = edits.includes(name);
