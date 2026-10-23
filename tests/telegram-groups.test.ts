@@ -5,6 +5,7 @@ import { TelegramAdapter, type TelegramUpdate } from "../src/telegram.js";
 import { MessageService } from "../src/messages.js";
 import { Scheduler } from "../src/scheduler.js";
 import { employeeTools } from "../src/personality.js";
+import { INSTRUCTIONS } from "../src/codex.js";
 
 const stores: Store[] = [];
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); for (const s of stores.splice(0)) s.close(); });
@@ -98,12 +99,22 @@ it("allows colleagues to address the employee but not change the binding", async
 });
 
 it("marks only the paired owner's private chat as the owner's turn", async () => {
-  const { adapter, profile, run } = setup(); const a = adapter.createLink(profile.id, "group");
+  const { store, adapter, profile, run } = setup(); const a = adapter.createLink(profile.id, "group");
+  store.createProfile({ name: "Researcher" });
   await adapter.processUpdate(message(1, `/start@strudel_bot ${a.code}`));
   await adapter.processUpdate(message(2, "Hello", 42));
   await adapter.processUpdate(message(3, "@strudel_bot hello", -100, 42));
   await adapter.processUpdate(message(4, "@strudel_bot hello", -100, 77));
-  expect(run.mock.calls.map(call => (call as any[])[1].byOwner)).toEqual([true, false, false]);
+  const options = () => run.mock.calls.map(call => (call as any[])[1]);
+  expect(options().map(o => o.byOwner)).toEqual([true, false, false]);
+  // The owner and people on this Home's access list get its services and helpers; anyone else in a group does not.
+  expect(options().map(o => o.access)).toEqual([true, true, false]);
+  expect(options()[2]).toMatchObject({ employees: [], profile: expect.stringContaining("not on this Strudel's access list") });
+  for (const o of options().slice(0, 2)) { expect(o.employees.length).toBeGreaterThan(0); expect(o.profile).not.toContain("access list"); }
+  store.setSetting("access.people", JSON.stringify(["77"]));
+  await adapter.processUpdate(message(5, "@strudel_bot again", -100, 77));
+  expect(options()[3]).toMatchObject({ access: true, byOwner: false, employees: [expect.objectContaining({ name: "Researcher" })] });
+  expect(options()[3].profile).not.toContain("access list");
 });
 
 it("preserves existing groups and requires explicit replacement in the app", async () => {
@@ -137,6 +148,54 @@ it("does not grant a group's members delivery into another connected chat", asyn
   const chat = store.bindTelegramChat("-100", profile.id);
   const tools = employeeTools(store, { run: vi.fn() }, messages.interactions, { profile, conversationId: chat.conversationId!, messageId: "one", channel: "telegram", scheduler, scope: messages.contextFor(chat.conversationId!) });
   await expect(tools.call("save_schedule", { name: "Leak", prompt: "share", cron: "0 12 * * *", timezone: "UTC", telegramChatId: "42" })).rejects.toThrow("эту же группу");
+});
+
+it("lets the owner see, change and stop any schedule on the Home from any chat, and nobody else", async () => {
+  const { store, profile, messages, adapter, run } = setup(); const scheduler = new Scheduler(store, messages); messages.scheduler = scheduler;
+  store.linkTelegramChat({ chatId: "-100", title: "Wai Core Team", allowedSenders: ["42", "77"] });
+  const group = store.bindTelegramChat("-100", profile.id);
+  const scout = store.createProfile({ name: "Офисный разведчик" }), offices = store.profileConversation(scout.id).id;
+  const office = scheduler.save({ conversationId: offices, name: "Рассылка офисов", prompt: "Найди офисы", cron: "0 9 * * *", timezone: "Europe/Moscow" });
+  const tools = (extra: Record<string, unknown>) => employeeTools(store, { run: vi.fn() }, messages.interactions, { profile, conversationId: group.conversationId!, messageId: "m", channel: "telegram", scheduler, scope: messages.contextFor(group.conversationId!), ...extra });
+  const edit = { id: office.id, name: "Рассылка офисов", prompt: "Найди офисы", cron: "0 10 * * *", timezone: "", telegramChatId: null };
+  for (const other of [tools({ telegramSenderId: "77" }), tools({ telegramSenderId: "42", scheduled: true }), tools({ channel: "api" })]) {
+    await expect(other.call("list_schedules", { scope: "home" })).rejects.toThrow("Все расписания Strudel видит только владелец.");
+    await expect(other.call("pause_schedule", { id: office.id })).rejects.toThrow();
+    await expect(other.call("save_schedule", edit)).rejects.toThrow();
+  }
+  expect(scheduler.list(offices)).toMatchObject([{ cron: "0 9 * * *", enabled: true }]);
+  // The verified owner in the group, as the Telegram adapter delivers him.
+  run.mockImplementationOnce(async (_input: string, options: any) => {
+    const owner = options.tools;
+    expect((await owner.call("list_schedules", {})).schedules).toEqual([]);
+    expect((await owner.call("list_schedules", { scope: "home" })).schedules).toEqual([expect.objectContaining({ id: office.id, name: "Рассылка офисов", chat: "Офисный разведчик", employee: "Офисный разведчик", nextRunLocal: expect.any(String) })]);
+    expect(await owner.call("save_schedule", { ...edit, telegramChatId: "42" })).toMatchObject({ conversationId: offices, cron: "0 10 * * *", timezone: "Europe/Moscow", telegramChatId: "42" });
+    expect(await owner.call("pause_schedule", { id: office.id })).toEqual({ paused: true });
+    return { threadId: "fixture", response: "Остановил", events: [] };
+  });
+  await adapter.processUpdate(message(1, "@strudel_bot останови, пожалуйста, рассылку офисов"));
+  expect(run).toHaveBeenCalledOnce();
+  expect(scheduler.list(offices)).toMatchObject([{ cron: "0 10 * * *", enabled: false }]);
+  expect(scheduler.list(group.conversationId!)).toEqual([]);
+  // In the app the owner has the same view.
+  expect((await tools({ channel: "api", byOwner: true }).call("list_schedules", { scope: "home" }) as any).schedules).toHaveLength(1);
+  // A Codex thread keeps the tool descriptions it started with; the instructions reach it on resume.
+  expect(INSTRUCTIONS).toContain('list_schedules with scope "home"');
+});
+
+it("lets only people with access set up or pause schedules in a group", async () => {
+  const { store, profile, messages } = setup(); const scheduler = new Scheduler(store, messages);
+  store.linkTelegramChat({ chatId: "-100", title: "Group", allowedSenders: ["42"] });
+  const chat = store.bindTelegramChat("-100", profile.id);
+  const tools = (access?: boolean) => employeeTools(store, { run: vi.fn() }, messages.interactions, { profile, conversationId: chat.conversationId!, messageId: "one", channel: "telegram", scheduler, scope: messages.contextFor(chat.conversationId!), access });
+  const brief = { id: null, name: "Brief", prompt: "brief", cron: "0 7 * * *", timezone: "UTC", telegramChatId: null };
+  await expect(tools(false).call("save_schedule", brief)).rejects.toThrow("Расписания в этом чате настраивают люди с доступом к этому Strudel.");
+  await expect(tools(false).call("pause_schedule", { id: "any" })).rejects.toThrow("Расписания в этом чате настраивают люди с доступом к этому Strudel.");
+  expect(scheduler.list(chat.conversationId!)).toEqual([]);
+  const saved = await tools(true).call("save_schedule", brief) as any;
+  await tools(undefined).call("save_schedule", { ...brief, name: "Notes" });
+  await expect(tools(false).call("pause_schedule", { id: saved.id })).rejects.toThrow("Расписания в этом чате");
+  expect(scheduler.list(chat.conversationId!).map(s => [s.name, s.enabled])).toEqual([["Brief", true], ["Notes", true]]);
 });
 
 it("brings a schedule asked for in Telegram back to that chat, and keeps an app request in the app", async () => {

@@ -94,6 +94,8 @@ export interface CodexEngine {
       groupContext?: boolean;
       /** Trusted: the device owner sent this turn. Set by the server from the owner's session and by the Telegram adapter, never from a request body. */
       byOwner?: boolean;
+      /** Trusted: false when the Telegram sender is not on this Home's access list. Set only by MessageService from the adapter's sender id, never from a request body. */
+      access?: boolean;
       /** Trusted server-selected source paths. Never populated from a request body. */
       readPaths?: string[];
       /** A schedule started this turn. */

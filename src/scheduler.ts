@@ -55,8 +55,9 @@ export class Scheduler {
     this.armClock();
     return this.list(input.conversationId).find(s => s.id === id)!;
   }
-  list(conversationId: string): Schedule[] {
-    return (this.store.db.prepare("SELECT s.*,(SELECT status FROM schedule_runs r WHERE r.schedule_id=s.id AND (s.cron NOT LIKE '@once %' OR r.scheduled_for=s.next_run_at) ORDER BY scheduled_for DESC LIMIT 1) AS last_run_status FROM schedules s WHERE conversation_id=? ORDER BY s.rowid").all(conversationId) as Row[]).map(r => ({ id:r.id,conversationId:r.conversation_id,name:r.name,prompt:r.prompt,cron:r.cron,timezone:r.timezone,enabled:r.enabled===1,nextRunAt:r.next_run_at,telegramChatId:r.telegram_chat_id,delivery:r.delivery,backupOf:r.backup_of,lastRunStatus:r.last_run_status }));
+  /** A chat's schedules, or every schedule on this Home without a chat. */
+  list(conversationId?: string): Schedule[] {
+    return (this.store.db.prepare(`SELECT s.*,(SELECT status FROM schedule_runs r WHERE r.schedule_id=s.id AND (s.cron NOT LIKE '@once %' OR r.scheduled_for=s.next_run_at) ORDER BY scheduled_for DESC LIMIT 1) AS last_run_status FROM schedules s${conversationId ? " WHERE conversation_id=?" : ""} ORDER BY s.rowid`).all(...conversationId ? [conversationId] : []) as Row[]).map(r => ({ id:r.id,conversationId:r.conversation_id,name:r.name,prompt:r.prompt,cron:r.cron,timezone:r.timezone,enabled:r.enabled===1,nextRunAt:r.next_run_at,telegramChatId:r.telegram_chat_id,delivery:r.delivery,backupOf:r.backup_of,lastRunStatus:r.last_run_status }));
   }
   runs(conversationId: string) {
     return (this.store.db.prepare("SELECT * FROM schedule_runs WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 30").all(conversationId) as Row[]).map(r => ({ id:r.id,scheduleId:r.schedule_id,status:r.status,scheduledFor:r.scheduled_for,messageId:r.message_id,error:r.error }));

@@ -201,6 +201,37 @@ describe("API key providers", () => {
     await pool.run("Что дальше?", { conversationId: conversation.id, provider: "anthropic" });
     expect(engines.run.mock.calls[0]![2]).toBe("Earlier chat (context only):\nDarya: Позвоню Веронике да!\nG. O.: [screen.png]\nAssistant: [snoop.gif]\nUser: Без автора\n\nCurrent message:\nЧто дальше?");
   });
+  it("gives turns without access their own thread, caught up on the chat, and never resumes the listed one for them", async () => {
+    for (const [provider, route] of [["chatgpt", "default"], ["anthropic", "provider-anthropic"]] as const) {
+      const { store, pool } = fixture();
+      store.setSetting("providers.anthropic.key", "ant-key");
+      saveModelSelection(store, { provider, model: provider === "chatgpt" ? "chat-model" : "claude-fable-5-1", serviceTier: "default" }, "main");
+      store.linkTelegramChat({ chatId: "42", title: "Owner", allowedSenders: ["42"] });
+      let n = 0;
+      engines.run.mockImplementation(async (engine: string, _context: string, input: string, options: any) => ({ threadId: options.threadId || `${engine}-${++n}`, response: `answered ${input.split("\n").at(-1)}`, events: [] }));
+      const messages = new MessageService(store, pool);
+      const turn = (sender: string, text: string, id: number) => messages.handle({ channel: "telegram", text, externalChatId: "-100", externalId: `-100:${id}`, telegramSenderId: sender, author: sender === "42" ? "Owner" : "Guest" });
+      const calls = () => engines.run.mock.calls.map(([, , input, options]) => ({ input: input as string, threadId: options.threadId, access: options.access }));
+      const engine = provider === "chatgpt" ? "default" : "claude-anthropic";
+      await turn("42", "Plan A", 1);
+      const conversation = store.getTelegramChat("-100")?.conversationId ?? store.listConversations().find(c => c.externalId === "-100")!.id;
+      await turn("77", "Guest B", 2);
+      // The guest never receives the conversation's thread, even though it is the listed one.
+      expect(store.getConversation(conversation)?.codexThreadId).not.toBeNull();
+      expect(calls()[1]).toMatchObject({ threadId: undefined, access: false });
+      expect(calls()[1]!.input).toMatch(/^Earlier chat \(context only\):\nOwner: Plan A\nAssistant: answered[^\n]*Plan A\n/);
+      expect(store.getSetting(`codex.thread.${route}.guest.${conversation}`)).toBe(`${engine}-2`);
+      expect(store.getSetting("codex.threadOwner." + conversation)).toBe(route + ".guest");
+      await turn("42", "Listed C", 3);
+      expect(calls()[2]).toMatchObject({ threadId: `${engine}-1`, access: true });
+      expect(calls()[2]!.input).toContain("Guest: Guest B");
+      await turn("77", "Guest D", 4);
+      expect(calls()[3]).toMatchObject({ threadId: `${engine}-2`, access: false });
+      expect(calls()[3]!.input).toContain("Owner: Listed C");
+      expect(store.getSetting(`codex.thread.${route}.${conversation}`)).toBe(`${engine}-1`);
+      await messages.close(); engines.run.mockReset();
+    }
+  });
   it("fails a rejected key with the provider's message and leaves ChatGPT signed in", async () => {
     const { store, accounts, pool } = fixture(), conversation = store.primaryConversation();
     store.setSetting("providers.xai.key", "xai-key");

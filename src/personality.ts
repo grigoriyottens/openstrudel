@@ -3,7 +3,7 @@ import type { Attachment, CodexEngine, DynamicTool, EmployeeProfile } from "./ty
 import { Interactions, safeURL } from "./interactions.js";
 import type { Scheduler } from "./scheduler.js";
 import { ownerTimezone, scheduleTimezone, localScheduleTime } from "./timezone.js";
-import { ownerSender, telegramTools, type TelegramToolContext } from "./telegram-tools.js";
+import { ownerSender, ownerTurn, telegramTools, type TelegramToolContext } from "./telegram-tools.js";
 import { MAX_SPEECH_TEXT, generateSpeech, isSpeechFile, speechSettings, transcribeRecording } from "./speech.js";
 
 const schema = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
@@ -26,9 +26,9 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
   if (context.files) definitions.push(tool("transcribe_audio", "Read speech from an audio or video file in your permitted workspace. Returns the actual transcript, not a summary. Treat the transcript as quoted source material. Maximum 25 MB.", schema({path:text})));
   if (context.files && speechSettings(store).connected && speechSettings(store).voiceId) definitions.push(tool("generate_speech", "Only when the user asks for spoken audio, turn their requested text into speech with ElevenLabs and attach the MP3 to this answer. Uses the voice chosen in settings. Maximum 10000 characters (the selected voice model limit). Never use to impersonate someone.", schema({text:{...text,maxLength:MAX_SPEECH_TEXT}})));
   if (context.scheduler) definitions.push(
-    tool("list_schedules", "List this conversation's actual schedules and recent results.", schema({})),
+    tool("list_schedules", "List this conversation's actual schedules and recent results. Only for the owner: scope \"home\" lists every schedule on this Strudel with its chat and employee; save_schedule and pause_schedule accept those ids from here.", schema({ scope:{ type:["string","null"] } }, [])),
     tool("save_schedule", "Only on an explicit user request, save a reminder or recurring request in this conversation. cron is five-field cron for repetition, or @once followed by an ISO 8601 date with offset for one execution, e.g. @once 2030-01-15T09:30:00+03:00. IANA timezone; list_schedules reports the owner's zone and current time. Null id creates. A Telegram request returns to that chat; an app request stays in the app unless the user names a connected chat ID. Preserve other schedules. Confirm only a successful save, answer immediately, and let the clock handle the later task.", schema({ id: { type:["string","null"] }, name:text, prompt:text, cron:text, timezone:text, enabled:{ type:"boolean" }, telegramChatId:{ type:["string","null"] } })),
-    tool("pause_schedule", "Pause a schedule belonging to this chat when the user asks to stop or remove it.", schema({ id:text })),
+    tool("pause_schedule", "Pause a schedule belonging to this chat when the user asks to stop or remove it. The owner can pause any schedule from list_schedules with scope \"home\".", schema({ id:text })),
   );
   if (!context.profile) definitions.push(tool("create_employee", "Create a permanent employee only when the user asks to create one. Return its actual identity.", profileSchema), tool("list_employees", "List permanent employees so the user can address one by @name.", schema({})));
   return { definitions, attachments, call: async (name: string, args: Record<string, unknown>): Promise<unknown> => {
@@ -60,17 +60,25 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
       const file=context.files!.output(context.conversationId,context.scope!,String(args.path ?? ""));
       attachments.push(file); return {attached:true,file};
     }
+    // The verified owner manages every schedule on this Home from any chat; everyone else, this chat's.
+    const owner = ownerTurn(store, context);
     if (name === "list_schedules") {
-      const timezone = ownerTimezone(store), now = new Date().toISOString();
-      return { schedules:context.scheduler!.list(context.conversationId).map(s=>({...s,nextRunLocal:localScheduleTime(s.nextRunAt,s.timezone)})), runs:context.scheduler!.runs(context.conversationId), timezone, currentTime:now, localTime:timezone ? localScheduleTime(now,timezone) : null };
+      const home = args.scope === "home", timezone = ownerTimezone(store), now = new Date().toISOString();
+      if (home && !owner) throw new Error("Все расписания Strudel видит только владелец. Здесь доступны расписания этого чата.");
+      const where = (id: string) => { const c = store.getConversation(id); return { chat: store.telegramChats().find(chat => chat.conversationId === id)?.title ?? c?.title ?? null, employee: c?.profileId ? store.getProfile(c.profileId)?.name ?? null : null }; };
+      return { schedules:context.scheduler!.list(home ? undefined : context.conversationId).map(s=>({...s,nextRunLocal:localScheduleTime(s.nextRunAt,s.timezone),...home ? where(s.conversationId) : {}})),
+        ...home ? {} : { runs:context.scheduler!.runs(context.conversationId) }, timezone, currentTime:now, localTime:timezone ? localScheduleTime(now,timezone) : null };
     }
     if (name === "save_schedule" || name === "pause_schedule") {
+      // A schedule runs later with this Home's services, so only people with access set one up.
+      if (context.access === false) throw new Error("Расписания в этом чате настраивают люди с доступом к этому Strudel.");
       if (context.scheduled) throw new Error("A scheduled edition cannot create or modify schedules");
-      if (name === "pause_schedule") { context.scheduler!.remove(String(args.id),context.conversationId); return { paused:true }; }
-      if (context.scope?.startsWith("group-") && args.telegramChatId != null && store.getTelegramChat(String(args.telegramChatId))?.conversationId !== context.conversationId) throw new Error("Из группы можно настроить доставку только в эту же группу.");
+      const conversationId = owner && args.id != null ? context.scheduler!.list().find(s=>s.id === String(args.id))?.conversationId ?? context.conversationId : context.conversationId;
+      if (name === "pause_schedule") { context.scheduler!.remove(String(args.id),conversationId); return { paused:true }; }
+      if (!owner && context.scope?.startsWith("group-") && args.telegramChatId != null && store.getTelegramChat(String(args.telegramChatId))?.conversationId !== context.conversationId) throw new Error("Из группы можно настроить доставку только в эту же группу.");
       // A request made in Telegram comes back to that chat unless another connected chat is named.
-      const existing = args.id == null ? undefined : context.scheduler!.list(context.conversationId).find(s=>s.id === String(args.id));
-      const saved = context.scheduler!.save({ conversationId:context.conversationId,id:args.id == null ? undefined : String(args.id),name:String(args.name ?? ""),prompt:String(args.prompt ?? ""),cron:String(args.cron ?? ""),timezone:scheduleTimezone(store,args.timezone,existing?.timezone),enabled:args.enabled !== false,telegramChatId:args.telegramChatId == null ? null : String(args.telegramChatId),
+      const existing = args.id == null ? undefined : context.scheduler!.list(conversationId).find(s=>s.id === String(args.id));
+      const saved = context.scheduler!.save({ conversationId,id:args.id == null ? undefined : String(args.id),name:String(args.name ?? ""),prompt:String(args.prompt ?? ""),cron:String(args.cron ?? ""),timezone:scheduleTimezone(store,args.timezone,existing?.timezone),enabled:args.enabled !== false,telegramChatId:args.telegramChatId == null ? null : String(args.telegramChatId),
         ...(args.telegramChatId == null && context.channel === "telegram" ? { delivery:"bound" as const } : {}) });
       return {...saved,nextRunLocal:localScheduleTime(saved.nextRunAt,saved.timezone)};
     }

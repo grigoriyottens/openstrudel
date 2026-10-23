@@ -12,16 +12,32 @@ export interface TelegramToolContext {
   scheduleTelegramChatId?: string | null;
   byOwner?: boolean;
   telegramSenderId?: string;
+  /** False when the Telegram sender is not on this Home's access list. */
+  access?: boolean;
   telegram?: TelegramAdapter;
   files?: ConversationFiles;
   scope?: string;
 }
 
+/** A Telegram user who paired their private chat with this Home: an owner. */
+const paired = (store: Store, sender: string) => Number(sender) > 0 && store.getTelegramChat(sender)?.allowedSenders.includes(sender) === true;
+
 /** The adapter's verified sender is the paired owner, whatever the chat. Never from model arguments. */
 export function ownerSender(store: Store, context: TelegramToolContext): boolean {
   const sender = context.channel === "telegram" ? context.telegramSenderId : undefined;
-  return !context.scheduled && Boolean(sender && store.getTelegramChat(sender)?.allowedSenders.includes(sender));
+  return !context.scheduled && Boolean(sender && paired(store, sender));
 }
+
+/** The verified owner's own turn: his private chat or the app, or his message in a group. Never a schedule or model arguments. */
+export const ownerTurn = (store: Store, context: TelegramToolContext) => !context.scheduled && (context.byOwner === true || ownerSender(store, context));
+
+/** Telegram ids the owner gave this Home's services and data, besides the paired owners. */
+export function accessPeople(store: Store): string[] {
+  try { const people = JSON.parse(store.getSetting("access.people") ?? "[]"); return Array.isArray(people) ? people.filter(id => typeof id === "string") : []; } catch { return []; }
+}
+export const accessOwners = (store: Store) => store.telegramChats().filter(chat => paired(store, chat.chatId)).map(chat => chat.chatId);
+/** Only from the adapter's verified sender id: a paired owner or someone on the access list. */
+export const hasAccess = (store: Store, sender?: string) => Boolean(sender && (paired(store, sender) || accessPeople(store).includes(sender)));
 
 /** The already connected bot is a native capability, not another MCP sign-in. */
 export function telegramTools(store: Store, context: TelegramToolContext) {
@@ -32,7 +48,7 @@ export function telegramTools(store: Store, context: TelegramToolContext) {
       inputSchema:{type:"object",properties:{chatId:{type:"string"},text:{type:"string"},paths:{type:"array",items:{type:"string"}},silent:{type:["boolean","null"]},linkPreview:{type:["boolean","null"]}},required:["chatId","text","paths"],additionalProperties:false} },
   ] : [];
   const chats = () => {
-    const owner = !context.scheduled && (context.byOwner === true || ownerSender(store, context));
+    const owner = ownerTurn(store, context);
     return store.telegramChats().filter(chat => chat.enabled !== false && (context.scheduled
       ? chat.chatId === context.scheduleTelegramChatId
       : owner || chat.conversationId === context.conversationId));

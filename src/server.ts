@@ -22,6 +22,7 @@ import { WebAccess, sameOrigin } from "./web-access.js";
 import type { Accounts } from "./accounts.js";
 import { hostingOrigin } from "./hosting-origin.js";
 import { approvalSetting, isApprovalMode, readApprovalMode } from "./approval-mode.js";
+import { accessOwners, accessPeople } from "./telegram-tools.js";
 import { ownerTimezone, saveOwnerTimezone } from "./timezone.js";
 import { notificationDestination, receiveNotification } from "./notification-hook.js";
 import { SERVICE_SIGN_IN_SECONDS } from "./service-oauth.js";
@@ -204,7 +205,7 @@ export class HttpApi {
       const canManageAccount = localExecution ? request.headers["x-openstrudel-owner"] === "1" : webSession ? webSession.owner : !paired || owner;
       if (path.startsWith("/v1/extensions") && request.method !== "GET" && !canManageAccount) throw new HomeError("Расширения подключает владелец устройства.",403);
       if (path.startsWith("/v1/connections/") && request.method !== "GET" && !canManageAccount) throw new HomeError("Сервисы подключает владелец устройства.",403);
-      if ((["/v1/settings/approvals", "/v1/settings/models", "/v1/settings/timezone", "/v1/settings/speech"].includes(path) || /^\/v1\/conversations\/[^/]+\/model$/.test(path)) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
+      if ((["/v1/settings/approvals", "/v1/settings/models", "/v1/settings/timezone", "/v1/settings/speech", "/v1/settings/access"].includes(path) || /^\/v1\/conversations\/[^/]+\/model$/.test(path)) && request.method !== "GET" && !canManageAccount) throw new HomeError("Настройки меняет владелец устройства.",403);
       if (!localExecution && request.method !== "GET" && path !== "/v1/home/transfer" && path !== "/v1/home/poll") {
         if (this.home.state.role === "primary" && this.store.getSetting("home.transfer")) throw new HomeError("Передаём управление. Изменения будут доступны после завершения.", 409);
         this.activeWrites++; counted = true;
@@ -259,6 +260,15 @@ export class HttpApi {
           this.store.setSetting(approvalSetting, input.mode);
         }
         this.send(response,200,{mode:readApprovalMode(this.store.getSetting(approvalSetting)),canManage:canManageAccount}); return;
+      }
+      // Who gets this Home's services and data in groups, besides its paired owners.
+      if (path === "/v1/settings/access" && ["GET", "POST"].includes(request.method ?? "")) {
+        if (request.method === "POST") {
+          const { people } = await this.body(request);
+          if (!Array.isArray(people) || people.length > 200 || people.some(id => typeof id !== "string" || !/^[1-9]\d{0,19}$/.test(id))) throw new HomeError("Укажите Telegram ID людей с доступом.");
+          this.store.setSetting("access.people", JSON.stringify([...new Set(people)]));
+        }
+        this.send(response, 200, { people: accessPeople(this.store), owners: accessOwners(this.store) }); return;
       }
       const conversationModel = path.match(/^\/v1\/conversations\/([^/]+)\/model$/);
       if ((path === "/v1/settings/models" || conversationModel) && ["GET", "POST"].includes(request.method ?? "")) {

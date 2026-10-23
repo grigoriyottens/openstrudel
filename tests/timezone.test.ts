@@ -11,7 +11,9 @@ it('never presents the server clock as the owner timezone or silently schedules 
  messages.scheduler=new Scheduler(store,messages);
  try {
   expect(ownerTimezone(store)).toBeNull();
-  await messages.handle({channel:'telegram',externalChatId:'42',text:'Remind me at 16:20'});
+  // The paired owner's private chat, as the Telegram adapter delivers it.
+  store.linkTelegramChat({chatId:'42',title:'Owner',allowedSenders:['42']});
+  await messages.handle({channel:'telegram',externalChatId:'42',telegramSenderId:'42',text:'Remind me at 16:20'});
   expect(seen.profile).toContain('Owner timezone is not configured');
   expect(seen.profile).not.toContain('Owner timezone: UTC');
   expect(await seen.tools.call('list_schedules',{})).toMatchObject({timezone:null,localTime:null});

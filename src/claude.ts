@@ -102,8 +102,10 @@ export class ClaudeEngine implements CodexEngine {
       const lists = servers[server]?.toolLists, tool = name.slice(`mcp__${server}__`.length);
       return !lists || (!lists.enabled || lists.enabled.includes(tool)) && !lists.disabled?.includes(tool);
     };
-    // A group's live turns run no commands. The owner's schedule in a group runs its saved work like the owner's chat, sandboxed.
+    // A group's live turns, like approve-all and Codex's group policy, must stay in the sandbox: commands run only inside it and
+    // change nothing beyond the group's workspace. The owner's schedule in a group runs its saved work like the owner's own chat.
     const mode = options.approvalMode ?? "ask", group = options.groupContext === true && options.scheduled !== true, ask = options.onRequest;
+    const sandboxed = mode === "approve_all" || group;
     const canUseTool: CanUseTool = async (name, input, { mcpServer }) => {
       const allow: PermissionResult = { behavior: "allow", updatedInput: input }, deny = (message: string): PermissionResult => ({ behavior: "deny", message });
       const path = input.file_path ?? input.notebook_path, edit = edits.includes(name);
@@ -117,11 +119,11 @@ export class ClaudeEngine implements CodexEngine {
           const { answers } = await ask("item/tool/requestUserInput", { questions }) as { answers: Record<string, { answers: string[] }> };
           return { behavior: "allow", updatedInput: { ...input, answers: Object.fromEntries(questions.map(q => [q.question, answers[q.id]?.answers.join(", ") ?? ""])) } };
         }
-        if (group && (name === "Bash" || edit)) return deny("Commands and file changes are not available in a group chat.");
         // Codex's profile: the workspace is readable and writable without asking, and nothing beyond it is readable.
         // Changes beyond it need the owner. Approve-all runs only sandboxed commands and services by itself.
         if ((edit || name === "Read") && insideWorkspace(workspace, path)) return allow;
-        if (mode === "approve_all") return name === "Bash" || name.startsWith("mcp__") ? allow : deny(edit ? "Only files inside the workspace can be changed." : "This action is not available.");
+        if (sandboxed && (name === "Bash" || edit)) return name === "Bash" ? allow : deny("Only files inside the workspace can be changed.");
+        if (mode === "approve_all") return name.startsWith("mcp__") ? allow : deny("This action is not available.");
         if (!ask) return deny("No user is available to approve this action.");
         if (name === "Bash") return accepted(await ask("item/commandExecution/requestApproval", { command: input.command, cwd, reason: input.description }));
         if (edit) { const target = physical(resolve(cwd, String(path))); return accepted(await ask("item/fileChange/requestApproval", { reason: `${name} ${target}`, grantRoot: dirname(target) })); }
@@ -163,7 +165,7 @@ export class ClaudeEngine implements CodexEngine {
         // Schedules live in OpenStrudel; the CLI's own cron dies with this per-turn process.
         disallowedTools: ["CronCreate", "CronDelete", "CronList", "ScheduleWakeup", ...provider.webSearch ? [] : ["WebSearch"], ...hidden],
         // Commands read like Codex's profile: never the owner's files or the Home's private data beyond this workspace.
-        sandbox: group ? undefined : { enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: mode !== "approve_all", failIfUnavailable: mode === "approve_all",
+        sandbox: { enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: !sandboxed, failIfUnavailable: sandboxed,
           filesystem: { denyRead: [data, owner], allowRead: [workspace] } },
       } });
       // An interrupt, unlike an abort, ends the turn only after the CLI has written its transcript and exited,
@@ -192,12 +194,13 @@ export class ClaudeEngine implements CodexEngine {
 }
 
 type Service = McpServerConfig & { toolLists?: { enabled?: string[]; disabled?: string[] } };
-/** The same services as the Codex scope: the owner's when shared with every chat, then shared, installer-provisioned, and Telegram's for the verified sender only. */
-export function contextServers(root: string, context: string, options: Pick<RunOptions, "telegramActor" | "conversationId">): Record<string, Service> {
+/** The same services as the Codex scope: the owner's when shared with every chat, then shared, installer-provisioned, and Telegram's for the verified sender only.
+ * A sender without access gets only the services that check the sender themselves. */
+export function contextServers(root: string, context: string, options: Pick<RunOptions, "telegramActor" | "conversationId" | "access">): Record<string, Service> {
   const own = { ...readToml(resolve(root, ".data/extensions", context, "config.toml")).mcp_servers, ...readToml(resolve(root, ".data/connections", context + ".toml")).mcp_servers };
   const telegram = resolve(root, ".data/connections", context + ".telegram.json");
   const verified = existsSync(telegram) ? JSON.parse(readFileSync(telegram, "utf8")) : undefined;
-  const servers = extensionServers({ ...inheritedIntegrations(root, context, { servers: own, telegram: verified }).servers, ...own });
+  const servers: Record<string, Service> = options.access === false ? {} : extensionServers({ ...inheritedIntegrations(root, context, { servers: own, telegram: verified }).servers, ...own });
   for (const [key, s] of Object.entries(telegramMcpConfig(verified, options.telegramActor, options.conversationId)) as Array<[string, any]>)
     if (s.enabled) servers[key.slice("mcp_servers.".length)] = { type: "http", url: s.url, headers: s.http_headers };
   return servers;

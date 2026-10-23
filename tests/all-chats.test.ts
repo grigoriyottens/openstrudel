@@ -70,6 +70,20 @@ it("keeps a chat's own services and a group's verified-sender service ahead of t
   } finally { scoped.close(); }
 });
 
+it("gives a group turn without access only the services that verify the sender themselves", () => {
+  const { root, write } = home();
+  shareWithAllChats(root, true);
+  write(`.data/extensions/${group}/config.toml`, '[mcp_servers.notion]\nurl = "https://group-own.example/mcp"\n[mcp_servers.notion.http_headers]\nAuthorization = "Bearer group"\n');
+  expect(Object.keys(contextServers(root, group, {})).sort()).toEqual(["company", "notion", "telegram_history"]);
+  expect(Object.keys(contextServers(root, group, { access: true })).sort()).toEqual(["company", "notion", "telegram_history"]);
+  expect(contextServers(root, group, { access: false })).toEqual({});
+  write(`.data/connections/${group}.telegram.json`, JSON.stringify({ wai: { url: "https://work.example/api/mcp/company/" } }));
+  const actor = { userId: "77", chatId: "-100", messageId: "-100:5" };
+  expect(contextServers(root, group, { access: false, telegramActor: actor, conversationId: "c" })).toEqual({ wai: { type: "http", url: "https://work.example/api/mcp/company/",
+    headers: { "x-hermes-platform": "telegram", "x-hermes-user-id": "77", "x-hermes-chat-id": "-100", "x-hermes-message-id": "-100:5", "x-hermes-session-id": "openstrudel:c" } } });
+  expect(Object.keys(contextServers(root, group, { access: true, telegramActor: actor })).sort()).toEqual(["notion", "telegram_history", "wai"]);
+});
+
 it("reloads an idle chat when the owner's or installer's files change, and never refuses a busy one", () => {
   const { root, source, write, config } = home();
   shareWithAllChats(root, true);
@@ -145,6 +159,30 @@ it("lets the owner turn sharing on and off through the Home API", async () => {
     expect(sharedWithAllChats(root)).toBe(true);
     expect((await call("POST", { enabled: "yes" })).status).toBe(400);
     expect(await call("POST", { enabled: false })).toEqual({ status: 200, value: { enabled: false } });
+  } finally { await runtime.stop(); }
+});
+
+it("lets the owner keep this Home's access list through the Home API", async () => {
+  const { root } = home();
+  const { OpenStrudelRuntime } = await import("../src/runtime.js");
+  const runtime = new OpenStrudelRuntime({ dbPath: ":memory:", startTelegram: false, apiToken: "owner", rootDirectory: root, engine: { run: async () => ({ threadId: "t", response: "OK", events: [] }) } });
+  runtime.store.linkTelegramChat({ chatId: "139287108", title: "Mik", allowedSenders: ["139287108"] });
+  runtime.store.linkTelegramChat({ chatId: "-100", title: "Team", allowedSenders: ["139287108"] });
+  const address = await runtime.api.listen("127.0.0.1", 0);
+  const call = async (method: string, body?: unknown, headers: Record<string, string> = { authorization: "Bearer owner" }) => {
+    const r = await fetch(`http://127.0.0.1:${address.port}/v1/settings/access`, { method, headers: { "content-type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: r.status, value: await r.json() };
+  };
+  try {
+    expect(await call("GET")).toEqual({ status: 200, value: { people: [], owners: ["139287108"] } });
+    expect(await call("POST", { people: ["139287108", "241196252"] })).toEqual({ status: 200, value: { people: ["139287108", "241196252"], owners: ["139287108"] } });
+    expect(JSON.parse(runtime.store.getSetting("access.people")!)).toEqual(["139287108", "241196252"]);
+    for (const people of ["241196252", ["-100"], ["abc"], [241196252], ["0"]]) expect((await call("POST", { people })).status, JSON.stringify(people)).toBe(400);
+    const session = await fetch(`http://127.0.0.1:${address.port}/auth/session`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: runtime.api.web.invite(false).key }) });
+    const { csrf } = await session.json();
+    const member = { cookie: session.headers.get("set-cookie")!.split(";")[0]!, "x-openstrudel-csrf": csrf, "x-openstrudel-owner": "1" };
+    expect((await call("POST", { people: [] }, member)).status).toBe(403);
+    expect(JSON.parse(runtime.store.getSetting("access.people")!)).toEqual(["139287108", "241196252"]);
   } finally { await runtime.stop(); }
 });
 

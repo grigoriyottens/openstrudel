@@ -68,12 +68,12 @@ A subscription is used only the way its vendor documents for other apps. OpenStr
 **Delegation.** Codex delegation offers only employees whose resolved provider is the parent's provider. ChatGPT accounts are not told apart. Codex runs a delegated role on the parent's provider and key whatever the role file says (verified), so an employee on another provider is left out rather than silently run elsewhere. Claude-engine conversations do not delegate.
 
 **Approval modes.** "Automatic" needs Codex's reviewer model, which exists only for ChatGPT. On other providers the reviewer denies everything (verified), so on key providers "Automatic" asks, and the approval setting says so. On the Claude engine the modes work as follows:
-- In both modes, files inside the workspace can be read without asking, and commands run in the sandbox without asking. Outside group chats, files inside the workspace can also be changed without asking.
+- In both modes, files inside the workspace can be read and changed without asking, and commands run in the sandbox without asking.
 - "Ask" asks the owner before a command that needs to leave the sandbox, a change outside the workspace and a service tool. It refuses reads outside the workspace.
 - "Approve all" runs service tools without asking. It refuses commands outside the sandbox and reads or changes outside the workspace, and the turn fails when the sandbox is not available.
-- Group chats get no commands and no file changes.
+- A group chat's live turns need the sandbox in every mode, as "Approve all" does: commands run only inside it, files change only in the group's workspace, and nothing asks to leave it. Service tools follow the mode.
 
-**Sandbox on servers.** Claude Code's sandbox on Linux needs `bubblewrap` and `socat`; the Home image includes both. Without them every private and employee chat fails, while group chats, which run no commands, still answer.
+**Sandbox on servers.** Claude Code's sandbox on Linux needs `bubblewrap` and `socat`; the Home image includes both. Without them every chat fails, group chats included.
 
 **Services on Claude providers.** The Claude engine loads the context's MCP services from the same files as Codex: the employee's services, the services the installer set up, and the Telegram group services for a verified sender only. It does not load SKILL.md skills, Codex plugins, ChatGPT apps or Computer Use. Browser sign-in for a service is not available there, so the owner adds such a service with an access key. The Services and skills screen still lists skills and plugins for these employees and says that they apply only on Codex providers.
 
