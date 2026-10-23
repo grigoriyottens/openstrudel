@@ -138,24 +138,33 @@ it("asks the owner through the same requests Codex makes", async () => {
   ]);
 });
 
-it("keeps approve-all writes in the workspace and never runs commands for a group", async () => {
+it("keeps approve-all writes in the workspace and a group's commands in its sandbox", async () => {
   const { query, calls } = fake();
   const asked: string[] = [];
   const onRequest = async (method: string) => { asked.push(method); return { decision: "accept" }; };
+  const groupContext = "group-" + "a".repeat(64), groupWorkspace = join(root, ".data/workspace", groupContext);
   await engine("kimi", query).run("Hi", { approvalMode: "approve_all", onRequest });
-  await engine("kimi", query).forContext("group-" + "a".repeat(64)).run("Hi", { approvalMode: "approve_all", groupContext: true, onRequest });
+  await engine("kimi", query).forContext(groupContext).run("Hi", { approvalMode: "approve_all", groupContext: true, onRequest });
   await engine("kimi", query).run("Hi", { approvalMode: "ask" });
-  await engine("kimi", query).forContext("group-" + "a".repeat(64)).run("Hi", { approvalMode: "approve_all", groupContext: true, scheduled: true });
-  const [all, group, unattended, scheduledGroup] = calls as [Call, Call, Call, Call];
-  expect(all.options.sandbox).toEqual({ enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false, failIfUnavailable: true,
-    filesystem: { denyRead: [realpathSync(join(root, ".data")), realpathSync(homedir())], allowRead: [realpathSync(join(root, ".data/workspace/personal"))] } });
+  await engine("kimi", query).forContext(groupContext).run("Hi", { approvalMode: "approve_all", groupContext: true, scheduled: true });
+  await engine("kimi", query).forContext(groupContext).run("Hi", { approvalMode: "ask", groupContext: true, onRequest });
+  const [all, group, unattended, scheduledGroup, askingGroup] = calls as [Call, Call, Call, Call, Call];
+  const filesystem = (workspace: string) => ({ denyRead: [realpathSync(join(root, ".data")), realpathSync(homedir())], allowRead: [realpathSync(workspace)] });
+  expect(all.options.sandbox).toEqual({ enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false, failIfUnavailable: true, filesystem: filesystem(join(root, ".data/workspace/personal")) });
   expect(await allow(all, "Bash", { command: "make" })).toMatchObject({ behavior: "allow" });
   expect(await allow(all, "mcp__notion__search", {}, { mcpServer: { name: "notion", source: "dynamic" } })).toMatchObject({ behavior: "allow" });
   expect(await allow(all, "Write", { file_path: "report.md", content: "x" })).toMatchObject({ behavior: "allow" });
   expect(await allow(all, "Write", { file_path: "../../outside.md", content: "x" })).toMatchObject({ behavior: "deny" });
-  expect(group.options.sandbox).toBeUndefined();
-  expect(await allow(group, "Bash", { command: "ls" })).toMatchObject({ behavior: "deny" });
-  expect(await allow(group, "Write", { file_path: "a.md", content: "x" })).toMatchObject({ behavior: "deny" });
+  // A group's live turn runs commands only in its sandbox and changes files only in its own workspace, like Codex.
+  expect(group.options.sandbox).toEqual({ enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: false, failIfUnavailable: true, filesystem: filesystem(groupWorkspace) });
+  expect(await allow(group, "Bash", { command: "ls" })).toMatchObject({ behavior: "allow" });
+  expect(await allow(group, "Write", { file_path: "a.md", content: "x" })).toMatchObject({ behavior: "allow" });
+  expect(await allow(group, "Write", { file_path: "../personal/a.md", content: "x" })).toMatchObject({ behavior: "deny" });
+  // In every mode the sandbox is required in a group: a command cannot leave it, and a change outside the workspace is refused without asking.
+  expect(askingGroup.options.sandbox).toEqual(group.options.sandbox);
+  expect(await allow(askingGroup, "Bash", { command: "echo x > made.txt" })).toMatchObject({ behavior: "allow" });
+  expect(await allow(askingGroup, "Edit", { file_path: join(root, "outside.md"), old_string: "a", new_string: "b" })).toMatchObject({ behavior: "deny" });
+  expect(await allow(askingGroup, "Edit", { file_path: "notes.md", old_string: "a", new_string: "b" })).toMatchObject({ behavior: "allow" });
   expect(await allow(unattended, "Bash", { command: "ls" })).toMatchObject({ behavior: "deny" });
   expect(await allow(unattended, "AskUserQuestion", { questions: [] })).toMatchObject({ behavior: "deny" });
   // The owner's schedule in a group runs its saved work like the owner's own chat, sandboxed.
@@ -163,6 +172,9 @@ it("keeps approve-all writes in the workspace and never runs commands for a grou
   expect(await allow(scheduledGroup, "Bash", { command: "python3 scripts/news/wai-news.py claim" })).toMatchObject({ behavior: "allow" });
   expect(await allow(scheduledGroup, "Write", { file_path: "state.json", content: "x" })).toMatchObject({ behavior: "allow" });
   expect(asked).toEqual([]);
+  // Services still ask in a group, as before.
+  await allow(askingGroup, "mcp__notion__search", {}, { mcpServer: { name: "notion", source: "dynamic" } });
+  expect(asked).toEqual(["mcpServer/elicitation/request"]);
 });
 
 it("stops the turn gracefully, and kills it only when the engine closes", async () => {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, onTestFinished } from "vitest";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { homedir, tmpdir } from "node:os";
@@ -111,6 +111,25 @@ it("keeps an approve-all turn out of the Home's private data", async () => {
   expect(outputs[2]).toContain("inside");
   expect(outputs.join("\n")).not.toContain("PLANTED");
   expect(existsSync(join(data, "pwned.txt"))).toBe(false);
+  expect(asked).toEqual([]);
+}, 90_000);
+
+it("runs a group's commands in its sandbox and changes files only in its workspace, without asking", async () => {
+  const group = "group-" + "d".repeat(64), cwd = join(root, ".data/workspace", group), data = join(root, ".data");
+  const steps = [
+    { name: "Bash", input: { command: "echo made > made.txt && cat made.txt", description: "Make a file" } },
+    { name: "Write", input: { file_path: join(cwd, "notes.md"), content: "group notes" } },
+    { name: "Bash", input: { command: `echo pwned > ${join(data, "bash.txt")}; echo pwned > ${join(root, "bash.txt")}`, description: "Write outside" } },
+    { name: "Bash", input: { command: `echo pwned > ${join(data, "unsandboxed.txt")}`, description: "Write outside", dangerouslyDisableSandbox: true } },
+    { name: "Write", input: { file_path: join(data, "write.txt"), content: "pwned" } },
+  ];
+  mock = await mockAnthropic(request => { const step = steps[results(request).length]; return step ? { tool: step } : { text: "Готово" }; });
+  const asked: unknown[] = [];
+  await claude("deepseek", "sk-deepseek-secret").forContext(group).run("Сделай", { groupContext: true, approvalMode: "ask", onRequest: async (...request) => { asked.push(request); return { decision: "decline" }; } });
+  expect(results(mock.requests.at(-1)!)).toHaveLength(5);
+  expect(readFileSync(join(cwd, "made.txt"), "utf8")).toBe("made\n");
+  expect(readFileSync(join(cwd, "notes.md"), "utf8")).toBe("group notes");
+  for (const file of [join(data, "bash.txt"), join(root, "bash.txt"), join(data, "unsandboxed.txt"), join(data, "write.txt")]) expect(existsSync(file), file).toBe(false);
   expect(asked).toEqual([]);
 }, 90_000);
 
