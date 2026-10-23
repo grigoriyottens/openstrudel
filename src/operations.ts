@@ -12,7 +12,7 @@ export const problemText = {
   voice: "Голосовое не распознано: ElevenLabs отказал. Проверьте лимит и ключ в настройках голоса.",
 } as const;
 export type ProblemCode = keyof typeof problemText;
-type RuntimeIssue = { conversationId:string; messageId:string; title:string; code:ProblemCode; time:string; tools?:string[] };
+type RuntimeIssue = { conversationId:string; messageId:string; title:string; code:ProblemCode; time:string; tools?:string[]; detail?:string };
 const prefix="runtime.issue.";
 
 /** Native MCP receipts are emitted even for calls made inside code mode. */
@@ -81,15 +81,21 @@ export function runtimeIssues(store:Store):RuntimeIssue[] {
   });
 }
 
-export function reportIssue(store:Store,conversationId:string,messageId:string,code:ProblemCode):Message|undefined {
+/** A scheduled run that could not do its work says so in its first line; the reason goes to the owner, never to the chat. */
+export function failedRun(text:string):string|undefined {
+  const match=text.trim().match(/^FAILED:[ \t]*(.*)/);
+  return match ? match[1]!.trim().slice(0,300) || "причина не указана" : undefined;
+}
+
+export function reportIssue(store:Store,conversationId:string,messageId:string,code:ProblemCode,detail?:string):Message|undefined {
   const conversation=store.getConversation(conversationId);if(!conversation)return;
   const previous=store.getSetting(prefix+conversationId);
   const title=conversation.title ?? "Чат";
   // One cause stops many chats at once (an account limit, a provider outage): tell it once.
-  const told=runtimeIssues(store).some(issue=>issue.conversationId!==conversationId && issue.code===code && Date.now()-Date.parse(issue.time)<12*3600_000);
-  store.setSetting(prefix+conversationId,JSON.stringify({conversationId,messageId,title,code,time:new Date().toISOString()}));
-  const root=store.primaryConversation();
-  if(!told && (!previous || JSON.parse(previous).code!==code))return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${problemText[code]}`});
+  const told=runtimeIssues(store).some(issue=>issue.conversationId!==conversationId && issue.code===code && issue.detail===detail && Date.now()-Date.parse(issue.time)<12*3600_000);
+  store.setSetting(prefix+conversationId,JSON.stringify({conversationId,messageId,title,code,detail,time:new Date().toISOString()}));
+  const root=store.primaryConversation(),last=previous ? JSON.parse(previous) as RuntimeIssue : null;
+  if(!told && (!last || last.code!==code || last.detail!==detail))return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${detail ? `Задача не выполнена: ${detail}` : problemText[code]}`});
 }
 
 export function resolveIssue(store:Store,conversationId:string):Message|undefined {

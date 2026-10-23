@@ -168,6 +168,48 @@ describe("durable cron", () => {
     expect(store.listMessages(c.id)).toEqual([]);
     expect(scheduler.runs(c.id)[0]?.status).toBe("quiet");
   });
+  it("tells the owner why a run could not do its work and keeps the failure out of the chat", async () => {
+    const store = new Store(":memory:"); stores.push(store);
+    let reason = "правила публикации не открылись";
+    const messages = new MessageService(store,{async run(){return {threadId:"failed",response:`FAILED: ${reason}`,events:[]};}});
+    const scheduler = new Scheduler(store,messages);
+    const root = store.primaryConversation();
+    const dates = store.getOrCreateConversation({channel:"telegram",externalId:"-100",title:"С днем рождения"});
+    const recipes = store.getOrCreateConversation({channel:"telegram",externalId:"-200",title:"Рецепты"});
+    store.linkTelegramChat({chatId:"-100",title:"С днем рождения",allowedSenders:["1"]});
+    const sent:string[]=[]; scheduler.deliver=async(_,text)=>{sent.push(text);};
+    scheduler.save({conversationId:dates.id,name:"Важные даты",prompt:"Поздравь",cron:"0 9 * * *",timezone:"Europe/Moscow",delivery:"telegram",telegramChatId:"-100"},new Date("2026-09-26T10:00:00Z"));
+    await scheduler.tick(new Date("2026-09-27T06:00:01Z")); await scheduler.idle();
+    expect(sent).toEqual([]);
+    expect(store.listMessages(dates.id)).toEqual([]);
+    expect(scheduler.runs(dates.id)[0]).toMatchObject({status:"failed",error:reason});
+    expect(store.listMessages(root.id).map(m=>m.text)).toEqual([`Требует внимания · С днем рождения\nЗадача не выполнена: ${reason}`]);
+    // Another chat failing for its own reason is a different cause.
+    reason = "нет инструмента для картинок";
+    scheduler.save({conversationId:recipes.id,name:"Рецепт дня",prompt:"Рецепт",cron:"0 9 * * *",timezone:"Europe/Moscow"},new Date("2026-09-26T10:00:00Z"));
+    await scheduler.tick(new Date("2026-09-27T06:00:02Z")); await scheduler.idle();
+    expect(store.listMessages(root.id).map(m=>m.text).at(-1)).toBe(`Требует внимания · Рецепты\nЗадача не выполнена: ${reason}`);
+  });
+  it("reports a repeated scheduled failure once until a successful check closes it", async () => {
+    const store = new Store(":memory:"); stores.push(store);
+    let response = "FAILED: источник недоступен";
+    const messages = new MessageService(store,{async run(){return {threadId:"repeated-failure",response,events:[]};}});
+    const scheduler = new Scheduler(store,messages);
+    const root = store.primaryConversation();
+    const chat = store.getOrCreateConversation({channel:"telegram",externalId:"-100",title:"Проверка"});
+    scheduler.save({conversationId:chat.id,name:"Проверка",prompt:"Проверь",cron:"* * * * *",timezone:"UTC"},new Date("2026-09-26T10:00:00Z"));
+    for (const minute of [1,2]) {
+      await scheduler.tick(new Date(`2026-09-26T10:0${minute}:01Z`)); await scheduler.idle();
+    }
+    expect(scheduler.runs(chat.id).map(run=>run.status)).toEqual(["failed","failed"]);
+    expect(store.listMessages(root.id)).toHaveLength(1);
+    response = "NO_REPLY";
+    await scheduler.tick(new Date("2026-09-26T10:03:01Z")); await scheduler.idle();
+    expect(store.getSetting("runtime.issue."+chat.id)).toBeNull();
+    response = "FAILED: источник недоступен";
+    await scheduler.tick(new Date("2026-09-26T10:04:01Z")); await scheduler.idle();
+    expect(store.listMessages(root.id)).toHaveLength(2);
+  });
   it("keeps an app-only edition in the app even when the chat has a Telegram binding", async () => {
     const { store, scheduler } = setup();
     const c = store.primaryConversation();
