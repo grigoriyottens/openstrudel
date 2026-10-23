@@ -255,6 +255,31 @@ it("brings the context's MCP services like Codex, from a private file instead of
   expect(calls[0]!.options.disallowedTools).toContain("WebSearch");
 });
 
+it("keeps Codex's per-service tool lists and environment credentials", async () => {
+  process.env.OPENSTRUDEL_TEST_TUTU = "tutu-token"; process.env.OPENSTRUDEL_TEST_MAPS = "maps-key";
+  try {
+    mkdirSync(join(root, ".data/extensions/work"), { recursive: true });
+    writeFileSync(join(root, ".data/extensions/work/config.toml"), `[mcp_servers.tutu]\nurl = "https://mcp.tutu.ru/mcp"\nbearer_token_env_var = "OPENSTRUDEL_TEST_TUTU"\ndisabled_tools = ["register_checkout_passengers"]\n
+[mcp_servers.maps]\nurl = "https://maps.example/mcp"\nenabled_tools = ["search"]\n[mcp_servers.maps.http_headers]\nX-Client = "home"\n[mcp_servers.maps.env_http_headers]\nX-Goog-Api-Key = "OPENSTRUDEL_TEST_MAPS"\n
+[mcp_servers.files]\ncommand = "/usr/bin/files-mcp"\ndisabled_tools = ["delete"]\n`);
+    const written: unknown[] = [];
+    const { query, calls } = fake(call => { written.push(JSON.parse(readFileSync(call.options.extraArgs!["mcp-config"]!, "utf8")).mcpServers); return [init(), success("ok")]; });
+    await engine("anthropic", query).forContext("work").run("Hi", { approvalMode: "approve_all" });
+    expect(written[0]).toEqual({ tutu: { type: "http", url: "https://mcp.tutu.ru/mcp", headers: { Authorization: "Bearer tutu-token" } },
+      maps: { type: "http", url: "https://maps.example/mcp", headers: { "X-Client": "home", "X-Goog-Api-Key": "maps-key" } },
+      files: { type: "stdio", command: "/usr/bin/files-mcp", args: [] } });
+    const call = calls[0]!, from = (name: string) => ({ mcpServer: { name, source: "dynamic" as const } });
+    // The model never sees a turned-off tool, and a call to one is refused anyway.
+    expect(call.options.disallowedTools).toEqual(expect.arrayContaining(["mcp__tutu__register_checkout_passengers", "mcp__files__delete"]));
+    expect(await allow(call, "mcp__tutu__register_checkout_passengers", {}, from("tutu"))).toMatchObject({ behavior: "deny" });
+    expect(await allow(call, "mcp__tutu__search_avia", {}, from("tutu"))).toMatchObject({ behavior: "allow" });
+    expect(await allow(call, "mcp__maps__search", {}, from("maps"))).toMatchObject({ behavior: "allow" });
+    expect(await allow(call, "mcp__maps__directions", {}, from("maps"))).toMatchObject({ behavior: "deny" });
+    expect(await allow(call, "mcp__files__delete", {}, from("files"))).toMatchObject({ behavior: "deny" });
+    expect(await allow(call, "mcp__files__read", {}, from("files"))).toMatchObject({ behavior: "allow" });
+  } finally { delete process.env.OPENSTRUDEL_TEST_TUTU; delete process.env.OPENSTRUDEL_TEST_MAPS; }
+});
+
 it("reads and changes only the real workspace, in every mode", async () => {
   const { query, calls } = fake();
   const asked: string[] = [];

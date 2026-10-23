@@ -14,8 +14,12 @@ export interface TelegramUpdate {
   update_id: number;
   my_chat_member?: { chat: { id: number | string; title?: string; type?: string }; from: { id: number }; date: number; old_chat_member: { status: string }; new_chat_member: { status: string; is_member?: boolean } };
   callback_query?: { id: string; from?: { id:number }; data?: string; message?: { message_id: number; chat: { id: number | string } } };
-  message?: { from?: { id:number; first_name?:string; last_name?:string; is_bot?:boolean }; sender_chat?: { id:number }; is_topic_message?:boolean; message_thread_id?:number; date?:number; migrate_to_chat_id?:number|string; migrate_from_chat_id?:number|string; voice?:TelegramFile; audio?:TelegramFile; video_note?:TelegramFile; video?:TelegramFile; document?:TelegramFile & {file_name?:string;mime_type?:string}; photo?:TelegramFile[]; caption?:string; reply_to_message?: { message_id: number; from?: { id: number; is_bot?: boolean; username?: string } }; message_id: number; text?: string; chat: { id: number | string; title?: string; type?: string } };
+  message?: TelegramMessage;
+  edited_message?: TelegramMessage;
 }
+type TelegramMessage = { from?: { id:number; first_name?:string; last_name?:string; is_bot?:boolean }; sender_chat?: { id:number }; is_topic_message?:boolean; message_thread_id?:number; date?:number; migrate_to_chat_id?:number|string; migrate_from_chat_id?:number|string; voice?:TelegramFile; audio?:TelegramFile; video_note?:TelegramFile; video?:TelegramFile; document?:TelegramFile & {file_name?:string;mime_type?:string}; photo?:TelegramFile[]; caption?:string;
+  reply_to_message?: { message_id: number; from?: { id: number; is_bot?: boolean; username?: string; first_name?: string; last_name?: string }; text?: string; caption?: string; photo?: TelegramFile[]; document?: { file_name?: string } };
+  quote?: { text?: string }; message_id: number; text?: string; chat: { id: number | string; title?: string; type?: string } };
 type TelegramFile = {file_id:string;file_size?:number};
 
 interface TelegramResponse<T> { ok: boolean; result: T; description?: string; error_code?: number; parameters?: { retry_after?: number } }
@@ -459,6 +463,15 @@ export class TelegramAdapter {
       }
       this.store.markTelegramUpdate(update.update_id); return;
     }
+    const edited = update.edited_message;
+    if (edited) {
+      const chatId = String(edited.chat.id), text = (edited.text ?? edited.caption)?.trim();
+      const speech = edited.voice || edited.audio || edited.video_note || edited.video || edited.document && isSpeechFile(edited.document.file_name ?? "", edited.document.mime_type);
+      // A correction reaches a request still waiting for its turn. It never starts a turn or rewrites an answered one.
+      if (text && !speech && this.linkedChats().includes(chatId) && this.authorizedSender(chatId, edited.from?.id))
+        this.store.db.prepare("UPDATE messages SET text=? WHERE channel='telegram' AND direction='inbound' AND status='queued' AND external_id=?").run(text, chatId + ":" + edited.message_id);
+      this.store.markTelegramUpdate(update.update_id); return;
+    }
     const message = update.message;
     if (message?.migrate_to_chat_id || message?.migrate_from_chat_id) {
       const oldId = String(message.migrate_from_chat_id ?? message.chat.id);
@@ -566,9 +579,13 @@ export class TelegramAdapter {
     try {
     const input = await prepared;text=input.text;received=true;
     const replyToAssistant = Boolean(replyConversation || replyAuthor && (replyAuthor.id === this.bot?.id || replyAuthor.is_bot && replyAuthor.username?.toLowerCase() === (this.bot?.username ?? this.store.getSetting("telegram.bot_username"))?.toLowerCase()));
+    // The exact message answered, from Telegram itself: the bot's own posts may never have passed through Home.
+    const target = message.reply_to_message;
+    const replyTo = target ? { messageId: target.message_id, author: replyToAssistant ? "assistant" : [target.from?.first_name, target.from?.last_name].filter(Boolean).join(" ") || undefined,
+      text: (message.quote?.text ?? target.text ?? target.caption ?? "").slice(0, 1500) || (target.photo ? "[photo]" : target.document ? `[${target.document.file_name ?? "file"}]` : "") } : undefined;
     // Only the paired owner in a private chat; a group's audience is never just the owner.
     const byOwner = Number(chatId) > 0 && this.isOwner(message.from?.id);
-    const submission = { channel: "telegram" as const, conversationId: conversation.id, text, uploads:input.uploads, replyToAssistant, telegramSenderId:message.from ? String(message.from.id) : undefined, author, externalId, externalChatId: chatId, title: message.chat.title ?? "Telegram " + chatId, byOwner };
+    const submission = { channel: "telegram" as const, conversationId: conversation.id, text, uploads:input.uploads, replyToAssistant, replyTo, telegramSenderId:message.from ? String(message.from.id) : undefined, author, externalId, externalChatId: chatId, title: message.chat.title ?? "Telegram " + chatId, byOwner };
     if (contextOnly) {
       await this.messages.submit({ ...submission, contextOnly:true });
       this.store.markTelegramUpdate(update.update_id); return;
@@ -585,7 +602,7 @@ export class TelegramAdapter {
       // The chat changed hands during the turn. Record that nothing was sent.
       if (!currentBinding || currentBinding.profileId !== binding?.profileId) this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status,error) VALUES(?,?,'{}','not_sent',?)")
         .run(`${chatId}:reply:${result.messageId}:0`, chatId, "Подключение этого чата изменилось. Ответ не отправлен в Telegram.");
-      else if (Number(chatId) >= 0 || result.text.trim() !== "NO_REPLY") { await this.sendMessage(message.chat.id, result.text,`reply:${result.messageId}`); await this.sendFiles(message.chat.id,result.attachments,`reply:${result.messageId}`); }
+      else if (Number(chatId) >= 0 || result.text.trim() !== "NO_REPLY") { await this.sendMessage(message.chat.id, result.text,`reply:${result.messageId}`, Number(chatId) < 0 ? message.message_id : undefined); await this.sendFiles(message.chat.id,result.attachments,`reply:${result.messageId}`); }
     }
     catch { this.lastError="Ответ сохранён в приложении; доставку в Telegram нужно проверить"; }
     } catch (error) {
@@ -682,7 +699,7 @@ export class TelegramAdapter {
     const controller = this.controller;
     while (this.running && controller === this.controller) {
       try {
-        const updates = await this.call<TelegramUpdate[]>("getUpdates", { offset: this.offset, timeout: 20, allowed_updates: ["message", "callback_query", "my_chat_member"] });
+        const updates = await this.call<TelegramUpdate[]>("getUpdates", { offset: this.offset, timeout: 20, allowed_updates: ["message", "edited_message", "callback_query", "my_chat_member"] });
         if (!this.running || controller !== this.controller) return;
         if (this.connectionError) recordDiagnostic(this.store, "telegram.connected");
         this.connectionError = null;

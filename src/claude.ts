@@ -95,6 +95,13 @@ export class ClaudeEngine implements CodexEngine {
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1", ...provider.env });
     if (provider.id !== "anthropic") for (const name of aliases) env[name] = model;
 
+    const servers = contextServers(root, context, options);
+    // Codex's per-service tool lists. The CLI has no such setting: hide what is turned off and refuse anything outside the lists.
+    const hidden = Object.entries(servers).flatMap(([name, s]) => (s.toolLists?.disabled ?? []).map(tool => `mcp__${name}__${tool}`));
+    const offered = (name: string, server = name.split("__")[1] ?? "") => {
+      const lists = servers[server]?.toolLists, tool = name.slice(`mcp__${server}__`.length);
+      return !lists || (!lists.enabled || lists.enabled.includes(tool)) && !lists.disabled?.includes(tool);
+    };
     // A group's live turns run no commands. The owner's schedule in a group runs its saved work like the owner's chat, sandboxed.
     const mode = options.approvalMode ?? "ask", group = options.groupContext === true && options.scheduled !== true, ask = options.onRequest;
     const canUseTool: CanUseTool = async (name, input, { mcpServer }) => {
@@ -103,6 +110,7 @@ export class ClaudeEngine implements CodexEngine {
       const accepted = (answer: any) => answer?.decision === "accept" ? allow : deny("The user declined this action.");
       try {
         if (mcpServer?.source === "sdk" || ["WebFetch", "WebSearch", "SandboxNetworkAccess"].includes(name)) return allow;
+        if (name.startsWith("mcp__") && !offered(name, mcpServer?.name)) return deny("This tool is turned off for this chat.");
         if (name === "AskUserQuestion") {
           if (!ask) return deny("No user is available to answer.");
           const questions = (input.questions as any[]).map((q, i) => ({ id: String(i), header: q.header, question: q.question, options: q.options }));
@@ -127,7 +135,6 @@ export class ClaudeEngine implements CodexEngine {
       } catch (error) { return deny(error instanceof Error ? error.message : String(error)); }
     };
 
-    const servers = contextServers(root, context, options);
     const sdkServers: Record<string, McpServerConfig> = {}, tools = options.tools;
     if (tools) sdkServers.openstrudel = createSdkMcpServer({ name: "openstrudel", alwaysLoad: true, tools: tools.definitions.map(d =>
       tool(d.name, d.description, (z.fromJSONSchema(d.inputSchema as any) as z.ZodObject).shape, async args => {
@@ -142,7 +149,7 @@ export class ClaudeEngine implements CodexEngine {
 
     // Inline --mcp-config JSON would show the services' tokens in the process list.
     const mcpConfig = resolve(config, `mcp-${randomUUID()}.json`);
-    writeFileSync(mcpConfig, JSON.stringify({ mcpServers: servers }), { mode: 0o600, flag: "wx" });
+    writeFileSync(mcpConfig, JSON.stringify({ mcpServers: Object.fromEntries(Object.entries(servers).map(([name, { toolLists: _, ...s }]) => [name, s])) }), { mode: 0o600, flag: "wx" });
     const abort = new AbortController();
     this.running.add(abort);
     let threadId = "", response: string | undefined, rejected = false, stopped = false, failure: string | undefined, stop = () => {};
@@ -154,7 +161,7 @@ export class ClaudeEngine implements CodexEngine {
         // Not recorded in the session, so a changed SOUL applies on resume.
         systemPrompt: { type: "preset", preset: "claude_code", append: instructions + (options.profile ? `\n\nCurrent employee SOUL (authoritative):\n${options.profile}` : ""), snapshot: false },
         // Schedules live in OpenStrudel; the CLI's own cron dies with this per-turn process.
-        disallowedTools: ["CronCreate", "CronDelete", "CronList", "ScheduleWakeup", ...provider.webSearch ? [] : ["WebSearch"]],
+        disallowedTools: ["CronCreate", "CronDelete", "CronList", "ScheduleWakeup", ...provider.webSearch ? [] : ["WebSearch"], ...hidden],
         // Commands read like Codex's profile: never the owner's files or the Home's private data beyond this workspace.
         sandbox: group ? undefined : { enabled: true, autoAllowBashIfSandboxed: true, allowUnsandboxedCommands: mode !== "approve_all", failIfUnavailable: mode === "approve_all",
           filesystem: { denyRead: [data, owner], allowRead: [workspace] } },
@@ -184,8 +191,9 @@ export class ClaudeEngine implements CodexEngine {
   }
 }
 
+type Service = McpServerConfig & { toolLists?: { enabled?: string[]; disabled?: string[] } };
 /** The same services as the Codex scope: the owner's when shared with every chat, then shared, installer-provisioned, and Telegram's for the verified sender only. */
-export function contextServers(root: string, context: string, options: Pick<RunOptions, "telegramActor" | "conversationId">): Record<string, McpServerConfig> {
+export function contextServers(root: string, context: string, options: Pick<RunOptions, "telegramActor" | "conversationId">): Record<string, Service> {
   const own = { ...readToml(resolve(root, ".data/extensions", context, "config.toml")).mcp_servers, ...readToml(resolve(root, ".data/connections", context + ".toml")).mcp_servers };
   const telegram = resolve(root, ".data/connections", context + ".telegram.json");
   const verified = existsSync(telegram) ? JSON.parse(readFileSync(telegram, "utf8")) : undefined;
@@ -196,10 +204,17 @@ export function contextServers(root: string, context: string, options: Pick<RunO
 }
 
 /** Codex-style MCP services. Computer Use runs on Codex's own kernel and is left out. */
-function extensionServers(table: Record<string, unknown>): Record<string, McpServerConfig> {
-  return Object.fromEntries(Object.entries(table).flatMap(([name, s]: [string, any]): Array<[string, McpServerConfig]> =>
-    s.enabled === false || name === "cua_repl" ? [] : s.url ? [[name, { type: "http", url: s.url, headers: s.http_headers }]]
-      : s.command ? [[name, { type: "stdio", command: s.command, args: s.args ?? [], env: s.env }]] : []));
+function extensionServers(table: Record<string, unknown>): Record<string, Service> {
+  return Object.fromEntries(Object.entries(table).flatMap(([name, s]: [string, any]): Array<[string, Service]> => {
+    // Like Codex, credentials named by environment variable are read from the Home's environment when the turn starts.
+    const variable = (key: unknown) => typeof key === "string" ? process.env[key] : undefined, bearer = variable(s.bearer_token_env_var);
+    const headers = { ...s.http_headers, ...Object.fromEntries(Object.entries(s.env_http_headers ?? {}).flatMap(([header, key]) => variable(key) ? [[header, variable(key)!]] : [])),
+      ...bearer ? { Authorization: `Bearer ${bearer}` } : {} };
+    const list = (value: unknown) => Array.isArray(value) ? value.map(String) : undefined;
+    const toolLists = s.enabled_tools || s.disabled_tools ? { toolLists: { enabled: list(s.enabled_tools), disabled: list(s.disabled_tools) } } : {};
+    return s.enabled === false || name === "cua_repl" ? [] : s.url ? [[name, { type: "http", url: s.url, headers: Object.keys(headers).length ? headers : undefined, ...toolLists }]]
+      : s.command ? [[name, { type: "stdio", command: s.command, args: s.args ?? [], env: s.env, ...toolLists }]] : [];
+  }));
 }
 
 /** Whether a tool's path, absolute or relative to the workspace (a real path), stays inside it once links are followed. */

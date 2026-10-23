@@ -33,10 +33,8 @@ export function reportConnectorIssues(store:Store,conversationId:string,messageI
   const names=[...tools].sort();
   if(JSON.stringify(names)===JSON.stringify(previous?.tools ?? []))return;
   const title=store.getConversation(conversationId)?.title ?? "Чат",root=store.primaryConversation();
-  if(!names.length){
-    store.deleteSetting(key);
-    return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Восстановлено · ${title}\nСервисы снова отвечают: ${previous!.tools!.join(", ")}.`});
-  }
+  // A recovery is not news; the incident closes silently.
+  if(!names.length){ store.deleteSetting(key); return; }
   store.setSetting(key,JSON.stringify({conversationId,messageId,title,code:"connector",tools:names,time:new Date().toISOString()}));
   return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${problemText.connector}\n${names.join(", ")}`});
 }
@@ -87,16 +85,17 @@ export function reportIssue(store:Store,conversationId:string,messageId:string,c
   const conversation=store.getConversation(conversationId);if(!conversation)return;
   const previous=store.getSetting(prefix+conversationId);
   const title=conversation.title ?? "Чат";
+  // One cause stops many chats at once (an account limit, a provider outage): tell it once.
+  const told=runtimeIssues(store).some(issue=>issue.conversationId!==conversationId && issue.code===code && Date.now()-Date.parse(issue.time)<12*3600_000);
   store.setSetting(prefix+conversationId,JSON.stringify({conversationId,messageId,title,code,time:new Date().toISOString()}));
   const root=store.primaryConversation();
-  if(!previous || JSON.parse(previous).code!==code)return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${problemText[code]}`});
+  if(!told && (!previous || JSON.parse(previous).code!==code))return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${problemText[code]}`});
 }
 
 export function resolveIssue(store:Store,conversationId:string):Message|undefined {
   const previous=store.getSetting(prefix+conversationId);
   // A later successful model turn does not prove an earlier delivery arrived.
   if(!previous || JSON.parse(previous).code==="delivery")return;
+  // A recovery is not news; the incident closes silently.
   store.deleteSetting(prefix+conversationId);
-  const root=store.primaryConversation();
-  return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Восстановлено · ${store.getConversation(conversationId)?.title ?? "Чат"}\nНовая задача выполнена успешно.`});
 }

@@ -26,7 +26,8 @@ it("reports an unresolved native connector failure to root and Telegram while pr
   failed=false;tool="read_crm";await messages.handle({channel:"api",profile:profile.id,text:"unrelated success"});
   expect(runtimeIssues(store)).toHaveLength(1);expect(sent).toHaveLength(1);
   tool="list_events";await messages.handle({channel:"api",profile:profile.id,text:"retry read"});
-  expect(runtimeIssues(store)).toEqual([]);expect(sent).toHaveLength(2);expect(sent[1].text).toContain("Восстановлено");
+  // A recovery is not news: the incident closes silently.
+  expect(runtimeIssues(store)).toEqual([]);expect(sent).toHaveLength(1);
  }finally{telegram.stop();await messages.close();}
 });
 
@@ -60,7 +61,7 @@ it("retries an operational notice after Telegram recovers without replaying ordi
  }finally{telegram.stop();await messages.close();}
 });
 
-it.each([true,false])("delivers one failure and recovery to the paired owner, including root failures (%s)",async(rootFailure)=>{
+it.each([true,false])("delivers one failure to the paired owner and closes it silently, including root failures (%s)",async(rootFailure)=>{
  const store=new Store(":memory:");stores.push(store);
  store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
  store.linkTelegramChat({chatId:"-100",title:"Team",allowedSenders:["42"]});
@@ -75,7 +76,7 @@ it.each([true,false])("delivers one failure and recovery to the paired owner, in
   for(let i=0;i<2;i++)await expect(messages.handle({channel:"api",conversationId:conversation.id,text:"check",externalId:"fail-"+i})).rejects.toThrow();
   expect(sent).toHaveLength(1);expect(sent[0].chat_id).toBe("42");expect(sent[0].text).toContain("Аккаунт");expect(sent[0].text).not.toContain("PRIVATE_SECRET");
   fail=false;await messages.handle({channel:"api",conversationId:conversation.id,text:"check again"});
-  expect(sent).toHaveLength(2);expect(sent[1].text).toContain("Восстановлено");
+  expect(sent).toHaveLength(1);
   expect(runtimeIssues(store)).toEqual([]);
  }finally{telegram.stop();await messages.close();}
 });
@@ -130,7 +131,7 @@ it("shows a failed employee at the owner's root without leaking raw tool output,
     expect(notices).toHaveLength(1);expect(notices[0]!.text).toContain("Dates");expect(notices[0]!.text).not.toContain("PRIVATE_SECRET");
     fail=false;await messages.handle({channel:"api",profile:profile.id,text:"check again",externalId:"two"});
     expect(runtimeIssues(store)).toHaveLength(0);
-    expect(store.listMessages(root.id).at(-1)!.text).toContain("Восстановлено");
+    expect(store.listMessages(root.id)).toHaveLength(1);
   }finally{await messages.close();}
 });
 
@@ -174,4 +175,23 @@ it("can cancel a hidden scheduled turn without reporting an intentional cancella
 it("does not mistake a successfully read diagnostic log for a new infrastructure failure",()=>{
  expect(toolProblem({type:"item/completed",payload:{item:{type:"commandExecution",exitCode:0,aggregatedOutput:"Yesterday: Resource temporarily unavailable"}}})).toBeUndefined();
  expect(toolProblem({type:"item/completed",payload:{item:{type:"functionCallOutput",name:"exec",output:[{text:JSON.stringify({exit_code:0,output:"Yesterday: failed to fork"})}]}}})).toBeUndefined();
+});
+
+it("tells the owner one cause once, however many chats it stops",async()=>{
+ const store=new Store(":memory:");stores.push(store);
+ store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
+ const chats=["Familia","Wish","News"].map(name=>store.profileConversation(store.createProfile({name,instructions:name}).id));
+ let error=Error("Лимит подключённых аккаунтов OpenAI закончился");
+ const messages=new MessageService(store,{async run(){throw error;}});
+ const sent:any[]=[];
+ vi.stubGlobal("fetch",vi.fn(async(_url,init)=>{sent.push(JSON.parse(init.body));return Response.json({ok:true,result:{message_id:sent.length}});}));
+ const telegram=new TelegramAdapter("123:test",store,messages);messages.telegram=telegram;
+ try {
+  for(const chat of chats)await expect(messages.handle({channel:"api",conversationId:chat.id,text:"go"})).rejects.toThrow();
+  expect(sent).toHaveLength(1);expect(runtimeIssues(store)).toHaveLength(3);
+  // A different cause is news again.
+  error=Error("Не удалось запустить необходимый инструмент: failed to spawn code-mode");
+  await expect(messages.handle({channel:"api",conversationId:chats[0]!.id,text:"go"})).rejects.toThrow();
+  expect(sent).toHaveLength(2);
+ }finally{telegram.stop();await messages.close();}
 });

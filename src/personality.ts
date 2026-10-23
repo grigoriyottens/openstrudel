@@ -3,7 +3,7 @@ import type { Attachment, CodexEngine, DynamicTool, EmployeeProfile } from "./ty
 import { Interactions, safeURL } from "./interactions.js";
 import type { Scheduler } from "./scheduler.js";
 import { ownerTimezone, scheduleTimezone, localScheduleTime } from "./timezone.js";
-import { telegramTools, type TelegramToolContext } from "./telegram-tools.js";
+import { ownerSender, telegramTools, type TelegramToolContext } from "./telegram-tools.js";
 import { MAX_SPEECH_TEXT, generateSpeech, isSpeechFile, speechSettings, transcribeRecording } from "./speech.js";
 
 const schema = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
@@ -53,7 +53,9 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
         files:context.files && context.scope ? context.files.forMessage(context.conversationId,(m.attachments ?? []).map(f=>f.id)).map(f=>({name:f.name,mimeType:f.mimeType,path:f.path})) : m.attachments})), olderCursor:page.pagination.olderCursor };
     }
     if (context.scope?.startsWith("group-") && name === "connect_service") throw new Error("Сервисы для группы подключает владелец в приложении OpenStrudel: эта группа → «Сервисы и навыки». Если он делится сервисами главного чата со всеми чатами, их достаточно подключить там.");
-    if (context.scope?.startsWith("group-") && ["update_employee","create_employee"].includes(name)) throw new Error("Характер меняется в личном чате владельца. У группы свой разговор и доступ.");
+    // The owner may set a group employee's standing rules from inside its group. Members never change its character,
+    // and a group served by the main assistant never rewrites the SOUL every other chat uses.
+    if (context.scope?.startsWith("group-") && (name === "create_employee" || name === "update_employee" && !(context.profile && ownerSender(store, context)))) throw new Error("Характер меняется в личном чате владельца. У группы свой разговор и доступ.");
     if (name === "attach_file") {
       const file=context.files!.output(context.conversationId,context.scope!,String(args.path ?? ""));
       attachments.push(file); return {attached:true,file};

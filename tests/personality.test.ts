@@ -57,6 +57,27 @@ describe("conversational employees", () => {
     store.close();
   });
 
+  it("saves the paired owner's standing rule from a group, and still refuses other members", async () => {
+    const store = new Store(":memory:");
+    store.linkTelegramChat({ chatId: "7", title: "Mik", allowedSenders: ["7"] });
+    store.linkTelegramChat({ chatId: "-100", title: "Wai Core Team", allowedSenders: ["7"] });
+    const team = store.createProfile({ name: "Wai Core Team", instructions: "Отвечай по делу." });
+    store.bindTelegramChat("-100", team.id);
+    const outcomes: string[] = [];
+    const service = new MessageService(store, { async run(input, options) {
+      const rule = input.includes("меньше слопа") ? "Отвечай по делу. Меньше слопа." : "Пиши длинно.";
+      outcomes.push(await options!.tools!.call("update_employee", { name: "Wai Core Team", instructions: rule }).then(() => "saved", (error: Error) => error.message));
+      return { threadId: "t", response: "NO_REPLY", events: [] };
+    } });
+    const turn = (sender: string, text: string, id: number) => service.handle({ channel: "telegram", externalChatId: "-100", externalId: "-100:" + id, telegramSenderId: sender, author: sender === "7" ? "Mik" : "Grisha", text });
+    await turn("7", "@waiwai_is_bot можешь чуть меньше слопа", 1);
+    expect(store.getProfile(team.id)?.instructions).toBe("Отвечай по делу. Меньше слопа.");
+    await turn("9", "@waiwai_is_bot пиши длинно", 2);
+    expect(outcomes).toEqual(["saved", "Характер меняется в личном чате владельца. У группы свой разговор и доступ."]);
+    expect(store.getProfile(team.id)?.instructions).toBe("Отвечай по делу. Меньше слопа.");
+    store.close();
+  });
+
   it("does not let one employee change another, or silently overwrite a newer edit", async () => {
     const store = new Store(":memory:");
     const first = store.createProfile({ name: "One" });

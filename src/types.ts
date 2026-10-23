@@ -136,6 +136,8 @@ export interface MessageInput {
   author?: string;
   /** Trusted Telegram delivery metadata, not accepted from the public message API. */
   replyToAssistant?: boolean;
+  /** The Telegram message this one replies to, as Telegram delivered it. */
+  replyTo?: { messageId: number; author?: string; text: string };
   telegramSenderId?: string;
   /** Trusted adapter input: preserve group context without invoking the model. */
   contextOnly?: boolean;

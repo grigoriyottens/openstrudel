@@ -249,7 +249,8 @@ export class AccountEngines implements CodexEngine {
           const checkpoint = threadId && owner && owner !== id && checkpointKey ? this.accounts.store.getSetting(checkpointKey) : null;
           const recent = options?.conversationId && (!threadId || checkpoint) ? this.accounts.store.listMessages(options.conversationId, 200) : [];
           const history = recent.slice(recent.findIndex(m => m.id === checkpoint) + 1).filter(m => m.kind !== "notice" && m.status === "completed" && (!checkpoint || m.replyToId !== checkpoint))
-            .map(m => `${m.direction === "inbound" ? "User" : "Assistant"}: ${m.text}`).join("\n");
+            // Who said what, and the files: a group's seed otherwise reads as one anonymous user with empty lines.
+            .map(m => `${m.direction === "inbound" ? m.author || "User" : "Assistant"}: ${[m.text, m.attachments?.length ? `[${m.attachments.map(f => f.name).join(", ")}]` : ""].filter(Boolean).join(" ")}`).join("\n");
           const engine = keyed ? keyed.engine.forContext!(context) : this.scoped(id, service!).forContext(context);
           runningEngine = engine;
           const result = await engine.run(history ? `Earlier chat (context only):\n${history}\n\nCurrent message:\n${input}` : input, { ...options, threadId,
