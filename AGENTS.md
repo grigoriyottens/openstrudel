@@ -7,3 +7,9 @@
 - Before a local production update, use `python3 scripts/backup-local-state.py` for the rollback snapshot. It stores user state, consistent SQLite backups, the installed app and launch configuration in `~/Library/Application Support/OpenStrudelBackups`, excluding old deployment trees and reproducible runtime files. Quiesce application writes when a consistent snapshot across multiple files is required.
 - After the updated service passes its health and data checks, run `python3 scripts/backup-local-state.py --mark-healthy <backup-path>`. This retains the latest two managed rollback snapshots from healthy deployments. Pending or foreign backups are not automatically deleted. Never copy the entire old deployment/backup tree into another backup.
 - Never automatically delete or rewrite Codex chat history, user databases, private exports or unique project data as part of disk maintenance. Preserve the existing deployment validation, signing, atomic installation and rollback sequence.
+
+# Published installers on WaiWeb
+
+- WaiWeb shares one 40 GB disk with PostgreSQL and the meeting pipeline. On 23 October 2026 old OpenStrudel installers filled it and PostgreSQL crashed.
+- Keep only the latest build there: its versioned DMG and Home archive, the stable `OpenStrudel-1.0-arm64.dmg` and `OpenStrudel-Home-1.0.tar.gz` as hard links to them, the latest APK, `SHA256SUMS` listing only those files, and the signed `updates/appcast.xml`.
+- Every release ends by deleting the previous build's installers and every staging and backup directory it created on WaiWeb (step 8 of [docs/mac-release.md](docs/mac-release.md)). Rollback packages stay on the release Mac.
