@@ -190,6 +190,26 @@ describe("durable cron", () => {
     await scheduler.tick(new Date("2026-09-27T06:00:02Z")); await scheduler.idle();
     expect(store.listMessages(root.id).map(m=>m.text).at(-1)).toBe(`Требует внимания · Рецепты\nЗадача не выполнена: ${reason}`);
   });
+  it("reports a repeated scheduled failure once until a successful check closes it", async () => {
+    const store = new Store(":memory:"); stores.push(store);
+    let response = "FAILED: источник недоступен";
+    const messages = new MessageService(store,{async run(){return {threadId:"repeated-failure",response,events:[]};}});
+    const scheduler = new Scheduler(store,messages);
+    const root = store.primaryConversation();
+    const chat = store.getOrCreateConversation({channel:"telegram",externalId:"-100",title:"Проверка"});
+    scheduler.save({conversationId:chat.id,name:"Проверка",prompt:"Проверь",cron:"* * * * *",timezone:"UTC"},new Date("2026-09-26T10:00:00Z"));
+    for (const minute of [1,2]) {
+      await scheduler.tick(new Date(`2026-09-26T10:0${minute}:01Z`)); await scheduler.idle();
+    }
+    expect(scheduler.runs(chat.id).map(run=>run.status)).toEqual(["failed","failed"]);
+    expect(store.listMessages(root.id)).toHaveLength(1);
+    response = "NO_REPLY";
+    await scheduler.tick(new Date("2026-09-26T10:03:01Z")); await scheduler.idle();
+    expect(store.getSetting("runtime.issue."+chat.id)).toBeNull();
+    response = "FAILED: источник недоступен";
+    await scheduler.tick(new Date("2026-09-26T10:04:01Z")); await scheduler.idle();
+    expect(store.listMessages(root.id)).toHaveLength(2);
+  });
   it("keeps an app-only edition in the app even when the chat has a Telegram binding", async () => {
     const { store, scheduler } = setup();
     const c = store.primaryConversation();

@@ -218,7 +218,7 @@ export class MessageService {
         this.store.setMessageStatus(inbound.id, "completed");
         const connectorNotice=reportConnectorIssues(this.store,current.id,inbound.id,connectors);
         if(connectorNotice)await this.telegram?.notifyOwner(connectorNotice);
-        if(text!=="/help") {
+        if(text!=="/help" && !(input.scheduled && failedRun(result.response))) {
           const notice=resolveIssue(this.store,current.id);
           if(notice)await this.telegram?.notifyOwner(notice);
         }
