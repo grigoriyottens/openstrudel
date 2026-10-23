@@ -76,10 +76,13 @@ describe("MessageService", () => {
       await expect(messages.handle(request)).rejects.toThrow("Codex не ответил вовремя");
       expect(run).toHaveBeenCalledOnce();
       const conversation = store.getOrCreateConversation({ channel: "api", externalId: "home" });
-      expect(store.listMessages(conversation.id)).toHaveLength(1);
-      expect(store.listMessages(conversation.id)[0]).toMatchObject({ status: "failed" });
-      expect(store.listMessages(conversation.id)[0]!.error).not.toContain("thread/start");
-    } finally { store.close(); }
+      const stored = store.listMessages(conversation.id);
+      const requests = stored.filter(message => message.direction === "inbound");
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).toMatchObject({ status: "failed" });
+      expect(requests[0]!.error).not.toContain("thread/start");
+      expect(stored.filter(message => message.kind === "notice")).toHaveLength(1);
+    } finally { await messages.close(); store.close(); }
   });
 
   it("keeps a rejected turn and its thread, refreshes account status, and never replays it after sign-in", async () => {
