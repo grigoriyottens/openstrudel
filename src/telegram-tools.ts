@@ -28,6 +28,9 @@ export function ownerSender(store: Store, context: TelegramToolContext): boolean
   return !context.scheduled && Boolean(sender && paired(store, sender));
 }
 
+/** The verified owner's own turn: his private chat or the app, or his message in a group. Never a schedule or model arguments. */
+export const ownerTurn = (store: Store, context: TelegramToolContext) => !context.scheduled && (context.byOwner === true || ownerSender(store, context));
+
 /** Telegram ids the owner gave this Home's services and data, besides the paired owners. */
 export function accessPeople(store: Store): string[] {
   try { const people = JSON.parse(store.getSetting("access.people") ?? "[]"); return Array.isArray(people) ? people.filter(id => typeof id === "string") : []; } catch { return []; }
@@ -45,7 +48,7 @@ export function telegramTools(store: Store, context: TelegramToolContext) {
       inputSchema:{type:"object",properties:{chatId:{type:"string"},text:{type:"string"},paths:{type:"array",items:{type:"string"}},silent:{type:["boolean","null"]},linkPreview:{type:["boolean","null"]}},required:["chatId","text","paths"],additionalProperties:false} },
   ] : [];
   const chats = () => {
-    const owner = !context.scheduled && (context.byOwner === true || ownerSender(store, context));
+    const owner = ownerTurn(store, context);
     return store.telegramChats().filter(chat => chat.enabled !== false && (context.scheduled
       ? chat.chatId === context.scheduleTelegramChatId
       : owner || chat.conversationId === context.conversationId));
