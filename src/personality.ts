@@ -65,6 +65,8 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
       return { schedules:context.scheduler!.list(context.conversationId).map(s=>({...s,nextRunLocal:localScheduleTime(s.nextRunAt,s.timezone)})), runs:context.scheduler!.runs(context.conversationId), timezone, currentTime:now, localTime:timezone ? localScheduleTime(now,timezone) : null };
     }
     if (name === "save_schedule" || name === "pause_schedule") {
+      // A schedule runs later with this Home's services, so only people with access set one up.
+      if (context.access === false) throw new Error("Расписания в этом чате настраивают люди с доступом к этому Strudel.");
       if (context.scheduled) throw new Error("A scheduled edition cannot create or modify schedules");
       if (name === "pause_schedule") { context.scheduler!.remove(String(args.id),context.conversationId); return { paused:true }; }
       if (context.scope?.startsWith("group-") && args.telegramChatId != null && store.getTelegramChat(String(args.telegramChatId))?.conversationId !== context.conversationId) throw new Error("Из группы можно настроить доставку только в эту же группу.");

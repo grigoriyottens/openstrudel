@@ -7,6 +7,9 @@ vi.mock("../src/rpc.js", () => ({ CodexRpc: class {
   request = wire.request;
   close() { this.closed = true; }
 } }));
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { CodexEngineAdapter } from "../src/codex.js";
 afterEach(() => {wire.request.mockReset();vi.useRealTimers();});
 
@@ -161,6 +164,42 @@ it("refreshes native MCP credentials for each group delivery without rewriting p
  }finally{engine.close();}
 });
 
+it("starts a turn without access on a thread with no keyed services, apps, memories or helpers",async()=>{
+ const home=mkdtempSync(join(tmpdir(),"codex-guest-")),memories=join(home,"memories"),workspace=join(home,"workspace");
+ writeFileSync(join(home,"config.toml"),[
+  '[mcp_servers.company]\nurl = "https://work.example/mcp"\n[mcp_servers.company.http_headers]\nAuthorization = "Bearer owner"',
+  '[mcp_servers.notion]\nurl = "https://notion.example/mcp"',
+  '[mcp_servers.cua_repl]\ncommand = "/Applications/Codex.app/cua"',
+  '[memories]\nuse_memories = true\ngenerate_memories = true',
+  `[permissions.openstrudel.filesystem]\n":minimal" = "read"\n${JSON.stringify(workspace)} = "write"\n${JSON.stringify(memories)} = "read"`,
+ ].join("\n")+"\n");
+ let thread=0;
+ wire.request.mockImplementation(async(method:string,params:any)=>{
+  if(method==="thread/start")return {thread:{id:"thread-"+(++thread)}};
+  if(method==="turn/start"){queueMicrotask(()=>wire.notify?.({method:"turn/completed",params:{threadId:params.threadId,turn:{status:"completed"}}}));return {turn:{id:"turn"}};}
+  if(method==="configRequirements/read")return {requirements:null};
+  if(method==="model/list")return {data:[]};
+  throw new Error(method);
+ });
+ const engine=new CodexEngineAdapter({codexHome:home,telegramServers:{wai:{url:"https://work.example/api/mcp/company/"}}});
+ (engine as any).extensionManager={updating:false,pluginServers:()=>({"p@openstrudel-local":["s"]})};
+ const actor={userId:"77",chatId:"-100",messageId:"-100:1"};
+ try{
+  await engine.run("Guest",{access:false,employees:[],telegramActor:actor,groupContext:true});
+  const guest=wire.request.mock.calls.find(([method])=>method==="thread/start")![1].config;
+  expect(guest).toMatchObject({"features.apps":false,"features.multi_agent":false,"memories.use_memories":false,
+   "mcp_servers.company.enabled":false,"mcp_servers.notion.enabled":false,"mcp_servers.cua_repl.enabled":false,"plugins.p@openstrudel-local.mcp_servers.s.enabled":false});
+  expect(guest["permissions.openstrudel.filesystem"]).toEqual({":minimal":"read",[workspace]:"write"});
+  // The service that checks the sender itself stays, with the verified sender.
+  expect(guest["mcp_servers.wai"]).toMatchObject({enabled:true,http_headers:{"x-hermes-user-id":"77","x-hermes-chat-id":"-100"}});
+  expect(guest["mcp_servers.wai.enabled"]).toBeUndefined();
+  await engine.run("Listed",{access:true,telegramActor:actor,groupContext:true});
+  const listed=wire.request.mock.calls.filter(([method])=>method==="thread/start")[1]![1].config;
+  expect(Object.keys(listed).filter(key=>/\.enabled$|use_memories|multi_agent/.test(key))).toEqual([]);
+  expect(listed["features.apps"]).toBe(true);
+  expect(listed["permissions.openstrudel.filesystem"]).toMatchObject({[memories]:"read"});
+ }finally{engine.close();rmSync(home,{recursive:true,force:true});}
+});
 
 it("switches native model and speed on the same thread and explicitly clears Fast",async()=>{
   wire.request.mockImplementation(async(method:string,params:any)=>{

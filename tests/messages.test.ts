@@ -43,6 +43,29 @@ describe("MessageService", () => {
       expect(store.listMessages(result.conversationId)[0]?.attachments).toHaveLength(7);
     }finally{await messages.close();store.close();}
   });
+  it("decides a sender's access when the turn starts, and only from the adapter's sender", async () => {
+    const store = new Store(":memory:"), seen: any[] = [];
+    let release!: () => void;
+    const messages = new MessageService(store, { run: async (_input, options) => {
+      seen.push(options);
+      if (seen.length === 1) await new Promise<void>(resolve => { release = resolve; });
+      return { threadId: "t", response: "OK", events: [] };
+    } });
+    const group = (text: string, id: number, sender?: string) => ({ channel: "telegram" as const, text, externalChatId: "-100", externalId: `-100:${id}`, telegramSenderId: sender });
+    try {
+      store.setSetting("access.people", JSON.stringify(["77"]));
+      const first = await messages.submit(group("first", 1, "77"));
+      await vi.waitFor(() => expect(seen).toHaveLength(1));
+      const waiting = await messages.submit(group("second", 2, "77"));
+      // Removing someone also applies to their messages already waiting in the queue.
+      store.setSetting("access.people", "[]");
+      release(); await Promise.all([first.completion, waiting.completion]);
+      await messages.handle(group("no sender", 3));
+      await messages.handle({ channel: "api", text: "app", externalChatId: "home" });
+      await messages.handle({ channel: "api", text: "schedule", externalChatId: "home", scheduled: true });
+      expect(seen.map(o => o.access)).toEqual([true, false, false, true, true]);
+    } finally { await messages.close(); store.close(); }
+  });
   it("shows a readable startup timeout and keeps its receipt without replaying the request", async () => {
     const store = new Store(":memory:");
     const run = vi.fn(async () => { throw new Error("Codex не ответил на thread/start"); });

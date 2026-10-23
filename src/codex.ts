@@ -149,6 +149,10 @@ export class CodexEngineAdapter implements CodexEngine {
     const policy = nativeApprovalPolicy(mode, options.groupContext);
     const overrides = { "features.apps": !provider, web_search: provider && !provider.webSearch ? "disabled" : process.env.OPENSTRUDEL_WEB_SEARCH_MODE ?? "live", ...this.options.config, ...telegramMcpConfig(this.options.telegramServers,options.telegramActor,options.conversationId) };
     const settings = { ...(this.codexHome ? readToml(resolve(this.codexHome,"config.toml")) : {}), ...overrides };
+    // A sender without access: no keyed services, apps or memories on this thread. Services that check the sender themselves stay.
+    const guest = options.access === false ? { "features.apps": false, ...(settings as any).memories ? { "memories.use_memories": false } : {},
+      ...Object.fromEntries(Object.keys((settings as any).mcp_servers ?? {}).filter(name => !this.options.telegramServers?.[name]).map(name => [`mcp_servers.${name}.enabled`, false])),
+      ...Object.fromEntries(Object.entries(this.extensionManager?.pluginServers() ?? {}).flatMap(([plugin, servers]) => servers.map(server => [`plugins.${plugin}.mcp_servers.${server}.enabled`, false]))) } : {};
     const employees = (options.employees ?? []).map(employee => ({...employee,
       model:employee.model ?? recommended.id,
       reasoningEffort:modelReasoning(employee.model ? models.find(m=>m.id === employee.model) : recommended,employee.reasoningEffort),
@@ -160,10 +164,11 @@ export class CodexEngineAdapter implements CodexEngine {
     // The key travels over stdin with each thread start or resume, never through config files.
     const custom = provider ? { [`model_providers.${codexProviderId(provider.id)}`]: { name:provider.name, base_url:provider.baseUrl, wire_api:"responses", experimental_bearer_token:this.options.provider!.key() },
       ...(window ? { model_context_window:window, model_auto_compact_token_limit:Math.floor(window*0.9) } : {}) } : {};
-    const filesystem=(settings as any).permissions?.openstrudel?.filesystem;
+    const memories=this.codexHome && options.access === false ? resolve(this.codexHome,"memories") : undefined;
+    const filesystem=(settings as any).permissions?.openstrudel?.filesystem && Object.fromEntries(Object.entries((settings as any).permissions.openstrudel.filesystem).filter(([path])=>path !== memories));
     const paths=options.byOwner && !options.groupContext ? options.readPaths ?? [] : [];
     const sourceAccess=filesystem ? {"permissions.openstrudel.filesystem":{...Object.fromEntries(paths.map(path=>[path,"read"])),...filesystem}} : {};
-    const config = { ...overrides, ...roles, ...(effort ? {model_reasoning_effort:effort} : {}), ...custom, ...sourceAccess, ...nativeApprovalConfig(mode,settings,this.extensionManager?.pluginServers()), approval_policy: policy.approvalPolicy, approvals_reviewer: policy.approvalsReviewer };
+    const config = { ...overrides, ...guest, ...roles, ...(effort ? {model_reasoning_effort:effort} : {}), ...custom, ...sourceAccess, ...nativeApprovalConfig(mode,settings,this.extensionManager?.pluginServers()), approval_policy: policy.approvalPolicy, approvals_reviewer: policy.approvalsReviewer };
     const configKey = createHash("sha256").update(JSON.stringify([config, employees])).digest("hex");
     let threadId = options.threadId ?? "";
     if (threadId && this.active.has(threadId)) throw new Error("В этом чате ещё идёт ответ. Сообщение нужно поставить в очередь.");

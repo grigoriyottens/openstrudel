@@ -12,16 +12,29 @@ export interface TelegramToolContext {
   scheduleTelegramChatId?: string | null;
   byOwner?: boolean;
   telegramSenderId?: string;
+  /** False when the Telegram sender is not on this Home's access list. */
+  access?: boolean;
   telegram?: TelegramAdapter;
   files?: ConversationFiles;
   scope?: string;
 }
 
+/** A Telegram user who paired their private chat with this Home: an owner. */
+const paired = (store: Store, sender: string) => Number(sender) > 0 && store.getTelegramChat(sender)?.allowedSenders.includes(sender) === true;
+
 /** The adapter's verified sender is the paired owner, whatever the chat. Never from model arguments. */
 export function ownerSender(store: Store, context: TelegramToolContext): boolean {
   const sender = context.channel === "telegram" ? context.telegramSenderId : undefined;
-  return !context.scheduled && Boolean(sender && store.getTelegramChat(sender)?.allowedSenders.includes(sender));
+  return !context.scheduled && Boolean(sender && paired(store, sender));
 }
+
+/** Telegram ids the owner gave this Home's services and data, besides the paired owners. */
+export function accessPeople(store: Store): string[] {
+  try { const people = JSON.parse(store.getSetting("access.people") ?? "[]"); return Array.isArray(people) ? people.filter(id => typeof id === "string") : []; } catch { return []; }
+}
+export const accessOwners = (store: Store) => store.telegramChats().filter(chat => paired(store, chat.chatId)).map(chat => chat.chatId);
+/** Only from the adapter's verified sender id: a paired owner or someone on the access list. */
+export const hasAccess = (store: Store, sender?: string) => Boolean(sender && (paired(store, sender) || accessPeople(store).includes(sender)));
 
 /** The already connected bot is a native capability, not another MCP sign-in. */
 export function telegramTools(store: Store, context: TelegramToolContext) {

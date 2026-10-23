@@ -236,17 +236,19 @@ export class AccountEngines implements CodexEngine {
           throw new ProviderIncident(`Подписка ${keyed.info.name} работает только в чатах владельца. Для коллег и групп выберите модель xAI с ключом API.`, 409, "policy:" + provider);
         const { id, service } = keyed ? { id: "provider-" + provider, service: undefined } : await this.accounts.choose(agent);
         if (service) locked = { id, service };
-        const threadKey = options?.conversationId ? `codex.thread.${id}.${options.conversationId}` : undefined;
+        // A sender without access gets a thread of their own, which never had the listed people's services or memories.
+        const route = options?.access === false ? id + ".guest" : id;
+        const threadKey = options?.conversationId ? `codex.thread.${route}.${options.conversationId}` : undefined;
         const saved = threadKey ? this.accounts.store.getSetting(threadKey) : undefined;
         this.accounts.active.set(id, (this.accounts.active.get(id) ?? 0) + 1);
         runningProvider = provider;
         try {
           const ownerKey = options?.conversationId ? "codex.threadOwner." + options.conversationId : undefined;
           const owner = ownerKey ? this.accounts.store.getSetting(ownerKey) : null;
-          const threadId = saved ?? (id === "default" && (!owner || owner === id) ? options?.threadId : undefined);
+          const threadId = saved ?? (route === "default" && (!owner || owner === route) ? options?.threadId : undefined);
           // A new thread is seeded with the chat. A thread resumed after another route answered gets the turns made since its last one.
-          const checkpointKey = options?.conversationId ? `codex.threadCheckpoint.${id}.${options.conversationId}` : undefined;
-          const checkpoint = threadId && owner && owner !== id && checkpointKey ? this.accounts.store.getSetting(checkpointKey) : null;
+          const checkpointKey = options?.conversationId ? `codex.threadCheckpoint.${route}.${options.conversationId}` : undefined;
+          const checkpoint = threadId && owner && owner !== route && checkpointKey ? this.accounts.store.getSetting(checkpointKey) : null;
           const recent = options?.conversationId && (!threadId || checkpoint) ? this.accounts.store.listMessages(options.conversationId, 200) : [];
           const history = recent.slice(recent.findIndex(m => m.id === checkpoint) + 1).filter(m => m.kind !== "notice" && m.status === "completed" && (!checkpoint || m.replyToId !== checkpoint))
             // Who said what, and the files: a group's seed otherwise reads as one anonymous user with empty lines.
@@ -260,11 +262,11 @@ export class AccountEngines implements CodexEngine {
             employees: options?.employees?.filter(employee => (employee.provider ?? "chatgpt") === provider),
             onEvent: event => {
               if (threadKey && event.type === "thread.started") this.accounts.store.setSetting(threadKey, (event.payload as any).threadId);
-              if (ownerKey && event.type === "thread.started") this.accounts.store.setSetting(ownerKey, id);
+              if (ownerKey && event.type === "thread.started") this.accounts.store.setSetting(ownerKey, route);
               options?.onEvent?.(event);
             } });
           if (threadKey) this.accounts.store.setSetting(threadKey, result.threadId);
-          if (ownerKey) this.accounts.store.setSetting(ownerKey, id);
+          if (ownerKey) this.accounts.store.setSetting(ownerKey, route);
           if (checkpointKey && options?.messageId) this.accounts.store.setSetting(checkpointKey, options.messageId);
           return result;
         } catch (error) {

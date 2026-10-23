@@ -134,3 +134,31 @@ it("keeps MCP service tokens out of the CLI's process arguments", async () => {
     expect(seen).toContain("Bearer MCP-SECRET-TOKEN");
   } finally { service.closeAllConnections(); await new Promise(resolve => service.close(resolve)); }
 }, 90_000);
+
+it("never starts the owner's keyed services for a group sender without access", async () => {
+  const seen: string[] = [];
+  const service = createServer(async (req, res) => {
+    seen.push(String(req.headers.authorization));
+    let raw = ""; for await (const chunk of req) raw += chunk;
+    const message = raw ? JSON.parse(raw) : {};
+    if (req.method !== "POST" || message.id === undefined) { res.writeHead(req.method === "POST" ? 202 : 405).end(); return; }
+    const result = message.method === "initialize" ? { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "svc", version: "1" } }
+      : message.method === "tools/list" ? { tools: [{ name: "private_lookup", description: "Owner's private data", inputSchema: { type: "object", properties: {} } }] } : {};
+    res.setHeader("content-type", "application/json"); res.end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }));
+  });
+  await new Promise<void>(resolve => service.listen(0, "127.0.0.1", resolve));
+  try {
+    const url = `http://127.0.0.1:${(service.address() as AddressInfo).port}/mcp`, group = "group-" + "c".repeat(64);
+    mkdirSync(join(root, ".data/extensions/personal"), { recursive: true });
+    writeFileSync(join(root, ".data/extensions/personal/config.toml"), `[mcp_servers.svc]\nurl = "${url}"\n[mcp_servers.svc.http_headers]\nAuthorization = "Bearer OWNER"\n`);
+    writeFileSync(join(root, ".data/extensions/all-chats.json"), '{"enabled":true}\n');
+    mock = await mockAnthropic(() => ({ text: "Готово" }));
+    const engine = claude("kimi", "sk-kimi-secret").forContext(group);
+    await engine.run("Что у владельца?", { access: false, groupContext: true });
+    expect(seen).toEqual([]);
+    const tools = mock.requests.flatMap(r => (r.body?.tools ?? []).map((t: any) => String(t.name)));
+    expect(tools.filter(name => name.startsWith("mcp__svc__"))).toEqual([]);
+    await engine.run("Что у владельца?", { access: true, groupContext: true });
+    expect(seen).toContain("Bearer OWNER");
+  } finally { service.closeAllConnections(); await new Promise(resolve => service.close(resolve)); }
+}, 90_000);

@@ -192,12 +192,13 @@ export class ClaudeEngine implements CodexEngine {
 }
 
 type Service = McpServerConfig & { toolLists?: { enabled?: string[]; disabled?: string[] } };
-/** The same services as the Codex scope: the owner's when shared with every chat, then shared, installer-provisioned, and Telegram's for the verified sender only. */
-export function contextServers(root: string, context: string, options: Pick<RunOptions, "telegramActor" | "conversationId">): Record<string, Service> {
+/** The same services as the Codex scope: the owner's when shared with every chat, then shared, installer-provisioned, and Telegram's for the verified sender only.
+ * A sender without access gets only the services that check the sender themselves. */
+export function contextServers(root: string, context: string, options: Pick<RunOptions, "telegramActor" | "conversationId" | "access">): Record<string, Service> {
   const own = { ...readToml(resolve(root, ".data/extensions", context, "config.toml")).mcp_servers, ...readToml(resolve(root, ".data/connections", context + ".toml")).mcp_servers };
   const telegram = resolve(root, ".data/connections", context + ".telegram.json");
   const verified = existsSync(telegram) ? JSON.parse(readFileSync(telegram, "utf8")) : undefined;
-  const servers = extensionServers({ ...inheritedIntegrations(root, context, { servers: own, telegram: verified }).servers, ...own });
+  const servers: Record<string, Service> = options.access === false ? {} : extensionServers({ ...inheritedIntegrations(root, context, { servers: own, telegram: verified }).servers, ...own });
   for (const [key, s] of Object.entries(telegramMcpConfig(verified, options.telegramActor, options.conversationId)) as Array<[string, any]>)
     if (s.enabled) servers[key.slice("mcp_servers.".length)] = { type: "http", url: s.url, headers: s.http_headers };
   return servers;

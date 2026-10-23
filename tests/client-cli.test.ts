@@ -53,6 +53,30 @@ describe("CLI recovery after a lost response", () => {
     }finally{await new Promise<void>(done=>server.close(()=>done()));await rm(root,{recursive:true,force:true});}
   });
 
+  it("shows and replaces this Home's access list", async () => {
+    const root = await mkdtemp(join(tmpdir(), "strudel-cli-access-"));
+    const requests: {method:string;path:string;body:unknown}[]=[];
+    const server=createServer(async(req,res)=>{
+      let raw="";for await(const chunk of req)raw+=chunk;
+      const body=raw?JSON.parse(raw):undefined;requests.push({method:req.method!,path:req.url!,body});
+      res.setHeader("content-type","application/json");res.end(JSON.stringify({people:body?.people??[],owners:["42"]}));
+    });
+    await new Promise<void>(done=>server.listen(0,"127.0.0.1",done));
+    const config=join(root,"connection.json");
+    await writeFile(config,JSON.stringify({url:`http://127.0.0.1:${(server.address() as any).port}`,token:"test-owner"}),{mode:0o600});
+    const cli=(args:string[])=>new Promise<{code:number|null;out:string;err:string}>((resolve,reject)=>{
+      const child=spawn(process.execPath,["--import",import.meta.resolve("tsx"),fileURLToPath(new URL("../src/cli.ts",import.meta.url)),"access",...args],{cwd:root,env:{...process.env,OPENSTRUDEL_CLIENT_CONFIG:config},stdio:"pipe"});
+      let out="",err="";child.stdout.on("data",b=>out+=b);child.stderr.on("data",b=>err+=b);child.once("error",reject);child.once("exit",code=>resolve({code,out,err}));child.stdin.end();
+    });
+    try {
+      const saved=await cli(["set","1","2"]);expect(saved.code,saved.err).toBe(0);
+      expect(requests.at(-1)).toEqual({method:"POST",path:"/v1/settings/access",body:{people:["1","2"]}});
+      const shown=await cli(["--json"]);expect(shown.code,shown.err).toBe(0);
+      expect(requests.at(-1)).toEqual({method:"GET",path:"/v1/settings/access",body:undefined});
+      expect(JSON.parse(shown.out)).toEqual({people:[],owners:["42"]});
+    }finally{await new Promise<void>(done=>server.close(()=>done()));await rm(root,{recursive:true,force:true});}
+  });
+
   it("keeps Telegram group links distinct from personal pairing, including older devices", async () => {
     const root = await mkdtemp(join(tmpdir(), "strudel-cli-telegram-"));
     const requests: { path: string; body: Record<string, string> }[] = [];
