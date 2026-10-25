@@ -148,6 +148,7 @@ export class AcpEngine implements CodexEngine {
         .onNotification("session/update", ({ params: { sessionId: id, update } }) => {
           // A loaded session replays its history before the prompt.
           if (!prompting || id !== sessionId) return;
+          if (["tool_call","tool_call_update","agent_message_chunk"].includes(update.sessionUpdate)) options.onEvent?.({type:"turn.progress",payload:{}});
           if (update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update") { afterTool = true; calls.set(update.toolCallId, { ...calls.get(update.toolCallId), ...defined(update) } as acp.ToolCallUpdate); }
           // The reply is the agent's last stretch of text; commentary before its tool calls is dropped.
           if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text") { if (afterTool) response = ""; afterTool = false; response += update.content.text; }

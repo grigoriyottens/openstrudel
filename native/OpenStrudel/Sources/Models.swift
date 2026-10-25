@@ -507,6 +507,7 @@ struct ModelSettings: Decodable {
     let effective: ModelSelection
     let recommended: ModelChoice?
     let canManage: Bool
+    var fallbacks: [ModelSelection]? = nil
     /// Connected providers, ChatGPT first. Older Homes send none.
     var providers: [ProviderSummary]? = nil
 

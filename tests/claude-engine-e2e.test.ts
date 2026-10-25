@@ -32,7 +32,7 @@ it("answers, resumes the same session with a changed SOUL and sends a bearer tok
   const first = await engine.run("Привет", { profile: "Имя: Ада", onEvent: event => started.push(event) });
   expect(first.response).toBe("Ответ 1");
   expect(first.threadId).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/);
-  expect(started).toEqual([{ type: "thread.started", payload: { threadId: first.threadId } }]);
+  expect(started).toEqual([{ type: "thread.started", payload: { threadId: first.threadId } },{type:"turn.progress",payload:{}}]);
   const second = await engine.run("Как тебя зовут?", { threadId: first.threadId, profile: "Имя: Бета" });
   expect(second).toEqual({ threadId: first.threadId, response: "Ответ 2", events: [] });
   const last = mock.requests.at(-1)!;
@@ -76,6 +76,14 @@ it("stops at once when the provider rejects the key instead of retrying for minu
   await expect(claude("zai", "sk-revoked").run("Привет")).rejects.toBeInstanceOf(ProviderKeyError);
   expect(Date.now() - started).toBeLessThan(15_000);
 }, 90_000);
+
+it("returns a quota refusal immediately, before the CLI retries", async () => {
+  mock = await mockAnthropic(() => ({status:429,type:"rate_limit_error",message:"usage limit reached"}));
+  const started = Date.now();
+  await expect(claude("anthropic","sk-limited").run("Привет")).rejects.toMatchObject({reason:"limits:anthropic"});
+  expect(Date.now()-started).toBeLessThan(15_000);
+  expect(mock.requests.filter(r=>r.path.startsWith("/v1/messages?"))).toHaveLength(1);
+}, 30_000);
 
 it("keeps the key out of command environments and a private HOME", async () => {
   mock = await mockAnthropic(request => toolResult(request) ? { text: "Готово" } : { tool: { name: "Bash", input: { command: "env", description: "Show environment" } } });

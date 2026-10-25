@@ -231,7 +231,8 @@ export class MessageService {
         if (isOpenAIAuthenticationError(error)) this.onAuthenticationError?.();
         const message = friendlyError(error);
         this.store.setMessageStatus(inbound.id, "failed", message);
-        if (!this.active.get(conversation.id)?.abort.signal.aborted) await this.reportProblem(conversation.id,inbound.id,problem ?? errorProblem(error),input.channel==="telegram" ? input.externalChatId : undefined);
+        if (!this.active.get(conversation.id)?.abort.signal.aborted) await this.reportProblem(conversation.id,inbound.id,problem ?? errorProblem(error),input.channel==="telegram" ? input.externalChatId : undefined,
+          error instanceof ProviderIncident || error instanceof AccountUnavailableError ? error.message : undefined);
         if (error instanceof AccountUnavailableError || error instanceof ProviderIncident) throw error;
         if (isOpenAIAuthenticationError(error)) throw new AccountUnavailableError("sign_in_required");
         throw new Error(message);

@@ -255,6 +255,9 @@
     .field { display: block; width: 100%; min-height: var(--control); margin: 0; padding: 7px var(--space-2); border: 1px solid var(--control-border); border-radius: var(--radius-control); background: transparent; line-height: 16px; }
     .field:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
     textarea.field { resize: vertical; line-height: 20px; padding-block: 6px; }
+    .model-fallbacks { display: grid; gap: var(--space-2); }
+    .model-fallback-row { display: grid; grid-template-columns: minmax(0,1fr) repeat(3,auto); align-items: center; gap: var(--space-1); }
+    .model-fallback-row > span { overflow-wrap: anywhere; }
     select.field { appearance: none; -webkit-appearance: none; padding-inline-end: 28px; background: var(--chevron) no-repeat right 6px center / 16px 16px; cursor: pointer; }
     select.field:dir(rtl) { background-position: left 6px center; }
     #imported-chat { width: auto; max-width: 200px; }

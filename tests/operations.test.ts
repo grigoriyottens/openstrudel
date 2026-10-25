@@ -177,7 +177,7 @@ it("does not mistake a successfully read diagnostic log for a new infrastructure
  expect(toolProblem({type:"item/completed",payload:{item:{type:"functionCallOutput",name:"exec",output:[{text:JSON.stringify({exit_code:0,output:"Yesterday: failed to fork"})}]}}})).toBeUndefined();
 });
 
-it("tells the owner one cause once, however many chats it stops",async()=>{
+it("tells the owner once for each affected chat and again for a different cause",async()=>{
  const store=new Store(":memory:");stores.push(store);
  store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
  const chats=["Familia","Wish","News"].map(name=>store.profileConversation(store.createProfile({name,instructions:name}).id));
@@ -188,10 +188,26 @@ it("tells the owner one cause once, however many chats it stops",async()=>{
  const telegram=new TelegramAdapter("123:test",store,messages);messages.telegram=telegram;
  try {
   for(const chat of chats)await expect(messages.handle({channel:"api",conversationId:chat.id,text:"go"})).rejects.toThrow();
-  expect(sent).toHaveLength(1);expect(runtimeIssues(store)).toHaveLength(3);
+  expect(sent).toHaveLength(3);expect(runtimeIssues(store)).toHaveLength(3);
   // A different cause is news again.
   error=Error("Не удалось запустить необходимый инструмент: failed to spawn code-mode");
   await expect(messages.handle({channel:"api",conversationId:chats[0]!.id,text:"go"})).rejects.toThrow();
-  expect(sent).toHaveLength(2);
+  expect(sent).toHaveLength(4);
  }finally{telegram.stop();await messages.close();}
+});
+
+it('does not hide a real chat failure behind an earlier quota notice from another chat',async()=>{
+ const {ProviderIncident}=await import('../src/providers.js');
+ const store=new Store(':memory:');stores.push(store);store.linkTelegramChat({chatId:'42',title:'Owner',allowedSenders:['42']});
+ const messages=new MessageService(store,{async run(){throw new ProviderIncident('У ключа Anthropic закончился лимит или баланс.',429,'limits:anthropic');}});
+ const sent:any[]=[];vi.stubGlobal('fetch',vi.fn(async(_url,init)=>{sent.push(JSON.parse(init.body));return Response.json({ok:true,result:{message_id:sent.length}});}));
+ const telegram=new TelegramAdapter('123:test',store,messages);messages.telegram=telegram;
+ try {
+  for(const title of ['Earlier test','Wai Reflections']){
+   const chat=store.getOrCreateConversation({channel:'telegram',externalId:title,title});
+   for(let i=0;i<2;i++)await expect(messages.handle({channel:'api',conversationId:chat.id,text:'check'})).rejects.toThrow();
+  }
+  expect(sent).toHaveLength(2);expect(sent[1].text).toContain('Wai Reflections');expect(sent[1].text).toContain('Anthropic');
+  expect(store.listMessages(store.primaryConversation().id).filter(m=>m.kind==='notice')).toHaveLength(2);
+ } finally {telegram.stop();await messages.close();}
 });

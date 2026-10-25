@@ -37,6 +37,18 @@ function fixture() {
   }
   return { store, accounts, second, pool: new AccountEngines(accounts) };
 }
+
+it("returns to the preferred subscription as soon as a fresh quota read confirms a purchased reset", async () => {
+  const {accounts,pool}=fixture();
+  engines.run.mockImplementation(async(account)=>{if(account==="default")throw new Error("429 usage limit");return{threadId:"reserve",response:"reserve",events:[]};});
+  await pool.run("one");
+  engines.run.mockClear();
+  await pool.run("two");
+  expect(engines.run.mock.calls.map(c=>c[0])).not.toContain("default");
+  vi.spyOn(accounts.get("default"),"usageSnapshot").mockReturnValue({checkedAt:new Date(Date.now()+1).toISOString(),ordinaryUsageAllowed:true,windows:[]});
+  engines.run.mockImplementation(async(account)=>({threadId:account,response:account,events:[]}));
+  expect((await pool.run("three")).response).toBe("default");
+});
 describe("per-device Codex subscriptions", () => {
   it("uses the conversation provider for account status, services and execution, without changing employee defaults", async () => {
     const {store,accounts,pool}=fixture(),chat=store.primaryConversation();
@@ -328,5 +340,91 @@ describe("Grok subscription", () => {
     await expect(pool.run("Again", { conversationId: conversation.id, provider: "grok", byOwner: true })).rejects.toThrow("Войдите в Grok снова в настройках аккаунтов.");
     expect(store.getSetting("providers.grok.signedIn")).toBeNull();
     await expect(pool.run("Again", { provider: "grok", byOwner: true })).rejects.toThrow("Подключите Grok на этом устройстве или выберите другую модель.");
+  });
+});
+
+describe("model priority", () => {
+  const reserve = { provider: "xai", model: "grok-4.7", serviceTier: "default" };
+  function setup() {
+    const f = fixture();
+    f.store.setSetting("providers.xai.key", "xai-key");
+    saveModelSelection(f.store, { provider: "chatgpt", model: "chat-model", serviceTier: "priority", reasoningEffort: "high" });
+    f.store.setSetting("models.fallbacks", JSON.stringify([reserve]));
+    engines.run.mockResolvedValue({ threadId: "new-thread", response: "OK", events: [] });
+    return f;
+  }
+  it("uses subscription accounts first, falls back on exhausted quota, and returns after recovery", async () => {
+    const { store, accounts, second, pool } = setup();
+    for (const id of ["default", second]) vi.mocked(accounts.get(id).usage).mockResolvedValue({ checkedAt: "now", ordinaryUsageAllowed: false, windows: [] });
+    await pool.run("Hi");
+    expect(engines.run.mock.calls[0]).toEqual(["provider-xai", "personal", "Hi", expect.objectContaining({ ...reserve, reasoningEffort: null })]);
+    vi.mocked(accounts.get("default").usage).mockResolvedValue({ checkedAt: "now", ordinaryUsageAllowed: true, windows: [] });
+    await pool.run("Next");
+    expect(engines.run.mock.calls[1]?.[0]).toBe("default");
+    expect(store.getSetting("models.defaults")).toContain('"provider":"chatgpt"');
+  });
+  it("tries the next subscription then each reserve once on an early quota error", async () => {
+    const { store, second, pool } = setup();
+    store.setSetting("providers.deepseek.key", "deepseek-key");
+    store.setSetting("models.fallbacks", JSON.stringify([reserve, { provider: "deepseek", model: "deepseek-v4-pro", serviceTier: "default" }]));
+    engines.run.mockImplementation(async route => {
+      if (route !== "claude-deepseek") throw new Error("429 Too Many Requests");
+      return { threadId: "deep-thread", response: "OK", events: [] };
+    });
+    await expect(pool.run("Hi")).resolves.toMatchObject({ response: "OK" });
+    expect(engines.run.mock.calls.map(c => c[0])).toEqual(["default", second, "provider-xai", "claude-deepseek"]);
+    engines.run.mockClear();
+    await pool.run("Next");
+    expect(engines.run.mock.calls.map(c => c[0])).toEqual(["claude-deepseek"]);
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 61_000);
+    engines.run.mockClear();
+    engines.run.mockResolvedValue({ threadId: "recovered", response: "OK", events: [] });
+    await pool.run("Recovered");
+    expect(engines.run.mock.calls.map(c => c[0])).toEqual(["default"]);
+  });
+  it.each(["item/started", "turn.progress", "tool", "approval"])("never replays a partially executed turn (%s)", async activity => {
+    const { pool, accounts } = setup();
+    engines.run.mockImplementation(async (_route, _context, _input, o) => {
+      if (activity === "tool") await o.tools.call("save_schedule", {});
+      else if (activity === "approval") await o.onRequest("item/commandExecution/requestApproval", {});
+      else o.onEvent({ type: activity, payload: { item: { type: "commandExecution" } } });
+      throw new Error("429 Too Many Requests");
+    });
+    const call = vi.fn().mockResolvedValue({});
+    await expect(pool.run("Do it", { tools: { definitions: [], call }, onRequest: call })).rejects.toThrow();
+    expect(engines.run).toHaveBeenCalledTimes(1);
+    expect(accounts.active.get("default")).toBe(0);
+  });
+  it.each(["401 Unauthorized", "network unavailable", "500 Internal Server Error"])("does not spend a reserve on unrelated failures (%s)", async error => {
+    const { pool } = setup();
+    engines.run.mockRejectedValue(new Error(error));
+    await expect(pool.run("Hi")).rejects.toThrow();
+    expect(engines.run).toHaveBeenCalledTimes(1);
+  });
+  it("honours a fixed employee or conversation model and cancellation", async () => {
+    const { store, pool } = setup(), e = store.createProfile({ name: "Fixed" });
+    saveModelSelection(store, { provider: "chatgpt", model: "chat-model", serviceTier: "default" }, e.id);
+    engines.run.mockRejectedValue(new Error("429 Too Many Requests"));
+    await expect(pool.forAgent(e.id, "personal").run("Hi")).rejects.toThrow();
+    expect(engines.run.mock.calls.every(c => c[0] !== "provider-xai")).toBe(true);
+    engines.run.mockClear();
+    const abort = new AbortController(); abort.abort();
+    await expect(pool.run("Stop", { signal: abort.signal })).rejects.toThrow();
+    expect(engines.run).not.toHaveBeenCalled();
+  });
+  it("keeps account-specific threads and completed history across fallback and recovery", async () => {
+    const { store, accounts, second, pool } = setup(), chat = store.primaryConversation();
+    const messages = new MessageService(store, pool);
+    engines.run.mockImplementation(async route => ({ threadId: route + "-thread", response: route + " reply", events: [] }));
+    await messages.handle({ channel: "api", text: "First", conversationId: chat.id });
+    for (const id of ["default", second]) vi.mocked(accounts.get(id).usage).mockResolvedValue({ checkedAt: "now", ordinaryUsageAllowed: false, windows: [] });
+    await messages.handle({ channel: "api", text: "Reserve", conversationId: chat.id });
+    expect(engines.run.mock.calls[1]?.[2]).toContain("default reply");
+    expect(engines.run.mock.calls[1]?.[3].threadId).toBeUndefined();
+    vi.mocked(accounts.get("default").usage).mockResolvedValue({ checkedAt: "now", ordinaryUsageAllowed: true, windows: [] });
+    await messages.handle({ channel: "api", text: "Back", conversationId: chat.id });
+    expect(engines.run.mock.calls[2]?.[2]).toContain("provider-xai reply");
+    expect(engines.run.mock.calls[2]?.[3].threadId).toBe("default-thread");
+    await messages.close();
   });
 });

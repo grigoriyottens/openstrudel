@@ -91,11 +91,10 @@ export function reportIssue(store:Store,conversationId:string,messageId:string,c
   const conversation=store.getConversation(conversationId);if(!conversation)return;
   const previous=store.getSetting(prefix+conversationId);
   const title=conversation.title ?? "Чат";
-  // One cause stops many chats at once (an account limit, a provider outage): tell it once.
-  const told=runtimeIssues(store).some(issue=>issue.conversationId!==conversationId && issue.code===code && issue.detail===detail && Date.now()-Date.parse(issue.time)<12*3600_000);
   store.setSetting(prefix+conversationId,JSON.stringify({conversationId,messageId,title,code,detail,time:new Date().toISOString()}));
   const root=store.primaryConversation(),last=previous ? JSON.parse(previous) as RuntimeIssue : null;
-  if(!told && (!last || last.code!==code || last.detail!==detail))return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${detail ? `Задача не выполнена: ${detail}` : problemText[code]}`});
+  // A failure in another chat must not silence this request. Repeat only after recovery or a changed cause.
+  if(!last || last.code!==code || last.detail!==detail)return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${detail ? `Задача не выполнена: ${detail}` : problemText[code]}`});
 }
 
 export function resolveIssue(store:Store,conversationId:string):Message|undefined {

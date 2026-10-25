@@ -613,20 +613,24 @@ async function openModelSettings(agent, deviceId, conversationId) {
     const ref=m=>m?.model?JSON.stringify([m.provider||'chatgpt',m.model]):'';
     const modelRef=m=>JSON.stringify([m.provider||'chatgpt',m.id]);
     const lookup=key=>data.models.find(m=>modelRef(m)===key);
+    const title=m=>m.name+((data.providers||[]).length>1?' · '+(data.providers.find(p=>p.id===m.provider)?.name||m.provider):'');
     if(inherits) { const o=element('option',t(conversationId?"Как у сотрудника · ":"Как на устройстве · ")+(lookup(ref(data.defaults))?.name||data.recommended?.name||data.defaults.model||t("Автоматически")));o.value='';model.append(o); }
     else if(data.recommended) { const o=element('option',t("Автоматически · ")+data.recommended.name);o.value='';model.append(o); }
-    for(const m of data.models) { const o=element('option',m.name);o.value=modelRef(m);model.append(o); }
+    for(const m of data.models) { const o=element('option',title(m));o.value=modelRef(m);model.append(o); }
     if(data.selection.model&&!lookup(ref(data.selection))) {const o=element('option',data.selection.model+t(" · недоступна"));o.value=ref(data.selection);model.append(o);}
     model.value=ref(data.selection);
     const speedLabel=element('label',t("Скорость")), speed=element('select','','field');speed.id='model-speed';speed.setAttribute('aria-label',t("Скорость"));speedLabel.append(speed);page.content.append(speedLabel);
     const reasoningLabel=element('label',t("Обдумывание")), reasoning=element('select','','field');reasoning.id='model-reasoning';reasoning.setAttribute('aria-label',t("Обдумывание"));reasoningLabel.append(reasoning);page.content.append(reasoningLabel);
     const recommendation=element('p'),note=element('p');page.content.append(recommendation,note);
+    let fallbacks=(data.fallbacks||[]).map(m=>({...m}));
+    const reserves=!inherits&&Array.isArray(data.fallbacks)?element('div','','model-fallbacks'):null;
+    if(reserves)page.content.append(reserves);
     let pending=false;
-    const value=()=>{const [provider,id]=model.value?JSON.parse(model.value):[null,null];return {provider,model:id,serviceTier:!model.value&&inherits?null:speed.value,...(model.value||!inherits)&&reasoning.value?{reasoningEffort:reasoning.value}:{}};};
+    const value=()=>{const [provider,id]=model.value?JSON.parse(model.value):[null,null];return {provider,model:id,serviceTier:!model.value&&inherits?null:speed.value,...(model.value||!inherits)&&reasoning.value?{reasoningEffort:reasoning.value}:{},...(reserves?{fallbacks}:{})};};
     const chosenModel=()=>model.value?lookup(model.value):inherits?(lookup(ref(data.defaults))||data.recommended):data.recommended;
     const save=element('button',t("Применить"),'primary');save.type='button';save.dataset.main='true';page.actions.append(save);arrange(page);
     save.onclick=async()=>{
-      pending=true;save.disabled=true;page.error.textContent='';model.disabled=speed.disabled=reasoning.disabled=true;status.textContent=t("Сохраняем…");
+      pending=true;save.disabled=true;page.error.textContent='';model.disabled=speed.disabled=reasoning.disabled=true;status.textContent=t("Сохраняем…");update();
       try {const result=await api(path,{method:'POST',body:JSON.stringify(value())});Object.assign(data,result); if(conversationId===state.conversationID) paintConversationModel(result); status.textContent=t("Сохранено. Применится со следующего поручения.");}
       catch(e){status.textContent=t("Не удалось сохранить.");page.report(e);}
       finally {pending=false;model.disabled=!data.canManage;update();}
@@ -638,8 +642,26 @@ async function openModelSettings(agent, deviceId, conversationId) {
       note.textContent=speed.value&&speed.value!=='default'?t("Ускоренный режим может расходовать больше лимита аккаунта."):'';
       const chosen=chosenModel();
       const selected=value(),saved=data.selection;
-      const unchanged=['provider','model','serviceTier','reasoningEffort'].every(k=>(selected[k]??null)===(saved[k]??null));
+      const unchanged=['provider','model','serviceTier','reasoningEffort'].every(k=>(selected[k]??null)===(saved[k]??null))&&(!reserves||JSON.stringify(fallbacks)===JSON.stringify(data.fallbacks));
       save.disabled=!data.canManage||pending||unchanged||!chosen||(!model.value&&inherits?false:!chosen.speeds.some(s=>s.id===speed.value)||(reasoning.value&&!(chosen.reasoningEfforts||[]).some(e=>e.id===reasoning.value)));
+      if(reserves)renderReserves();
+    }
+    function renderReserves(){
+      reserves.replaceChildren(element('strong',t("Резервные модели")),element('p',t("При исчерпании лимита — следующая по порядку. Когда лимит вернётся — снова основная. Ключи API оплачиваются отдельно."),'hint'));
+      fallbacks.forEach((entry,i)=>{
+        const line=element('div','','model-fallback-row'), m=lookup(ref(entry));
+        line.append(element('span',(i+1)+'. '+(m?title(m):entry.model)));
+        for(const [label,symbol,disabled,change] of [[t("Выше"),'↑',i===0,()=>{[fallbacks[i-1],fallbacks[i]]=[fallbacks[i],fallbacks[i-1]];}],[t("Ниже"),'↓',i===fallbacks.length-1,()=>{[fallbacks[i+1],fallbacks[i]]=[fallbacks[i],fallbacks[i+1]];}],[t("Удалить резерв"),'−',false,()=>fallbacks.splice(i,1)]]){
+          const button=element('button',symbol,'secondary');button.type='button';button.setAttribute('aria-label',label+' '+(i+1));button.disabled=disabled||pending||!data.canManage;button.onclick=()=>{change();status.textContent='';update();};line.append(button);
+        }
+        reserves.append(line);
+      });
+      const add=element('select','','field');add.setAttribute('aria-label',t("Добавить резерв"));add.id='add-model-fallback';
+      const placeholder=element('option',t("Добавить резерв"));placeholder.value='';add.append(placeholder);
+      for(const m of data.models.filter(m=>modelRef(m)!==modelRef(chosenModel()||{})&&!fallbacks.some(f=>ref(f)===modelRef(m)))){const o=element('option',title(m));o.value=modelRef(m);add.append(o);}
+      add.disabled=pending||!data.canManage||add.options.length===1;
+      add.onchange=()=>{const m=lookup(add.value);if(m){fallbacks.push({provider:m.provider||'chatgpt',model:m.id,serviceTier:'default'});status.textContent='';update();}};
+      reserves.append(add);
     }
     function speeds(preferred,preserve=false){
       const chosen=chosenModel();speed.replaceChildren();
@@ -655,7 +677,7 @@ async function openModelSettings(agent, deviceId, conversationId) {
       speedLabel.hidden=(chosen?.speeds||[]).length<=1&&speed.value==='default';update();
     }
     speeds(data.selection.serviceTier||data.defaults.serviceTier,true);model.disabled=!data.canManage;
-    model.onchange=()=>{status.textContent='';speeds(!model.value&&inherits?data.defaults.serviceTier:speed.value);};speed.onchange=reasoning.onchange=()=>{status.textContent='';update();};
+    model.onchange=()=>{status.textContent='';fallbacks=fallbacks.filter(m=>ref(m)!==modelRef(chosenModel()||{}));speeds(!model.value&&inherits?data.defaults.serviceTier:speed.value);};speed.onchange=reasoning.onchange=()=>{status.textContent='';update();};
   }catch(e){status.textContent='';page.report(e);action(page,t("Повторить"),()=>openModelSettings(agent,deviceId,conversationId));}
 }
 

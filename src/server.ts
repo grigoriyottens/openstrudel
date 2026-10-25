@@ -1,4 +1,4 @@
-import { automaticProvider, checkModelSelection, parseModelSelection, readModelSelection, readConversationModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, saveConversationModelSelection } from "./model-settings.js";
+import { automaticProvider, checkModelSelection, parseModelSelection, readModelSelection, readConversationModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, saveConversationModelSelection, parseModelFallbacks, readModelFallbacks } from "./model-settings.js";
 import { connectProvider, disconnectProvider, providerInfo, providerSummaries } from "./providers.js";
 import { deleteEmployee } from "./employee-delete.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -286,14 +286,17 @@ export class HttpApi {
         const models = (await engine.models(url.searchParams.get("refresh") === "true")).filter(model => !conversationId || !context.startsWith("group-") || providerInfo(model.provider ?? "chatgpt")?.engine !== "acp");
         const automatic = automaticProvider(this.store);
         if (request.method === "POST") {
-          const selection = parseModelSelection(await this.body(request),Boolean(agent));
+          const input = await this.body(request), selection = parseModelSelection(input,Boolean(agent));
+          if (input.fallbacks !== undefined && agent) throw new HomeError('Порядок резервов задаётся в настройках устройства.');
+          const fallbacks = input.fallbacks === undefined ? undefined : parseModelFallbacks(input.fallbacks,selection.model ? selection : {...selection,provider:automatic,model:recommendedModel(models.filter(m=>m.provider === automatic)).id},this.store,models);
           if (agent) assertAgentWritable(this.store,agent);
           // A chat inherits its employee; an employee inherits the device.
           checkModelSelection(this.store,agent && !selection.model ? resolveModelSelection(this.store,conversationId ? agent : undefined,models) : selection,models);
           if (conversationId) saveConversationModelSelection(this.store,conversationId,selection);
           else saveModelSelection(this.store,selection,agent);
+          if (fallbacks) this.store.setSetting('models.fallbacks',JSON.stringify(fallbacks));
         }
-        this.send(response,200,{models,providers:providerSummaries(this.store).filter(p=>p.connected),recommended:{...recommendedModel(models.filter(m=>m.provider === automatic)),provider:automatic},
+        this.send(response,200,{models,fallbacks:readModelFallbacks(this.store),providers:providerSummaries(this.store).filter(p=>p.connected),recommended:{...recommendedModel(models.filter(m=>m.provider === automatic)),provider:automatic},
           selection:conversationId ? readConversationModelSelection(this.store,conversationId) : readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,conversationId ? agent : undefined,models),effective:resolveModelSelection(this.store,agent,models,conversationId),canManage:canManageAccount}); return;
       }
       if (path === "/v1/settings/speech" && ["GET", "POST"].includes(request.method ?? "")) {
@@ -429,7 +432,7 @@ export class HttpApi {
         this.send(response,200,{timezone:ownerTimezone(this.store),configured:Boolean(this.store.getSetting('owner.timezone'))}); return;
       }
       if (request.method === "GET" && path === "/health") {
-        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, speechVersion: 1, diagnosticsVersion: 1, conversationModelsVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, ownerInvitesVersion: 1, subscriptionsVersion: 1, telegramPrivateChoiceVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
+        this.send(response, 200, { ok: true, service: "openstrudel", platform: process.platform, arch: process.arch, time: new Date().toISOString(), telegram: this.telegram.status(), employeeTimelineVersion: 1, turnControlVersion: 1, speechVersion: 1, diagnosticsVersion: 1, modelFallbacksVersion: 1, conversationModelsVersion: 1, queueControlVersion: 1, agentArchiveVersion: 1, agentArchiveEncryption: true, employeeTransferVersion: 1, agentAppearanceVersion: 1, deviceLogoutVersion: 1, employeeRenameKeepsInstructions: 1, deviceRenameVersion: 1, colleagueInvitesVersion: 1, ownerInvitesVersion: 1, subscriptionsVersion: 1, telegramPrivateChoiceVersion: 1, providers: 1, homeProtocol: 1, homeId: this.home.state.id, primaryId: this.home.state.primaryId, nodeId: this.home.state.nodeId, hostingOrigin: hostingOrigin(process.env.OPENSTRUDEL_HOSTING_ORIGIN) });
         return;
       }
       if (request.method === "GET" && path === "/v1/integrations") {

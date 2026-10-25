@@ -263,3 +263,25 @@ it('validates reasoning against the chosen model and persists independent employ
   expect(resolveModelSelection(store,e.id).reasoningEffort).toBe('low');
  } finally {store.close();}
 });
+
+it('saves an ordered device reserve, validates atomically, and preserves it for older clients', async()=>{
+ const {OpenStrudelRuntime}=await import('../src/runtime.js');
+ const {providerModels,providerInfo}=await import('../src/providers.js');
+ const runtime=new OpenStrudelRuntime({dbPath:':memory:',startTelegram:false,apiToken:'owner',engine:{models:async()=>[...catalog,...providerModels(providerInfo('xai')!)],run:async()=>({threadId:'t',response:'OK',events:[]})}});
+ runtime.store.setSetting('providers.xai.key','xai-key');
+ const addr=await runtime.api.listen('127.0.0.1',0);
+ const call=(body?:any,path='/v1/settings/models')=>fetch(`http://127.0.0.1:${addr.port}${path}`,{method:body?'POST':'GET',headers:{'content-type':'application/json',authorization:'Bearer owner'},body:body&&JSON.stringify(body)});
+ const first={provider:'chatgpt',model:'m1',serviceTier:'default'}, reserve={provider:'xai',model:'grok-4.7',serviceTier:'default'};
+ try {
+  let response=await call({...first,fallbacks:[reserve]});expect(response.status).toBe(200);
+  expect((await response.json()).fallbacks).toEqual([reserve]);
+  response=await call({...first,model:'m2',fallbacks:[{...reserve,model:'missing'}]});expect(response.status).toBe(409);
+  expect((await (await call()).json()).selection.model).toBe('m1');
+  expect((await call({...first,fallbacks:[reserve,reserve]})).status).toBe(400);
+  expect((await call({...first,fallbacks:[first]})).status).toBe(400);
+  expect((await call({...first,fallbacks:[reserve]},'/v1/settings/models?agentId=main')).status).toBe(400);
+  await call({...first,model:'m2'});
+  expect((await (await call()).json()).fallbacks).toEqual([reserve]);
+  await call({...first,fallbacks:[]});expect((await (await call()).json()).fallbacks).toEqual([]);
+ }finally{await runtime.stop();}
+});

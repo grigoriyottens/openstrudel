@@ -103,6 +103,7 @@ export class OpenStrudelRuntime {
       } catch(error) { this.store.db.exec("ROLLBACK"); throw error; }
     }
     if (this.startTelegram) await this.telegram.start();
+    if (this.engine instanceof AccountEngines) this.accounts.startQuotaChecks();
     this.scheduler.start();
     this.started = true;
     return { host: address.address, port: address.port };
@@ -115,6 +116,7 @@ export class OpenStrudelRuntime {
       this.setup = undefined;
     }
     this.scheduler.stop();
+    await this.accounts.stopQuotaChecks();
     this.telegram.stop();
     await this.messages.close();
     await this.scheduler.idle();

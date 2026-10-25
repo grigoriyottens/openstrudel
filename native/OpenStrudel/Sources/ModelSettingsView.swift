@@ -14,6 +14,7 @@ struct ModelSettingsView: View {
     @State private var choice: ModelRef?
     @State private var speed = "default"
     @State private var reasoning = ""
+    @State private var fallbacks: [ModelSelection] = []
     @State private var loading = true
     @State private var saving = false
     @State private var error: (any Error)?
@@ -26,7 +27,7 @@ struct ModelSettingsView: View {
         return settings.model(ref) ?? (settings.recommended?.ref == ref ? settings.recommended : nil)
     }
     private var selection: ModelSelection { ModelSelection(provider: choice?.provider, model: choice?.model, serviceTier: choice == nil && inherits ? nil : speed, reasoningEffort: choice == nil && inherits || reasoning.isEmpty ? nil : reasoning) }
-    private var changed: Bool { selection != settings?.selection }
+    private var changed: Bool { selection != settings?.selection || !inherits && fallbacks != (settings?.fallbacks ?? []) }
     /// One speed needs no choice; an unavailable saved speed stays visible so it can be changed.
     private var showsSpeed: Bool {
         guard let selected else { return false }
@@ -85,6 +86,7 @@ struct ModelSettingsView: View {
                     }
                     .accessibilityIdentifier("modelSpeed").disabled((choice == nil && inherits) || saving || !settings.canManage)
                 }
+                if !inherits && settings.fallbacks != nil { reserves(settings) }
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         if choice == nil && !inherits, let recommended = settings.recommended {
@@ -127,6 +129,7 @@ struct ModelSettingsView: View {
             saved = false
             if value == nil && inherits { speed = settings.defaults.serviceTier ?? "default"; reasoning = settings.defaults.reasoningEffort ?? "" }
             else {
+                fallbacks.removeAll { $0.ref == selected?.ref }
                 if selected?.speeds.contains(where: { $0.id == speed }) != true { speed = "default" }
                 if selected?.reasoningEfforts?.contains(where: { $0.id == reasoning }) != true { reasoning = "" }
             }
@@ -135,8 +138,36 @@ struct ModelSettingsView: View {
     private func options(_ models: [ModelChoice]) -> some View {
         ForEach(models, id: \.ref) { Text($0.name).tag(Optional($0.ref)) }
     }
+    @ViewBuilder private func reserves(_ settings: ModelSettings) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L("Резервные модели")).font(AppTypography.meta)
+            Text(L("При исчерпании лимита — следующая по порядку. Когда лимит вернётся — снова основная. Ключи API оплачиваются отдельно."))
+                .font(AppTypography.meta).foregroundStyle(AppTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(fallbacks.indices, id: \.self) { index in
+                HStack(spacing: 10) {
+                    Text("\(index + 1).").foregroundStyle(AppTheme.secondaryText)
+                    Text(settings.model(fallbacks[index].ref).map(settings.title) ?? fallbacks[index].model ?? "")
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button { fallbacks.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }
+                        .accessibilityLabel(L("Выше")).disabled(index == 0)
+                    Button { fallbacks.swapAt(index, index + 1) } label: { Image(systemName: "arrow.down") }
+                        .accessibilityLabel(L("Ниже")).disabled(index == fallbacks.count - 1)
+                    Button { fallbacks.remove(at: index) } label: { Image(systemName: "minus.circle") }
+                        .accessibilityLabel(L("Удалить резерв"))
+                }.buttonStyle(.borderless)
+            }
+            Menu(L("Добавить резерв")) {
+                ForEach(settings.models.filter { model in model.ref != selected?.ref && !fallbacks.contains { $0.ref == model.ref } }, id: \.ref) { model in
+                    Button(settings.title(model)) { fallbacks.append(ModelSelection(provider: model.provider, model: model.id, serviceTier: "default")) }
+                }
+            }.accessibilityIdentifier("addModelFallback")
+        }.disabled(saving || !settings.canManage)
+    }
     private func apply(_ value: ModelSettings) {
         settings = value; choice = value.selection.ref
+        fallbacks = value.fallbacks ?? []
         speed = value.selection.serviceTier ?? value.defaults.serviceTier ?? "default"
         reasoning = value.selection.reasoningEffort ?? (value.selection.model == nil && inherits ? value.defaults.reasoningEffort : nil) ?? ""
         onLoad(value)
@@ -152,8 +183,11 @@ struct ModelSettingsView: View {
         saving = true; error = nil
         defer { saving = false }
         do {
-            let payload: [String: Any] = ["provider": selection.provider as Any? ?? NSNull(), "model": selection.model as Any? ?? NSNull(),
+            var payload: [String: Any] = ["provider": selection.provider as Any? ?? NSNull(), "model": selection.model as Any? ?? NSNull(),
                                           "serviceTier": selection.serviceTier as Any? ?? NSNull(), "reasoningEffort": selection.reasoningEffort as Any? ?? NSNull()]
+            if !inherits && settings?.fallbacks != nil {
+                payload["fallbacks"] = fallbacks.map { ["provider": $0.provider as Any? ?? NSNull(), "model": $0.model as Any? ?? NSNull(), "serviceTier": $0.serviceTier ?? "default", "reasoningEffort": $0.reasoningEffort as Any? ?? NSNull()] }
+            }
             let result: ModelSettings = try await client.management(path, method: "POST", payload: payload)
             apply(result); saved = true
             // Another provider can open or close the chat's account gate.

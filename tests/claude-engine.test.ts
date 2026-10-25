@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CanUseTool, Options, query as sdkQuery, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeEngine } from "../src/claude.js";
-import { ProviderKeyError, providerInfo } from "../src/providers.js";
+import { ProviderIncident, ProviderKeyError, providerInfo } from "../src/providers.js";
 
 type Call = { prompt: SDKUserMessage[]; options: Options; interrupted: Promise<void> };
 let root: string;
@@ -33,6 +33,16 @@ function fake(script: (call: Call) => AsyncGenerator<any> | any[] = () => [init(
 const interrupted = { type: "result", subtype: "error_during_execution", is_error: true, errors: ["Request was aborted."], session_id: "s-1" };
 const aborted = (call: Call) => new Promise(resolve => call.options.abortController!.signal.aborted ? resolve(null) : call.options.abortController!.signal.addEventListener("abort", resolve));
 const engine = (id: string, query: typeof sdkQuery, key: string | null = "sk-test-key") => new ClaudeEngine({ root, provider: providerInfo(id)!, key: () => key, query });
+
+it("interrupts the CLI's quota retry so the reserve can start immediately", async () => {
+  const sdk = fake(async function* (call) {
+    yield init();
+    yield { type:"system",subtype:"api_retry",error_status:429,error:"rate_limit",session_id:"s-1" };
+    await call.interrupted;
+    yield interrupted;
+  });
+  await expect(engine("anthropic",sdk.query).run("Hi")).rejects.toMatchObject({reason:"limits:anthropic"});
+}, 1_000);
 const allow = (call: Call, name: string, input: Record<string, unknown>, extra: Partial<Parameters<CanUseTool>[2]> = {}) =>
   call.options.canUseTool!(name, input, { signal: new AbortController().signal, ...extra } as Parameters<CanUseTool>[2]);
 
@@ -215,7 +225,8 @@ it("fails fast on a rejected key and keeps other provider errors short", async (
     { type: "result", subtype: "success", is_error: true, api_error_status: 403, result: quota, session_id: "s-1" }]);
   const limited = await engine("kimicode", exhausted.query).run("Hi").catch(e => e);
   expect(limited).not.toBeInstanceOf(ProviderKeyError);
-  expect(limited.message).toBe("Kimi Code не завершил ответ: " + quota);
+  expect(limited).toBeInstanceOf(ProviderIncident);
+  expect(limited.reason).toBe("limits:kimicode");
   expect(exhausted.calls[0]!.options.env).toMatchObject({ ANTHROPIC_API_KEY: "sk-test-key", ANTHROPIC_BASE_URL: "https://api.kimi.ai/coding", ANTHROPIC_DEFAULT_HAIKU_MODEL: "k3-256k" });
   expect(exhausted.calls[0]!.options.env).not.toHaveProperty("API_TIMEOUT_MS");
   expect(dump.calls[0]!.options.env).toMatchObject({ API_TIMEOUT_MS: "3000000" });

@@ -270,3 +270,16 @@ it("shares account status over the real paired transport but only lets the owner
     expect((await remote(port, "/v1/account/login/login", phone)).status).toBe(403);
   } finally { await runtime.stop(); }
 });
+
+it('uses known exhausted quota immediately while a separate refresh detects an early reset', async()=>{
+ savedAuth();store.setSetting('codex.auth.mode','managed');
+ wire.request.mockResolvedValueOnce({ordinaryUsageAllowed:false,rateLimitsByLimitId:{}});
+ await account.usage();
+ let finish!:(value:unknown)=>void;
+ wire.request.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+ const refresh=account.usage(true);
+ expect((await account.usage(false,true)).ordinaryUsageAllowed).toBe(false);
+ await vi.waitFor(()=>expect(finish).toBeTypeOf('function'));
+ finish({ordinaryUsageAllowed:true,rateLimitsByLimitId:{}});await refresh;
+ expect((await account.usage(false,true)).ordinaryUsageAllowed).toBe(true);
+});

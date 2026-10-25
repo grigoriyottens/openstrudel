@@ -9,6 +9,22 @@ export type ReasoningChoice = { id: string; name: string; description: string };
 export type ModelChoice = { id: string; name: string; description: string; isDefault: boolean; defaultReasoningEffort?: string; reasoningEfforts?: ReasoningChoice[]; speeds: Array<{ id: string; name: string; description: string }>; provider?: string };
 const defaultsKey = 'models.defaults';
 
+/** The device's ordered reserves. A fixed employee or chat model opts out. */
+export const readModelFallbacks = (store: Store): ModelSelection[] => JSON.parse(store.getSetting('models.fallbacks') ?? '[]');
+export function followsDeviceModel(store: Store, agent?: string, conversationId?: string): boolean {
+  return !(conversationId && readConversationModelSelection(store,conversationId).model) && !(agent && readModelSelection(store,agent).model);
+}
+export function parseModelFallbacks(value: unknown, primary: ModelSelection, store: Store, models: ModelChoice[]): ModelSelection[] {
+  if (!Array.isArray(value) || value.length > 12) throw new HomeError('Выберите резервные модели.');
+  const seen = new Set([JSON.stringify([primary.provider,primary.model])]);
+  return value.map(item => {
+    if (!item || typeof item !== 'object' || !item.model) throw new HomeError('Выберите резервную модель.');
+    const selection = parseModelSelection(item,false), ref = JSON.stringify([selection.provider,selection.model]);
+    if (seen.has(ref)) throw new HomeError('Модели в очереди не должны повторяться.');
+    seen.add(ref); checkModelSelection(store,selection,models); return selection;
+  });
+}
+
 /** These are labels, not capabilities. Only levels reported by the agent are offered. */
 export function reasoningChoices(rows: Array<{ reasoningEffort: string; description?: string }>): ReasoningChoice[] {
   const names: Record<string,string> = {none:'Без обдумывания',minimal:'Минимальное',low:'Низкое',medium:'Среднее',high:'Высокое',xhigh:'Очень высокое',max:'Максимальное',ultra:'Ультра'};
@@ -60,7 +76,7 @@ export function saveConversationModelSelection(store: Store, conversationId: str
   store.db.prepare('UPDATE conversations SET model_selection=?,updated_at=? WHERE id=?')
     .run(value.model ? JSON.stringify(value) : null,new Date().toISOString(),conversationId);
 }
-/** ChatGPT when signed in, otherwise the key or subscription connected first, so adding one changes nothing. Quota never switches it. */
+/** ChatGPT when signed in, otherwise the first connection. Reserves do not change this preference. */
 export function automaticProvider(store: Store): string {
   return chatgptSignedIn(store) ? 'chatgpt' : providerInfos().filter(p => providerConnected(store,p.id)).sort((a,b) => providerConnectedAt(store,a.id) - providerConnectedAt(store,b.id))[0]?.id ?? 'chatgpt';
 }
