@@ -6,7 +6,7 @@ import { basename, dirname, resolve, sep } from "node:path";
 import { z } from "zod";
 import { INSTRUCTIONS } from "./codex.js";
 import { readToml, inheritedIntegrations } from "./extensions.js";
-import { ProviderKeyError, exhaustedPlan, providerNotConnected, providerModels, type ProviderInfo } from "./providers.js";
+import { ProviderIncident, ProviderKeyError, exhaustedPlan, providerFailure, providerNotConnected, providerModels, type ProviderInfo } from "./providers.js";
 import { modelReasoning, reasoningChoices, type ModelChoice } from "./model-settings.js";
 import { contextPattern } from "./scopes.js";
 import { telegramMcpConfig } from "./telegram-mcp.js";
@@ -107,6 +107,7 @@ export class ClaudeEngine implements CodexEngine {
     const mode = options.approvalMode ?? "ask", group = options.groupContext === true && options.scheduled !== true, ask = options.onRequest;
     const sandboxed = mode === "approve_all" || group;
     const canUseTool: CanUseTool = async (name, input, { mcpServer }) => {
+      options.onEvent?.({type:"turn.progress",payload:{}});
       const allow: PermissionResult = { behavior: "allow", updatedInput: input }, deny = (message: string): PermissionResult => ({ behavior: "deny", message });
       const path = input.file_path ?? input.notebook_path, edit = edits.includes(name);
       const accepted = (answer: any) => answer?.decision === "accept" ? allow : deny("The user declined this action.");
@@ -154,7 +155,7 @@ export class ClaudeEngine implements CodexEngine {
     writeFileSync(mcpConfig, JSON.stringify({ mcpServers: Object.fromEntries(Object.entries(servers).map(([name, { toolLists: _, ...s }]) => [name, s])) }), { mode: 0o600, flag: "wx" });
     const abort = new AbortController();
     this.running.add(abort);
-    let threadId = "", response: string | undefined, rejected = false, stopped = false, failure: string | undefined, stop = () => {};
+    let threadId = "", response: string | undefined, rejected = false, stopped = false, failure: string | undefined, limit: ProviderIncident | undefined, stop = () => {};
     try {
       const turn = (this.options.query ?? sdkQuery)({ prompt: (async function* () { yield message; })(), options: {
         cwd, env, model, ...(effort ? {effort} : {}), abortController: abort, resume: options.threadId ?? undefined, permissionMode: "default", canUseTool, mcpServers: sdkServers, extraArgs: { "mcp-config": mcpConfig },
@@ -175,8 +176,14 @@ export class ClaudeEngine implements CodexEngine {
       if (options.signal?.aborted) stop();
       for await (const m of turn) {
         if (!threadId && "session_id" in m && m.session_id) { threadId = m.session_id; options.onEvent?.({ type: "thread.started", payload: { threadId } }); }
+        if (m.type === "assistant" && !m.error) options.onEvent?.({type:"turn.progress",payload:{}});
+        // A quota refusal belongs to the Home's reserve policy, not the CLI's minute-long retry loop.
+        const refusal = m.type === "system" && m.subtype === "api_retry" ? `${m.error_status} ${m.error}`
+          : m.type === "assistant" && m.error ? JSON.stringify(m.message.content) : undefined;
+        const incident = refusal && providerFailure(provider,new Error(refusal));
+        if (incident instanceof ProviderIncident && incident.reason.startsWith("limits:")) { limit=incident;stop(); }
         // The CLI retries a rejected key for minutes; the owner has to replace it instead.
-        if (m.type === "system" && m.subtype === "api_retry" && (m.error_status === 401 || m.error_status === 403)
+        else if (m.type === "system" && m.subtype === "api_retry" && (m.error_status === 401 || m.error_status === 403)
           || m.type === "assistant" && m.error === "authentication_failed" && !exhaustedPlan(JSON.stringify(m.message.content))) { rejected = true; stop(); }
         if (m.type === "result") {
           if (m.subtype === "success" && !m.is_error) response = m.result;
@@ -186,6 +193,7 @@ export class ClaudeEngine implements CodexEngine {
       }
     } catch (error) { if (!stopped && !abort.signal.aborted) failure = error instanceof Error ? error.message : String(error); }
     finally { options.signal?.removeEventListener("abort", stop); this.running.delete(abort); rmSync(mcpConfig, { force: true }); }
+    if (limit) throw limit;
     if (rejected) throw new ProviderKeyError(provider);
     if (response === undefined && (stopped || abort.signal.aborted)) throw new Error("Ответ остановлен");
     if (failure !== undefined) throw new Error(`${provider.name} не завершил ответ: ${failure.replace(/^API Error:\s*/, "").split("\n")[0]!.slice(0, 300)}`);

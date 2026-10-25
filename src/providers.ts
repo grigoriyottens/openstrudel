@@ -197,6 +197,8 @@ export function disconnectProvider(store: Store, id: string): number {
   }
   for (const agent of [undefined, "main"]) if (readModelSelection(store, agent).provider === id) { saveModelSelection(store, { provider: null, model: null, serviceTier: agent ? null : "default" }, agent); reset++; }
   for (const name of ["key", "connectedAt", "signedIn", "models"]) store.deleteSetting(`providers.${id}.${name}`);
+  const reserves = JSON.parse(store.getSetting("models.fallbacks") ?? "[]");
+  if (reserves.some((m: {provider:string})=>m.provider===id)) store.setSetting("models.fallbacks",JSON.stringify(reserves.filter((m: {provider:string})=>m.provider!==id)));
   forgetThreads(store, id);
   return reset;
 }

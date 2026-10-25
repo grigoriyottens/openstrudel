@@ -91,6 +91,10 @@ import XCTest
         XCTAssertTrue(model.waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["Рекомендует OpenAI"].exists, app.debugDescription)
         capture("automatic-account-model", app)
+        let reserve = app.buttons["addModelFallback"]
+        reveal(reserve, in: app); reserve.tap()
+        app.buttons["Claude Opus 5.5 · Anthropic"].tap()
+        reveal(model, in: app)
         model.tap(); app.buttons["GPT-6 Astra"].tap()
         speed.tap()
         XCTAssertFalse(app.buttons["Ultra Fast"].exists)
@@ -101,6 +105,8 @@ import XCTest
         app.navigationBars["Настройки"].buttons["Готово"].tap()
         XCTAssertTrue(model.waitForNonExistence(timeout: 10), app.debugDescription)
         let state = try await read(fixture + "/state")
+        let fallbacks = try XCTUnwrap(state["fallbacks"] as? [[String:Any]])
+        XCTAssertEqual(fallbacks.map { $0["model"] as? String }, ["claude-opus-5-5"])
         let profile = try XCTUnwrap(state["profile"] as? [String:Any])
         app.buttons["employee-" + (try XCTUnwrap(profile["id"] as? String))].tap()
         let details = app.buttons["openEmployeeDetails"]
@@ -117,7 +123,7 @@ import XCTest
         capture("employee-model-override", app)
         var updated = try await read(fixture + "/state")
         XCTAssertEqual((updated["profile"] as? [String:Any])?["serviceTier"] as? String, "ultra")
-        model.tap(); app.buttons["Как на устройстве · GPT-6 Astra"].tap()
+        model.tap(); app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Как на устройстве · GPT-6 Astra")).firstMatch.tap()
         app.buttons["saveModelSelection"].tap()
         XCTAssertTrue(app.staticTexts["Сохранено. Применится со следующего поручения."].waitForExistence(timeout: 10))
         XCTAssertFalse(speed.isEnabled)

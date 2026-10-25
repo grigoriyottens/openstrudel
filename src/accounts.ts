@@ -6,7 +6,7 @@ import { ScopedCodexEngine } from "./scopes.js";
 import type { Store } from "./store.js";
 import type { CodexEngine } from "./types.js";
 import { AccountUnavailableError, isOpenAIAuthenticationError } from "./account-errors.js";
-import { resolveModelSelection } from "./model-settings.js";
+import { resolveModelSelection, followsDeviceModel, readModelFallbacks } from "./model-settings.js";
 import { ProviderIncident, providerConnected, providerFailure, providerInfo, providerInfos, providerKey, providerModels, providerNotConnected, subscriptionModels, type ProviderInfo } from "./providers.js";
 import { ClaudeEngine } from "./claude.js";
 import { AcpEngine, AcpSessionLost, ProviderSignInError } from "./acp.js";
@@ -21,6 +21,16 @@ export class Accounts {
   onChange?: (id: string) => void;
   /** The Grok subscription's sign-in on this device. */
   readonly grok: GrokLogin;
+  private quotaTimer?: ReturnType<typeof setInterval>;
+  private quotaReading?: Promise<unknown>;
+  /** Refresh read-only account state independently of queued work, including purchased resets. */
+  startQuotaChecks() {
+    if (this.quotaTimer) return;
+    const refresh = () => { if (!this.quotaReading) this.quotaReading = Promise.allSettled(this.entries().filter(a => !this.changing.has(a.id) && !this.get(a.id).loginPending)
+      .flatMap(a => [this.get(a.id).read(true), this.get(a.id).usage(true)])).finally(()=>{this.quotaReading=undefined;}); };
+    this.quotaTimer = setInterval(refresh, 30_000); this.quotaTimer.unref(); refresh();
+  }
+  async stopQuotaChecks() { clearInterval(this.quotaTimer); this.quotaTimer=undefined; await this.quotaReading; }
   constructor(readonly store: Store, readonly root: string, readonly primary: CodexAccountService) { this.services.set("default", primary); this.watch("default", primary); this.grok = new GrokLogin(store, root); }
   private watch(id: string, service: CodexAccountService) {
     service.setOnChange(identityChanged => {
@@ -150,20 +160,21 @@ export class Accounts {
     if (ids !== null && (!Array.isArray(ids) || ids.length < 1 || ids.length > 12 || ids.some(id => typeof id !== "string" || !this.entries().some(a => a.id === id)) || new Set(ids).size !== ids.length)) throw new HomeError("Выберите подключённые аккаунты.");
     this.store.setSetting("agent.accounts." + agent, JSON.stringify(ids));
   }
-  async choose(agent: string, checkQuota = true): Promise<{ id: string; service: CodexAccountService }> {
+  async choose(agent: string, checkQuota = true, excluded: ReadonlySet<string> = new Set()): Promise<{ id: string; service: CodexAccountService }> {
     await this.consolidate();
     const ids = this.policy(agent) ?? this.entries().map(a => a.id);
     let limited = false, signingIn = false;
     for (const id of ids) {
       const service = this.get(id);
+      if (excluded.has(id)) { limited = true; continue; }
       if (this.changing.has(id) || service.loginPending) { signingIn = true; continue; }
-      const account = await service.read();
+      const usage = checkQuota ? await service.usage(false,true) : null;
+      if (usage?.ordinaryUsageAllowed === false) { limited = true; continue; }
+      const account = await service.read(false,true);
       if (account.issue === "unavailable") throw new AccountUnavailableError("unavailable");
       if (!account.connected) continue;
-      const usage = checkQuota ? await service.usage() : null;
       // Only backend permission can block ordinary usage. A local clock and a
       // percentage are not proof of quota recovery or permission to spend credits.
-      if (usage?.ordinaryUsageAllowed === false) { limited = true; continue; }
       if (this.changing.has(id) || service.loginPending) { signingIn = true; continue; }
       return { id, service };
     }
@@ -183,7 +194,7 @@ export class Accounts {
     await this.withIdle(id, () => this.get(id).logout()); this.get(id).close(); this.services.delete(id);
     this.store.setSetting("codex.accounts", JSON.stringify(this.entries().filter(a => a.id !== id)));
   }
-  close() { for (const service of this.services.values()) service.close(); this.grok.close(); }
+  close() { clearInterval(this.quotaTimer); for (const service of this.services.values()) service.close(); this.grok.close(); }
 }
 
 /** Account choice is fixed for a whole turn. No retry of a partly executed turn.
@@ -192,6 +203,7 @@ export class AccountEngines implements CodexEngine {
   private engines = new Map<string, ScopedCodexEngine>();
   private providers = new Map<string, { engine: CodexEngine; scope: ScopedCodexEngine }>();
   private directoryEngine?: CodexEngine;
+  private limited = new Map<string, { until: number; failedAt: number; failures: number; error: unknown }>();
   get connectionNotice() { return this.directoryEngine?.connectionNotice; }
   constructor(private readonly accounts: Accounts) { accounts.onChange = id => { this.engines.get(id)?.close(); this.engines.delete(id); }; }
   private scoped(id: string, service: CodexAccountService): ScopedCodexEngine {
@@ -228,13 +240,14 @@ export class AccountEngines implements CodexEngine {
       if (provider !== "chatgpt") return this.keyed(provider).scope.forContext(context);
       const selected = await selection(); return this.scoped(selected.id, selected.service).forContext(context);
     };
-    const run: CodexEngine["run"] = async (input, options) => {
+    const attempt = async (input: string, options: NonNullable<Parameters<CodexEngine["run"]>[1]>, excluded: ReadonlySet<string>, chosen: (id: string) => void): ReturnType<CodexEngine["run"]> => {
         const provider = options?.provider ?? providerForChat();
         const keyed = provider !== "chatgpt" ? this.keyed(provider) : undefined;
         // A subscription serves its subscriber: the owner's own chats and schedules, never colleagues or groups.
         if (keyed?.info.engine === "acp" && (options?.groupContext || !(options?.byOwner || options?.scheduled)))
           throw new ProviderIncident(`Подписка ${keyed.info.name} работает только в чатах владельца. Для коллег и групп выберите модель xAI с ключом API.`, 409, "policy:" + provider);
-        const { id, service } = keyed ? { id: "provider-" + provider, service: undefined } : await this.accounts.choose(agent);
+        const { id, service } = keyed ? { id: "provider-" + provider, service: undefined } : await this.accounts.choose(agent, true, excluded);
+        chosen(id);
         if (service) locked = { id, service };
         // A sender without access gets a thread of their own, which never had the listed people's services or memories.
         const route = options?.access === false ? id + ".guest" : id;
@@ -248,8 +261,9 @@ export class AccountEngines implements CodexEngine {
           const threadId = saved ?? (route === "default" && (!owner || owner === route) ? options?.threadId : undefined);
           // A new thread is seeded with the chat. A thread resumed after another route answered gets the turns made since its last one.
           const checkpointKey = options?.conversationId ? `codex.threadCheckpoint.${route}.${options.conversationId}` : undefined;
-          const checkpoint = threadId && owner && owner !== route && checkpointKey ? this.accounts.store.getSetting(checkpointKey) : null;
-          const recent = options?.conversationId && (!threadId || checkpoint) ? this.accounts.store.listMessages(options.conversationId, 200) : [];
+          const resumedElsewhere = threadId && owner && owner !== route;
+          const checkpoint = resumedElsewhere && checkpointKey ? this.accounts.store.getSetting(checkpointKey) : null;
+          const recent = options?.conversationId && (!threadId || resumedElsewhere) ? this.accounts.store.listMessages(options.conversationId, 200) : [];
           const history = recent.slice(recent.findIndex(m => m.id === checkpoint) + 1).filter(m => m.kind !== "notice" && m.status === "completed" && (!checkpoint || m.replyToId !== checkpoint))
             // Who said what, and the files: a group's seed otherwise reads as one anonymous user with empty lines.
             .map(m => `${m.direction === "inbound" ? m.author || "User" : "Assistant"}: ${[m.text, m.attachments?.length ? `[${m.attachments.map(f => f.name).join(", ")}]` : ""].filter(Boolean).join(" ")}`).join("\n");
@@ -273,13 +287,68 @@ export class AccountEngines implements CodexEngine {
           // Grok no longer knows the saved session, or Claude failed before writing it:
           // a new one starts, seeded with the chat, once.
           const lost = error instanceof AcpSessionLost || keyed?.info.engine === "claude" && /No conversation found with session ID/.test(error instanceof Error ? error.message : "");
-          if (lost && saved) { this.accounts.store.deleteSetting(threadKey!); return run(input, options); }
+          if (lost && saved) { this.accounts.store.deleteSetting(threadKey!); return await attempt(input, options, excluded, chosen); }
           // A lost sign-in needs the owner; Accounts offers it again.
           if (error instanceof ProviderSignInError) this.accounts.store.deleteSetting(`providers.${provider}.signedIn`);
           if (keyed) throw providerFailure(keyed.info, error);
           if (isOpenAIAuthenticationError(error)) service!.invalidate(); throw error;
         }
         finally { locked = undefined; runningEngine = undefined; runningProvider = undefined; this.accounts.active.set(id, Math.max(0, (this.accounts.active.get(id) ?? 1) - 1)); }
+    };
+    const run: CodexEngine["run"] = async (input, options = {}) => {
+      const store = this.accounts.store, chat = options.conversationId ?? conversationId;
+      const preferred = options.provider ? { provider:options.provider,model:options.model ?? null,serviceTier:options.serviceTier ?? null,reasoningEffort:options.reasoningEffort }
+        : resolveModelSelection(store,agent,undefined,chat);
+      const candidates = [preferred, ...followsDeviceModel(store,agent,chat) ? readModelFallbacks(store) : []];
+      const tried = new Set<string>();
+      let last: unknown = new AccountUnavailableError("limits");
+      for (const [index, candidate] of candidates.entries()) {
+        options.signal?.throwIfAborted();
+        const provider = candidate.provider!, ref = JSON.stringify([provider,candidate.model]);
+        if (tried.has(ref)) continue; tried.add(ref);
+        // A personal subscription in the reserve cannot serve a group or a colleague.
+        if (index && providerInfo(provider)?.engine === "acp" && (options.groupContext || !(options.byOwner || options.scheduled))) continue;
+        const excluded = new Set<string>();
+        for (const [id, limit] of this.limited) {
+          const usage = !id.startsWith("provider-") && this.accounts.entries().some(a=>a.id===id) ? this.accounts.get(id).usageSnapshot() : undefined;
+          if (usage?.ordinaryUsageAllowed === true && Date.parse(usage.checkedAt) > limit.failedAt || limit.until <= Date.now()) continue;
+          excluded.add(id); last = limit.error;
+        }
+        if (excluded.has("provider-" + provider)) continue;
+        while (true) {
+          options.signal?.throwIfAborted();
+          let id: string | undefined, progressed = false;
+          try {
+            const result = await attempt(input, { ...options,...candidate,reasoningEffort:candidate.reasoningEffort ?? null,
+              tools:options.tools && {...options.tools,call:(name,args)=>{progressed=true;return options.tools!.call(name,args);}},
+              onRequest:options.onRequest && ((method,params)=>{progressed=true;return options.onRequest!(method,params);}),
+              onEvent:event=>{
+                if (event.type === "turn.progress" || /^item\/(?:started|completed)$/.test(event.type) && (event.payload as any)?.item?.type !== "userMessage"
+                  || /^item\/.+\/delta$/.test(event.type)) progressed=true;
+                options.onEvent?.(event);
+              },
+            }, excluded, selected=>{id=selected;});
+            if (id) this.limited.delete(id);
+            return result;
+          } catch (error) {
+            const quota = error instanceof AccountUnavailableError ? error.reason === "limits"
+              : error instanceof ProviderIncident ? error.reason.startsWith("limits:")
+              : /\b429\b|rate[_ -]?limit|quota|usage limit|too many requests/i.test(error instanceof Error ? error.message : "");
+            if (!quota) throw error;
+            if (id) {
+              const failures = (this.limited.get(id)?.failures ?? 0) + 1;
+              this.limited.set(id,{failedAt:Date.now(),until:Date.now()+Math.min(60_000*5**(failures-1),900_000),failures,error});
+              if (provider === "chatgpt") this.accounts.get(id).recordQuotaLimit();
+            }
+            if (progressed || options.signal?.aborted) throw error;
+            last = error;
+            if (provider !== "chatgpt" || !id) break;
+            excluded.add(id);
+          }
+        }
+      }
+      if (candidates.length > 1) throw new ProviderIncident("Лимиты основной и резервных моделей исчерпаны. Запрос сохранён; повторите его после восстановления лимита.",429,"limits:all");
+      throw last;
     };
     return {
       steer: async (input, options) => runningEngine?.steer?.(input, options) ?? false,

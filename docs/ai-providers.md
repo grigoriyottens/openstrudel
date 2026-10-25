@@ -19,8 +19,8 @@ First run keeps one primary action, "Sign in to OpenAI" (ChatGPT). A quiet secon
 
 Not built, on purpose:
 - Claude.ai subscription sign-in. Anthropic does not allow third-party products to offer Claude.ai login (code.claude.com/docs/en/legal-and-compliance). Subscriptions that are allowed are described under [Subscriptions](#subscriptions).
-- Silent fallback to another provider or model. Auth and billing errors stop the turn and say which provider failed and what to do.
-- Base URL fields, fallback chains, per-key toggles, an "Auto" router across providers.
+- Unconfigured fallback to another provider or model. Auth errors stop the turn and name the provider; quota fallback uses only the owner's saved reserves.
+- Base URL fields, per-key toggles, an "Auto" router across providers.
 
 ## Engines
 
@@ -61,7 +61,13 @@ A subscription is used only the way its vendor documents for other apps. OpenStr
 
 ## Behaviour
 
-**Resolution.** Employee selection → device default → automatic. Automatic is the ChatGPT recommended model when a ChatGPT account is signed in, otherwise the recommended model of the first connected key provider in registry order. Quota limits never switch providers.
+**Resolution.** Chat selection → employee selection → device default → automatic. Automatic is the ChatGPT recommended model when a ChatGPT account is signed in, otherwise the recommended model of the first connected key provider in registry order.
+
+**Quota reserves (2026-10-25).** Device settings keep the preferred model and an ordered list of reserves in `models.fallbacks`. Employees and chats inheriting the device use that list; an explicit employee or chat model stays fixed. ChatGPT uses its accounts in the existing priority order before advancing to the next model. Only a quota refusal before execution starts can retry the same request. Tool calls, approvals, assistant output or other execution progress prevent replay; cancellation, authentication and network errors never trigger it. Route changes preserve each provider's native thread and seed completed conversation history.
+
+ChatGPT account and quota reads run in parallel every 30 seconds, independently of requests. Cached exhausted accounts are skipped immediately. A later authoritative positive quota read restores priority, including a purchased reset; local percentages and estimated reset times never grant permission to spend credits. An unavailable check preserves a known negative result. Other providers have no shared read-only quota API: a quota refusal backs off for 1, then 5, then 15 minutes, using the next real request as the probe. Successful work clears that backoff. These refusal timers live for the Home process lifetime. Claude's quota retries are interrupted immediately so the reserve can start.
+
+When no route can complete the request, its failure stays on the original message and a concise notice goes to the main OpenStrudel conversation and the paired owner's bot DM. Duplicate suppression is per chat and cause until recovery; an earlier test in another chat cannot hide a real incident. Raw provider errors and credentials never enter notices.
 
 **Routes and threads.** Each key provider is an account-shaped route `provider-<id>` with its own engine processes: `.data/providers/<id>/contexts/<ctx>` for Codex, `.data/providers/<id>/claude/<ctx>` for Claude. A turn is fixed to one route. A conversation keeps one native thread per route, exactly like ChatGPT accounts today: `codex.thread.<route>.<conversation>` and `codex.threadOwner.<conversation>`. A new route starts a fresh native thread seeded with up to 200 completed messages as quoted context. Resuming a native thread on another provider is never done, because Codex replays the previous provider's encrypted reasoning. Switching back resumes that route's own thread, and the turns made on other providers since that thread last ran are added to the next input as quoted context. Changing the model within one provider stays on the same thread. Replacing a key with a different key, or removing it, drops that route's native threads, because a key from another organization cannot resume them. Claude providers also get a Codex home at `.data/providers/<id>/contexts/<ctx>`, which is used only to manage Services.
 

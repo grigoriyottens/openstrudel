@@ -10302,5 +10302,47 @@
     "es": "Se guardan los estados de conexión y los resultados de transcripción. El modo detallado añade el inicio y la duración de las solicitudes. No se registran claves, grabaciones ni conversaciones.",
     "he": "מצבי החיבור ותוצאות התמלול נשמרים. במצב מפורט נרשמים גם תחילת פעולות וזמני בקשות. מפתחות, הקלטות ותוכן שיחות אינם נרשמים.",
     "ru": "Сохраняем состояния связи и результаты распознавания. Подробный режим добавляет начало операций и время запросов. Ключи, записи и текст разговоров в журнал не попадают."
+  },
+  "Резервные модели": {
+    "en": "Fallback models",
+    "fr": "Modèles de secours",
+    "es": "Modelos de reserva",
+    "he": "מודלים חלופיים",
+    "ru": "Резервные модели"
+  },
+  "Добавить резерв": {
+    "en": "Add fallback",
+    "fr": "Ajouter un secours",
+    "es": "Añadir reserva",
+    "he": "הוספת חלופה",
+    "ru": "Добавить резерв"
+  },
+  "Удалить резерв": {
+    "en": "Remove fallback",
+    "fr": "Retirer le secours",
+    "es": "Eliminar reserva",
+    "he": "הסרת חלופה",
+    "ru": "Удалить резерв"
+  },
+  "Выше": {
+    "en": "Move up",
+    "fr": "Monter",
+    "es": "Subir",
+    "he": "העברה למעלה",
+    "ru": "Выше"
+  },
+  "Ниже": {
+    "en": "Move down",
+    "fr": "Descendre",
+    "es": "Bajar",
+    "he": "העברה למטה",
+    "ru": "Ниже"
+  },
+  "При исчерпании лимита — следующая по порядку. Когда лимит вернётся — снова основная. Ключи API оплачиваются отдельно.": {
+    "en": "When a limit runs out, use the next model. Return to the preferred model when it recovers. API keys are billed separately.",
+    "fr": "Quand une limite est atteinte, passer au modèle suivant. Revenir au modèle principal dès son rétablissement. Les clés API sont facturées séparément.",
+    "es": "Al agotar un límite, se usa el siguiente modelo. Se vuelve al principal cuando se restablece. Las claves API se facturan por separado.",
+    "he": "כשהמכסה נגמרת, עוברים למודל הבא. חוזרים למודל הראשי כשהמכסה מתחדשת. השימוש במפתחות API מחויב בנפרד.",
+    "ru": "При исчерпании лимита — следующая по порядку. Когда лимит вернётся — снова основная. Ключи API оплачиваются отдельно."
   }
 }

@@ -624,7 +624,9 @@ export class TelegramAdapter {
       } else {
         // Groups and other people never see technical failures. The owner gets
         // one private notice per incident instead; the request stays in Home.
-        await this.messages.reportProblem(conversation.id, `telegram:${update.update_id}`, errorProblem(error));
+        // MessageService already records and reports execution failures with their precise cause.
+        if (!received || !this.store.findMessageByExternal("telegram",externalId)?.error)
+          await this.messages.reportProblem(conversation.id, `telegram:${update.update_id}`, errorProblem(error));
       }
     } finally {
       stopTyping();

@@ -42,7 +42,8 @@ it("runs the pinned agent in the workspace with a private home, the employee too
     const threadId = result.threadId;
     expect(threadId).toMatch(/^s-new#[0-9a-f]{16}$/);
     expect(result).toEqual({ threadId, response: "Ответ: 42", events: [] });
-    expect(events).toEqual([{ type: "thread.started", payload: { threadId } }]);
+    expect(events[0]).toEqual({ type: "thread.started", payload: { threadId } });
+    expect(events.slice(1)).toEqual(Array(4).fill({type:"turn.progress",payload:{}}));
     const workspace = realpathSync(join(root, ".data/workspace/work")), home = realpathSync(join(root, ".data/providers/grok/home"));
     const [{ start }] = g.messages();
     expect(start.args).toEqual(["--sandbox", "openstrudel", "agent", "stdio"]);

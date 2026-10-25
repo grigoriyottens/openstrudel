@@ -74,7 +74,11 @@ export class CodexAccountService {
     return this.store.getSetting(this.modeKey) === "managed" ? this.codexHome : undefined;
   }
 
-  read(force = false): Promise<OpenAIAccount> {
+  read(force = false, background = false): Promise<OpenAIAccount> {
+    if (!force && background && this.cached) {
+      if (this.cached.until <= Date.now()) void this.read(true);
+      return Promise.resolve(this.cached.account);
+    }
     if (!force && this.cached && this.cached.until > Date.now()) return Promise.resolve(this.cached.account);
     if (!this.reading) {
       const generation = this.generation;
@@ -147,11 +151,22 @@ export class CodexAccountService {
   }
 
   /** Read-only usage. Never consumes reset credits or changes billing. */
-  usage(force = false): Promise<AccountUsage> {
+  usageSnapshot(): AccountUsage | undefined { return this.usageCache?.value; }
+
+  /** An explicit quota refusal is authoritative until a later usage read confirms recovery. */
+  recordQuotaLimit() {
+    this.usageCache = { until: Date.now() + 30_000, value: { ...this.usageCache?.value, checkedAt: new Date().toISOString(), ordinaryUsageAllowed: false, windows: this.usageCache?.value.windows ?? [] } };
+  }
+
+  usage(force = false, background = false): Promise<AccountUsage> {
+    if (!force && background && this.usageCache) {
+      if (this.usageCache.until <= Date.now()) void this.usage(true);
+      return Promise.resolve(this.usageCache.value);
+    }
     if (!force && this.usageCache && this.usageCache.until > Date.now()) return Promise.resolve(this.usageCache.value);
     if (!this.executionHome()) return Promise.resolve({ checkedAt: new Date().toISOString(), ordinaryUsageAllowed: null, windows: [], unavailable: true });
     if (!this.usageReading) {
-    const generation = this.generation;
+    const generation = this.generation, checkedAt = new Date().toISOString();
     const reading = this.withAuthRpc(async rpc => {
       const result = await rpc.request("account/rateLimits/read", { excludeResetCreditDetails: false });
       const windows: AccountUsage["windows"] = [];
@@ -176,9 +191,11 @@ export class CodexAccountService {
         .map((credit: any) => credit.expiresAt as number);
       const resetCredits = Number.isSafeInteger(resets?.availableCount) && resets.availableCount >= 0
         ? { availableCount: resets.availableCount as number, nextExpiresAt: expiries.length ? Math.min(...expiries) : null } : null;
-      return { checkedAt: new Date().toISOString(), ordinaryUsageAllowed: typeof result.ordinaryUsageAllowed === "boolean" ? result.ordinaryUsageAllowed : null, windows, credits, resetCredits };
+      return { checkedAt, ordinaryUsageAllowed: typeof result.ordinaryUsageAllowed === "boolean" ? result.ordinaryUsageAllowed : null, windows, credits, resetCredits };
     }).catch(() => ({ checkedAt: new Date().toISOString(), ordinaryUsageAllowed: null, windows: [], unavailable: true })).then(value => {
       if (generation !== this.generation) return this.usage();
+      // An unavailable check cannot erase a known limit; an older in-flight read cannot undo a newer refusal.
+      if (this.usageCache && (this.usageCache.value.checkedAt > checkedAt || value.ordinaryUsageAllowed == null && this.usageCache.value.ordinaryUsageAllowed === false)) return this.usageCache.value;
       this.usageCache = { until: Date.now() + 30_000, value }; return value;
     }).finally(() => { if (this.usageReading === reading) this.usageReading = undefined; });
     this.usageReading = reading;
