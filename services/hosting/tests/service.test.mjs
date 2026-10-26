@@ -17,6 +17,10 @@ async function ready(s,id) {for(let i=0;i<5;i++)await s.tick();return s.db.get('
 
 test('accounts, validation, durable sessions, expiry, logout',t=>{const {s,advance}=fixture(t);assert.throws(()=>s.register('bad','tiny','x'));const a=account(s);assert.throws(()=>account(s),/существует/);assert.throws(()=>s.login(a.user.email,'wrong','x'),/не совпадают/);const b=s.login(a.user.email,'correct horse battery staple!','y');assert.equal(s.auth(b.token).user_id,a.user.id);assert.notEqual(s.db.get('SELECT password FROM users').password,'correct horse battery staple!');advance(DAY+1);assert.throws(()=>s.auth(a.token),/истекла/);});
 test('login rate limits survive a process restart',t=>{const {s,c}=fixture(t);const a=account(s);for(let i=0;i<10;i++)assert.throws(()=>s.login(a.user.email,'wrong','p'));s.db.close();const restarted=new Service(c);assert.throws(()=>restarted.login(a.user.email,'correct horse battery staple!','p'),/много/);restarted.db.close();});
+test('spaces around an email do not open a new login allowance',t=>{const {s}=fixture(t);const a=account(s);
+  for(let i=0;i<10;i++)assert.throws(()=>s.login(' '.repeat(i)+a.user.email,'wrong','ip-'+i),/не совпадают/);
+  assert.throws(()=>s.login('  '+a.user.email.toUpperCase()+'  ','correct horse battery staple!','ip-new'),e=>e.status===429);
+});
 test('order idempotency rejects changed input and deduplicates repeated clicks',t=>{const {s}=fixture(t),a=account(s);const b={purpose:'agent',idempotency_key:'same-key-123',consent:true,amount:1};const o=s.order(a.user.id,b);assert.equal(o.amount,1200);assert.equal(s.order(a.user.id,b).id,o.id);assert.equal(order(s,a).id,o.id);assert.throws(()=>s.order(a.user.id,{...b,purpose:'site'}),/другими/);assert.throws(()=>s.order(a.user.id,{...b,consent:false}),/Подтвердите/);});
 test('CLI price consent is checked before an order exists',t=>{
   const {s}=fixture(t),a=account(s),catalog=s.catalog();assert.equal(catalog.client_quote_version,1);
