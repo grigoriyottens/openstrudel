@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bounded production launch or checkout closure. Does not make provider purchases.
-set -euo pipefail
+set -Eeuo pipefail
 umask 077
 [[ $(id -u) == 0 ]] || exit 1
 action=${1:?Usage: promote.sh open|close}
@@ -12,7 +12,9 @@ release=$(cat "$root/current-release")
 [[ "$release" =~ ^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$ ]] || exit 2
 bundle="$root/releases/$release/deploy"
 image=$(docker image inspect "wai-vds:$release" --format '{{.Id}}')
-test "$(docker inspect wai-vds --format '{{.State.Health.Status}} {{.Config.Image}} {{.Image}} {{index .Config.Labels "com.docker.compose.project"}} {{index .Config.Labels "com.docker.compose.service"}}')" = "healthy wai-vds:$release $image wai-vds wai-vds"
+state=$(docker inspect wai-vds --format '{{.State.Health.Status}} {{.Config.Image}} {{.Image}} {{index .Config.Labels "com.docker.compose.project"}} {{index .Config.Labels "com.docker.compose.service"}}')
+# Closing must work during an outage; opening needs a healthy service.
+if [[ "$action" == open ]]; then test "$state" = "healthy wai-vds:$release $image wai-vds wai-vds"; else test "${state#* }" = "wai-vds:$release $image wai-vds wai-vds"; fi
 test "$(stat -c '%u:%a' "$root/runtime.env")" = 0:600
 export WAI_VDS_RELEASE="$release"
 compose=(docker compose -p wai-vds --project-directory "$root" --env-file /dev/null -f "$bundle/compose.yml")
@@ -71,12 +73,18 @@ PY
 previous_action=$(python3 -c 'import sys;print("open" if "WAI_ALLOW_PAID_VM=I_APPROVE_KAMATERA_SPEND" in open(sys.argv[1]).read().splitlines() else "close")' "$backup/runtime.env")
 rollback() {
   code=$?;trap - ERR INT TERM;set +e
+  [[ "$code" != 0 ]] || code=1
+  if [[ "$action" == close ]]; then
+    # Closing fails closed: never restore the open settings because a check failed.
+    if grep -qx 'WAI_ALLOW_PAID_VM=I_APPROVE_KAMATERA_SPEND' "$root/runtime.env"; then state=open; else state=closed; fi
+    echo "Closing could not be verified; checkout is $state in runtime.env; exit $code; backup: $backup" >&2
+    exit "$code"
+  fi
   restored=0
   install -m 600 "$backup/runtime.env" "$root/runtime.rollback.env" && mv -f "$root/runtime.rollback.env" "$root/runtime.env" || restored=1
   "${compose[@]}" up -d --no-deps --no-build --pull never wai-vds || restored=1
   health "$previous_action" || restored=1
   echo "Promotion failed; rollback health exit: $restored; backup: $backup" >&2
-  [[ "$code" != 0 ]] || code=1
   exit "$code"
 }
 trap rollback ERR INT TERM
