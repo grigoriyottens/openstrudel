@@ -1,8 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
-const wire = vi.hoisted(() => ({ request: vi.fn(), notify: undefined as undefined | ((message: any) => void) }));
+const wire = vi.hoisted(() => ({ request: vi.fn(), notify: undefined as undefined | ((message: any) => void), serverRequest: undefined as undefined | ((method: string, params: any) => Promise<unknown>) }));
 vi.mock("../src/rpc.js", () => ({ CodexRpc: class {
   closed = false;
-  constructor(_home: unknown, notify: (message: any) => void) { wire.notify = notify; }
+  constructor(_home: unknown, notify: (message: any) => void, serverRequest?: (method: string, params: any) => Promise<unknown>) { wire.notify = notify; wire.serverRequest = serverRequest; }
   initialize = async () => undefined;
   request = wire.request;
   close() { this.closed = true; }
@@ -34,6 +34,53 @@ it("releases a silent turn after native tool exhaustion without timing out ordin
   await rejected;
   expect(engine.busy).toBe(false);
   expect(wire.request.mock.calls.some(([m])=>m==="turn/interrupt")).toBe(true);
+  engine.close();
+});
+
+it("does not release a turn while its own dynamic tool is still working",async()=>{
+  vi.useFakeTimers();
+  wire.request.mockImplementation(async(method:string)=>{
+    if(method==="configRequirements/read")return {requirements:null};
+    if(method==="model/list")return {data:[]};
+    if(method==="thread/start")return {thread:{id:"tool-thread"}};
+    if(method==="turn/start")return {turn:{id:"t"}};
+    if(method==="turn/interrupt")return {};
+    throw Error(method);
+  });
+  let finishTool!:(value:unknown)=>void;
+  const engine=new CodexEngineAdapter();
+  const pending=engine.run("connect the calendar",{tools:{definitions:[],call:()=>new Promise(resolve=>finishTool=resolve)}});
+  await vi.waitFor(()=>expect(wire.request.mock.calls.some(([m])=>m==="turn/start")).toBe(true));
+  // An earlier command failed, then the employee waits for the owner to finish signing in.
+  wire.notify?.({method:"item/completed",params:{threadId:"tool-thread",item:{type:"commandExecution",exitCode:127,aggregatedOutput:"sh: jq: command not found"}}});
+  const call=wire.serverRequest!("item/tool/call",{threadId:"tool-thread",tool:"connect_service",arguments:{}});
+  await vi.advanceTimersByTimeAsync(600_000);
+  expect(wire.request.mock.calls.some(([m])=>m==="turn/interrupt")).toBe(false);
+  finishTool({connected:true});
+  await expect(call).resolves.toMatchObject({success:true});
+  wire.notify?.({method:"turn/completed",params:{threadId:"tool-thread",turn:{status:"completed"}}});
+  await expect(pending).resolves.toMatchObject({threadId:"tool-thread"});
+  engine.close();
+});
+
+it("still releases a silent turn after its dynamic tool returns",async()=>{
+  vi.useFakeTimers();
+  wire.request.mockImplementation(async(method:string)=>{
+    if(method==="configRequirements/read")return {requirements:null};
+    if(method==="model/list")return {data:[]};
+    if(method==="thread/start")return {thread:{id:"quiet-thread"}};
+    if(method==="turn/start")return {turn:{id:"t"}};
+    if(method==="turn/interrupt")return {};
+    throw Error(method);
+  });
+  const engine=new CodexEngineAdapter();
+  const pending=engine.run("read a file",{tools:{definitions:[],call:async()=>({ok:true})}});
+  const rejected=expect(pending).rejects.toThrow("ресурсов");
+  await vi.waitFor(()=>expect(wire.request.mock.calls.some(([m])=>m==="turn/start")).toBe(true));
+  wire.notify?.({method:"item/completed",params:{threadId:"quiet-thread",item:{type:"commandExecution",exitCode:1,aggregatedOutput:"Resource temporarily unavailable"}}});
+  await wire.serverRequest!("item/tool/call",{threadId:"quiet-thread",tool:"read_chat_history",arguments:{}});
+  await vi.advanceTimersByTimeAsync(120_000);
+  await rejected;
   engine.close();
 });
 
