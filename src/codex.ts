@@ -14,6 +14,8 @@ import { codexProviderId, providerModels, type ProviderInfo } from "./providers.
 import { serviceOAuth } from "./service-oauth.js";
 import type { ServiceSignIn } from "./types.js";
 
+const instructionDigest = (text: string) => createHash("sha256").update(text).digest("hex");
+
 type CatalogApp = { id: string; name: string; installUrl: string | null };
 /** Directory refresh attempts per Home, shared by its runtimes. */
 const catalogTries = new Map<string, number>();
@@ -177,7 +179,8 @@ export class CodexEngineAdapter implements CodexEngine {
     const instructions = INSTRUCTIONS + (employees.length ? "\n\n" + routingInstructions : "") + (options.profile ? `\n\nCurrent employee SOUL (authoritative):\n${options.profile}` : "");
     if (!threadId || this.loaded.get(threadId) !== instructions || this.loadedConfig.get(threadId) !== configKey) {
       const resuming = Boolean(threadId);
-      const identityChanged = this.loaded.get(threadId) !== instructions;
+      const applied = threadId ? this.appliedIdentity(threadId) : undefined;
+      const identityChanged = applied !== instructionDigest(instructions);
       // A loaded Codex thread keeps its MCP transport on resume. Unload that
       // thread before changing verified identity, otherwise the previous
       // participant's headers remain in use. Other threads are unaffected.
@@ -194,6 +197,7 @@ export class CodexEngineAdapter implements CodexEngine {
       if (resuming && identityChanged) await rpc.request("thread/inject_items", { threadId, items: [{ type: "message", role: "developer", content: [{ type: "input_text", text: "The owner has updated this employee. The following replaces earlier OpenStrudel identity and app instructions; keep the conversation history.\n\n" + instructions }] }] });
       this.loaded.set(threadId, instructions);
       this.loadedConfig.set(threadId,configKey);
+      if (identityChanged) this.rememberIdentity(threadId, instructions);
     }
     if (this.active.has(threadId)) throw new Error("В этом чате ещё идёт ответ. Сообщение нужно поставить в очередь.");
     options.onEvent?.({ type: "thread.started", payload: { threadId } });
@@ -239,6 +243,25 @@ export class CodexEngineAdapter implements CodexEngine {
       else if (p.turn.status === "interrupted") active.reject(new Error("Ответ остановлен"));
       else active.resolve({ threadId: p.threadId, response: active.response || "Готово.", events: active.events });
     }
+  }
+
+  /** Instructions last applied to a thread, kept beside its Codex history so a
+   * restart, crash or idle eviction does not inject an unchanged SOUL again. */
+  private identityPath(): string | undefined { return this.codexHome ? resolve(this.codexHome, "openstrudel-identities.json") : undefined; }
+  private savedIdentities(): Record<string, string> {
+    const path = this.identityPath();
+    try { return path ? JSON.parse(readFileSync(path, "utf8")) : {}; } catch { return {}; }
+  }
+  private appliedIdentity(threadId: string): string | undefined {
+    const loaded = this.loaded.get(threadId);
+    return loaded !== undefined ? instructionDigest(loaded) : this.savedIdentities()[threadId];
+  }
+  private rememberIdentity(threadId: string, instructions: string): void {
+    const path = this.identityPath();
+    if (!path) return;
+    const saved = this.savedIdentities();
+    delete saved[threadId]; saved[threadId] = instructionDigest(instructions);
+    atomicText(path, JSON.stringify(Object.fromEntries(Object.entries(saved).slice(-1000))));
   }
 
   /** No total-turn deadline: long work is allowed. Recover only a native runtime

@@ -200,6 +200,33 @@ it("sends identity as developer instructions and refreshes it when the employee 
   } finally { engine.close(); }
 });
 
+it("does not repeat an unchanged SOUL after a restart or eviction, and still applies a changed one",async()=>{
+  wire.request.mockImplementation(async (method: string, params: any) => {
+    if (method === "thread/start" || method === "thread/resume") return {thread:{id:"cold-thread"}};
+    if (method === "thread/inject_items") return {};
+    if (method === "turn/start") { queueMicrotask(() => wire.notify?.({method:"turn/completed",params:{threadId:params.threadId,turn:{status:"completed"}}})); return {turn:{id:"turn"}}; }
+    if (method === "configRequirements/read") return {requirements:null};
+    if (method === "model/list") return {data:[]};
+    throw new Error(method);
+  });
+  const home=mkdtempSync(join(tmpdir(),"codex-identity-"));
+  const injected=()=>wire.request.mock.calls.filter(([method])=>method==="thread/inject_items").length;
+  try {
+    let engine=new CodexEngineAdapter({codexHome:home});
+    const first=await engine.run("Йо!",{profile:"Отвечай только НЕТ."});engine.close();
+    engine=new CodexEngineAdapter({codexHome:home});
+    await engine.run("Привет!",{threadId:first.threadId,profile:"Отвечай только НЕТ."});engine.close();
+    expect(wire.request.mock.calls.filter(([method])=>method==="thread/resume")).toHaveLength(1);
+    expect(injected()).toBe(0);
+    engine=new CodexEngineAdapter({codexHome:home});
+    await engine.run("Привет!",{threadId:first.threadId,profile:"Новая роль: редактор."});engine.close();
+    expect(injected()).toBe(1);
+    engine=new CodexEngineAdapter({codexHome:home});
+    await engine.run("Ещё",{threadId:first.threadId,profile:"Новая роль: редактор."});engine.close();
+    expect(injected()).toBe(1);
+  } finally { rmSync(home,{recursive:true,force:true}); }
+});
+
 it("refreshes native MCP credentials for each group delivery without rewriting personality",async()=>{
  wire.request.mockImplementation(async(method:string,params:any)=>{
   if(method==="thread/start" || method==="thread/resume")return {thread:{id:"group"}};
