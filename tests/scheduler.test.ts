@@ -223,6 +223,35 @@ describe("durable cron", () => {
     expect(delivered).toEqual([]);
     expect(scheduler.runs(c.id)[0]?.status).toBe("completed");
   });
+  it("keeps an edition in the app when its Telegram chat is paused", async () => {
+    const { store, scheduler } = setup();
+    const c = store.primaryConversation();
+    store.linkTelegramChat({ chatId: "-100", title: "Group", allowedSenders: ["456"] });
+    store.db.prepare("UPDATE telegram_chats SET conversation_id=? WHERE chat_id=?").run(c.id, "-100");
+    const delivered: string[] = [];
+    scheduler.deliver = async chatId => { delivered.push(chatId); };
+    scheduler.save({ conversationId: c.id, name: "Bound", prompt: "Digest", cron: "0 6 * * *", timezone: "Europe/Moscow", delivery: "bound" }, new Date("2026-09-26T10:00:00Z"));
+    scheduler.save({ conversationId: c.id, name: "Direct", prompt: "Digest", cron: "0 6 * * *", timezone: "Europe/Moscow", delivery: "telegram", telegramChatId: "-100" }, new Date("2026-09-26T10:00:00Z"));
+    store.setSetting("telegram.paused.-100", "true");
+    await scheduler.tick(new Date("2026-09-27T04:00:00Z")); await scheduler.idle();
+    expect(delivered).toEqual([]);
+    expect(scheduler.runs(c.id).map(run => run.status)).toEqual(["completed", "completed"]);
+    expect(store.listMessages(c.id).filter(m => m.direction === "outbound").map(m => m.text)).toEqual(["Digest", "Digest"]);
+    store.deleteSetting("telegram.paused.-100");
+    await scheduler.tick(new Date("2026-09-28T04:00:00Z")); await scheduler.idle();
+    expect(delivered).toEqual(["-100", "-100"]);
+  });
+  it("runs an edition whose local time falls in the spring-forward hour", async () => {
+    const { store, scheduler, calls } = setup();
+    const c = store.primaryConversation();
+    scheduler.save({ conversationId: c.id, name: "Night", prompt: "Digest", cron: "30 2 * * *", timezone: "Europe/Berlin" }, new Date("2026-03-27T12:00:00Z"));
+    await scheduler.tick(new Date("2026-03-28T02:00:00Z")); await scheduler.idle();
+    expect(calls()).toBe(1);
+    // 29 March 2026: Berlin skips 02:00-03:00; the edition is due at 01:30 UTC.
+    await scheduler.tick(new Date("2026-03-29T02:00:00Z")); await scheduler.idle();
+    expect(calls()).toBe(2);
+    expect(scheduler.runs(c.id).map(run => run.scheduledFor)).toContain("2026-03-29T01:30:00.000Z");
+  });
   it("does not confirm a pause for a missing schedule or a different chat", () => {
     const { store, scheduler } = setup();
     const c = store.primaryConversation();
