@@ -153,10 +153,12 @@ export class CodexEngineAdapter implements CodexEngine {
     const guest = options.access === false ? { "features.apps": false, ...(settings as any).memories ? { "memories.use_memories": false } : {},
       ...Object.fromEntries(Object.keys((settings as any).mcp_servers ?? {}).filter(name => !this.options.telegramServers?.[name]).map(name => [`mcp_servers.${name}.enabled`, false])),
       ...Object.fromEntries(Object.entries(this.extensionManager?.pluginServers() ?? {}).flatMap(([plugin, servers]) => servers.map(server => [`plugins.${plugin}.mcp_servers.${server}.enabled`, false]))) } : {};
-    const employees = (options.employees ?? []).map(employee => ({...employee,
-      model:employee.model ?? recommended.id,
-      reasoningEffort:modelReasoning(employee.model ? models.find(m=>m.id === employee.model) : recommended,employee.reasoningEffort),
-    }));
+    // A helper's outdated level must not fail another conversation; the helper uses its model's default.
+    const employees = (options.employees ?? []).map(employee => {
+      const choice = employee.model ? models.find(m=>m.id === employee.model) : recommended;
+      const level = choice?.reasoningEfforts?.some(e => e.id === employee.reasoningEffort) ? employee.reasoningEffort : null;
+      return {...employee, model:employee.model ?? recommended.id, reasoningEffort:modelReasoning(choice,level)};
+    });
     const roles = options.employees === undefined ? {} : this.codexHome && employees.length
       ? employeeRoleConfig(this.codexHome, employees, options.profile)
       : { "features.multi_agent": false };

@@ -84,6 +84,20 @@ it("still releases a silent turn after its dynamic tool returns",async()=>{
   engine.close();
 });
 
+it("keeps chatting when a helper employee saved a reasoning level the account no longer offers",async()=>{
+  wire.request.mockImplementation(async(method:string,params:any)=>{
+    if(method==="configRequirements/read")return {requirements:null};
+    if(method==="model/list")return {data:[{model:"recommended",isDefault:true,defaultReasoningEffort:"medium",supportedReasoningEfforts:[{reasoningEffort:"low"},{reasoningEffort:"medium"}]}]};
+    if(method==="thread/start")return {thread:{id:"helper-thread"}};
+    if(method==="turn/start"){queueMicrotask(()=>wire.notify?.({method:"turn/completed",params:{threadId:params.threadId,turn:{status:"completed"}}}));return {turn:{id:"turn"}};}
+    throw Error(method);
+  });
+  const engine=new CodexEngineAdapter();
+  const helper={id:"e1",name:"Old helper",instructions:"help",capabilities:[],model:"recommended",reasoningEffort:"xhigh",tokenLimit:null,createdAt:new Date().toISOString()};
+  try {await expect(engine.run("Main chat",{employees:[helper]})).resolves.toMatchObject({threadId:"helper-thread"});}
+  finally {engine.close();}
+});
+
 it("uses the account default and refreshes it without changing explicit choices",async()=>{
   let catalog:any[]=[{model:'recommended',isDefault:true,defaultReasoningEffort:'high'},{model:'explicit',defaultReasoningEffort:'low'}];
   wire.request.mockImplementation(async(method:string,params:any)=>{
