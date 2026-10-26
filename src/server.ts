@@ -624,6 +624,8 @@ export class HttpApi {
         if(request.method==="DELETE" && scheduleMatch[2]) {scheduler.remove(scheduleMatch[2],conversationId);this.send(response,200,{ok:true});return;}
         if(request.method==="POST") {
           const b=await this.body(request);
+          // Only the owner sends a schedule's results to another Telegram chat.
+          if(b.telegramChatId && !canManageAccount && this.store.getTelegramChat(String(b.telegramChatId))?.conversationId !== conversationId) throw new HomeError("Доставку в другой Telegram-чат настраивает владелец устройства.",403);
           const existing = b.id ? scheduler.list(conversationId).find(s => s.id === String(b.id)) : undefined;
           const schedule=scheduler.save({conversationId,id:b.id ? String(b.id):undefined,name:String(b.name ?? ""),prompt:String(b.prompt ?? ""),cron:String(b.cron ?? ""),timezone:String(b.timezone ?? ""),enabled:b.enabled!==false,telegramChatId:b.telegramChatId ? String(b.telegramChatId):null,delivery:b.delivery === "app" || b.delivery === "telegram" ? b.delivery : existing?.delivery,backupOf:existing?.backupOf});
           this.send(response,201,{schedule});return;

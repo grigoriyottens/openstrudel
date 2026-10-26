@@ -75,7 +75,8 @@ export function employeeTools(store: Store, engine: CodexEngine, interactions: I
       if (context.scheduled) throw new Error("A scheduled edition cannot create or modify schedules");
       const conversationId = owner && args.id != null ? context.scheduler!.list().find(s=>s.id === String(args.id))?.conversationId ?? context.conversationId : context.conversationId;
       if (name === "pause_schedule") { context.scheduler!.remove(String(args.id),conversationId); return { paused:true }; }
-      if (!owner && context.scope?.startsWith("group-") && args.telegramChatId != null && store.getTelegramChat(String(args.telegramChatId))?.conversationId !== context.conversationId) throw new Error("Из группы можно настроить доставку только в эту же группу.");
+      // Only the owner sends a schedule's results to another Telegram chat.
+      if (!owner && args.telegramChatId != null && store.getTelegramChat(String(args.telegramChatId))?.conversationId !== context.conversationId) throw new Error(context.scope?.startsWith("group-") ? "Из группы можно настроить доставку только в эту же группу." : "Доставку в другой Telegram-чат настраивает владелец устройства.");
       // A request made in Telegram comes back to that chat unless another connected chat is named.
       const existing = args.id == null ? undefined : context.scheduler!.list(conversationId).find(s=>s.id === String(args.id));
       const saved = context.scheduler!.save({ conversationId,id:args.id == null ? undefined : String(args.id),name:String(args.name ?? ""),prompt:String(args.prompt ?? ""),cron:String(args.cron ?? ""),timezone:scheduleTimezone(store,args.timezone,existing?.timezone),enabled:args.enabled !== false,telegramChatId:args.telegramChatId == null ? null : String(args.telegramChatId),
