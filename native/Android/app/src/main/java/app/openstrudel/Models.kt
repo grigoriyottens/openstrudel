@@ -22,6 +22,11 @@ fun json(vararg fields: Pair<String, Any?>) =
 
 fun encoded(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
+/** The send modes the Home accepts, as on iPhone; it rejects any other mode. */
+val sendModes = listOf("steer" to "Уточнить задачу", "queue" to "После ответа")
+
+fun serverSendMode(mode: String): String? = mode.takeIf { value -> sendModes.any { it.first == value } }
+
 /** The same strict invitation format used by the native Apple clients. */
 data class Invitation(
     val host: String,

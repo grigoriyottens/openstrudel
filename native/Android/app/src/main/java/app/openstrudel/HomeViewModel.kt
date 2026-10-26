@@ -658,7 +658,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         if (p.employee != "main") payload.put("profile", p.employee)
                         if (_state.value.homes[p.home]?.health?.optInt("turnControlVersion") == 1)
-                            payload.put("mode", p.mode)
+                            serverSendMode(p.mode)?.let { payload.put("mode", it) }
                         service.call("/v1/messages?async=true", "POST", payload, p.id).json
                     }
                     persist { s ->

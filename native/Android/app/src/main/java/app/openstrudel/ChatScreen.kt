@@ -623,23 +623,17 @@ private fun Composer(
                                 Icon(
                                     when (mode) {
                                         "queue" -> Icons.Rounded.PlaylistAdd
-                                        "interrupt" -> Icons.Rounded.RestartAlt
                                         else -> Icons.Rounded.SubdirectoryArrowRight
                                     },
                                     "Отправка: " +
                                         when (mode) {
                                             "queue" -> "После ответа"
-                                            "interrupt" -> "Начать заново"
                                             else -> "Уточнить задачу"
                                         },
                                 )
                             }
                             DropdownMenu(modeMenu, { modeMenu = false }) {
-                                listOf(
-                                        "steer" to "Уточнить задачу",
-                                        "queue" to "После ответа",
-                                        "interrupt" to "Начать заново",
-                                    )
+                                sendModes
                                     .forEach { (value, label) ->
                                         DropdownMenuItem(
                                             text = { Text(label) },
