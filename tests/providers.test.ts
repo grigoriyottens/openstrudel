@@ -225,6 +225,11 @@ it("serves providers per device with owner-only writes, a provider-aware catalog
     expect((await (await create({ name: "Writer", provider: "xai", model: "grok-4.7" })).json()).profile).toMatchObject({ provider: "xai", model: "grok-4.7" });
     expect((await (await create({ name: "Chat", model: "gpt-6-sol" })).json()).profile).toMatchObject({ provider: "chatgpt", model: "gpt-6-sol" });
 
+    // A turn running on the route keeps its key; the next turn would resume the old key's thread.
+    runtime.accounts.active.set("provider-xai", 1);
+    expect((await call("/v1/providers/xai", "PUT", { key: "xai-good" })).status).toBe(409);
+    expect((await call("/v1/providers/xai", "DELETE")).status).toBe(409);
+    runtime.accounts.active.set("provider-xai", 0);
     expect(await (await call("/v1/providers/xai", "DELETE")).json()).toEqual({ ok: true, reset: 2 });
     expect(runtime.store.getProfile(employee.id)).toMatchObject({ provider: null, model: null });
     expect((await (await call("/v1/account?agentId=" + employee.id)).json()).accountId).not.toBe("provider-xai");

@@ -325,6 +325,8 @@ export class HttpApi {
       if (providerAction && ["PUT", "DELETE"].includes(request.method ?? "")) {
         if (!canManageAccount) throw new HomeError("Подключать аккаунты может владелец устройства.", 403);
         const id = decodeURIComponent(providerAction[1]!);
+        // A running turn would write its old-key thread back after the reset.
+        this.accounts?.assertIdle("provider-" + id);
         if (request.method === "PUT") this.send(response, 200, { provider: await connectProvider(this.store, id, (await this.body(request)).key) });
         // A subscription signs out through its own CLI, which removes the token; forgetting it here would leave the token behind.
         else if (providerInfo(id)?.auth === "signin") throw new HomeError("Провайдер не найден.", 404);
