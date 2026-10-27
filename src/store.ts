@@ -133,6 +133,9 @@ export class Store {
       const profile = String(row.external_id).split("::employee::")[1];
       if (profile && this.getProfile(profile)) this.db.prepare("UPDATE conversations SET profile_id=? WHERE id=?").run(profile, String(row.id));
     }
+    // An employee's own app chat carries its current name. Earlier Homes renamed
+    // only the employee, so the chat kept the name it was created with.
+    this.db.exec("UPDATE conversations SET title=p.name FROM employee_profiles p WHERE conversations.channel='api' AND conversations.external_id='home::employee::'||p.id AND conversations.title IS NOT p.name");
     // Existing private links retain their owner. Legacy groups remain closed
     // until their allowed participants are explicitly provided.
     for (const chatId of jsonArray(this.getSetting("telegram.linked_chats"))) {
@@ -587,6 +590,8 @@ export class Store {
     if (named && named.id !== profileId) throw new Error("Сотрудник с таким именем уже есть");
     const appearance = input.appearance === undefined ? undefined : parseAppearance(input.appearance);
     this.db.prepare("UPDATE employee_profiles SET name = ?, instructions = ? WHERE id = ?").run(name, instructions, profileId);
+    // Its own app chat follows the name; Telegram chats keep the titles Telegram reports.
+    this.db.prepare("UPDATE conversations SET title=? WHERE channel='api' AND external_id=?").run(name, `home::employee::${profileId}`);
     if (input.purpose !== undefined) {
       this.db.prepare("UPDATE employee_profiles SET purpose=? WHERE id=?").run(input.purpose.trim(),profileId);
     }
