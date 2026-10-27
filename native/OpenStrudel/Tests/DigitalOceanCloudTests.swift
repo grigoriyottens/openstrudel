@@ -33,27 +33,43 @@ struct DigitalOceanCloudTests {
         let size = DigitalOceanSize(slug: "s-2vcpu-4gb", memory: 4096, vcpus: 2, disk: 80,
                                     priceMonthly: 24, priceHourly: 0.035714, regions: ["fra1", "ams3"], available: true)
         let regions = [DigitalOceanRegion(slug: "fra1", available: true), DigitalOceanRegion(slug: "ams3", available: true)]
-        let quote = try DigitalOceanQuote.make(sizes: [size], regions: regions, releaseSHA256: String(repeating: "a", count: 64))
+        let file = "OpenStrudel-Home-1.0-59.tar.gz"
+        let quote = try DigitalOceanQuote.make(sizes: [size], regions: regions, releaseSHA256: String(repeating: "a", count: 64), releaseFile: file)
         #expect(quote.monthlyPrice == 24)
         #expect(quote.region == "fra1")
         #expect(quote.size == "s-2vcpu-4gb")
-        #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [], regions: regions, releaseSHA256: quote.releaseSHA256) }
-        #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [size], regions: regions, releaseSHA256: "bad") }
+        #expect(quote.releaseFile == file)
+        #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [], regions: regions, releaseSHA256: quote.releaseSHA256, releaseFile: file) }
+        #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [size], regions: regions, releaseSHA256: "bad", releaseFile: file) }
+        for name in ["../" + file, "OpenStrudel-Home-1.0.tar.gz", file + "\n"] {
+            #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [size], regions: regions, releaseSHA256: quote.releaseSHA256, releaseFile: name) }
+        }
         var unavailable = size
         unavailable.available = false
-        #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [unavailable], regions: regions, releaseSHA256: quote.releaseSHA256) }
+        #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [unavailable], regions: regions, releaseSHA256: quote.releaseSHA256, releaseFile: file) }
         for price in [0.0, -1.0, Double.infinity, Double.nan] {
             var invalid = size; invalid.priceMonthly = price
-            #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [invalid], regions: regions, releaseSHA256: quote.releaseSHA256) }
+            #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [invalid], regions: regions, releaseSHA256: quote.releaseSHA256, releaseFile: file) }
         }
-        #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [size], regions: [], releaseSHA256: quote.releaseSHA256) }
+        #expect(throws: (any Error).self) { try DigitalOceanQuote.make(sizes: [size], regions: [], releaseSHA256: quote.releaseSHA256, releaseFile: file) }
     }
 
-    @Test func checksumMustIdentifyOneExactHomeArchive() throws {
-        let hash = String(repeating: "a", count: 64)
-        #expect(try DigitalOceanQuote.releaseHash(from: "\(hash)  OpenStrudel-Home-1.0.tar.gz\n") == hash)
-        for input in ["\(hash)  Another.tar.gz", "bad  OpenStrudel-Home-1.0.tar.gz", "\(hash)  ../OpenStrudel-Home-1.0.tar.gz", "\(hash)  OpenStrudel-Home-1.0.tar.gz\n\(hash)  OpenStrudel-Home-1.0.tar.gz"] {
-            #expect(throws: (any Error).self) { try DigitalOceanQuote.releaseHash(from: input) }
+    @Test func checksumPinsTheImmutableArchiveBehindTheCurrentAlias() throws {
+        let hash = String(repeating: "a", count: 64), previous = String(repeating: "c", count: 64)
+        let alias = "\(hash)  OpenStrudel-Home-1.0.tar.gz"
+        // Until a release finishes cleaning up, the previous build is still listed.
+        let published = [String(repeating: "d", count: 64) + "  OpenStrudel-1.0-59-arm64.dmg", "\(previous)  OpenStrudel-Home-1.0-58.tar.gz",
+                         "\(hash)  OpenStrudel-Home-1.0-59.tar.gz", alias].joined(separator: "\n") + "\n"
+        let release = try DigitalOceanQuote.release(from: published)
+        #expect(release.sha256 == hash)
+        #expect(release.file == "OpenStrudel-Home-1.0-59.tar.gz")
+        #expect(try DigitalOceanQuote.release(from: "\(hash)  OpenStrudel-Home-1.0-35.1.tar.gz\n" + alias).file == "OpenStrudel-Home-1.0-35.1.tar.gz")
+        for input in [alias, "\(previous)  OpenStrudel-Home-1.0-58.tar.gz\n" + alias,
+                      "\(hash)  ../OpenStrudel-Home-1.0-59.tar.gz\n" + alias, "\(hash)  OpenStrudel-Home-1.0-59.tar.gz.sig\n" + alias,
+                      "\(hash)  OpenStrudel-Home-1.0-59.tar.gz\n\(hash)  OpenStrudel-Home-1.0-60.tar.gz\n" + alias,
+                      "\(hash)  OpenStrudel-Home-1.0-59.tar.gz\n\(alias)\n\(alias)", "\(hash)  Another.tar.gz",
+                      "bad  OpenStrudel-Home-1.0-59.tar.gz\nbad  OpenStrudel-Home-1.0.tar.gz"] {
+            #expect(throws: (any Error).self) { try DigitalOceanQuote.release(from: input) }
         }
     }
 
@@ -95,7 +111,7 @@ struct DigitalOceanCloudTests {
         var state = try initialState()
         state.installation = .init(id: UUID().uuidString.lowercased(), accountID: "account:account-1",
             privateKeyPEM: P256.Signing.PrivateKey().pemRepresentation, ownerToken: String(repeating: "a", count: 64),
-            quote: .init(monthlyPrice: 24, hourlyPrice: 0.035714, region: "fra1", size: "s-2vcpu-4gb", releaseSHA256: String(repeating: "b", count: 64)),
+            quote: .init(monthlyPrice: 24, hourlyPrice: 0.035714, region: "fra1", size: "s-2vcpu-4gb", releaseSHA256: String(repeating: "b", count: 64), releaseFile: "OpenStrudel-Home-1.0-58.tar.gz"),
             createAttemptedAt: Date(), dropletID: 12345,
             connection: .init(url: "https://8.8.8.8:7789", token: "owner", pin: String(repeating: "c", count: 64), name: "Моя команда"))
         try store.save(JSONEncoder().encode(state))
@@ -237,6 +253,63 @@ struct DigitalOceanCloudTests {
         #expect(cloud.phase == .failed)
     }
 
+    @MainActor @Test func createSendsTheVersionedArchiveWithItsHash() async throws {
+        let store = DigitalOceanMemoryStore()
+        try store.save(JSONEncoder().encode(try initialState()))
+        let observations = DigitalOceanObservations()
+        let session = mockSession { request in
+            if request.httpMethod == "POST", request.url?.path == "/v2/droplets" {
+                let payload = try #require(JSONSerialization.jsonObject(with: Self.body(request)) as? [String: Any])
+                let files = Self.userDataFiles(try #require(payload["user_data"] as? String))
+                #expect(files["/var/lib/openstrudel-cloud/release.sha256"] == Data(String(repeating: "a", count: 64).utf8))
+                #expect(files["/var/lib/openstrudel-cloud/release.file"] == Data("OpenStrudel-Home-1.0-59.tar.gz".utf8))
+                await MainActor.run { observations.creates += 1 }
+                throw URLError(.timedOut)
+            }
+            return try Self.mockResponse(request)
+        }
+        let cloud = DigitalOceanCloud(store: store, session: session, pollingAttempts: 1)
+        await cloud.resume()
+        #expect(cloud.quote?.releaseFile == "OpenStrudel-Home-1.0-59.tar.gz")
+        await cloud.confirmCreate()
+        #expect(observations.creates == 1)
+    }
+
+    @MainActor @Test func installationSavedBeforeArchivesWerePinnedStillLoads() throws {
+        var record = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(try attemptedState(dropletID: 12345))) as? [String: Any])
+        var installation = try #require(record["installation"] as? [String: Any])
+        var quote = try #require(installation["quote"] as? [String: Any])
+        quote.removeValue(forKey: "releaseFile"); installation["quote"] = quote; record["installation"] = installation
+        let restored = try JSONDecoder().decode(DigitalOceanSavedState.self, from: JSONSerialization.data(withJSONObject: record))
+        #expect(restored.installation?.quote.releaseFile == nil)
+        #expect(restored.installation?.dropletID == 12345)
+    }
+
+    @MainActor private func attemptedState(dropletID: Int?, attemptedAt: Date = Date().addingTimeInterval(-3600),
+                                           connection: HomeConnection? = nil) throws -> DigitalOceanSavedState {
+        var state = try initialState()
+        state.installation = .init(id: UUID().uuidString.lowercased(), accountID: "account:account-1",
+            privateKeyPEM: P256.Signing.PrivateKey().pemRepresentation, ownerToken: String(repeating: "a", count: 64),
+            quote: .init(monthlyPrice: 24, hourlyPrice: 0.035714, region: "fra1", size: "s-2vcpu-4gb",
+                         releaseSHA256: String(repeating: "b", count: 64), releaseFile: "OpenStrudel-Home-1.0-58.tar.gz"),
+            createAttemptedAt: attemptedAt, dropletID: dropletID, connection: connection)
+        return state
+    }
+
+    /// The cloud-config files by path, decoded from their base64 content.
+    private static func userDataFiles(_ userData: String) -> [String: Data] {
+        var files: [String: Data] = [:]
+        var path: String?
+        for line in userData.components(separatedBy: "\n").map({ $0.trimmingCharacters(in: .whitespaces) }) {
+            if line.hasPrefix("- path: ") { path = String(line.dropFirst("- path: ".count)) }
+            if line.hasPrefix("content: "), let current = path {
+                files[current] = Data(base64Encoded: String(line.dropFirst("content: ".count))); path = nil
+            }
+        }
+        return files
+    }
+
+
     @MainActor private func initialState() throws -> DigitalOceanSavedState {
         var state = DigitalOceanSavedState()
         state.registration = .init(clientID: "client", registrationAccessToken: "registration", registrationClientURI: "https://cloud.digitalocean.com/v1/oauth/register/client")
@@ -266,7 +339,9 @@ struct DigitalOceanCloudTests {
         case "/v2/account": json = #"{"account":{"uuid":"account-1","email_verified":true,"status":"active","droplet_limit":25}}"#
         case "/v2/sizes": json = "{\"sizes\":[{\"slug\":\"s-2vcpu-4gb\",\"memory\":4096,\"vcpus\":2,\"disk\":80,\"price_monthly\":\(price),\"price_hourly\":0.035714,\"regions\":[\"fra1\"],\"available\":true}]}"
         case "/v2/regions": json = #"{"regions":[{"slug":"fra1","available":true}]}"#
-        case "/openstrudel/downloads/SHA256SUMS": return (200, Data((String(repeating: "a", count: 64) + "  OpenStrudel-Home-1.0.tar.gz\n").utf8))
+        case "/openstrudel/downloads/SHA256SUMS":
+            let hash = String(repeating: "a", count: 64)
+            return (200, Data("\(hash)  OpenStrudel-Home-1.0-59.tar.gz\n\(hash)  OpenStrudel-Home-1.0.tar.gz\n".utf8))
         case "/v2/droplets": json = #"{"droplets":[]}"#
         default: throw URLError(.unsupportedURL)
         }

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createPublicKey, generateKeyPairSync } from "node:crypto";
+import { createHash, createPublicKey, generateKeyPairSync } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -160,22 +160,26 @@ install_apparmor_profile
   it.skipIf(process.platform !== "darwin")("renders the actual Swift resource into bounded cloud-config without shell interpolation", () => {
     const root = fixture();
     const main = join(root, "main.swift");
-    writeFileSync(main, `import Foundation\nimport CryptoKit\nlet key = P256.Signing.PrivateKey()\nlet installer = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))\nlet rendered = try DigitalOceanBootstrap.userData(installationID: "${id}", privateKeyPEM: key.pemRepresentation, ownerTokenHash: "${"a".repeat(64)}", releaseSHA256: "${"b".repeat(64)}", installer: installer)\nvar rejected = false\ndo { _ = try DigitalOceanBootstrap.userData(installationID: "not-an-id", privateKeyPEM: key.pemRepresentation, ownerTokenHash: "${"a".repeat(64)}", releaseSHA256: "${"b".repeat(64)}", installer: installer) } catch { rejected = true }\nlet json = try JSONSerialization.data(withJSONObject: ["userData": rendered, "publicKey": key.publicKey.derRepresentation.base64EncodedString(), "invalidRejected": rejected])\nprint(String(decoding: json, as: UTF8.self))\n`);
+    writeFileSync(main, `import Foundation\nimport CryptoKit\nlet key = P256.Signing.PrivateKey()\nlet installer = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))\nlet rendered = try DigitalOceanBootstrap.userData(installationID: "${id}", privateKeyPEM: key.pemRepresentation, ownerTokenHash: "${"a".repeat(64)}", releaseSHA256: "${"b".repeat(64)}", releaseFile: "OpenStrudel-Home-1.0-59.tar.gz", installer: installer)\nvar rejected = false\ndo { _ = try DigitalOceanBootstrap.userData(installationID: "not-an-id", privateKeyPEM: key.pemRepresentation, ownerTokenHash: "${"a".repeat(64)}", releaseSHA256: "${"b".repeat(64)}", releaseFile: "OpenStrudel-Home-1.0-59.tar.gz", installer: installer) } catch { rejected = true }\nvar fileRejected = false\ndo { _ = try DigitalOceanBootstrap.userData(installationID: "${id}", privateKeyPEM: key.pemRepresentation, ownerTokenHash: "${"a".repeat(64)}", releaseSHA256: "${"b".repeat(64)}", releaseFile: "../OpenStrudel-Home-1.0-59.tar.gz", installer: installer) } catch { fileRejected = true }\nlet json = try JSONSerialization.data(withJSONObject: ["userData": rendered, "publicKey": key.publicKey.derRepresentation.base64EncodedString(), "invalidRejected": rejected, "invalidFileRejected": fileRejected])\nprint(String(decoding: json, as: UTF8.self))\n`);
     const executable = join(root, "render");
     execFileSync("swiftc", [resolve("native/OpenStrudel/Sources/DigitalOceanBootstrap.swift"), resolve("native/OpenStrudel/Sources/Localization.swift"), main, "-o", executable], { timeout: 60_000, stdio: "pipe" });
     const result = JSON.parse(execFileSync(executable, [script], { encoding: "utf8", timeout: 10_000 }));
     expect(result.invalidRejected).toBe(true);
+    expect(result.invalidFileRejected).toBe(true);
     expect(Buffer.byteLength(result.userData)).toBeLessThan(65_536);
     expect(result.userData.startsWith("#cloud-config\n")).toBe(true);
     expect(result.userData).toContain("[bash, /var/lib/openstrudel-cloud/install.sh, --install-service]");
+    const paths = [...result.userData.matchAll(/- path: (\S+)/g)].map(match => match[1]);
+    expect(paths).toEqual(["bootstrap.json", "release.sha256", "release.file", "install.sh"].map(name => "/var/lib/openstrudel-cloud/" + name));
     const contents = [...result.userData.matchAll(/content: ([A-Za-z0-9+/=]+)/g)].map(match => Buffer.from(match[1], "base64"));
-    expect(contents).toHaveLength(3);
+    expect(contents).toHaveLength(4);
     const boot = JSON.parse(contents[0]!.toString("utf8"));
     expect(boot.installationId).toBe(id);
     expect(boot.ownerTokenHash).toBe("a".repeat(64));
     expect(createPublicKey(boot.privateKeyPEM).export({ type: "spki", format: "der" }).toString("base64")).toBe(result.publicKey);
     expect(contents[1]!.toString()).toBe("b".repeat(64));
-    expect(contents[2]).toEqual(readFileSync(script));
+    expect(contents[2]!.toString()).toBe("OpenStrudel-Home-1.0-59.tar.gz");
+    expect(contents[3]).toEqual(readFileSync(script));
     expect(result.userData).not.toContain("BEGIN PRIVATE KEY");
   }, 70_000);
   it("validates input without printing the private key or token hash", () => {
@@ -216,6 +220,46 @@ install_apparmor_profile
     execFileSync("python3", ["-c", `import tarfile,sys\nwith tarfile.open(sys.argv[1], 'w:gz') as t:\n i=tarfile.TarInfo('OpenStrudel-Home/escape' if sys.argv[2]=='symlink' else 'OpenStrudel-Home/../../escape')\n if sys.argv[2]=='symlink': i.type=tarfile.SYMTYPE; i.linkname='/etc'\n else: i.type=tarfile.DIRTYPE\n t.addfile(i)`, archive, kind]);
     const result = shell('extract_archive "$1" "$STATE_DIR/extracted"', root, [archive]);
     expect(result.status).not.toBe(0);
+  });
+  function homeArchive(root: string) {
+    const archive = join(root, "published.tar.gz");
+    execFileSync("python3", ["-c", `import io,sys,tarfile\nwith tarfile.open(sys.argv[1], 'w:gz') as t:\n for name in ['Dockerfile','package-lock.json','src/cloud-bootstrap.ts','deploy/compose.yaml','deploy/docker/openstrudel.apparmor','deploy/docker/seccomp.json','scripts/check-sandbox.mjs']:\n  t.addfile(tarfile.TarInfo('OpenStrudel-Home/' + name), io.BytesIO())`, archive]);
+    return { archive, hash: createHash("sha256").update(readFileSync(archive)).digest("hex") };
+  }
+  // The fake records the address and serves the published bytes to the -o path.
+  const download = (root: string, archive: string) => shell(`curl() { printf '%s\\n' "$@" > "$STATE_DIR/curl.args"; while [[ "$1" != -o ]]; do shift; done; cp "$ARCHIVE" "$2"; }
+ARCHIVE=$1; check_input; prepare_release`, root, [archive]);
+  it("downloads the immutable versioned archive pinned with the hash, never the moving alias", () => {
+    const root = fixture(); const { archive, hash } = homeArchive(root);
+    writeFileSync(join(root, "release.file"), "OpenStrudel-Home-1.0-59.tar.gz");
+    const mismatch = download(root, archive);
+    expect(mismatch.status).not.toBe(0);
+    expect(mismatch.stderr).toContain("checksum");
+    expect(existsSync(join(root, "home"))).toBe(false);
+    writeFileSync(join(root, "release.sha256"), hash);
+    const result = download(root, archive);
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(join(root, "curl.args"), "utf8")).toContain("\nhttps://waiwai.is/openstrudel/downloads/OpenStrudel-Home-1.0-59.tar.gz\n");
+    expect(readFileSync(join(root, "home/.cloud-release.sha256"), "utf8").trim()).toBe(hash);
+    expect(existsSync(join(root, "home/Dockerfile"))).toBe(true);
+  });
+  it("keeps an installation staged before the file was pinned on the alias", () => {
+    const root = fixture(); const { archive, hash } = homeArchive(root);
+    writeFileSync(join(root, "release.sha256"), hash);
+    const result = download(root, archive);
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(join(root, "curl.args"), "utf8")).toContain("\nhttps://waiwai.is/openstrudel/downloads/OpenStrudel-Home-1.0.tar.gz\n");
+  });
+  it.each(["../OpenStrudel-Home-1.0-59.tar.gz", "OpenStrudel-Home-1.0-59.tar.gz/../../escape", "https://other.example/OpenStrudel-Home-1.0-59.tar.gz",
+    "OpenStrudel-Home-1.0-59.tar.gz?x=1", " OpenStrudel-Home-1.0-59.tar.gz", "OpenStrudel-Home-1.0-59.tar.gz\nOpenStrudel-Home-1.0-60.tar.gz",
+    "OpenStrudel-Home-1.0.tar.gz", "OpenStrudel-Home-1.0-x.tar.gz", "", "symlink"])("refuses the pinned release file %j before downloading", name => {
+    const root = fixture(); const { archive } = homeArchive(root);
+    if (name === "symlink") { writeFileSync(join(root, "target"), "OpenStrudel-Home-1.0-59.tar.gz"); symlinkSync(join(root, "target"), join(root, "release.file")); }
+    else writeFileSync(join(root, "release.file"), name);
+    const result = download(root, archive);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("release file");
+    expect(existsSync(join(root, "curl.args"))).toBe(false);
   });
   it("preserves an existing matching installation without downloading again", () => {
     const root = fixture(); const home = join(root, "home"); mkdirSync(home);

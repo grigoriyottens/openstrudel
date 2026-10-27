@@ -42,34 +42,41 @@ struct DigitalOceanQuote: Codable, Equatable, Sendable {
     let region: String
     let size: String
     let releaseSHA256: String
+    /// The immutable archive with that hash. Quotes saved before it was pinned have none.
+    let releaseFile: String?
     var title: String { L("Basic · 2 CPU · 4 ГБ") }
 
-    static func make(sizes: [DigitalOceanSize], regions: [DigitalOceanRegion], releaseSHA256: String) throws -> Self {
+    static func make(sizes: [DigitalOceanSize], regions: [DigitalOceanRegion], releaseSHA256: String, releaseFile: String) throws -> Self {
         let matches = sizes.filter { $0.slug == "s-2vcpu-4gb" }
         guard matches.count == 1, let size = matches.first, size.available,
               size.memory == 4096, size.vcpus == 2, size.disk >= 50,
               size.priceMonthly.isFinite, size.priceMonthly > 0,
               size.priceHourly.isFinite, size.priceHourly > 0,
-              releaseSHA256.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil
+              releaseSHA256.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
+              DigitalOceanBootstrap.isReleaseFile(releaseFile)
         else { throw DigitalOceanFailure.unavailablePlan }
         // Amsterdam is the only fallback: the same plan, still within the EU.
         guard let region = ["fra1", "ams3"].first(where: { slug in
             size.regions.contains(slug) && regions.contains { $0.slug == slug && $0.available }
         }) else { throw DigitalOceanFailure.unavailablePlan }
         return .init(monthlyPrice: size.priceMonthly, hourlyPrice: size.priceHourly,
-                     region: region, size: size.slug, releaseSHA256: releaseSHA256)
+                     region: region, size: size.slug, releaseSHA256: releaseSHA256, releaseFile: releaseFile)
     }
 
-    static func releaseHash(from checksums: String) throws -> String {
-        let matches = checksums.split(whereSeparator: \.isNewline).compactMap { line -> String? in
+    /// The current Home release. Each release moves the alias, so a server that downloads
+    /// minutes later fetches the versioned file listed with the same hash instead.
+    static func release(from checksums: String) throws -> (sha256: String, file: String) {
+        let entries = checksums.split(whereSeparator: \.isNewline).compactMap { line -> (hash: String, file: String)? in
             let columns = line.split(whereSeparator: \.isWhitespace)
-            guard columns.count == 2, columns[1] == "OpenStrudel-Home-1.0.tar.gz" else { return nil }
-            return String(columns[0])
+            return columns.count == 2 ? (String(columns[0]), String(columns[1])) : nil
         }
-        guard matches.count == 1, let hash = matches.first,
+        let current = entries.filter { $0.file == "OpenStrudel-Home-1.0.tar.gz" }
+        guard current.count == 1, let hash = current.first?.hash,
               hash.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil
         else { throw DigitalOceanFailure.release }
-        return hash
+        let pinned = entries.filter { $0.hash == hash && DigitalOceanBootstrap.isReleaseFile($0.file) }
+        guard pinned.count == 1, let file = pinned.first?.file else { throw DigitalOceanFailure.release }
+        return (hash, file)
     }
 }
 
@@ -247,9 +254,10 @@ struct DigitalOceanSavedState: Codable {
                 return
             }
             guard var installation = self.state.installation else { throw DigitalOceanFailure.storage }
+            guard let releaseFile = currentQuote.releaseFile else { throw DigitalOceanFailure.release }
             let ownerHash = Self.hex(SHA256.hash(data: Data(installation.ownerToken.utf8)))
-            let userData = try DigitalOceanBootstrap.userData(installationID: installation.id,
-                privateKeyPEM: installation.privateKeyPEM, ownerTokenHash: ownerHash, releaseSHA256: currentQuote.releaseSHA256)
+            let userData = try DigitalOceanBootstrap.userData(installationID: installation.id, privateKeyPEM: installation.privateKeyPEM,
+                ownerTokenHash: ownerHash, releaseSHA256: currentQuote.releaseSHA256, releaseFile: releaseFile)
             guard userData.utf8.count <= 65_536 else { throw DigitalOceanFailure.release }
             let body: [String: Any] = ["name": installation.name, "region": currentQuote.region,
                 "size": currentQuote.size, "image": "ubuntu-24-04-x64", "tags": [installation.name],
@@ -432,7 +440,8 @@ struct DigitalOceanSavedState: Codable {
         let regions = try JSONDecoder().decode(Regions.self, from: await api("/regions?per_page=200")).regions
         let checksums = try await request(URL(string: "https://waiwai.is/openstrudel/downloads/SHA256SUMS")!)
         guard let text = String(data: checksums, encoding: .utf8) else { throw DigitalOceanFailure.release }
-        let result = try Quote.make(sizes: sizes, regions: regions, releaseSHA256: Quote.releaseHash(from: text))
+        let release = try Quote.release(from: text)
+        let result = try Quote.make(sizes: sizes, regions: regions, releaseSHA256: release.sha256, releaseFile: release.file)
         var next = state
         if next.installation == nil {
             var bytes = [UInt8](repeating: 0, count: 32)
