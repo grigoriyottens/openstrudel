@@ -393,8 +393,16 @@ export class TelegramAdapter {
     for (const file of files) if (!begun.has(prefix + "file:" + file.id) && await this.isPhoto(file)) photos.push(file);
     const caption = photos.length && !begun.has(prefix + "0") ? captionFor(text) : null;
     if (!caption) await this.sendMessage(chatId, text, deliveryKey, replyToMessageId);
-    for (let first = 0; first < photos.length; first += 10)
-      await this.sendPhotos(String(chatId), photos.slice(first, first + 10), deliveryKey, first, caption && !first ? { caption, replyTo: replyToMessageId } : {});
+    for (let first = 0; first < photos.length; first += 10) {
+      const batch = photos.slice(first, first + 10), captioned = Boolean(caption && !first);
+      try { await this.sendPhotos(String(chatId), batch, deliveryKey, first, captioned ? { caption: caption!, replyTo: replyToMessageId } : {}); }
+      catch (error) {
+        // Telegram refused the photos, so nothing went out: the answer still arrives as text and files.
+        if (!refused(error)) throw error;
+        if (captioned) await this.sendMessage(chatId, text, deliveryKey, replyToMessageId);
+        await this.sendFiles(chatId, batch, deliveryKey);
+      }
+    }
     await this.sendFiles(chatId, files.filter(file => !photos.includes(file)), deliveryKey);
   }
 

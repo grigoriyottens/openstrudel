@@ -187,6 +187,16 @@ it("never resends photos Telegram did not confirm, even from a restarted Home",a
   expect(sent.map(s=>s.method)).toEqual(["sendMediaGroup"]);
   expect(runtime.store.db.prepare("SELECT DISTINCT status FROM telegram_outbox").all()).toEqual([{status:"unknown"}]);
 });
+it("still delivers the answer and its images when Telegram refuses them as photos",async()=>{
+  const {sent,edition}=photoHome([["chart.png",png()]],"График за неделю");
+  const delivered=vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async(url,init)=>String(url).endsWith("/sendPhoto")
+    ? (sent.push({method:"sendPhoto",body:init!.body}),Response.json({ok:false,error_code:400,description:"Bad Request: IMAGE_PROCESS_FAILED"},{status:400}))
+    : delivered(url,init));
+  expect(await edition()).toMatchObject({status:"completed"});
+  expect(sent.map(s=>s.method)).toEqual(["sendPhoto","sendMessage","sendDocument"]);
+  expect(sent[1]!.body.text).toBe("График за неделю");
+});
 it("finishes a delivery begun as text and documents without repeating either",async()=>{
   // A Home updated in the middle of a delivery: its text and first image already went out as before.
   const {runtime,sent}=photoHome();
