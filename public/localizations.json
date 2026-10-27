@@ -2911,6 +2911,27 @@
     "he": "מצבים מהירים עשויים לצרוך יותר ממכסת החשבון.",
     "ru": "Ускоренный режим может расходовать больше лимита аккаунта."
   },
+  "Fast в личных чатах": {
+    "en": "Fast in direct chats",
+    "fr": "Fast dans les discussions privées",
+    "es": "Fast en chats privados",
+    "he": "Fast בצ'אטים פרטיים",
+    "ru": "Fast в личных чатах"
+  },
+  "Личные чаты в Telegram и в приложении отвечают быстрее, если модель это поддерживает. Группы и расписания работают со скоростью устройства.": {
+    "en": "Direct chats in Telegram and the app answer faster when the model supports it. Groups and schedules use the device speed.",
+    "fr": "Les discussions privées dans Telegram et l’application répondent plus vite si le modèle le permet. Les groupes et les tâches planifiées gardent la vitesse de l’appareil.",
+    "es": "Los chats privados en Telegram y en la app responden más rápido si el modelo lo admite. Los grupos y las tareas programadas usan la velocidad del dispositivo.",
+    "he": "צ'אטים פרטיים בטלגרם ובאפליקציה עונים מהר יותר כשהמודל תומך בכך. קבוצות ומשימות מתוזמנות משתמשות במהירות של המכשיר.",
+    "ru": "Личные чаты в Telegram и в приложении отвечают быстрее, если модель это поддерживает. Группы и расписания работают со скоростью устройства."
+  },
+  "Скорость личных чатов задаётся в настройках устройства.": {
+    "en": "The speed of direct chats is set in the device settings.",
+    "fr": "La vitesse des discussions privées se règle dans les réglages de l’appareil.",
+    "es": "La velocidad de los chats privados se configura en los ajustes del dispositivo.",
+    "he": "המהירות של צ'אטים פרטיים נקבעת בהגדרות המכשיר.",
+    "ru": "Скорость личных чатов задаётся в настройках устройства."
+  },
   "Настройки меняет владелец устройства.": {
     "en": "Only the device owner can change these settings.",
     "ru": "Настройки меняет владелец устройства.",

@@ -6,6 +6,7 @@ import { Store } from "../src/store.js";
 import { MessageService } from "../src/messages.js";
 import { TelegramAdapter } from "../src/telegram.js";
 import { employeeTools } from "../src/personality.js";
+import { saveConversationModelSelection } from "../src/model-settings.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanups.splice(0)) await close(); vi.unstubAllGlobals(); });
@@ -238,4 +239,22 @@ it("runs the owner's pipeline operations in a group like its schedules; everythi
   await api("app-message", true);
   await adapter.processUpdate(update(1, "operations: сделай"));
   expect(run.mock.calls.map(call => [call[1].groupContext, call[1].scheduled])).toEqual([[true, true], [true, false], [true, false], [true, false]]);
+});
+
+it("runs direct chats at Fast unless the owner turns it off; groups, schedules and a chosen chat model keep their speed", async () => {
+  const { store, chat, run, messages, adapter, update } = setup("instructions");
+  store.linkTelegramChat({ chatId: "7", title: "Owner", allowedSenders: ["7"] });
+  const direct = (id: number) => ({ update_id: id, message: { message_id: id, from: { id: 7, first_name: "Grisha" }, chat: { id: 7, type: "private" }, text: "Привет" } });
+  const app = store.primaryConversation().id;
+  await adapter.processUpdate(direct(1));
+  await messages.handle({ channel: "api", conversationId: app, text: "Привет", byOwner: true });
+  await adapter.processUpdate(update(2, "@strudel_bot привет"));
+  await messages.handle({ channel: "api", conversationId: app, text: "Утренний обзор", byOwner: true, scheduled: true });
+  await messages.handle({ channel: "api", conversationId: chat.conversationId!, text: "Срочная пачка", externalId: "operations:1", byOwner: true });
+  saveConversationModelSelection(store, app, { provider: "chatgpt", model: "chosen", serviceTier: "default" });
+  await messages.handle({ channel: "api", conversationId: app, text: "Своя модель", byOwner: true });
+  saveConversationModelSelection(store, app, { provider: null, model: null, serviceTier: null });
+  store.setSetting("models.directFast", "false");
+  await adapter.processUpdate(direct(3));
+  expect(run.mock.calls.map(call => call[1].fast)).toEqual([true, true, false, false, false, false, false]);
 });

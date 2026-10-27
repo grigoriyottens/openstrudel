@@ -1,4 +1,4 @@
-import { automaticProvider, checkModelSelection, parseModelSelection, readModelSelection, readConversationModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, saveConversationModelSelection, parseModelFallbacks, readModelFallbacks } from "./model-settings.js";
+import { automaticProvider, checkModelSelection, parseModelSelection, readModelSelection, readConversationModelSelection, recommendedModel, resolveModelSelection, saveModelSelection, saveConversationModelSelection, parseModelFallbacks, readModelFallbacks, directFast, fastChat, offersFast, turnSpeed } from "./model-settings.js";
 import { connectProvider, disconnectProvider, providerInfo, providerSummaries } from "./providers.js";
 import { deleteEmployee } from "./employee-delete.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -288,6 +288,7 @@ export class HttpApi {
         if (request.method === "POST") {
           const input = await this.body(request), selection = parseModelSelection(input,Boolean(agent));
           if (input.fallbacks !== undefined && agent) throw new HomeError('Порядок резервов задаётся в настройках устройства.');
+          if (input.directFast !== undefined && (agent || typeof input.directFast !== 'boolean')) throw new HomeError('Скорость личных чатов задаётся в настройках устройства.');
           const fallbacks = input.fallbacks === undefined ? undefined : parseModelFallbacks(input.fallbacks,selection.model ? selection : {...selection,provider:automatic,model:recommendedModel(models.filter(m=>m.provider === automatic)).id},this.store,models);
           if (agent) assertAgentWritable(this.store,agent);
           // A chat inherits its employee; an employee inherits the device.
@@ -295,9 +296,14 @@ export class HttpApi {
           if (conversationId) saveConversationModelSelection(this.store,conversationId,selection);
           else saveModelSelection(this.store,selection,agent);
           if (fallbacks) this.store.setSetting('models.fallbacks',JSON.stringify(fallbacks));
+          if (input.directFast !== undefined) this.store.setSetting('models.directFast',String(input.directFast));
         }
-        this.send(response,200,{models,fallbacks:readModelFallbacks(this.store),providers:providerSummaries(this.store).filter(p=>p.connected),recommended:{...recommendedModel(models.filter(m=>m.provider === automatic)),provider:automatic},
-          selection:conversationId ? readConversationModelSelection(this.store,conversationId) : readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,conversationId ? agent : undefined,models),effective:resolveModelSelection(this.store,agent,models,conversationId),canManage:canManageAccount}); return;
+        // A direct chat shows the speed its turns run at.
+        const effective = resolveModelSelection(this.store,agent,models,conversationId);
+        if (conversationId && fastChat(this.store,agent!,conversationId,context.startsWith("group-")))
+          effective.serviceTier = turnSpeed(offersFast(models.find(m => m.id === effective.model && (m.provider ?? "chatgpt") === effective.provider)),effective.serviceTier);
+        this.send(response,200,{models,fallbacks:readModelFallbacks(this.store),directFast:directFast(this.store),providers:providerSummaries(this.store).filter(p=>p.connected),recommended:{...recommendedModel(models.filter(m=>m.provider === automatic)),provider:automatic},
+          selection:conversationId ? readConversationModelSelection(this.store,conversationId) : readModelSelection(this.store,agent),defaults:resolveModelSelection(this.store,conversationId ? agent : undefined,models),effective,canManage:canManageAccount}); return;
       }
       if (path === "/v1/settings/speech" && ["GET", "POST"].includes(request.method ?? "")) {
         const settings = request.method === "POST" ? await saveSpeechSettings(this.store, await this.body(request)) : speechSettings(this.store);
@@ -795,7 +801,11 @@ export class HttpApi {
   }
 
   private modelConversation(conversation: import("./types.js").Conversation) {
-    return {...conversation,effectiveModel:resolveModelSelection(this.store,conversation.profileId ?? "main",undefined,conversation.id)};
+    const agent = conversation.profileId ?? "main", effectiveModel = resolveModelSelection(this.store,agent,undefined,conversation.id);
+    // Clients refresh the chat's model control when this changes. Without the catalog: only OpenAI providers have speeds.
+    if (fastChat(this.store,agent,conversation.id,this.messages.contextFor(conversation.id).startsWith("group-")))
+      effectiveModel.serviceTier = turnSpeed(["chatgpt","openai"].includes(effectiveModel.provider ?? ""),effectiveModel.serviceTier);
+    return {...conversation,effectiveModel};
   }
 
   private employeeTimeline(conversation: import("./types.js").Conversation, query: URLSearchParams) {

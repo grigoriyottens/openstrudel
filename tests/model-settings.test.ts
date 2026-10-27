@@ -285,3 +285,27 @@ it('saves an ordered device reserve, validates atomically, and preserves it for 
   await call({...first,fallbacks:[]});expect((await (await call()).json()).fallbacks).toEqual([]);
  }finally{await runtime.stop();}
 });
+
+it('keeps Fast for direct chats on by default, saves the switch on the device only, and shows it in direct chats', async()=>{
+ const {OpenStrudelRuntime}=await import('../src/runtime.js');
+ const runtime=new OpenStrudelRuntime({dbPath:':memory:',startTelegram:false,apiToken:'owner',engine:{models:async()=>catalog,run:async()=>({threadId:'t',response:'OK',events:[]})}});
+ const addr=await runtime.api.listen('127.0.0.1',0);
+ const call=(path:string,body?:any)=>fetch(`http://127.0.0.1:${addr.port}${path}`,{method:body?'POST':'GET',headers:{'content-type':'application/json',authorization:'Bearer owner'},body:body&&JSON.stringify(body)});
+ const device={provider:'chatgpt',model:'m1',serviceTier:'default'};
+ try {
+  const direct=runtime.store.primaryConversation().id, group=runtime.store.getOrCreateConversation({channel:'telegram',externalId:'-42',title:'QA group'}).id;
+  expect((await (await call('/v1/settings/models')).json()).directFast).toBe(true);
+  await call('/v1/settings/models',device);
+  const tier=async(id:string)=>(await (await call('/v1/conversations/'+id+'/model')).json()).effective.serviceTier;
+  expect([await tier(direct),await tier(group)]).toEqual(['priority','default']);
+  // The chat envelope's model is the clients' cue to refresh the model control.
+  const envelope=async()=>(await (await call('/v1/conversation')).json()).conversation.effectiveModel.serviceTier;
+  expect(await envelope()).toBe('priority');
+  expect((await call('/v1/settings/models?agentId=main',{provider:null,model:null,serviceTier:null,directFast:false})).status).toBe(400);
+  expect((await call('/v1/settings/models',{...device,directFast:'no'})).status).toBe(400);
+  const saved=await (await call('/v1/settings/models',{...device,directFast:false})).json();
+  expect([saved.directFast,saved.selection]).toEqual([false,device]);
+  expect([await tier(direct),await envelope()]).toEqual(['default','default']);
+  expect((await (await call('/v1/settings/models',{...device,directFast:true})).json()).directFast).toBe(true);
+ }finally{await runtime.stop();}
+});

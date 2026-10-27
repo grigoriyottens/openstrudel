@@ -307,3 +307,19 @@ it("switches native model and speed on the same thread and explicitly clears Fas
     await expect(engine.run("Bad",{model:"m",serviceTier:"ultra"})).rejects.toThrow(/скорость/);
   }finally{engine.close();}
 });
+
+it("runs a direct chat at Fast only where its model offers it and never lowers a chosen speed",async()=>{
+  wire.request.mockImplementation(async(method:string,params:any)=>{
+    if(method==="configRequirements/read")return {requirements:null};
+    if(method==="model/list")return {data:[{model:"m",isDefault:true,serviceTiers:[{id:"priority",name:"Fast"},{id:"ultra",name:"Ultra"}]},{model:"plain"}]};
+    if(method==="thread/start")return {thread:{id:"fast-thread"}};
+    if(method==="turn/start") { queueMicrotask(()=>wire.notify?.({method:"turn/completed",params:{threadId:params.threadId,turn:{status:"completed"}}})); return {turn:{id:"turn"}}; }
+    throw new Error(method);
+  });
+  const engine=new CodexEngineAdapter();
+  try{
+    for(const options of [{model:"m",serviceTier:"default",fast:true},{model:null,serviceTier:"default",fast:true},{model:"plain",serviceTier:"default",fast:true},{model:"m",serviceTier:"ultra",fast:true},{model:"m",serviceTier:"default"}])
+      await engine.run("Hi",options);
+    expect(wire.request.mock.calls.filter(([m])=>m==="turn/start").map(([,p])=>p.serviceTier)).toEqual(["priority","priority","default","ultra","default"]);
+  }finally{engine.close();}
+});

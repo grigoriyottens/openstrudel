@@ -525,6 +525,8 @@ struct ModelSettings: Decodable {
     let recommended: ModelChoice?
     let canManage: Bool
     var fallbacks: [ModelSelection]? = nil
+    /// Direct chats on the device's model run at Fast where the model offers it. Older Homes send none.
+    var directFast: Bool? = nil
     /// Connected providers, ChatGPT first. Older Homes send none.
     var providers: [ProviderSummary]? = nil
 
