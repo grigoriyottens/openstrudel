@@ -33,6 +33,7 @@ struct ApprovalSettingsView: View {
     @State private var saving = false
     @State private var error: (any Error)?
     @State private var confirmAll = false
+    @State private var loadedFor = LoadedKey<OpenAIAccount?>()
     /// With every model on an API key the device asks instead, so Automatic is not offered and reads as Ask.
     @State private var reviews = true
     private func shown(_ mode: EmployeeApprovalMode) -> EmployeeApprovalMode { mode == .auto && !reviews ? .ask : mode }
@@ -82,7 +83,7 @@ struct ApprovalSettingsView: View {
             }
         }
         // A model change above can move the last model off ChatGPT or back.
-        .task(id: client.openAIAccount) { await load() }
+        .task(id: client.openAIAccount) { if loadedFor.claim(client.openAIAccount) { await load() } }
         .alert(L("Выполнять без подтверждений?"), isPresented: $confirmAll) {
             Button(L("Включить для этого устройства"), role: .destructive) { Task { await save(.approveAll) } }
             Button(L("Отмена"), role: .cancel) { }

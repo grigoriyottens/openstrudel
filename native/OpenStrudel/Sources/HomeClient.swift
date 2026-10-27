@@ -1085,6 +1085,7 @@ final class HomeClient: ObservableObject, Identifiable {
     }
 
     func downloadFile(_ file: ChatAttachment) async throws -> URL {
+        guard ChatAttachment.isHomeFileID(file.id) else { throw HomeClientError.invalidResponse }
         let bytes = try await requestData("/v1/files/" + file.id)
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("OpenStrudelFiles").appendingPathComponent(file.id)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

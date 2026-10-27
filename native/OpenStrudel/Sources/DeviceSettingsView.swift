@@ -410,7 +410,15 @@ private struct DeviceDisclosureStyle: DisclosureGroupStyle {
             }
             .buttonStyle(.plain)
             .accessibilityValue(configuration.isExpanded ? L("Развёрнуто") : L("Свёрнуто"))
-            if configuration.isExpanded { configuration.content }
+            if configuration.isExpanded {
+                #if os(iOS)
+                // The whole device is one Form row, and iOS fires every default-style button
+                // in a row on one tap. Borderless buttons answer only to their own tap.
+                configuration.content.buttonStyle(.borderless)
+                #else
+                configuration.content
+                #endif
+            }
         }
     }
 }

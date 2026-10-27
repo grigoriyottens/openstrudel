@@ -19,6 +19,7 @@ struct ModelSettingsView: View {
     @State private var saving = false
     @State private var error: (any Error)?
     @State private var saved = false
+    @State private var loadedFor = LoadedKey<String>()
     private var path: String { conversationID.map { "/v1/conversations/" + $0 + "/model" } ?? "/v1/settings/models" + (agentID.map { "?agentId=" + $0 } ?? "") }
     private var selected: ModelChoice? {
         guard let settings else { return nil }
@@ -123,7 +124,7 @@ struct ModelSettingsView: View {
                 }
             }
         }
-        .task(id: path) { await load() }
+        .task(id: path) { if loadedFor.claim(path) { await load() } }
         .onChange(of: choice) { _, value in
             guard let settings else { return }
             saved = false
