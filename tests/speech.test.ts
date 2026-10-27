@@ -157,7 +157,7 @@ it("says an exhausted ElevenLabs quota is a limit, not a rejected key, and tells
   expect(failure.reason).toBe("provider_limit");
   const { errorProblem, problemText } = await import("../src/operations.js");
   expect(errorProblem(failure)).toBe("voice");
-  expect(problemText.voice).toMatch(/ElevenLabs/);
+  expect(problemText.voice).toMatch(/^Запись не распознана/);
   vi.stubGlobal("fetch", vi.fn(async () => Response.json({ detail: { status: "invalid_api_key" } }, { status: 401 })));
   expect((await transcribeRecording(s, new Uint8Array([1, 2]), "voice.ogg").catch(error => error)).reason).toBe("provider_auth");
 });
@@ -183,6 +183,14 @@ it("recognizes every recording on the Home's speech server and keeps voice gener
     return new Response("ID3");
   }));
   expect(await generateSpeech(s, "Проверка")).toEqual(Buffer.from("ID3"));
+});
+
+it("reports where recordings actually go when the Home's speech server overrides the choice", () => {
+  const local = store(), cloud = store(true), report = () => [local, cloud].map(s => [speechSettings(s).provider, speechSettings(s).transcription]);
+  expect(report()).toEqual([["local", "local"], ["elevenlabs", "elevenlabs"]]);
+  vi.stubEnv("OPENSTRUDEL_STT_URL", "https://stt.example.test");
+  // The saved choice stays for the settings picker; only transcription names the server.
+  expect(report()).toEqual([["local", "server"], ["elevenlabs", "server"]]);
 });
 
 it("gives a long recording more time on the speech server, up to its interactive limit", async () => {

@@ -17,7 +17,7 @@ import { providerInfo, ProviderIncident } from "./providers.js";
 import type { TelegramAdapter } from "./telegram.js";
 import { readFile } from "node:fs/promises";
 import { isSpeechFile, transcribeRecording } from "./speech.js";
-import { connectorOutcome, reportConnectorIssues, errorProblem, failedRun, problemText, reportIssue, resolveIssue, runtimeIssues, toolProblem, toolRecovered, type ProblemCode } from "./operations.js";
+import { connectorOutcome, reportConnectorIssues, errorProblem, failedRun, quietReply, problemText, reportIssue, resolveIssue, runtimeIssues, toolProblem, toolRecovered, type ProblemCode } from "./operations.js";
 import { ownerKnowledge } from "./knowledge.js";
 import { hasAccess } from "./telegram-tools.js";
 
@@ -157,14 +157,16 @@ export class MessageService {
         const engine = this.engine.forAgent?.(currentProfile?.id ?? "main", context, current.id) ?? this.engine.forContext?.(context) ?? this.engine;
         const running = { engine, messageId: inbound.id, channel: input.channel, abort: new AbortController(), threadId: undefined as string | undefined };
         this.active.set(current.id, running);
-        const speech = files.filter(file => isSpeechFile(file.name, file.mimeType));
+        // Telegram recordings were transcribed on arrival; a video it could not hear comes here as a plain file.
+        const speech = input.channel === "telegram" ? [] : files.filter(file => isSpeechFile(file.name, file.mimeType));
         const transcripts: Array<{file: string; text: string}> = [];
         for (const file of speech) {
           let transcript: string;
           try { transcript = await transcribeRecording(this.store, await readFile(file.path), file.name, running.abort.signal); }
           catch (error) {
-            // A recording without speech is still a file the employee can open. Only a lone voice note leaves nothing to answer.
-            if (running.abort.signal.aborted || (!text && files.length === 1)) throw error;
+            // A recording without speech is still a file the employee can open, and a video is a file first.
+            // Only a lone voice note or audio file leaves nothing to answer.
+            if (running.abort.signal.aborted || (!text && files.length === 1 && !/^video\//i.test(file.mimeType))) throw error;
             transcripts.push({ file: file.name, text: "No speech was recognized in this file." });
             continue;
           }
@@ -226,7 +228,7 @@ export class MessageService {
         if(problem)throw new Error(problemText[problem]);
         if (text !== "/help") this.store.advanceContextCheckpoint(current.id, inbound.id);
         const outbound = this.store.addMessage({ conversationId: current.id, channel: input.channel, direction: "outbound", replyToId: inbound.id, text: result.response,attachments:tools.attachments });
-        if ((input.scheduled || groupContext && input.channel === "telegram") && result.response.trim() === "NO_REPLY" || input.scheduled && failedRun(result.response)) this.store.db.prepare("UPDATE messages SET hidden=1 WHERE id=?").run(outbound.id);
+        if ((input.scheduled || groupContext && input.channel === "telegram") && quietReply(result.response) || input.scheduled && failedRun(result.response)) this.store.db.prepare("UPDATE messages SET hidden=1 WHERE id=?").run(outbound.id);
         this.store.setMessageStatus(inbound.id, "completed");
         const connectorNotice=reportConnectorIssues(this.store,current.id,inbound.id,connectors);
         if(connectorNotice)await this.telegram?.notifyOwner(connectorNotice);

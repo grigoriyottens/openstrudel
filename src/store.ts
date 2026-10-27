@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { Attachment, Channel, Conversation, EmployeeProfile, Message, TelegramChat, HistoryEntry } from "./types.js";
-import { id, jsonArray, nowIso } from "./util.js";
+import { id, jsonArray, jsonObject, nowIso } from "./util.js";
 import { defaultAppearance, parseAppearance, type AgentAppearance } from "./agent-appearance.js";
 
 type Row = Record<string, unknown>;
@@ -133,6 +133,9 @@ export class Store {
       const profile = String(row.external_id).split("::employee::")[1];
       if (profile && this.getProfile(profile)) this.db.prepare("UPDATE conversations SET profile_id=? WHERE id=?").run(profile, String(row.id));
     }
+    // An employee's own app chat carries its current name. Earlier Homes renamed
+    // only the employee, so the chat kept the name it was created with.
+    this.db.exec("UPDATE conversations SET title=p.name FROM employee_profiles p WHERE conversations.channel='api' AND conversations.external_id='home::employee::'||p.id AND conversations.title IS NOT p.name");
     // Existing private links retain their owner. Legacy groups remain closed
     // until their allowed participants are explicitly provided.
     for (const chatId of jsonArray(this.getSetting("telegram.linked_chats"))) {
@@ -294,6 +297,10 @@ export class Store {
       }
       const legacy = jsonArray(this.getSetting("telegram.linked_chats"));
       if (legacy.includes(oldId)) this.setSetting("telegram.linked_chats", JSON.stringify([...new Set(legacy.map(id => id === oldId ? newId : id))]));
+      // The notification hook keeps relaying to the upgraded group.
+      const hook = jsonObject(this.getSetting("telegram.notification_hook")), rename = (chatId: unknown) => chatId === oldId ? newId : chatId;
+      if (hook.chatId === oldId || Array.isArray(hook.chatIds) && hook.chatIds.includes(oldId)) this.setSetting("telegram.notification_hook",
+        JSON.stringify({ ...hook, chatId: rename(hook.chatId), ...(Array.isArray(hook.chatIds) ? { chatIds: [...new Set(hook.chatIds.map(rename))] } : {}) }));
       this.db.exec("COMMIT");
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
@@ -501,13 +508,15 @@ export class Store {
     let telegramMessageId = message.direction === "inbound" ? String(external ?? "").split(":")[1] : undefined;
     const prefix = `${chatId}:reply:${message.id}:`;
     const deliveries = message.direction === "outbound" && this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='telegram_outbox'").get()
-      ? this.db.prepare("SELECT key,status,message_id,error FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix, prefix + "\uffff") as Row[] : [];
+      ? this.db.prepare("SELECT key,status,message_id,error,payload FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix, prefix + "\uffff") as Row[] : [];
     // Replies from before delivery tracking, or saved just before a crash, have no
     // record. Nothing is known about them, so no state is shown.
     if (deliveries.length) {
       const uncertain = deliveries.find(r => r.status === "unknown"), rejected = deliveries.find(r => r.status === "not_sent");
+      // Every attachment has its own receipt: a file, or a photo in an album.
       const pending = deliveries.some(r => r.status === "pending" || r.status === "sending") || message.status === "running"
-        || (message.attachments ?? []).some(file => !deliveries.some(r => r.key === prefix + "file:" + file.id));
+        || (message.attachments ?? []).some(file => !deliveries.some(r => r.key === prefix + "file:" + file.id
+          || String(r.key).startsWith(prefix + "album:") && JSON.parse(String(r.payload)).fileId === file.id));
       message.delivery = uncertain ? { state: "unknown", error: String(uncertain.error ?? "") }
         : message.status === "failed" || rejected ? { state: deliveries.some(r => r.status === "delivered") ? "unknown" : "not_sent", error: String(rejected?.error ?? message.error ?? "") }
         : pending ? { state: "pending" } : { state: "delivered" };
@@ -587,6 +596,8 @@ export class Store {
     if (named && named.id !== profileId) throw new Error("Сотрудник с таким именем уже есть");
     const appearance = input.appearance === undefined ? undefined : parseAppearance(input.appearance);
     this.db.prepare("UPDATE employee_profiles SET name = ?, instructions = ? WHERE id = ?").run(name, instructions, profileId);
+    // Its own app chat follows the name; Telegram chats keep the titles Telegram reports.
+    this.db.prepare("UPDATE conversations SET title=? WHERE channel='api' AND external_id=?").run(name, `home::employee::${profileId}`);
     if (input.purpose !== undefined) {
       this.db.prepare("UPDATE employee_profiles SET purpose=? WHERE id=?").run(input.purpose.trim(),profileId);
     }

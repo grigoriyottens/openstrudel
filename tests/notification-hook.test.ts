@@ -12,11 +12,12 @@ import { homeRequest, requestJSON, resultJSON } from "../src/home-transport.js";
 const nativeFetch = globalThis.fetch;
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanups.splice(0)) await close(); vi.unstubAllGlobals(); });
-async function setup() {
+async function setup(destinations: Record<string, unknown> = { chatId: "42" }) {
   const root = mkdtempSync(join(tmpdir(), "strudel-notification-"));
   const store = new Store(join(root, "db.sqlite"));
   store.linkTelegramChat({ chatId: "42", title: "Owner", allowedSenders: ["42"] });
-  store.setSetting("telegram.notification_hook", JSON.stringify({ chatId: "42", tokenHash: digest("notification-secret") }));
+  store.linkTelegramChat({ chatId: "-100", title: "Team", allowedSenders: [] }); store.connectTelegramGroup("-100");
+  store.setSetting("telegram.notification_hook", JSON.stringify({ ...destinations, tokenHash: digest("notification-secret") }));
   const engine = { run: vi.fn(async () => { throw new Error("Notifications must not run an agent"); }) };
   const messages = new MessageService(store, engine, root);
   const telegram = new TelegramAdapter("1:test", store, messages);
@@ -62,9 +63,127 @@ it("rejects missing identity, empty text and changed content on a repeated ident
 
 it("does not acknowledge or repeat an uncertain Telegram delivery", async () => {
   const { post, send } = await setup(); send.mockRejectedValue(new Error("connection lost"));
-  expect((await post({ text: "Once" })).status).toBe(502);
-  expect((await post({ text: "Once" })).status).toBe(502);
+  for (const attempt of [1, 2]) {
+    const response = await post({ text: "Once" }); expect(response.status, `attempt ${attempt}`).toBe(502);
+    expect(await response.json()).toEqual({ error: "Доставка не подтверждена; проверьте Telegram перед новой отправкой." });
+  }
   expect(send).toHaveBeenCalledTimes(1);
+});
+
+it("relays one notification to every listed chat once, each under its own identity", async () => {
+  const { post, store, send } = await setup({ chatIds: ["42", "-100"] });
+  const first = await post({ text: "Meeting ready" }); expect(first.status).toBe(200);
+  expect(await first.json()).toMatchObject({ sent: true, status: "delivered", chatId: "42", deliveries: [
+    { sent: true, status: "delivered", chatId: "42", title: "Owner", telegramMessageIds: ["123"] },
+    { sent: true, status: "delivered", chatId: "-100", title: "Team", telegramMessageIds: ["123"] }] });
+  expect((await post({ text: "Meeting ready" })).status).toBe(200);
+  expect(send.mock.calls.map(call => JSON.parse(String(call[1]?.body)).chat_id)).toEqual(["42", "-100"]);
+  for (const chatId of ["42", "-100"]) expect(store.findMessageByExternal("telegram", "notification:" + digest(chatId + "\0meeting-card:one:v1"))?.text).toBe("Meeting ready");
+});
+
+it("keeps the single-chat receipt when one chat is listed", async () => {
+  const { post } = await setup({ chatIds: ["42"] });
+  const receipt = await (await post({ text: "Meeting ready" })).json();
+  expect(Object.keys(receipt).sort()).toEqual(["chatId", "messageId", "sent", "status", "telegramMessageIds", "title"]);
+  expect(receipt).toMatchObject({ sent: true, status: "delivered", chatId: "42", title: "Owner", telegramMessageIds: ["123"] });
+});
+
+it("uses chatIds and ignores chatId when the setting has both", async () => {
+  const { post, send } = await setup({ chatId: "42", chatIds: ["-100"] });
+  expect((await post({ text: "Meeting ready" })).status).toBe(200);
+  expect(send.mock.calls.map(call => JSON.parse(String(call[1]?.body)).chat_id)).toEqual(["-100"]);
+});
+
+it("accepts 1 to 10 distinct chat ids", async () => {
+  const { post, store, send } = await setup();
+  const ids = Array.from({ length: 11 }, (_, index) => String(index + 1));
+  const configure = (chatIds: unknown) => store.setSetting("telegram.notification_hook", JSON.stringify({ chatIds, tokenHash: digest("notification-secret") }));
+  for (const chatIds of [[], ["42", "42"], ids, ["42", "team"], "42"]) { configure(chatIds); expect((await post({ text: "No" })).status, JSON.stringify(chatIds)).toBe(401); }
+  // Ten unconnected chats pass the setting check and then fail as destinations.
+  configure(ids.slice(0, 10)); expect((await post({ text: "No" })).status).toBe(400);
+  expect(send).not.toHaveBeenCalled();
+});
+
+it("sends nothing unless every listed chat can receive it", async () => {
+  const { post, store, send } = await setup({ chatIds: ["42", "-100"] });
+  store.setSetting("telegram.paused.-100", "true");
+  const paused = await post({ text: "Meeting ready" });
+  expect(paused.status).toBe(400); expect(await paused.json()).toEqual({ error: "Бот больше не подключён к этому чату." });
+  store.deleteSetting("telegram.paused.-100"); store.db.prepare("DELETE FROM telegram_chats WHERE chat_id='-100'").run();
+  expect((await post({ text: "Meeting ready" })).status).toBe(400);
+  expect(send).not.toHaveBeenCalled();
+});
+
+it("answers 409 for text changed on a later chat before checking or sending to any chat", async () => {
+  const { post, store, send } = await setup({ chatIds: ["42"] });
+  expect((await post({ text: "Original" })).status).toBe(200);
+  store.setSetting("telegram.notification_hook", JSON.stringify({ chatIds: ["-100", "42"], tokenHash: digest("notification-secret") }));
+  expect((await post({ text: "Changed" })).status).toBe(409);
+  store.setSetting("telegram.paused.-100", "true");
+  expect((await post({ text: "Changed" })).status).toBe(409);
+  expect(send).toHaveBeenCalledTimes(1);
+});
+
+it("answers 502 with each chat's receipt and resends to none after a partly confirmed delivery", async () => {
+  const { post, send } = await setup({ chatIds: ["42", "-100"] });
+  send.mockImplementationOnce(async () => Response.json({ ok: true, result: { message_id: 123 } })).mockRejectedValueOnce(new Error("connection lost"));
+  for (const attempt of [1, 2]) {
+    const response = await post({ text: "Once" }); expect(response.status, `attempt ${attempt}`).toBe(502);
+    expect(await response.json()).toMatchObject({ error: "Доставка не подтверждена; проверьте Telegram перед новой отправкой.", sent: false, status: "unknown", chatId: "42",
+      deliveries: [{ chatId: "42", sent: true, status: "delivered" }, { chatId: "-100", sent: false, status: "unknown" }] });
+  }
+  expect((await post({ text: "Changed" })).status).toBe(409);
+  expect(send).toHaveBeenCalledTimes(2);
+});
+
+it("reports a chat that Telegram refused as a partial delivery", async () => {
+  const { post, send } = await setup({ chatIds: ["42", "-100"] });
+  send.mockImplementation(async (_url: string, init?: RequestInit) => JSON.parse(String(init?.body)).chat_id === "-100"
+    ? Response.json({ ok: false, error_code: 403, description: "Forbidden: bot was kicked" }, { status: 403 })
+    : Response.json({ ok: true, result: { message_id: 123 } }));
+  const response = await post({ text: "Once" }); expect(response.status).toBe(502);
+  expect(await response.json()).toMatchObject({ sent: false, status: "partial", deliveries: [{ status: "delivered" }, { status: "not_sent" }] });
+});
+
+it("reports not_sent when Telegram refused every chat", async () => {
+  const { post, send } = await setup({ chatIds: ["42", "-100"] });
+  send.mockImplementation(async () => Response.json({ ok: false, error_code: 403, description: "Forbidden: bot was kicked" }, { status: 403 }));
+  const response = await post({ text: "Once" }); expect(response.status).toBe(502);
+  expect(await response.json()).toMatchObject({ sent: false, status: "not_sent", deliveries: [{ status: "not_sent" }, { status: "not_sent" }] });
+});
+
+it("reports pending rather than partial while an earlier request is still sending to a chat", async () => {
+  const { post, send } = await setup({ chatIds: ["42", "-100"] });
+  let release!: () => void;
+  send.mockImplementationOnce(async () => Response.json({ ok: true, result: { message_id: 123 } }))
+    .mockImplementationOnce(() => new Promise<Response>(resolve => { release = () => resolve(Response.json({ ok: true, result: { message_id: 124 } })); }));
+  const first = post({ text: "Once" });
+  await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+  const repeat = await post({ text: "Once" }); expect(repeat.status).toBe(502);
+  expect(await repeat.json()).toMatchObject({ sent: false, status: "pending", deliveries: [{ status: "delivered" }, { status: "pending" }] });
+  release(); expect((await first).status).toBe(200);
+  expect(send).toHaveBeenCalledTimes(2);
+});
+
+it("reports a chat that stopped being available while an earlier chat was sent", async () => {
+  const { post, store, send } = await setup({ chatIds: ["42", "-100"] });
+  send.mockImplementationOnce(async () => { store.setSetting("telegram.paused.-100", "true"); return Response.json({ ok: true, result: { message_id: 123 } }); });
+  const response = await post({ text: "Once" }); expect(response.status).toBe(502);
+  expect(await response.json()).toMatchObject({ sent: false, status: "partial", chatId: "42", deliveries: [{ chatId: "42", sent: true, status: "delivered" },
+    { chatId: "-100", sent: false, status: "not_sent", error: "Бот больше не подключён к этому чату." }] });
+  // The Home never tried that chat, so a repeat sends there and only there.
+  store.deleteSetting("telegram.paused.-100");
+  expect((await post({ text: "Once" })).status).toBe(200);
+  expect(send.mock.calls.map(call => JSON.parse(String(call[1]?.body)).chat_id)).toEqual(["42", "-100"]);
+});
+
+it("keeps relaying to a group after Telegram upgrades it to a supergroup", async () => {
+  // A setting can keep chatId for a Home that reads only that field, so both forms move.
+  const { post, store, send } = await setup({ chatId: "-100", chatIds: ["42", "-100"] });
+  store.migrateTelegramGroup("-100", "-100200");
+  expect(JSON.parse(store.getSetting("telegram.notification_hook")!)).toEqual({ chatId: "-100200", chatIds: ["42", "-100200"], tokenHash: digest("notification-secret") });
+  expect((await post({ text: "Meeting ready" })).status).toBe(200);
+  expect(send.mock.calls.map(call => JSON.parse(String(call[1]?.body)).chat_id)).toEqual(["42", "-100200"]);
 });
 
 it("uses the same scoped authentication through the remote HTTPS listener", async () => {

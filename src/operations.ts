@@ -9,7 +9,8 @@ export const problemText = {
   delivery: "Ответ сохранён, но доставка не подтверждена. Проверьте Telegram перед повтором.",
   execution: "Задача завершилась с ошибкой. Подробности сохранены в исходном чате.",
   connector: "Не удалось выполнить запрос к подключённому сервису. Доступные результаты сохранены в исходном чате.",
-  voice: "Голосовое не распознано: ElevenLabs отказал. Проверьте лимит и ключ в настройках голоса.",
+  // One text for every speech provider and cause; the precise cause stays on the original message.
+  voice: "Запись не распознана. Подробности сохранены в исходном чате.",
 } as const;
 export type ProblemCode = keyof typeof problemText;
 type RuntimeIssue = { conversationId:string; messageId:string; title:string; code:ProblemCode; time:string; tools?:string[]; detail?:string };
@@ -82,6 +83,8 @@ export function runtimeIssues(store:Store):RuntimeIssue[] {
 }
 
 /** A scheduled run that could not do its work says so in its first line; the reason goes to the owner, never to the chat. */
+/** Nothing to post: the answer is NO_REPLY, or ends with it after the model explained itself. */
+export const quietReply = (text:string):boolean => /(?:^|\n)[ \t]*NO_REPLY[ \t]*$/.test(text.trim());
 export function failedRun(text:string):string|undefined {
   const match=text.trim().match(/^FAILED:[ \t]*(.*)/);
   return match ? match[1]!.trim().slice(0,300) || "причина не указана" : undefined;

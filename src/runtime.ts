@@ -55,10 +55,7 @@ export class OpenStrudelRuntime {
     this.messages.telegram=this.telegram;
     this.scheduler = new Scheduler(this.store,this.messages);
     this.messages.scheduler=this.scheduler;
-    this.scheduler.deliver=async(chat,text,key,attachments)=>{
-      await this.telegram.sendMessage(chat,text,key);
-      await this.telegram.sendFiles(chat,attachments,key);
-    };
+    this.scheduler.deliver=(chat,text,key,attachments)=>this.telegram.sendAnswer(chat,text,attachments,key);
     this.api = new HttpApi(this.store, this.messages, this.telegram, options.apiToken ?? (options.engine ? null : process.env.OPENSTRUDEL_API_TOKEN), this.account, this.engine, { mobileDirectory: resolve(options.rootDirectory ?? process.cwd(), ".data/mobile"), mobilePort: options.mobilePort }, this.accounts);
     this.startTelegram = options.startTelegram ?? true;
   }

@@ -5,7 +5,7 @@ import type { MessageService } from "./messages.js";
 import type { Attachment } from "./types.js";
 import { agentTransfer } from "./agent-move.js";
 import { scheduleTiming } from "./schedule-timing.js";
-import { errorProblem, failedRun } from "./operations.js";
+import { errorProblem, failedRun, quietReply } from "./operations.js";
 
 export interface ScheduleInput {
   id?: string; conversationId: string; name: string; prompt: string; cron: string; timezone: string;
@@ -156,7 +156,7 @@ export class Scheduler {
     try {
       const reply = this.store.db.prepare("SELECT text,attachments_json FROM messages WHERE id=? AND conversation_id=?").get(messageId,conversationId) as Row | undefined;
       if (!reply) throw new Error("Ответ не найден");
-      if (reply.text.trim() === "NO_REPLY") {
+      if (quietReply(reply.text)) {
         this.store.db.prepare("UPDATE schedule_runs SET status='quiet',error=NULL WHERE id=?").run(runId); return;
       }
       const reason = failedRun(reply.text);
