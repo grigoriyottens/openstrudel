@@ -1,4 +1,4 @@
-FROM node:24.13.0-bookworm-slim AS build
+FROM node:24.22.1-bookworm-slim AS build
 WORKDIR /opt/openstrudel
 # .npmrc keeps vendor install scripts from running: Grok Build's would install itself into ~/.grok.
 COPY package.json package-lock.json .npmrc ./
@@ -14,7 +14,7 @@ RUN npm run build && npm prune --omit=dev \
 # Official whisper.cpp v1.9.4, built for the image architecture (no native CPU flags).
 # Source: https://github.com/ggml-org/whisper.cpp/releases/tag/v1.9.4
 # The multilingual model is the upstream conversion linked from models/README.md.
-FROM node:24.13.0-bookworm-slim AS speech-build
+FROM node:24.22.1-bookworm-slim AS speech-build
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl cmake build-essential pkg-config libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
@@ -35,7 +35,7 @@ RUN curl -fL --retry 3 --connect-timeout 30 --max-time 60 \
       https://raw.githubusercontent.com/openai/whisper/86098128c0b4f24f0e2aa2994de830614b474227/LICENSE -o /build/models/LICENSE \
     && echo 'b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d  /build/models/LICENSE' | sha256sum -c -
 
-FROM node:24.13.0-bookworm-slim
+FROM node:24.22.1-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl git curl ripgrep python3 poppler-utils bubblewrap socat ffmpeg libopenblas0-pthread \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /opt/openstrudel /opt/openstrudel

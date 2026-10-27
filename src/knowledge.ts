@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Store } from "./store.js";
 import { contextPattern } from "./scopes.js";
@@ -19,6 +19,9 @@ export function ownerKnowledge(store:Store,root:string,contextFor:(id:string)=>s
     renameSync(history+".tmp",history);
     return{conversationId:c.id,title:c.title,employee:c.profileId?store.getProfile(c.profileId)?.name:null,context,workspace,history,messages:rows.length};
   });
+  // A deleted or moved employee's chat must not stay readable through an old copy.
+  const current=new Set(sources.map(source=>source.conversationId+".jsonl"));
+  for(const name of readdirSync(directory))if(name.endsWith(".jsonl") && !current.has(name))rmSync(resolve(directory,name),{force:true});
   const memories:string[]=[];
   const contextRoots=[resolve(root,".data/contexts")];
   const accounts=resolve(root,".data/accounts");

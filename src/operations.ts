@@ -40,7 +40,7 @@ export function reportConnectorIssues(store:Store,conversationId:string,messageI
 }
 
 function infrastructureProblem(text:string):ProblemCode|undefined {
-  if (/resource temporarily unavailable|failed to fork|os error 11|spawn.*EAGAIN|not enough memory|cannot allocate memory/i.test(text)) return "resources";
+  if (/resource temporarily unavailable|failed to fork|os error 11\b|spawn.*EAGAIN|not enough memory|cannot allocate memory/i.test(text)) return "resources";
   if (/code-mode host.*(?:exited|failed)|failed to spawn code-mode|не смог установить.*плагин|command not found|No such file or directory: ['"](?:pdftotext|python3|rg)['"]/i.test(text)) return "tools";
 }
 

@@ -7,6 +7,16 @@ import AppKit
 
 @Suite("Attachment import")
 struct AttachmentImportTests {
+    @Test func downloadsOnlyFileIDsTheHomeIssues() {
+        #expect(ChatAttachment.isHomeFileID("2f8c1e1a-6a51-4c1e-9d2b-5d2f0a9b7c31"))
+        #expect(ChatAttachment.isHomeFileID("0123456789abcdef0123456789abcdef0123"))
+        // A downloaded file's folder is named by this id; a path must never escape it.
+        #expect(!ChatAttachment.isHomeFileID("../../Library/Application Support/x"))
+        #expect(!ChatAttachment.isHomeFileID(".."))
+        #expect(!ChatAttachment.isHomeFileID(""))
+        #expect(!ChatAttachment.isHomeFileID("2f8c1e1a-6a51-4c1e-9d2b-5d2f0a9b7c3/"))
+    }
+
     @Test func preservesContentAndFileMetadata() async throws {
         let folder = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: folder) }

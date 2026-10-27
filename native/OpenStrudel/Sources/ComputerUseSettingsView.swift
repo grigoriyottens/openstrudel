@@ -12,6 +12,7 @@ struct ComputerUseSettingsView: View {
     @State private var settings: ComputerUseSettings?
     @State private var busy = false
     @State private var error: (any Error)?
+    @State private var loadedFor = LoadedKey<String>()
     private var path: String { "/v1/extensions/computer?conversationId=" + conversationID }
     private var canManage: Bool { client.canManageConnections || client.canManageOpenAI }
 
@@ -67,7 +68,7 @@ struct ComputerUseSettingsView: View {
                     .foregroundStyle(AppTheme.destructive).disabled(busy)
             }
         }
-        .task(id: conversationID) { await load() }
+        .task(id: conversationID) { if loadedFor.claim(conversationID) { await load() } }
     }
 
     private func summary(_ settings: ComputerUseSettings) -> String {

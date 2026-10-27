@@ -160,7 +160,14 @@ export class MessageService {
         const speech = files.filter(file => isSpeechFile(file.name, file.mimeType));
         const transcripts: Array<{file: string; text: string}> = [];
         for (const file of speech) {
-          const transcript = await transcribeRecording(this.store, await readFile(file.path), file.name, running.abort.signal);
+          let transcript: string;
+          try { transcript = await transcribeRecording(this.store, await readFile(file.path), file.name, running.abort.signal); }
+          catch (error) {
+            // A recording without speech is still a file the employee can open. Only a lone voice note leaves nothing to answer.
+            if (running.abort.signal.aborted || (!text && files.length === 1)) throw error;
+            transcripts.push({ file: file.name, text: "No speech was recognized in this file." });
+            continue;
+          }
           const preview = `📝 ${file.name}\n${transcript}`;
           transcripts.push({ file: file.name, text: transcript });
           this.store.addMessage({ conversationId: current.id, channel: input.channel, direction: "outbound", text: preview, kind: "notice" });

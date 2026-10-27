@@ -55,9 +55,15 @@ async function recognize(bytes: Uint8Array, extension: string, signal?: AbortSig
     let text: string;
     if (executable) {
       try {
-        const result = await run(executable, [file, "--format", "txt"], { signal, maxBuffer: 1_048_576 });
+        // Recordings have no length limit, so a stalled recognizer must not hold the queue forever. Parakeet runs far
+        // faster than real time; at a low voice bitrate of 1.5 KB/s, allow half the possible duration, at least 3 minutes.
+        const result = await run(executable, [file, "--format", "txt"], { timeout: Math.max(180_000, Math.ceil(bytes.length / 1_500) * 500), signal, maxBuffer: 1_048_576 });
         text = result.stdout.trim();
-      } catch {
+      } catch (error) {
+        signal?.throwIfAborted();
+        if (error && typeof error === "object" && "killed" in error && error.killed) {
+          throw new Error("Распознавание заняло слишком много времени. Отправьте более короткое голосовое или текст.");
+        }
         throw new Error("Не удалось распознать голосовое. Проверьте, что модель OpenRamble загружена, или отправьте текст.");
       }
     } else {

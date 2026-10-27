@@ -193,4 +193,15 @@ describe("offline voice", () => {
     expect(mocks.run.mock.calls[0][0]).toContain("openramble");
     expect(mocks.run.mock.calls[0][1]).toEqual([join(mocks.directories[0], "voice.ogg"), "--format", "txt"]);
   });
+
+  it("bounds a stalled Mac recognizer by the recording's size and reports the timeout", async () => {
+    mocks.platform.mockReturnValue("darwin"); mocks.run.mockResolvedValue({ stdout: "Готово." });
+    await transcribeVoice(new Uint8Array([1]));
+    await transcribeVoice(new Uint8Array(6_000_000));
+    const [small, large] = mocks.run.mock.calls.map(call => call[2].timeout);
+    expect(small).toBe(180_000);
+    expect(large).toBeGreaterThan(small);
+    mocks.run.mockRejectedValue(Object.assign(new Error("Command failed"), { killed: true }));
+    await expect(transcribeVoice(new Uint8Array([1]))).rejects.toThrow("слишком много времени");
+  });
 });

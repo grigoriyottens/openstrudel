@@ -9,9 +9,17 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 NODE_BIN="$(command -v node)"
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-if [[ "$NODE_MAJOR" -lt 22 ]]; then
-  echo "OpenStrudel needs Node.js 22 or newer; found $(node --version)." >&2
+# node:sqlite works without a flag from Node.js 22.13.
+if ! node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||a===22&&b>=13?0:1)'; then
+  echo "OpenStrudel needs Node.js 22.13 or newer; found $(node --version)." >&2
+  exit 1
+fi
+
+# The Mac app runs its own Home under the same launch agent; replacing it would stop that Home and hide its data.
+PLIST="$HOME/Library/LaunchAgents/is.openstrudel.home.plist"
+if [[ "$(uname -s)" == "Darwin" && -f "$PLIST" ]] \
+  && [[ "$(/usr/bin/plutil -extract WorkingDirectory raw -o - "$PLIST" 2>/dev/null)" != "$ROOT" ]]; then
+  echo "Another OpenStrudel Home already runs from $PLIST. Remove it first if this checkout should replace it." >&2
   exit 1
 fi
 
@@ -24,7 +32,6 @@ chmod 700 .data
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
-  PLIST="$LAUNCH_AGENTS/is.openstrudel.home.plist"
   mkdir -p "$LAUNCH_AGENTS"
   cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -64,6 +71,8 @@ EOF
   if command -v systemctl >/dev/null 2>&1; then
     systemctl --user daemon-reload
     systemctl --user enable --now openstrudel.service
+    # A user service stops at logout and does not start at boot without lingering.
+    loginctl enable-linger "$USER" 2>/dev/null || echo "To keep Home running after logout and start it at boot, run: sudo loginctl enable-linger $USER" >&2
     echo "OpenStrudel Home is running at http://127.0.0.1:7788"
   else
     echo "Build complete. Start Home with: $NODE_BIN $ROOT/dist/cli.js start"

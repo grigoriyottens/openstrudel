@@ -24,7 +24,8 @@ export function createServer(service) {
       const base=s.c.basePath||'';
       const path=base&&u.pathname.startsWith(base+'/')?u.pathname.slice(base.length):u.pathname;
       if(req.headers.host!==new URL(s.c.origin).host)throw s.err(400,'Неверный адрес сервиса.');
-      let raw='';if(!['GET','HEAD'].includes(method)){for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>65536)throw s.err(413,'Запрос слишком большой.');}}
+      // Decode once: a multibyte character can span two chunks, and webhook signatures cover the exact text.
+      let raw='';if(!['GET','HEAD'].includes(method)){const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>65536)throw s.err(413,'Запрос слишком большой.');chunks.push(chunk);}raw=Buffer.concat(chunks).toString('utf8');}
       if(await magicHTTP(s,req,res,u,raw,json))return;
       if(await openstrudelHTTP(s,req,res,u,raw,json))return;
       if(path==='/api/v1/webhooks/wai-pay'&&method==='POST'){if(!s.payments.real)throw s.err(404,'WAI Pay не подключён.');json(200,await s.payments.real.webhook(raw,req.headers));return;}

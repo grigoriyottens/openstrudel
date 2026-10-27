@@ -23,6 +23,7 @@ struct SpeechSettingsView: View {
     @State private var voiceId = ""
     @State private var saving = false
     @State private var error: String?
+    @State private var loadedFor = LoadedKey<String>()
     private var changed: Bool { provider != settings?.provider || !key.isEmpty || voiceId != (settings?.voiceId ?? "") }
 
     var body: some View {
@@ -68,7 +69,7 @@ struct SpeechSettingsView: View {
                 if settings == nil { Button(L("Повторить")) { Task { await load() } } }
             }
         }
-        .task(id: client.id + query) { await load() }
+        .task(id: client.id + query) { if loadedFor.claim(client.id + query) { await load() } }
         .onChange(of: changed) { _, value in onEditingChange(value) }
         .onChange(of: provider) { _, value in onProviderChange(value) }
     }

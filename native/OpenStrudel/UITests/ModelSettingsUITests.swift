@@ -131,6 +131,87 @@ import XCTest
         XCTAssertTrue((updated["profile"] as? [String:Any])?["model"] is NSNull)
         capture("employee-inherits-device", app)
     }
+    /// Choosing a ChatGPT model adds the speed and reasoning rows; adding rows must not reload and undo the choice.
+    func testChoosingChatGPTAfterAnAPIKeyModelKeepsTheChoice() async throws {
+        let (app, fixture) = try await pairedApplication()
+        _ = try await read(fixture + "/claude")
+        app.buttons["teamSettings"].tap()
+        app.buttons["settingsSection"].tap(); app.buttons["Приложение"].tap()
+        let model = app.buttons["modelChoice"]
+        XCTAssertTrue(model.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["modelSpeed"].exists, app.debugDescription)
+        model.tap(); app.buttons["GPT-6 Sol"].tap()
+        XCTAssertTrue(app.buttons["modelSpeed"].waitForExistence(timeout: 10), app.debugDescription)
+        // Give a reload the time it would need to land.
+        _ = app.staticTexts["never-appears"].waitForExistence(timeout: 3)
+        XCTAssertTrue(model.label.contains("GPT-6 Sol"), app.debugDescription)
+        let save = app.buttons["saveModelSelection"]
+        reveal(save, in: app); save.tap()
+        XCTAssertTrue(app.staticTexts["Сохранено. Применится со следующего поручения."].waitForExistence(timeout: 10))
+        let state = try await read(fixture + "/state")
+        XCTAssertEqual((state["defaults"] as? [String:Any])?["model"] as? String, "gpt-6-sol")
+        capture("device-model-from-api-key", app)
+    }
+
+    /// Choosing ElevenLabs shows its key field; adding those rows must not reload and switch back.
+    func testChoosingElevenLabsKeepsTheChoiceAndTheTypedKey() async throws {
+        let (app, _) = try await pairedApplication()
+        app.buttons["teamSettings"].tap()
+        app.buttons["settingsSection"].tap(); app.buttons["Приложение"].tap()
+        let provider = app.buttons["speechProvider"]
+        reveal(provider, in: app)
+        XCTAssertTrue(provider.waitForExistence(timeout: 15), app.debugDescription)
+        provider.tap(); app.buttons["ElevenLabs"].tap()
+        let key = app.secureTextFields["speechAPIKey"]
+        XCTAssertTrue(key.waitForExistence(timeout: 10), app.debugDescription)
+        reveal(key, in: app); key.tap(); key.typeText("fixture-key")
+        _ = app.staticTexts["never-appears"].waitForExistence(timeout: 3)
+        XCTAssertTrue(key.exists, app.debugDescription)
+        XCTAssertTrue(provider.label.contains("ElevenLabs"), app.debugDescription)
+        XCTAssertTrue(app.buttons["saveSpeechSettings"].exists, app.debugDescription)
+        capture("speech-elevenlabs-kept", app)
+    }
+
+    /// A device's controls share one Form row; one tap must run only the tapped control.
+    func testOneTapInADeviceRowRunsOnlyThatControl() async throws {
+        let (app, fixture) = try await pairedApplication()
+        _ = try await read(fixture + "/invite")
+        app.buttons["teamSettings"].tap()
+        app.buttons["settingsSection"].tap(); app.buttons["Устройства"].tap()
+        let device = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "deviceDetails")).firstMatch
+        XCTAssertTrue(device.waitForExistence(timeout: 15), app.debugDescription)
+        device.tap()
+        let waiting = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "cancelInvitation-"))
+        let reconnect = app.buttons["reconnectDevice"]
+        XCTAssertTrue(reconnect.waitForExistence(timeout: 10), app.debugDescription)
+        reveal(waiting.firstMatch, in: app)
+        XCTAssertTrue(waiting.firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+        let invitations = waiting.count
+        reveal(reconnect, in: app); reconnect.tap()
+        _ = app.staticTexts["never-appears"].waitForExistence(timeout: 3)
+        XCTAssertEqual(waiting.count, invitations, app.debugDescription)
+        XCTAssertFalse(app.buttons["confirmDeviceSignOut"].exists, app.debugDescription)
+        XCTAssertTrue(reconnect.isHittable, app.debugDescription)
+        capture("device-row-single-tap", app)
+    }
+
+    private func pairedApplication() async throws -> (XCUIApplication, String) {
+        continueAfterFailure = false
+        guard let fixture = ProcessInfo.processInfo.environment["OPENSTRUDEL_MODEL_FIXTURE"] else { throw XCTSkip("Start model-settings.ts.") }
+        _ = try await read(fixture + "/reset")
+        let app = XCUIApplication()
+        app.launchArguments = ["-openstrudel.language", "ru", "-AppleLanguages", "(ru)"]
+        app.launch()
+        let invite = try await read(fixture + "/invite")
+        app.open(try XCTUnwrap(URL(string: XCTUnwrap(invite["url"] as? String))))
+        let confirm = app.buttons["confirmMacPairing"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 15)); confirm.tap(); app.finishDevicePairing()
+        if app.buttons["acceptAIDataSharing"].waitForExistence(timeout: 4) { app.buttons["acceptAIDataSharing"].tap() }
+        let chats = app.buttons["Чаты"]
+        XCTAssertTrue(chats.waitForExistence(timeout: 15)); chats.tap()
+        return (app, fixture)
+    }
+
     private func read(_ url: String) async throws -> [String:Any] {
         let (data,_) = try await URLSession.shared.data(from: XCTUnwrap(URL(string:url)))
         return try XCTUnwrap(JSONSerialization.jsonObject(with:data) as? [String:Any])

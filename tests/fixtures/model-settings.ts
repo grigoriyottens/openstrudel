@@ -38,6 +38,8 @@ const controller=createServer(async(req,res)=>{
   }
   if(req.url==='/invite'){res.end(JSON.stringify(await runtime.api.mobile.invite(true)));return;}
   if(req.url==='/web'){res.end(JSON.stringify({url:url+'/#invite='+runtime.api.web.invite(true).key}));return;}
+  // A device on an API-key model shows no speed or reasoning rows until a ChatGPT model is chosen.
+  if(req.url==='/claude')saveModelSelection(runtime.store,{provider:'anthropic',model:'claude-opus-5-5',serviceTier:null});
   if(req.url?.startsWith('/unavailable'))unavailable=req.url.includes('value=1');
   if(req.url?.startsWith('/recommendation'))recommended=req.url.includes('value=1');
   res.end(JSON.stringify({profile:runtime.store.getProfile(profile.id),conversation:runtime.store.getConversation(conversation.id),fallbacks:JSON.parse(runtime.store.getSetting('models.fallbacks')||'[]'),defaults:readModelSelection(runtime.store),main:readModelSelection(runtime.store,'main')}));

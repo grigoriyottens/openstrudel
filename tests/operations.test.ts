@@ -172,6 +172,14 @@ it("can cancel a hidden scheduled turn without reporting an intentional cancella
 });
 
 
+it("does not mistake an ordinary network error for exhausted resources",()=>{
+ const failed=(text:string)=>toolProblem({type:"item/completed",payload:{item:{type:"commandExecution",exitCode:1,aggregatedOutput:text}}});
+ // Linux: 110 ETIMEDOUT, 111 ECONNREFUSED, 113 EHOSTUNREACH. Only 11 is EAGAIN.
+ for(const text of ["Connection timed out (os error 110)","Connection refused (os error 111)","No route to host (os error 113)"])expect(failed(text)).toBeUndefined();
+ expect(failed("Resource temporarily unavailable (os error 11)")).toBe("resources");
+ expect(failed("spawn failed (os error 11)")).toBe("resources");
+});
+
 it("does not mistake a successfully read diagnostic log for a new infrastructure failure",()=>{
  expect(toolProblem({type:"item/completed",payload:{item:{type:"commandExecution",exitCode:0,aggregatedOutput:"Yesterday: Resource temporarily unavailable"}}})).toBeUndefined();
  expect(toolProblem({type:"item/completed",payload:{item:{type:"functionCallOutput",name:"exec",output:[{text:JSON.stringify({exit_code:0,output:"Yesterday: failed to fork"})}]}}})).toBeUndefined();

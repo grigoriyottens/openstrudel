@@ -238,6 +238,19 @@ struct HomeMessage: Codable, Identifiable, Hashable {
     var time: String? { hasTime ? sentAt.map(ChatClock.time) : nil }
 }
 
+/// A Form gives a modifier on several rows to every row, so a settings view's `.task` also runs for each
+/// row that appears later. Loading again then would reset what the person is choosing; load once per key.
+struct LoadedKey<Key: Equatable> {
+    private var key: Key?
+    private var loaded = false
+    /// True the first time for each key.
+    mutating func claim(_ next: Key) -> Bool {
+        if loaded && key == next { return false }
+        key = next; loaded = true
+        return true
+    }
+}
+
 struct ChatAttachment: Codable, Hashable, Identifiable {
     let id: String
     let conversationId: String
@@ -246,6 +259,10 @@ struct ChatAttachment: Codable, Hashable, Identifiable {
     let size: Int
     var icon: String { mimeType.hasPrefix("image/") ? "photo" : mimeType == "application/pdf" ? "doc.richtext" : mimeType.hasPrefix("audio/") ? "waveform" : "doc" }
     var sizeLabel: String { ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file) }
+    /// Homes issue 36-character ids of hex digits and dashes; a download folder is named by one.
+    static func isHomeFileID(_ id: String) -> Bool {
+        id.count == 36 && id.allSatisfy { $0.isHexDigit || $0 == "-" }
+    }
 }
 
 struct PickedFile: Codable, Equatable, Identifiable, Sendable {

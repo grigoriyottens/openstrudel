@@ -107,7 +107,9 @@ export class Scheduler {
       const schedule = this.list(row.conversation_id).find(s => s.id === row.id)!;
       // After sleep, produce only the latest due edition, never a burst of old digests.
       const timing = scheduleTiming(schedule.cron, schedule.timezone, now);
-      const scheduledFor = timing.once ? timing.nextRunAt : CronExpressionParser.parse(schedule.cron, { currentDate: new Date(now.getTime()+1), tz: schedule.timezone }).prev().toISOString()!;
+      const latest = timing.once ? timing.nextRunAt : CronExpressionParser.parse(schedule.cron, { currentDate: new Date(now.getTime()+1), tz: schedule.timezone }).prev().toISOString()!;
+      // In a skipped spring-forward hour prev() returns the previous edition; the stored deadline is the due one.
+      const scheduledFor = timing.once || String(row.next_run_at) <= latest ? latest : String(row.next_run_at);
       const next = timing.nextRunAt;
       const runId = randomUUID();
       this.store.db.exec("BEGIN IMMEDIATE");
@@ -179,7 +181,11 @@ export class Scheduler {
     }
   }
   private destination(conversationId: string, chatId?: string | null, delivery = "app"): string | null {
-    return delivery === "app" ? null : chatId ?? (delivery === "bound" ? this.store.telegramChats().find(c => c.conversationId === conversationId)?.chatId ?? null : null);
+    if (delivery === "app") return null;
+    const target = chatId ?? (delivery === "bound" ? this.store.telegramChats().find(c => c.conversationId === conversationId)?.chatId ?? null : null);
+    const chat = target ? this.store.getTelegramChat(target) : null;
+    // A chat the owner paused or removed gets nothing; the edition stays in the app.
+    return chat && chat.enabled !== false && this.store.getSetting("telegram.paused." + chat.chatId) !== "true" ? chat.chatId : null;
   }
   private async fail(id: string, error: unknown): Promise<void> {
     this.store.db.prepare("UPDATE schedule_runs SET status='failed',error=? WHERE id=?").run(error instanceof Error ? error.message : String(error),id);
