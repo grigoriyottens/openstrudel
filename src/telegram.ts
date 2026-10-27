@@ -17,7 +17,7 @@ export interface TelegramUpdate {
   message?: TelegramMessage;
   edited_message?: TelegramMessage;
 }
-type TelegramMessage = { from?: { id:number; first_name?:string; last_name?:string; is_bot?:boolean }; sender_chat?: { id:number }; is_topic_message?:boolean; message_thread_id?:number; date?:number; migrate_to_chat_id?:number|string; migrate_from_chat_id?:number|string; voice?:TelegramFile; audio?:TelegramFile; video_note?:TelegramFile; video?:TelegramFile; document?:TelegramFile & {file_name?:string;mime_type?:string}; photo?:TelegramFile[]; caption?:string;
+type TelegramMessage = { from?: { id:number; first_name?:string; last_name?:string; is_bot?:boolean }; sender_chat?: { id:number }; is_topic_message?:boolean; message_thread_id?:number; date?:number; migrate_to_chat_id?:number|string; migrate_from_chat_id?:number|string; voice?:TelegramFile; audio?:TelegramFile; video_note?:TelegramFile; video?:TelegramFile & {file_name?:string;mime_type?:string}; document?:TelegramFile & {file_name?:string;mime_type?:string}; photo?:TelegramFile[]; caption?:string;
   reply_to_message?: { message_id: number; from?: { id: number; is_bot?: boolean; username?: string; first_name?: string; last_name?: string }; text?: string; caption?: string; photo?: TelegramFile[]; document?: { file_name?: string } };
   quote?: { text?: string }; message_id: number; text?: string; chat: { id: number | string; title?: string; type?: string } };
 type TelegramFile = {file_id:string;file_size?:number};
@@ -609,14 +609,17 @@ export class TelegramAdapter {
       if(!response.ok) throw new Error("Не удалось скачать вложение");
       const bytes=new Uint8Array(await response.arrayBuffer());
       if(bytes.length>20_000_000) throw new Error("Отправьте файл до 20 МБ.");
-      if (speech) {
+      if (speech) try {
         const transcript = await this.transcribe(bytes, (message.document?.file_name ?? file.file_path).split(".").at(-1));
         this.store.setSetting("telegram.transcript." + update.update_id, transcript);
         return { text: [text, transcript].filter(Boolean).join("\n"), transcript };
+      } catch (error) {
+        // A video is a file first: when its speech cannot be heard, the employee opens it like any other attachment.
+        if (!message.video && !/^video\//i.test(message.document?.mime_type ?? "")) throw error;
       }
       const hex=sha256(`${chatId}:${message.message_id}:${media.file_id}`).slice(0,32);
       const id=`${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
-      return {text,uploads:[{id,name:message.document?.file_name ?? "photo.jpg",mimeType:message.document ? message.document.mime_type ?? "application/octet-stream" : "image/jpeg",contentBase64:Buffer.from(bytes).toString("base64")}]};
+      return {text,uploads:[{id,name:message.video ? message.video.file_name ?? "video.mp4" : message.document?.file_name ?? "photo.jpg",mimeType:message.video ? message.video.mime_type ?? "video/mp4" : message.document ? message.document.mime_type ?? "application/octet-stream" : "image/jpeg",contentBase64:Buffer.from(bytes).toString("base64")}]};
     }).then(async input => {
       const current = this.store.getTelegramChat(chatId);
       if (input.transcript && !contextOnly && current && current.enabled !== false && current.profileId === binding?.profileId && current.conversationId === binding?.conversationId) {
