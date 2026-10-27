@@ -12,7 +12,7 @@ import { AccountUnavailableError } from "../src/account-errors.js";
 import { ProviderKeyError, providerFailure, providerInfo, providerNotConnected } from "../src/providers.js";
 const stores:Store[]=[];
 const deliveryCalls=()=>vi.mocked(fetch).mock.calls.filter(([url])=>!String(url).endsWith("/sendChatAction"));
-afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();for(const s of stores.splice(0))s.close();});
+afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();vi.unstubAllEnvs();for(const s of stores.splice(0))s.close();});
 function setup() {
  const s=new Store(":memory:");stores.push(s);const run=vi.fn(async()=>({threadId:"one",response:"**Done**",events:[]}));
  const m=new MessageService(s,{run});const a=new TelegramAdapter("123:test",s,m);
@@ -210,6 +210,24 @@ it("keeps a context-only recording quiet and never previews into a changed audie
  a.transcribe=async()=>{s.bindTelegramChat("-100",s.createProfile({name:"Changed"}).id);return "Private audio";};
  await a.processUpdate({update_id:14,message:{message_id:14,from:{id:7},chat:{id:-100,type:"group"},voice:{file_id:"v2",file_size:1}}});
  expect(sent).toEqual([]);expect(run).not.toHaveBeenCalled();await m.close();
+});
+
+it("tells the owner a group recording was not recognized without blaming a speech provider",async()=>{
+ vi.stubEnv("OPENSTRUDEL_STT_URL","https://stt.example.test");vi.stubEnv("OPENSTRUDEL_STT_KEY","server-test-key");
+ const {a,run,m,s}=setup();m.telegram=a;s.bindTelegramChat("-100",s.createProfile({name:"Voice"}).id);
+ s.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});const sent:Array<{chat:string;text:string}>=[];
+ vi.stubGlobal("fetch",vi.fn(async(url:string,init:RequestInit)=>{
+   // The Home's own speech server hears music, not words.
+   if(url==="https://stt.example.test/v1/speech-to-text")return Response.json({text:""});
+   if(url.includes("/file/"))return new Response(new Uint8Array([1]));
+   if(url.endsWith("getFile"))return Response.json({ok:true,result:{file_path:"voice/file.oga",file_size:1}});
+   if(url.endsWith("sendMessage")){const body=JSON.parse(String(init.body));sent.push({chat:String(body.chat_id),text:String(body.text)});}
+   return Response.json({ok:true,result:{message_id:99}});
+ }));
+ await a.processUpdate({update_id:15,message:{message_id:15,from:{id:7},chat:{id:-100,type:"group"},voice:{file_id:"v",file_size:1}}});
+ expect(run).not.toHaveBeenCalled();
+ expect(s.listMessages(s.getTelegramChat("-100")!.conversationId!)).toMatchObject([{status:"failed",error:"Речь не распознана. Попробуйте записать сообщение ещё раз."}]);
+ expect(sent).toEqual([{chat:"42",text:"Требует внимания · Group\nЗапись не распознана. Подробности сохранены в исходном чате."}]);await m.close();
 });
 
 it("delivers the bound employee's approval to its originating private chat", async () => {

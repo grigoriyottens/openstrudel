@@ -9,7 +9,8 @@ export const problemText = {
   delivery: "Ответ сохранён, но доставка не подтверждена. Проверьте Telegram перед повтором.",
   execution: "Задача завершилась с ошибкой. Подробности сохранены в исходном чате.",
   connector: "Не удалось выполнить запрос к подключённому сервису. Доступные результаты сохранены в исходном чате.",
-  voice: "Голосовое не распознано: ElevenLabs отказал. Проверьте лимит и ключ в настройках голоса.",
+  // One text for every speech provider and cause; the precise cause stays on the original message.
+  voice: "Запись не распознана. Подробности сохранены в исходном чате.",
 } as const;
 export type ProblemCode = keyof typeof problemText;
 type RuntimeIssue = { conversationId:string; messageId:string; title:string; code:ProblemCode; time:string; tools?:string[]; detail?:string };

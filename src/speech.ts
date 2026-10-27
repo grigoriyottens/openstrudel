@@ -16,9 +16,11 @@ type Voice = { id: string; name: string };
  * The public settings never contain the key. Local mode never sends audio away. */
 export function speechSettings(store: Store) {
   const voices: Voice[] = JSON.parse(store.getSetting("speech.elevenlabs.voices") ?? "[]");
+  const provider: "local" | "elevenlabs" = store.getSetting("speech.provider") === "elevenlabs" ? "elevenlabs" : "local";
   return {
-    provider: store.getSetting("speech.provider") === "elevenlabs" ? "elevenlabs" : "local",
-    connected: Boolean(store.getSetting(keySetting)), transcriptionModel, voiceModel,
+    provider, connected: Boolean(store.getSetting(keySetting)),
+    // Where recordings actually go: the operator's speech server overrides the saved choice.
+    transcription: speechServer() ? "server" as const : provider, transcriptionModel, voiceModel,
     voiceId: store.getSetting("speech.elevenlabs.voice") ?? null, voices,
   };
 }
@@ -121,7 +123,7 @@ export function isSpeechFile(name: string, mimeType?: string): boolean {
 }
 
 export async function transcribeRecording(store: Store, bytes: Uint8Array, name = "voice.ogg", signal?: AbortSignal): Promise<string> {
-  const provider = speechServer() ? "server" : speechSettings(store).provider as "local" | "elevenlabs", started = Date.now();
+  const provider = speechSettings(store).transcription, started = Date.now();
   recordDiagnostic(store, "speech.started", { provider, bytes: bytes.length });
   try {
     const text = await recognizeRecording(store, bytes, name, signal);
