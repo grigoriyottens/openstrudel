@@ -211,7 +211,7 @@ struct AgentMetalTests {
         let ssh = MetalInstallationSSH()
         let flow = AgentMetalSetupFlow(client: client) { client in
             ServerSetupFlow(store: MetalInstallationStore(client: client), probe: { _ in nil },
-                            transport: ssh, releaseHash: { String(repeating: "a", count: 64) })
+                            transport: ssh, release: { (String(repeating: "a", count: 64), "OpenStrudel-Home-1.0-59.tar.gz") })
         }
         await flow.load(days: 1); await flow.checkPayment()
         for _ in 0..<200 where flow.installer?.hostKey == nil { try await Task.sleep(for: .milliseconds(5)) }
