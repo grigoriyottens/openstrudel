@@ -10435,5 +10435,12 @@
     "fr": "Ce Mac oubliera la configuration inachevée de {0}. Le serveur lui-même n’est pas modifié. Pour réinstaller OpenStrudel, utilisez un nouveau serveur Ubuntu.",
     "es": "Este Mac olvidará la configuración sin terminar de {0}. El servidor en sí no cambia. Para volver a instalar OpenStrudel, usa un servidor Ubuntu nuevo.",
     "he": "ה-Mac הזה ישכח את ההגדרה שלא הושלמה של {0}. השרת עצמו לא משתנה. כדי להתקין את OpenStrudel שוב, יש להשתמש בשרת Ubuntu חדש."
+  },
+  "Запись не распознана. Подробности сохранены в исходном чате.": {
+    "en": "A recording couldn’t be transcribed. Details are saved in the original chat.",
+    "ru": "Запись не распознана. Подробности сохранены в исходном чате.",
+    "fr": "Un enregistrement n’a pas pu être transcrit. Les détails sont conservés dans la conversation d’origine.",
+    "es": "No se pudo transcribir una grabación. Los detalles están guardados en el chat original.",
+    "he": "לא ניתן היה לתמלל הקלטה. הפרטים נשמרו בשיחה המקורית."
   }
 }

@@ -45,7 +45,9 @@ describe("user-owned primary Home", () => {
     worker.runtime.store.setSetting("speech.elevenlabs.key", "private-key-value");
     const route = "/v1/diagnostics?deviceId=" + worker.home.state.nodeId;
     expect((await primary.api(route, "POST", { level: "detailed" })).status).toBe(200);
-    expect((await primary.api(route)).value).toMatchObject({ level: "detailed", speech: { provider: "local", connected: true } });
+    expect((await primary.api(route)).value).toMatchObject({ level: "detailed", speech: { provider: "local", connected: true, transcription: "local" } });
+    vi.stubEnv("OPENSTRUDEL_STT_URL", "https://stt.example.test");
+    try { expect((await primary.api(route)).value.speech).toEqual({ provider: "local", connected: true, transcription: "server" }); } finally { vi.unstubAllEnvs(); }
     expect(primary.runtime.store.getSetting("diagnostics.level")).toBeNull();
     const member = await worker.runtime.api.homeLink.execute({ id: randomUUID(), request: { method: "GET", path: "/v1/diagnostics", owner: false } });
     expect(member.status).toBe(403);

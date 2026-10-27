@@ -312,7 +312,8 @@ export class HttpApi {
       if (path === "/v1/diagnostics" && ["GET", "POST"].includes(request.method ?? "")) {
         if (!canManageAccount) throw new HomeError("Диагностика доступна владельцу устройства.", 403);
         if (request.method === "POST") saveDiagnosticLevel(this.store, (await this.body(request)).level);
-        this.send(response, 200, { ...diagnosticReport(this.store), issues:runtimeIssues(this.store), speech: { provider: speechSettings(this.store).provider, connected: speechSettings(this.store).connected }, telegram: { running: this.telegram.status().running, lastCheckedAt: this.telegram.status().lastCheckedAt } }); return;
+        const { provider, connected, transcription } = speechSettings(this.store);
+        this.send(response, 200, { ...diagnosticReport(this.store), issues:runtimeIssues(this.store), speech: { provider, connected, transcription }, telegram: { running: this.telegram.status().running, lastCheckedAt: this.telegram.status().lastCheckedAt } }); return;
       }
       if (path === "/v1/speech/transcribe" && request.method === "POST") {
         const input = await this.body(request, Math.ceil(MAX_SPEECH_BYTES * 4 / 3) + 4096);
