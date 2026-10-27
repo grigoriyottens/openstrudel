@@ -3,7 +3,7 @@ import { HomeError } from "./home.js";
 
 type Event = "speech.started" | "speech.completed" | "speech.failed" | "telegram.connected" | "telegram.disconnected" | "service.started";
 export type DiagnosticReason = "provider_auth" | "provider_limit" | "invalid_audio" | "provider_unavailable" | "network" | "timeout" | "cancelled" | "local_recognition" | "empty_audio" | "file_too_large";
-type Details = { provider?: "local" | "elevenlabs"; bytes?: number; durationMs?: number; status?: number; reason?: DiagnosticReason };
+type Details = { provider?: "local" | "elevenlabs" | "server"; bytes?: number; durationMs?: number; status?: number; reason?: DiagnosticReason };
 export type DiagnosticEvent = Details & { id: number; time: string; event: Event };
 
 export function diagnosticLevel(store: Store): "standard" | "detailed" {
@@ -19,7 +19,7 @@ export function saveDiagnosticLevel(store: Store, level: unknown) {
 export function recordDiagnostic(store: Store, event: Event, details: Details = {}) {
   if (event === "speech.started" && diagnosticLevel(store) !== "detailed") return;
   const safe: Details = {};
-  if (details.provider === "local" || details.provider === "elevenlabs") safe.provider = details.provider;
+  if (details.provider === "local" || details.provider === "elevenlabs" || details.provider === "server") safe.provider = details.provider;
   for (const key of ["bytes", "durationMs", "status"] as const) {
     if (Number.isFinite(details[key]) && details[key]! >= 0) safe[key] = Math.round(details[key]!);
   }

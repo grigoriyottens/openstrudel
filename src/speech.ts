@@ -27,30 +27,55 @@ class SpeechFailure extends HomeError {
   constructor(message: string, status: number, readonly reason: DiagnosticReason, readonly providerStatus?: number) { super(message, status); }
 }
 
-function problem(status: number, code?: unknown): Error {
-  // ElevenLabs answers an exhausted quota with 401 too; its error code tells them apart.
-  if (code === "quota_exceeded") return new SpeechFailure("У ElevenLabs закончился лимит. Пополните баланс ElevenLabs или дождитесь его обновления.", 503, "provider_limit", status);
-  if (status === 401 || status === 403) return new SpeechFailure("ElevenLabs не принял ключ или его разрешения. Проверьте ключ в настройках голоса.", 400, "provider_auth", status);
-  if (status === 402 || status === 429) return new SpeechFailure("ElevenLabs временно недоступен или закончился лимит. Проверьте баланс и повторите позже.", 503, "provider_limit", status);
-  if (status === 400 || status === 422) return new SpeechFailure("ElevenLabs не смог обработать запись. Проверьте формат файла и наличие речи.", 400, "invalid_audio", status);
-  return new SpeechFailure("ElevenLabs сейчас не отвечает. Попробуйте ещё раз.", 503, "provider_unavailable", status);
+type Service = { origin: string; key: string; errors: Record<"auth" | "busy" | "audio" | "down" | "late" | "network", string> };
+const elevenLabs = (key: string): Service => ({ origin, key, errors: {
+  auth: "ElevenLabs не принял ключ или его разрешения. Проверьте ключ в настройках голоса.",
+  busy: "ElevenLabs временно недоступен или закончился лимит. Проверьте баланс и повторите позже.",
+  audio: "ElevenLabs не смог обработать запись. Проверьте формат файла и наличие речи.",
+  down: "ElevenLabs сейчас не отвечает. Попробуйте ещё раз.",
+  late: "ElevenLabs не успел распознать запись. Попробуйте ещё раз.",
+  network: "Не удалось связаться с ElevenLabs. Запись можно распознать повторно.",
+} });
+
+/** A server Home can send recordings to its own OpenRamble server, which answers like ElevenLabs Scribe. When the
+ * operator sets one, every recording goes there, whatever the voice settings choose; voice generation stays on ElevenLabs. */
+function speechServer(): Service | null {
+  const url = process.env.OPENSTRUDEL_STT_URL?.trim();
+  return url ? { origin: url.replace(/\/+$/, ""), key: process.env.OPENSTRUDEL_STT_KEY?.trim() ?? "", errors: {
+    auth: "Сервер распознавания не принял ключ. Проверьте OPENSTRUDEL_STT_KEY.",
+    busy: "Сервер распознавания сейчас занят. Повторите через минуту.",
+    audio: "Сервер распознавания не смог обработать запись. Проверьте формат файла и наличие речи.",
+    down: "Сервер распознавания сейчас не отвечает. Попробуйте ещё раз.",
+    late: "Сервер распознавания не успел распознать запись. Попробуйте ещё раз.",
+    network: "Не удалось связаться с сервером распознавания. Запись можно распознать повторно.",
+  } } : null;
 }
 
-async function request(key: string, path: string, init: RequestInit = {}, signal?: AbortSignal) {
+function problem(service: Service, status: number, code?: unknown): Error {
+  // ElevenLabs answers an exhausted quota with 401 too; its error code tells them apart.
+  if (code === "quota_exceeded") return new SpeechFailure("У ElevenLabs закончился лимит. Пополните баланс ElevenLabs или дождитесь его обновления.", 503, "provider_limit", status);
+  if (code === "audio_too_long" || code === "audio_too_long_for_deadline") return new SpeechFailure("Запись слишком длинная для распознавания. Разделите её на части.", 400, "invalid_audio", status);
+  if (status === 401 || status === 403) return new SpeechFailure(service.errors.auth, 400, "provider_auth", status);
+  if (status === 402 || status === 429) return new SpeechFailure(service.errors.busy, 503, "provider_limit", status);
+  if (status === 400 || status === 422) return new SpeechFailure(service.errors.audio, 400, "invalid_audio", status);
+  return new SpeechFailure(service.errors.down, 503, "provider_unavailable", status);
+}
+
+async function request(service: Service, path: string, init: RequestInit = {}, signal?: AbortSignal, timeoutMs = 180_000) {
   try {
-    const timeout = AbortSignal.timeout(180_000);
-    const response = await fetch(origin + path, { ...init, redirect: "error", headers: { ...init.headers, "xi-api-key": key },
+    const timeout = AbortSignal.timeout(timeoutMs);
+    const response = await fetch(service.origin + path, { ...init, redirect: "error", headers: { ...init.headers, "xi-api-key": service.key },
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
     if (!response.ok) {
       const code = await response.json().then((body: any) => body?.detail?.status, () => undefined);
-      throw problem(response.status, code);
+      throw problem(service, response.status, code);
     }
     return response;
   } catch (error) {
     if (error instanceof HomeError || signal?.aborted) throw error;
     // Provider errors can contain request details. Return only our own text.
     const timedOut = error instanceof Error && error.name === "TimeoutError";
-    throw new SpeechFailure(timedOut ? "ElevenLabs не успел распознать запись. Попробуйте ещё раз." : "Не удалось связаться с ElevenLabs. Запись можно распознать повторно.", 503, timedOut ? "timeout" : "network");
+    throw new SpeechFailure(timedOut ? service.errors.late : service.errors.network, 503, timedOut ? "timeout" : "network");
   }
 }
 
@@ -63,11 +88,11 @@ export async function saveSpeechSettings(store: Store, input: Record<string, unk
   if (input.key !== undefined) {
     if (typeof input.key !== "string" || !/^[^\s]{20,512}$/.test(input.key.trim())) throw new HomeError("Вставьте API-ключ ElevenLabs.");
     key = input.key.trim();
-    await request(key, "/v1/models").then(r => r.json());
+    await request(elevenLabs(key), "/v1/models").then(r => r.json());
     // A transcription-only key need not have access to the voice library.
     voices = [];
     try {
-      const data = await (await request(key, "/v1/voices")).json() as { voices?: Array<{voice_id?: string; name?: string}> };
+      const data = await (await request(elevenLabs(key), "/v1/voices")).json() as { voices?: Array<{voice_id?: string; name?: string}> };
       voices = (data.voices ?? []).filter(v => v.voice_id && v.name).map(v => ({ id: v.voice_id!, name: v.name! }));
     } catch {}
   }
@@ -96,7 +121,7 @@ export function isSpeechFile(name: string, mimeType?: string): boolean {
 }
 
 export async function transcribeRecording(store: Store, bytes: Uint8Array, name = "voice.ogg", signal?: AbortSignal): Promise<string> {
-  const provider = speechSettings(store).provider as "local" | "elevenlabs", started = Date.now();
+  const provider = speechServer() ? "server" : speechSettings(store).provider as "local" | "elevenlabs", started = Date.now();
   recordDiagnostic(store, "speech.started", { provider, bytes: bytes.length });
   try {
     const text = await recognizeRecording(store, bytes, name, signal);
@@ -114,20 +139,26 @@ export async function transcribeRecording(store: Store, bytes: Uint8Array, name 
 async function recognizeRecording(store: Store, bytes: Uint8Array, name: string, signal?: AbortSignal): Promise<string> {
   if (!bytes.length) throw new HomeError("Запись пустая. Запишите её ещё раз.");
   if (bytes.length > MAX_SPEECH_BYTES) throw new HomeError("Для распознавания выберите аудио или видео до 25 МБ.", 413);
-  if (speechSettings(store).provider === "local") return transcribeVoice(bytes, name.split(".").at(-1), signal);
+  const server = speechServer();
+  if (!server && speechSettings(store).provider === "local") return transcribeVoice(bytes, name.split(".").at(-1), signal);
   const key = store.getSetting(keySetting);
-  if (!key) throw new HomeError("Добавьте API-ключ ElevenLabs в настройках голоса.");
+  if (!server && !key) throw new HomeError("Добавьте API-ключ ElevenLabs в настройках голоса.");
+  const service = server ?? elevenLabs(key!);
   const form = new FormData();
   form.set("model_id", transcriptionModel);
   form.set("tag_audio_events", "false");
   form.set("timestamps_granularity", "none");
+  // A voice note waits 170 s, under the Home's 180 s limit. A longer recording waits up to half its length at the
+  // lowest voice bitrate (1.5 KB/s), at most 10 minutes: the longest wait the server still puts ahead of meetings.
+  const wait = Math.min(600, Math.max(170, Math.ceil(bytes.length / 3_000)));
+  if (server) form.set("deadline_s", String(wait));
   form.set("file", new Blob([new Uint8Array(bytes)]), name.replace(/[^\p{L}\p{N}._ -]/gu, "_").slice(-180) || "voice.ogg");
-  const response = await request(key, "/v1/speech-to-text", { method: "POST", body: form }, signal);
+  const response = await request(service, "/v1/speech-to-text", { method: "POST", body: form }, signal, server ? (wait + 10) * 1_000 : undefined);
   let result: { text?: string };
   try { result = await response.json() as { text?: string }; }
   catch (error) {
     if (signal?.aborted) throw error;
-    throw new SpeechFailure("ElevenLabs сейчас не отвечает. Попробуйте ещё раз.", 503,
+    throw new SpeechFailure(service.errors.down, 503,
       error instanceof Error && error.name === "TimeoutError" ? "timeout" : "provider_unavailable");
   }
   if (typeof result.text !== "string" || !result.text.trim()) throw new HomeError("Речь не распознана. Попробуйте записать сообщение ещё раз.");
@@ -139,7 +170,7 @@ export async function generateSpeech(store: Store, text: string): Promise<Buffer
   const settings = speechSettings(store), key = store.getSetting(keySetting);
   if (!key || !settings.voiceId) throw new HomeError("Подключите ElevenLabs и выберите голос в настройках.");
   if (!text.trim() || text.length > MAX_SPEECH_TEXT) throw new HomeError("Для озвучивания нужен текст до 10000 символов.");
-  const response = await request(key, "/v1/text-to-speech/" + encodeURIComponent(settings.voiceId) + "?output_format=mp3_44100_128", {
+  const response = await request(elevenLabs(key), "/v1/text-to-speech/" + encodeURIComponent(settings.voiceId) + "?output_format=mp3_44100_128", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, model_id: voiceModel }),
   });
   const reader = response.body?.getReader();
