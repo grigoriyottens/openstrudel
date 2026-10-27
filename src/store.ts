@@ -501,13 +501,15 @@ export class Store {
     let telegramMessageId = message.direction === "inbound" ? String(external ?? "").split(":")[1] : undefined;
     const prefix = `${chatId}:reply:${message.id}:`;
     const deliveries = message.direction === "outbound" && this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='telegram_outbox'").get()
-      ? this.db.prepare("SELECT key,status,message_id,error FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix, prefix + "\uffff") as Row[] : [];
+      ? this.db.prepare("SELECT key,status,message_id,error,payload FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix, prefix + "\uffff") as Row[] : [];
     // Replies from before delivery tracking, or saved just before a crash, have no
     // record. Nothing is known about them, so no state is shown.
     if (deliveries.length) {
       const uncertain = deliveries.find(r => r.status === "unknown"), rejected = deliveries.find(r => r.status === "not_sent");
+      // Every attachment has its own receipt: a file, or a photo in an album.
       const pending = deliveries.some(r => r.status === "pending" || r.status === "sending") || message.status === "running"
-        || (message.attachments ?? []).some(file => !deliveries.some(r => r.key === prefix + "file:" + file.id));
+        || (message.attachments ?? []).some(file => !deliveries.some(r => r.key === prefix + "file:" + file.id
+          || String(r.key).startsWith(prefix + "album:") && JSON.parse(String(r.payload)).fileId === file.id));
       message.delivery = uncertain ? { state: "unknown", error: String(uncertain.error ?? "") }
         : message.status === "failed" || rejected ? { state: deliveries.some(r => r.status === "delivered") ? "unknown" : "not_sent", error: String(rejected?.error ?? message.error ?? "") }
         : pending ? { state: "pending" } : { state: "delivered" };
