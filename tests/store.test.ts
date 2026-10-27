@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Store } from "../src/store.js";
+import { reportIssue } from "../src/operations.js";
 
 describe("Store", () => {
   it("names new assistants in the creating client's language without renaming existing ones", () => {
@@ -24,6 +28,42 @@ describe("Store", () => {
     expect(store.getProfile(p.id)).toMatchObject({ purpose: "Помогает писать", domain: "work", instructions: "New rules" });
     expect(() => store.createProfile({ name: "Invalid", domain: "other" as any })).toThrow();
     store.close();
+  });
+  it("renames an employee's own app chat with the employee, never its Telegram chats", () => {
+    const store = new Store(":memory:");
+    try {
+      const employee = store.createProfile({ defaultName: "Новый сотрудник" }), chat = store.profileConversation(employee.id);
+      store.linkTelegramChat({ chatId: "42", title: "Анна", allowedSenders: ["42"] });
+      store.linkTelegramChat({ chatId: "-100", title: "Редакция", allowedSenders: ["42"] });
+      store.bindTelegramChat("42", employee.id);
+      const group = store.bindTelegramChat("-100", employee.id).conversationId!;
+      store.importHistory(chat.id, [{ sourceId: "1", author: "Анна", text: "Старое письмо", direction: "inbound", date: "2026-10-01" }]);
+      store.updateProfile(employee.id, { name: "Редактор", instructions: "" });
+      expect(store.getConversation(chat.id)?.title).toBe("Редактор");
+      // What the owner reads: the caption above imported history and the notice about this chat.
+      expect(store.employeeMessagePage(employee.id, new URLSearchParams()).messages[0]?.origin).toEqual({ channel: "archive", title: "Редактор" });
+      expect(reportIssue(store, chat.id, "request", "execution")?.text).toMatch(/^Требует внимания · Редактор\n/);
+      expect(store.getConversation(group)?.title).toBe("Редакция");
+      expect(store.telegramChats().map(c => [c.chatId, c.title, c.conversationId])).toEqual([["42", "Анна", chat.id], ["-100", "Редакция", group]]);
+    } finally { store.close(); }
+  });
+  it("corrects an employee chat still titled with an earlier name when an existing Home starts", () => {
+    const directory = mkdtempSync(join(tmpdir(), "strudel-chat-titles-")), path = join(directory, "home.db");
+    let store = new Store(path);
+    try {
+      const first = store.createProfile({ defaultName: "Nouvel assistant" }), second = store.createProfile({ name: "Research" });
+      const chats = [first, second].map(p => store.profileConversation(p.id)), main = store.primaryConversation();
+      store.linkTelegramChat({ chatId: "-100", title: "Редакция", allowedSenders: ["42"] });
+      const group = store.bindTelegramChat("-100", first.id).conversationId!;
+      // Earlier Homes renamed only the employee; its app chat kept the name it was created with.
+      const rename = store.db.prepare("UPDATE employee_profiles SET name=? WHERE id=?");
+      rename.run("Редактор", first.id); rename.run("Researcher", second.id);
+      store.close(); store = new Store(path);
+      expect(chats.map(c => store.getConversation(c.id)?.title)).toEqual(["Редактор", "Researcher"]);
+      expect(store.getConversation(chats[0]!.id)?.updatedAt).toBe(chats[0]!.updatedAt);
+      expect(store.getConversation(group)?.title).toBe("Редакция");
+      expect(store.getConversation(main.id)?.title).toBe("Главный чат");
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
   });
   it("uses the latest employee answer as a bounded preview, keeping the personality separate", () => {
     const store = new Store(":memory:");
