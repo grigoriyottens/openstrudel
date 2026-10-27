@@ -83,6 +83,8 @@ export function runtimeIssues(store:Store):RuntimeIssue[] {
 }
 
 /** A scheduled run that could not do its work says so in its first line; the reason goes to the owner, never to the chat. */
+/** Nothing to post: the answer is NO_REPLY, or ends with it after the model explained itself. */
+export const quietReply = (text:string):boolean => /(?:^|\n)[ \t]*NO_REPLY[ \t]*$/.test(text.trim());
 export function failedRun(text:string):string|undefined {
   const match=text.trim().match(/^FAILED:[ \t]*(.*)/);
   return match ? match[1]!.trim().slice(0,300) || "причина не указана" : undefined;

@@ -168,6 +168,19 @@ describe("durable cron", () => {
     expect(store.listMessages(c.id)).toEqual([]);
     expect(scheduler.runs(c.id)[0]?.status).toBe("quiet");
   });
+  it("keeps a run quiet when its answer explains itself and ends with NO_REPLY", async () => {
+    const store = new Store(":memory:"); stores.push(store);
+    const messages = new MessageService(store,{async run(){return {threadId:"quiet",response:"I checked the latest queue — nothing worth a card tonight.\n\nNO_REPLY",events:[]};}});
+    const scheduler = new Scheduler(store,messages);
+    const c = store.primaryConversation();
+    store.linkTelegramChat({chatId:"123",title:"Test",allowedSenders:["123"]});
+    const sent:string[]=[]; scheduler.deliver=async(_,text)=>{sent.push(text);};
+    scheduler.save({conversationId:c.id,name:"News",prompt:"Fresh items",cron:"0 9 * * *",timezone:"Europe/Moscow",delivery:"telegram",telegramChatId:"123"},new Date("2026-09-26T10:00:00Z"));
+    await scheduler.tick(new Date("2026-09-27T06:00:01Z")); await scheduler.idle();
+    expect(sent).toEqual([]);
+    expect(store.listMessages(c.id)).toEqual([]);
+    expect(scheduler.runs(c.id)[0]?.status).toBe("quiet");
+  });
   it("tells the owner why a run could not do its work and keeps the failure out of the chat", async () => {
     const store = new Store(":memory:"); stores.push(store);
     let reason = "правила публикации не открылись";

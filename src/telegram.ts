@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { telegramText, type TelegramText } from "./telegram-format.js";
 import { isSpeechFile, transcribeRecording } from "./speech.js";
-import { errorProblem } from "./operations.js";
+import { errorProblem, quietReply } from "./operations.js";
 import type { MessageService } from "./messages.js";
 import type { Store } from "./store.js";
 import { agentTransfer, assertAgentWritable } from "./agent-move.js";
@@ -756,7 +756,7 @@ export class TelegramAdapter {
       // The chat changed hands during the turn. Record that nothing was sent.
       if (!currentBinding || currentBinding.profileId !== binding?.profileId) this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status,error) VALUES(?,?,'{}','not_sent',?)")
         .run(`${chatId}:reply:${result.messageId}:0`, chatId, "Подключение этого чата изменилось. Ответ не отправлен в Telegram.");
-      else if (Number(chatId) >= 0 || result.text.trim() !== "NO_REPLY") await this.sendAnswer(message.chat.id, result.text, result.attachments, `reply:${result.messageId}`, Number(chatId) < 0 ? message.message_id : undefined);
+      else if (Number(chatId) >= 0 || !quietReply(result.text)) await this.sendAnswer(message.chat.id, result.text, result.attachments, `reply:${result.messageId}`, Number(chatId) < 0 ? message.message_id : undefined);
     }
     catch { this.lastError="Ответ сохранён в приложении; доставку в Telegram нужно проверить"; }
     } catch (error) {
