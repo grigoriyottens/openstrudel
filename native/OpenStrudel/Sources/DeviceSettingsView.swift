@@ -273,6 +273,7 @@ private struct DevicesPane: View {
                     } icon: { Image(systemName: "server.rack") }
                 }
                 .accessibilityIdentifier("continuePendingServer")
+                ForgetServerSetupButton(flow: serverSetup)
             }
         }
         #endif

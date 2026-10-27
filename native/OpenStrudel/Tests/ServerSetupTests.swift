@@ -112,11 +112,15 @@ struct ServerSetupTests {
     @Test func bootstrapIsReplayedWithTheSameIdentityAndSecretsStayInStdin() throws {
         let target = try ServerTarget(host: "server.example.com", user: "root", port: 22)
         let key = try SSHHostKey(line: "server.example.com ssh-ed25519 " + Data(repeating: 1, count: 51).base64EncodedString(), target: target)
-        let saved = try ServerInstallation(target: target, hostKey: key, releaseHash: String(repeating: "a", count: 64))
+        var saved = try ServerInstallation(target: target, hostKey: key, releaseHash: String(repeating: "a", count: 64))
+        // A recipe saved before archives were pinned leaves the file to the installer's alias.
+        #expect(try !ServerSetupScripts.install(saved, installer: Data("#!/usr/bin/env bash\ntrue\n".utf8), script: "").contains("releaseFile"))
+        saved.releaseFile = "OpenStrudel-Home-1.0-59.tar.gz"
         let input = try ServerSetupScripts.install(saved, installer: Data("#!/usr/bin/env bash\ntrue\n".utf8), script: "install_server() { :; }")
         #expect(input == (try ServerSetupScripts.install(saved, installer: Data("#!/usr/bin/env bash\ntrue\n".utf8), script: "install_server() { :; }")))
         #expect(!input.contains(saved.ownerToken))
         #expect(input.contains(saved.id))
+        #expect(input.contains(#""releaseFile":"OpenStrudel-Home-1.0-59.tar.gz""#))
         #expect(saved.target == target)
     }
 
@@ -130,13 +134,16 @@ struct ServerSetupTests {
     }
 
     @Test func oldRecoveryRecordsAndStatusRemainReadable() throws {
-        let saved = try pendingInstallation()
+        var saved = try pendingInstallation()
+        saved.releaseFile = "OpenStrudel-Home-1.0-59.tar.gz"
         var record = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(saved)) as? [String: Any])
         record.removeValue(forKey: "previousReleaseHash")
+        record.removeValue(forKey: "releaseFile")
         let restored = try JSONDecoder().decode(ServerInstallation.self, from: JSONSerialization.data(withJSONObject: record))
         #expect(restored.id == saved.id)
         #expect(restored.ownerToken == saved.ownerToken)
         #expect(restored.previousReleaseHash == nil)
+        #expect(restored.releaseFile == nil)
         let status = try JSONDecoder().decode(ServerInstallationStatus.self, from: Data(#"{"installationID":null,"state":"inactive","stage":"dependencies"}"#.utf8))
         #expect(status.canUpdateRelease == nil)
     }
@@ -244,9 +251,9 @@ struct ServerSetupTests {
         let store = ServerSetupMemoryStore(installation: saved)
         var releaseRequests = 0
         let connection = HomeConnection(url: "https://server.example.com:7789", token: "fixture", pin: String(repeating: "b", count: 64), name: "Server")
-        let flow = ServerSetupFlow(store: store, probe: { _ in await transport.installInputs.isEmpty ? nil : connection }, transport: transport, releaseHash: {
+        let flow = ServerSetupFlow(store: store, probe: { _ in await transport.installInputs.isEmpty ? nil : connection }, transport: transport, release: {
             releaseRequests += 1
-            return String(repeating: "c", count: 64)
+            return (String(repeating: "c", count: 64), "OpenStrudel-Home-1.0-60.tar.gz")
         })
         flow.confirm(access: ServerAccess(password: "fixture"))
         for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
@@ -269,9 +276,9 @@ struct ServerSetupTests {
         let transport = ServerSetupTestTransport(status: Data(#"{"installationID":"different","state":"failed","stage":"download","canUpdateRelease":true}"#.utf8))
         let store = ServerSetupMemoryStore(installation: saved)
         var releaseRequests = 0
-        let flow = ServerSetupFlow(store: store, probe: { _ in nil }, transport: transport, releaseHash: {
+        let flow = ServerSetupFlow(store: store, probe: { _ in nil }, transport: transport, release: {
             releaseRequests += 1
-            return String(repeating: "c", count: 64)
+            return (String(repeating: "c", count: 64), "OpenStrudel-Home-1.0-60.tar.gz")
         })
         flow.confirm(access: ServerAccess(password: "fixture"))
         for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
@@ -292,13 +299,15 @@ struct ServerSetupTests {
         let store = ServerSetupMemoryStore(installation: saved)
         let connection = HomeConnection(url: "https://server.example.com:7789", token: "fixture", pin: String(repeating: "b", count: 64), name: "Server")
         let updatedHash = String(repeating: "c", count: 64)
-        let flow = ServerSetupFlow(store: store, probe: { _ in await transport.installInputs.isEmpty ? nil : connection }, transport: transport, releaseHash: { updatedHash })
+        let flow = ServerSetupFlow(store: store, probe: { _ in await transport.installInputs.isEmpty ? nil : connection }, transport: transport,
+                                   release: { (updatedHash, "OpenStrudel-Home-1.0-60.tar.gz") })
         flow.confirm(access: ServerAccess(password: "fixture"))
         for _ in 0..<200 where flow.phase != .ready { try await Task.sleep(for: .milliseconds(5)) }
         flow.install(access: ServerAccess(password: "fixture"))
         for _ in 0..<200 where flow.phase == .ready || flow.phase == .installing { try await Task.sleep(for: .milliseconds(5)) }
         #expect(flow.phase == .connected)
         #expect(store.installation?.releaseHash == updatedHash)
+        #expect(store.installation?.releaseFile == "OpenStrudel-Home-1.0-60.tar.gz")
         #expect(store.installation?.previousReleaseHash == saved.releaseHash)
         #expect(store.installation?.id == saved.id)
         #expect(store.installation?.ownerToken == saved.ownerToken)
@@ -306,6 +315,7 @@ struct ServerSetupTests {
         let inputs = await transport.installInputs
         #expect(inputs.count == 1)
         #expect(inputs.first?.contains("\"previousReleaseHash\":\"\(saved.releaseHash)\"") == true)
+        #expect(inputs.first?.contains(#""releaseFile":"OpenStrudel-Home-1.0-60.tar.gz""#) == true)
     }
 
     @Test @MainActor func runningInstallationSurvivesALostStatusCheckWithoutReinstalling() async throws {
@@ -453,6 +463,32 @@ struct ServerSetupTests {
         #expect(store.installation == nil)
     }
 
+    @Test @MainActor func startingOverForgetsAPendingSetupOnThisMacWithoutContactingTheServer() async throws {
+        let saved = try pendingInstallation()
+        let store = ServerSetupMemoryStore(installation: saved)
+        let transport = ServerSetupTestTransport(status: Data())
+        var probes = 0
+        let flow = ServerSetupFlow(store: store, probe: { _ in probes += 1; try await Task.sleep(for: .milliseconds(30)); return nil }, transport: transport)
+        #expect(flow.phase == .paused)
+        store.failSave = true
+        #expect(throws: ServerSetupFailure.storage) { try flow.startOver() }
+        #expect(flow.installation?.id == saved.id, "Keychain still holds the setup, so this Mac keeps showing it")
+        #expect(store.installation?.id == saved.id)
+        store.failSave = false
+        flow.resume()
+        try flow.startOver()
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(store.installation == nil)
+        #expect(flow.installation == nil && flow.target == nil && flow.hostKey == nil && flow.error == nil)
+        #expect(flow.phase == .address, "A check that was under way does not bring the setup back")
+        #expect(probes == 1)
+        #expect(await transport.statusRequests == 0)
+        #expect(await transport.installInputs.isEmpty)
+        flow.inspect(try ServerTarget(host: "other.example.com", user: "root", port: 22))
+        for _ in 0..<200 where flow.phase != .failed { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.target?.host == "other.example.com", "Another server can be set up next")
+    }
+
     private func pendingInstallation() throws -> ServerInstallation {
         let target = try ServerTarget(host: "server.example.com", user: "root", port: 22)
         let key = try SSHHostKey(line: "host ssh-ed25519 " + Data(repeating: 1, count: 51).base64EncodedString(), target: target)
@@ -500,9 +536,13 @@ private actor ServerSetupTestTransport: ServerSSHTransport {
 
 @MainActor private final class ServerSetupMemoryStore: ServerSetupStore {
     var installation: ServerInstallation?
+    var failSave = false
     init(installation: ServerInstallation?) { self.installation = installation }
     func load() throws -> ServerInstallation? { installation }
-    func save(_ installation: ServerInstallation?) throws { self.installation = installation }
+    func save(_ installation: ServerInstallation?) throws {
+        if failSave { throw ServerSetupFailure.storage }
+        self.installation = installation
+    }
 }
 
 @Suite("Real SSH setup", .serialized, .enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_SSH_INTEGRATION"] == "1"))

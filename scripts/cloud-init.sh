@@ -104,6 +104,13 @@ PY
   ) || fail 'Invalid bootstrap input or release checksum.'
   RELEASE_SHA256=$(cat "$STATE_DIR/release.sha256")
   RELEASE_SHA256=${RELEASE_SHA256//$'\n'/}
+  # The alias moves to each new release; the versioned file behind the pinned
+  # hash stays. A recipe staged before files were pinned keeps the alias.
+  RELEASE_FILE=OpenStrudel-Home-1.0.tar.gz
+  if [[ -e "$STATE_DIR/release.file" || -L "$STATE_DIR/release.file" ]]; then
+    [[ ! -L "$STATE_DIR/release.file" ]] && RELEASE_FILE=$(cat "$STATE_DIR/release.file") \
+      && [[ "$RELEASE_FILE" =~ ^OpenStrudel-Home-1\.0-[0-9]+(\.[0-9]+)?\.tar\.gz$ ]] || fail 'Invalid trusted release file.'
+  fi
 }
 
 ubuntu_codename() {
@@ -294,7 +301,7 @@ prepare_release() {
   progress 'Downloading the verified release.'
   STAGING_DIR=$(mktemp -d "${INSTALL_ROOT}.download.XXXXXX")
   curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 15 --max-time 180 \
-    https://waiwai.is/openstrudel/downloads/OpenStrudel-Home-1.0.tar.gz -o "$STAGING_DIR/release.tar.gz"
+    "https://waiwai.is/openstrudel/downloads/$RELEASE_FILE" -o "$STAGING_DIR/release.tar.gz"
   verify_archive "$STAGING_DIR/release.tar.gz"
   extract_archive "$STAGING_DIR/release.tar.gz" "$STAGING_DIR/extracted"
   local release="$STAGING_DIR/extracted/OpenStrudel-Home" required

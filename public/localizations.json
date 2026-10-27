@@ -1350,6 +1350,48 @@
     "he": "השרת כבר לא מופיע ב-DigitalOcean. יש לבדוק את מצבו בחשבון הספק.",
     "ru": "Начатый сервер больше не найден в DigitalOcean. Проверьте его состояние в аккаунте провайдера."
   },
+  "Начать заново…": {
+    "en": "Start over…",
+    "fr": "Recommencer…",
+    "es": "Empezar de nuevo…",
+    "he": "להתחיל מחדש…",
+    "ru": "Начать заново…"
+  },
+  "Начать установку заново?": {
+    "en": "Start the installation over?",
+    "fr": "Recommencer l’installation ?",
+    "es": "¿Empezar la instalación de nuevo?",
+    "he": "להתחיל את ההתקנה מחדש?",
+    "ru": "Начать установку заново?"
+  },
+  "Сначала удалите сервер в DigitalOcean. OpenStrudel проверит, что его там больше нет, и забудет эту установку. Новый сервер запустится только после того, как вы подтвердите стоимость.": {
+    "en": "First delete the server in DigitalOcean. OpenStrudel will check that it’s gone and forget this installation. A new server starts only after you confirm the price.",
+    "fr": "Supprimez d’abord le serveur dans DigitalOcean. OpenStrudel vérifiera qu’il n’y est plus et oubliera cette installation. Un nouveau serveur ne démarre qu’après votre confirmation du prix.",
+    "es": "Primero elimina el servidor en DigitalOcean. OpenStrudel comprobará que ya no está y olvidará esta instalación. Un servidor nuevo solo se inicia después de que confirmes el precio.",
+    "he": "קודם יש למחוק את השרת ב-DigitalOcean. OpenStrudel יוודא שהוא כבר לא שם וישכח את ההתקנה הזו. שרת חדש יופעל רק אחרי אישור המחיר.",
+    "ru": "Сначала удалите сервер в DigitalOcean. OpenStrudel проверит, что его там больше нет, и забудет эту установку. Новый сервер запустится только после того, как вы подтвердите стоимость."
+  },
+  "Сервер удалён": {
+    "en": "Server deleted",
+    "fr": "Serveur supprimé",
+    "es": "Servidor eliminado",
+    "he": "השרת נמחק",
+    "ru": "Сервер удалён"
+  },
+  "Сервер этой установки ещё есть в DigitalOcean. Удалите его там, затем начните заново.": {
+    "en": "This installation’s server is still in DigitalOcean. Delete it there, then start over.",
+    "fr": "Le serveur de cette installation est toujours dans DigitalOcean. Supprimez-le, puis recommencez.",
+    "es": "El servidor de esta instalación sigue en DigitalOcean. Elimínalo allí y luego empieza de nuevo.",
+    "he": "השרת של ההתקנה הזו עדיין קיים ב-DigitalOcean. יש למחוק אותו שם ואז להתחיל מחדש.",
+    "ru": "Сервер этой установки ещё есть в DigitalOcean. Удалите его там, затем начните заново."
+  },
+  "Сервер ещё может появиться в DigitalOcean. Начните заново через несколько минут.": {
+    "en": "The server may still appear in DigitalOcean. Start over in a few minutes.",
+    "fr": "Le serveur peut encore apparaître dans DigitalOcean. Recommencez dans quelques minutes.",
+    "es": "El servidor aún puede aparecer en DigitalOcean. Empieza de nuevo en unos minutos.",
+    "he": "השרת עדיין עשוי להופיע ב-DigitalOcean. אפשר להתחיל מחדש בעוד כמה דקות.",
+    "ru": "Сервер ещё может появиться в DigitalOcean. Начните заново через несколько минут."
+  },
   "Не удалось подтвердить, что это ваш сервер. Подключение остановлено; новый сервер не создаём.": {
     "en": "Could not confirm that this server belongs to you. Connection stopped; no new server was created.",
     "fr": "Impossible de confirmer que ce serveur vous appartient. La connexion est arrêtée ; aucun nouveau serveur n’a été créé.",
@@ -10344,5 +10386,33 @@
     "es": "Al agotar un límite, se usa el siguiente modelo. Se vuelve al principal cuando se restablece. Las claves API se facturan por separado.",
     "he": "כשהמכסה נגמרת, עוברים למודל הבא. חוזרים למודל הראשי כשהמכסה מתחדשת. השימוש במפתחות API מחויב בנפרד.",
     "ru": "При исчерпании лимита — следующая по порядку. Когда лимит вернётся — снова основная. Ключи API оплачиваются отдельно."
+  },
+  "Забыть настройку сервера…": {
+    "en": "Forget server setup…",
+    "ru": "Забыть настройку сервера…",
+    "fr": "Oublier la configuration du serveur…",
+    "es": "Olvidar la configuración del servidor…",
+    "he": "שכחת הגדרת השרת…"
+  },
+  "Забыть настройку сервера?": {
+    "en": "Forget server setup?",
+    "ru": "Забыть настройку сервера?",
+    "fr": "Oublier la configuration du serveur ?",
+    "es": "¿Olvidar la configuración del servidor?",
+    "he": "לשכוח את הגדרת השרת?"
+  },
+  "Забыть настройку": {
+    "en": "Forget setup",
+    "ru": "Забыть настройку",
+    "fr": "Oublier la configuration",
+    "es": "Olvidar la configuración",
+    "he": "שכחת ההגדרה"
+  },
+  "Этот Mac забудет незавершённую настройку {0}. Сам сервер не изменится. Чтобы установить OpenStrudel снова, используйте новый сервер Ubuntu.": {
+    "en": "This Mac will forget the unfinished setup of {0}. The server itself is not changed. To install OpenStrudel again, use a new Ubuntu server.",
+    "ru": "Этот Mac забудет незавершённую настройку {0}. Сам сервер не изменится. Чтобы установить OpenStrudel снова, используйте новый сервер Ubuntu.",
+    "fr": "Ce Mac oubliera la configuration inachevée de {0}. Le serveur lui-même n’est pas modifié. Pour réinstaller OpenStrudel, utilisez un nouveau serveur Ubuntu.",
+    "es": "Este Mac olvidará la configuración sin terminar de {0}. El servidor en sí no cambia. Para volver a instalar OpenStrudel, usa un servidor Ubuntu nuevo.",
+    "he": "ה-Mac הזה ישכח את ההגדרה שלא הושלמה של {0}. השרת עצמו לא משתנה. כדי להתקין את OpenStrudel שוב, יש להשתמש בשרת Ubuntu חדש."
   }
 }

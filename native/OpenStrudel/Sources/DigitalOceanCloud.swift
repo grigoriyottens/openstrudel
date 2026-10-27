@@ -42,34 +42,41 @@ struct DigitalOceanQuote: Codable, Equatable, Sendable {
     let region: String
     let size: String
     let releaseSHA256: String
+    /// The immutable archive with that hash. Quotes saved before it was pinned have none.
+    let releaseFile: String?
     var title: String { L("Basic · 2 CPU · 4 ГБ") }
 
-    static func make(sizes: [DigitalOceanSize], regions: [DigitalOceanRegion], releaseSHA256: String) throws -> Self {
+    static func make(sizes: [DigitalOceanSize], regions: [DigitalOceanRegion], releaseSHA256: String, releaseFile: String) throws -> Self {
         let matches = sizes.filter { $0.slug == "s-2vcpu-4gb" }
         guard matches.count == 1, let size = matches.first, size.available,
               size.memory == 4096, size.vcpus == 2, size.disk >= 50,
               size.priceMonthly.isFinite, size.priceMonthly > 0,
               size.priceHourly.isFinite, size.priceHourly > 0,
-              releaseSHA256.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil
+              releaseSHA256.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
+              DigitalOceanBootstrap.isReleaseFile(releaseFile)
         else { throw DigitalOceanFailure.unavailablePlan }
         // Amsterdam is the only fallback: the same plan, still within the EU.
         guard let region = ["fra1", "ams3"].first(where: { slug in
             size.regions.contains(slug) && regions.contains { $0.slug == slug && $0.available }
         }) else { throw DigitalOceanFailure.unavailablePlan }
         return .init(monthlyPrice: size.priceMonthly, hourlyPrice: size.priceHourly,
-                     region: region, size: size.slug, releaseSHA256: releaseSHA256)
+                     region: region, size: size.slug, releaseSHA256: releaseSHA256, releaseFile: releaseFile)
     }
 
-    static func releaseHash(from checksums: String) throws -> String {
-        let matches = checksums.split(whereSeparator: \.isNewline).compactMap { line -> String? in
+    /// The current Home release. Each release moves the alias, so a server that downloads
+    /// minutes later fetches the versioned file listed with the same hash instead.
+    static func release(from checksums: String) throws -> (sha256: String, file: String) {
+        let entries = checksums.split(whereSeparator: \.isNewline).compactMap { line -> (hash: String, file: String)? in
             let columns = line.split(whereSeparator: \.isWhitespace)
-            guard columns.count == 2, columns[1] == "OpenStrudel-Home-1.0.tar.gz" else { return nil }
-            return String(columns[0])
+            return columns.count == 2 ? (String(columns[0]), String(columns[1])) : nil
         }
-        guard matches.count == 1, let hash = matches.first,
+        let current = entries.filter { $0.file == "OpenStrudel-Home-1.0.tar.gz" }
+        guard current.count == 1, let hash = current.first?.hash,
               hash.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil
         else { throw DigitalOceanFailure.release }
-        return hash
+        let pinned = entries.filter { $0.hash == hash && DigitalOceanBootstrap.isReleaseFile($0.file) }
+        guard pinned.count == 1, let file = pinned.first?.file else { throw DigitalOceanFailure.release }
+        return (hash, file)
     }
 }
 
@@ -203,6 +210,8 @@ struct DigitalOceanSavedState: Codable {
     @Published private(set) var connection: HomeConnection?
     @Published private(set) var message: String?
     @Published private(set) var authorizationURL: URL?
+    /// Setup is stuck on a server that is missing or never answered.
+    @Published private(set) var canStartOver = false
 
     private let store: any DigitalOceanCredentialStore
     private let session: URLSession
@@ -228,6 +237,10 @@ struct DigitalOceanSavedState: Codable {
     func resume() async {
         await perform {
             if let saved = self.state.installation?.connection {
+                // A server deleted in DigitalOcean must not return as a device.
+                if let id = self.state.installation?.dropletID, try await self.serverDeleted(id) {
+                    self.connection = nil; throw DigitalOceanFailure.missingServer
+                }
                 self.connection = saved; self.phase = .connected; return
             }
             guard self.state.tokens != nil else { self.phase = .idle; return }
@@ -247,9 +260,10 @@ struct DigitalOceanSavedState: Codable {
                 return
             }
             guard var installation = self.state.installation else { throw DigitalOceanFailure.storage }
+            guard let releaseFile = currentQuote.releaseFile else { throw DigitalOceanFailure.release }
             let ownerHash = Self.hex(SHA256.hash(data: Data(installation.ownerToken.utf8)))
-            let userData = try DigitalOceanBootstrap.userData(installationID: installation.id,
-                privateKeyPEM: installation.privateKeyPEM, ownerTokenHash: ownerHash, releaseSHA256: currentQuote.releaseSHA256)
+            let userData = try DigitalOceanBootstrap.userData(installationID: installation.id, privateKeyPEM: installation.privateKeyPEM,
+                ownerTokenHash: ownerHash, releaseSHA256: currentQuote.releaseSHA256, releaseFile: releaseFile)
             guard userData.utf8.count <= 65_536 else { throw DigitalOceanFailure.release }
             let body: [String: Any] = ["name": installation.name, "region": currentQuote.region,
                 "size": currentQuote.size, "image": "ubuntu-24-04-x64", "tags": [installation.name],
@@ -276,13 +290,39 @@ struct DigitalOceanSavedState: Codable {
             try await self.waitForServer()
         }
     }
+    /// Forgets a stuck installation once DigitalOcean lists no server with its tag, after
+    /// the user says they deleted it. Any other answer keeps it. This never creates a
+    /// server: the next one needs a fresh quote and the user's confirmation.
+    func startOver() async {
+        guard canStartOver else { return }
+        await perform {
+            guard let installation = self.state.installation else { try await self.advance(); return }
+            // An unanswered create can still appear in the list for a while.
+            if let attempted = installation.createAttemptedAt, Date().timeIntervalSince(attempted) < 600 {
+                self.phase = .failed; self.canStartOver = true
+                self.message = L("Сервер ещё может появиться в DigitalOcean. Начните заново через несколько минут.")
+                return
+            }
+            try await self.verifyAccount()
+            let servers = try JSONDecoder().decode(DropletsEnvelope.self,
+                from: await self.api("/droplets?tag_name=\(installation.name)&per_page=200")).droplets
+            guard servers.isEmpty else {
+                self.phase = .failed; self.canStartOver = true
+                self.message = L("Сервер этой установки ещё есть в DigitalOcean. Удалите его там, затем начните заново.")
+                return
+            }
+            var next = self.state; next.installation = nil; try self.save(next)
+            self.connection = nil; self.quote = nil
+            try await self.advance()
+        }
+    }
     func cancel() { operation?.cancel(); browser.cancel() }
 
     func prepareForLocalErase() async {
         erasing = true
         cancel()
         await operation?.value
-        state = .init(); quote = nil; connection = nil; message = nil; authorizationURL = nil; phase = .idle
+        state = .init(); quote = nil; connection = nil; message = nil; authorizationURL = nil; canStartOver = false; phase = .idle
     }
 
     func finishLocalErase() { erasing = false }
@@ -300,7 +340,7 @@ struct DigitalOceanSavedState: Codable {
         guard operation == nil, !erasing else { return }
         let task = Task { @MainActor in
             defer { self.operation = nil }
-            self.message = nil
+            self.message = nil; self.canStartOver = false
             do {
                 if let data = try self.store.load() { self.state = try JSONDecoder().decode(DigitalOceanSavedState.self, from: data) }
                 else { self.state = .init() }
@@ -432,7 +472,8 @@ struct DigitalOceanSavedState: Codable {
         let regions = try JSONDecoder().decode(Regions.self, from: await api("/regions?per_page=200")).regions
         let checksums = try await request(URL(string: "https://waiwai.is/openstrudel/downloads/SHA256SUMS")!)
         guard let text = String(data: checksums, encoding: .utf8) else { throw DigitalOceanFailure.release }
-        let result = try Quote.make(sizes: sizes, regions: regions, releaseSHA256: Quote.releaseHash(from: text))
+        let release = try Quote.release(from: text)
+        let result = try Quote.make(sizes: sizes, regions: regions, releaseSHA256: release.sha256, releaseFile: release.file)
         var next = state
         if next.installation == nil {
             var bytes = [UInt8](repeating: 0, count: 32)
@@ -456,6 +497,15 @@ struct DigitalOceanSavedState: Codable {
     }
     private func matches(_ droplet: Droplet, _ installation: DigitalOceanSavedState.Installation) -> Bool {
         droplet.id > 0 && droplet.name == installation.name && droplet.tags.contains(installation.name)
+    }
+    /// Only DigitalOcean's 404 for the saved server is proof. Without a sign-in, or with
+    /// any other answer, the saved connection stays, as it works without DigitalOcean.
+    private func serverDeleted(_ id: Int) async throws -> Bool {
+        guard state.tokens != nil else { return false }
+        do { try await verifyAccount() } catch { if Task.isCancelled { throw CancellationError() }; return false }
+        do { _ = try await api("/droplets/\(id)"); return false }
+        catch let error as DigitalOceanHTTPFailure where error.status == 404 { return true }
+        catch { if Task.isCancelled { throw CancellationError() }; return false }
     }
     private func waitForServer() async throws {
         guard let initial = state.installation, initial.createAttemptedAt != nil else { throw DigitalOceanFailure.storage }
@@ -564,8 +614,8 @@ struct DigitalOceanSavedState: Codable {
         case .unavailablePlan: message = L("Подходящая конфигурация сейчас недоступна. Попробуйте позже — другой сервер автоматически не заказываем.")
         case .release: message = L("Не удалось проверить установку OpenStrudel. Попробуйте немного позже.")
         case .wrongAccount: requireSignIn(); message = L("Эта установка связана с другим аккаунтом или командой DigitalOcean. Войдите в тот аккаунт, с которого её начали.")
-        case .uncertainCreate: message = L("Установка пока не ответила. Можно проверить подключение ещё раз. Если ожидание не помогает, откройте DigitalOcean, чтобы проверить установку или остановить оплату удалением. Повторная проверка не создаёт новую установку.")
-        case .missingServer: message = L("Начатый сервер больше не найден в DigitalOcean. Проверьте его состояние в аккаунте провайдера.")
+        case .uncertainCreate: canStartOver = true; message = L("Установка пока не ответила. Можно проверить подключение ещё раз. Если ожидание не помогает, откройте DigitalOcean, чтобы проверить установку или остановить оплату удалением. Повторная проверка не создаёт новую установку.")
+        case .missingServer: canStartOver = true; message = L("Начатый сервер больше не найден в DigitalOcean. Проверьте его состояние в аккаунте провайдера.")
         case .ambiguousServer, .serverIdentity: message = L("Не удалось подтвердить, что это ваш сервер. Подключение остановлено; новый сервер не создаём.")
         case .serverAuthentication: message = L("Сервер найден, но пока не принимает сохранённое подключение. Продолжите настройку позже.")
         default: message = L("Не удалось закончить настройку. Проверьте интернет и продолжите — ваш прогресс сохранён.")

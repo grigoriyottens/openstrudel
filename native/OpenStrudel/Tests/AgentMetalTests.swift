@@ -175,7 +175,7 @@ struct AgentMetalTests {
         #expect(throws: AgentMetalFailure.self) { try AgentMetalClient(store: store, transport: MetalTestHTTP()) }
     }
 
-    @Test @MainActor func installerPinsTheFirstSSHKeyAndChecksThePaidInstanceBeforeRunningCommands() async throws {
+    @Test @MainActor func installerPinsTheConfirmedSSHKeyAndChecksThePaidInstanceBeforeRunningCommands() async throws {
         let store = MetalTestStore(); let wire = MetalTestHTTP()
         let client = try AgentMetalClient(store: store, transport: wire)
         _ = try await client.checkout(AgentMetalOffer(plan: "small", location: "ash", days: 1, dailyPrice: 2.2))
@@ -184,9 +184,11 @@ struct AgentMetalTests {
         let base = MetalTestSSH()
         let ssh = AgentMetalSSHTransport(client: client, base: base)
         let key = try await ssh.scan(target)
-        #expect(try AgentMetalClient(store: store, transport: wire).state.hostKey == key)
+        #expect(try AgentMetalClient(store: store, transport: wire).state.hostKey == nil, "A scanned key is trusted only after the person confirms it")
         let access = ServerAccess(privateKey: client.state.privateKey)
+        // The first command runs only after confirmation, and pins the key.
         _ = try await ssh.run(target: target, key: key, access: access, input: Data("check_server".utf8), elevated: false)
+        #expect(try AgentMetalClient(store: store, transport: wire).state.hostKey == key)
         #expect(await base.commandCount == 2)
         _ = try await ssh.run(target: target, key: key, access: access, input: Data("server_status".utf8), elevated: false)
         #expect(await base.commandCount == 3, "Do not repeatedly mutate the provider firewall")
@@ -201,6 +203,31 @@ struct AgentMetalTests {
         }
     }
 
+    @Test @MainActor func paidServerWaitsForThePersonToConfirmItsSSHFingerprint() async throws {
+        let store = MetalTestStore(); let wire = MetalTestHTTP()
+        let client = try AgentMetalClient(store: store, transport: wire)
+        _ = try await client.checkout(AgentMetalOffer(plan: "small", location: "ash", days: 1, dailyPrice: 2.2))
+        wire.response = try Self.receipt()
+        let ssh = MetalInstallationSSH()
+        let flow = AgentMetalSetupFlow(client: client) { client in
+            ServerSetupFlow(store: MetalInstallationStore(client: client), probe: { _ in nil },
+                            transport: ssh, release: { (String(repeating: "a", count: 64), "OpenStrudel-Home-1.0-59.tar.gz") })
+        }
+        await flow.load(days: 1); await flow.checkPayment()
+        for _ in 0..<200 where flow.installer?.hostKey == nil { try await Task.sleep(for: .milliseconds(5)) }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(flow.installer?.phase == .confirmIdentity)
+        #expect(ssh.commands == 0, "The provider does not supply a fingerprint, so nothing runs over SSH before the person confirms it")
+        let identity = try #require(flow.identityToConfirm)
+        #expect(identity == flow.installer?.hostKey)
+        flow.confirmIdentity()
+        for _ in 0..<200 where ssh.installInputs.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(ssh.commands > 1)
+        #expect(!ssh.installInputs.isEmpty)
+        #expect(client.state.installation?.hostKey == identity, "The installation uses the confirmed key")
+        flow.pause()
+    }
+
     @Test @MainActor func interruptedSetupResumesTheSameInstallationWithoutAnotherPurchase() async throws {
         let store = MetalTestStore(); let wire = MetalTestHTTP()
         let client = try AgentMetalClient(store: store, transport: wire)
@@ -209,14 +236,18 @@ struct AgentMetalTests {
         let ssh = MetalInstallationSSH()
         let first = AgentMetalSetupFlow(client: client) { client in
             ServerSetupFlow(store: MetalInstallationStore(client: client), probe: { _ in nil },
-                            transport: ssh, releaseHash: { String(repeating: "a", count: 64) })
+                            transport: ssh, release: { (String(repeating: "a", count: 64), "OpenStrudel-Home-1.0-59.tar.gz") })
         }
         await first.load(days: 1); await first.checkPayment()
+        for _ in 0..<200 where first.identityToConfirm == nil { try await Task.sleep(for: .milliseconds(5)) }
+        first.confirmIdentity()
         for _ in 0..<200 where ssh.installInputs.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
         #expect(!ssh.installInputs.isEmpty)
         #expect(first.error == nil, "A lost SSH acknowledgement keeps observing the saved installation")
         let saved = try #require(client.state.installation)
         #expect(saved.attempted)
+        #expect(saved.releaseFile == "OpenStrudel-Home-1.0-59.tar.gz")
+        #expect(ssh.installInputs.first?.contains(#""releaseFile":"OpenStrudel-Home-1.0-59.tar.gz""#) == true)
         first.pause()
         let requestCount = wire.requests.count
         let reopened = try AgentMetalClient(store: store, transport: wire)
@@ -228,7 +259,7 @@ struct AgentMetalTests {
                 #expect(pending.privateKeyPEM == saved.privateKeyPEM)
                 // Stay unavailable until the unstaged recipe has been replayed.
                 return ssh.installInputs.count < 2 ? nil : HomeConnection(url: "https://8.8.4.4:7789", token: pending.ownerToken, pin: "fixture", name: "Server")
-            }, transport: ssh, releaseHash: { Issue.record("Do not replace the pinned release"); return "" })
+            }, transport: ssh, release: { Issue.record("Do not replace the pinned release"); return ("", "") })
         }
         await second.load(days: 1); await second.checkPayment()
         for _ in 0..<200 where second.connection == nil { try await Task.sleep(for: .milliseconds(5)) }
@@ -305,10 +336,12 @@ struct AgentMetalTests {
 @MainActor private final class MetalInstallationSSH: ServerSSHTransport {
     var failInstallation = true
     var installInputs: [String] = []
+    var commands = 0
     func scan(_ target: ServerTarget) async throws -> SSHHostKey {
         try SSHHostKey(line: target.host + " ssh-ed25519 " + Data(repeating: 1, count: 64).base64EncodedString(), target: target)
     }
     func run(target: ServerTarget, key: SSHHostKey, access: ServerAccess, input: Data, elevated: Bool) async throws -> Data {
+        commands += 1
         let script = String(decoding: input, as: UTF8.self)
         if script.hasSuffix("\ncheck_server\n") {
             return try JSONEncoder().encode(ServerPreflight(os: "ubuntu", version: "24.04", architecture: "x86_64", memoryMiB: 3900,
