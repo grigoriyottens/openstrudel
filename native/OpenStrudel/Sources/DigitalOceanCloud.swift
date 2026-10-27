@@ -210,6 +210,8 @@ struct DigitalOceanSavedState: Codable {
     @Published private(set) var connection: HomeConnection?
     @Published private(set) var message: String?
     @Published private(set) var authorizationURL: URL?
+    /// Setup is stuck on a server that is missing or never answered.
+    @Published private(set) var canStartOver = false
 
     private let store: any DigitalOceanCredentialStore
     private let session: URLSession
@@ -235,6 +237,10 @@ struct DigitalOceanSavedState: Codable {
     func resume() async {
         await perform {
             if let saved = self.state.installation?.connection {
+                // A server deleted in DigitalOcean must not return as a device.
+                if let id = self.state.installation?.dropletID, try await self.serverDeleted(id) {
+                    self.connection = nil; throw DigitalOceanFailure.missingServer
+                }
                 self.connection = saved; self.phase = .connected; return
             }
             guard self.state.tokens != nil else { self.phase = .idle; return }
@@ -284,13 +290,39 @@ struct DigitalOceanSavedState: Codable {
             try await self.waitForServer()
         }
     }
+    /// Forgets a stuck installation once DigitalOcean lists no server with its tag, after
+    /// the user says they deleted it. Any other answer keeps it. This never creates a
+    /// server: the next one needs a fresh quote and the user's confirmation.
+    func startOver() async {
+        guard canStartOver else { return }
+        await perform {
+            guard let installation = self.state.installation else { try await self.advance(); return }
+            // An unanswered create can still appear in the list for a while.
+            if let attempted = installation.createAttemptedAt, Date().timeIntervalSince(attempted) < 600 {
+                self.phase = .failed; self.canStartOver = true
+                self.message = L("Сервер ещё может появиться в DigitalOcean. Начните заново через несколько минут.")
+                return
+            }
+            try await self.verifyAccount()
+            let servers = try JSONDecoder().decode(DropletsEnvelope.self,
+                from: await self.api("/droplets?tag_name=\(installation.name)&per_page=200")).droplets
+            guard servers.isEmpty else {
+                self.phase = .failed; self.canStartOver = true
+                self.message = L("Сервер этой установки ещё есть в DigitalOcean. Удалите его там, затем начните заново.")
+                return
+            }
+            var next = self.state; next.installation = nil; try self.save(next)
+            self.connection = nil; self.quote = nil
+            try await self.advance()
+        }
+    }
     func cancel() { operation?.cancel(); browser.cancel() }
 
     func prepareForLocalErase() async {
         erasing = true
         cancel()
         await operation?.value
-        state = .init(); quote = nil; connection = nil; message = nil; authorizationURL = nil; phase = .idle
+        state = .init(); quote = nil; connection = nil; message = nil; authorizationURL = nil; canStartOver = false; phase = .idle
     }
 
     func finishLocalErase() { erasing = false }
@@ -308,7 +340,7 @@ struct DigitalOceanSavedState: Codable {
         guard operation == nil, !erasing else { return }
         let task = Task { @MainActor in
             defer { self.operation = nil }
-            self.message = nil
+            self.message = nil; self.canStartOver = false
             do {
                 if let data = try self.store.load() { self.state = try JSONDecoder().decode(DigitalOceanSavedState.self, from: data) }
                 else { self.state = .init() }
@@ -466,6 +498,15 @@ struct DigitalOceanSavedState: Codable {
     private func matches(_ droplet: Droplet, _ installation: DigitalOceanSavedState.Installation) -> Bool {
         droplet.id > 0 && droplet.name == installation.name && droplet.tags.contains(installation.name)
     }
+    /// Only DigitalOcean's 404 for the saved server is proof. Without a sign-in, or with
+    /// any other answer, the saved connection stays, as it works without DigitalOcean.
+    private func serverDeleted(_ id: Int) async throws -> Bool {
+        guard state.tokens != nil else { return false }
+        do { try await verifyAccount() } catch { if Task.isCancelled { throw CancellationError() }; return false }
+        do { _ = try await api("/droplets/\(id)"); return false }
+        catch let error as DigitalOceanHTTPFailure where error.status == 404 { return true }
+        catch { if Task.isCancelled { throw CancellationError() }; return false }
+    }
     private func waitForServer() async throws {
         guard let initial = state.installation, initial.createAttemptedAt != nil else { throw DigitalOceanFailure.storage }
         phase = .waitingForServer
@@ -573,8 +614,8 @@ struct DigitalOceanSavedState: Codable {
         case .unavailablePlan: message = L("Подходящая конфигурация сейчас недоступна. Попробуйте позже — другой сервер автоматически не заказываем.")
         case .release: message = L("Не удалось проверить установку OpenStrudel. Попробуйте немного позже.")
         case .wrongAccount: requireSignIn(); message = L("Эта установка связана с другим аккаунтом или командой DigitalOcean. Войдите в тот аккаунт, с которого её начали.")
-        case .uncertainCreate: message = L("Установка пока не ответила. Можно проверить подключение ещё раз. Если ожидание не помогает, откройте DigitalOcean, чтобы проверить установку или остановить оплату удалением. Повторная проверка не создаёт новую установку.")
-        case .missingServer: message = L("Начатый сервер больше не найден в DigitalOcean. Проверьте его состояние в аккаунте провайдера.")
+        case .uncertainCreate: canStartOver = true; message = L("Установка пока не ответила. Можно проверить подключение ещё раз. Если ожидание не помогает, откройте DigitalOcean, чтобы проверить установку или остановить оплату удалением. Повторная проверка не создаёт новую установку.")
+        case .missingServer: canStartOver = true; message = L("Начатый сервер больше не найден в DigitalOcean. Проверьте его состояние в аккаунте провайдера.")
         case .ambiguousServer, .serverIdentity: message = L("Не удалось подтвердить, что это ваш сервер. Подключение остановлено; новый сервер не создаём.")
         case .serverAuthentication: message = L("Сервер найден, но пока не принимает сохранённое подключение. Продолжите настройку позже.")
         default: message = L("Не удалось закончить настройку. Проверьте интернет и продолжите — ваш прогресс сохранён.")

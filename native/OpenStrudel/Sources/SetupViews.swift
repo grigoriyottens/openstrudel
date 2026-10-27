@@ -150,6 +150,7 @@ struct ServerSetupView: View {
     @StateObject private var cloud = DigitalOceanCloud.shared
     @State private var connecting = false
     @State private var connectionError: String?
+    @State private var confirmingStartOver = false
     @Binding var working: Bool
     let onConnected: (HomeClient) -> Void
 
@@ -232,6 +233,10 @@ struct ServerSetupView: View {
                 if let url = cloud.managementURL, cloud.phase != .connected {
                     SetupLinkRow(title: L("Открыть в DigitalOcean"), url: url)
                 }
+                if cloud.canStartOver {
+                    Button(L("Начать заново…")) { confirmingStartOver = true }
+                        .accessibilityIdentifier("cloudStartOver")
+                }
             } header: {
                 SetupHeader(title: title, explanation)
             } footer: {
@@ -243,6 +248,12 @@ struct ServerSetupView: View {
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(L("Начать установку заново?"), isPresented: $confirmingStartOver, titleVisibility: .visible) {
+            Button(L("Сервер удалён")) { Task { await cloud.startOver() } }
+            Button(L("Отмена"), role: .cancel) {}
+        } message: {
+            Text(L("Сначала удалите сервер в DigitalOcean. OpenStrudel проверит, что его там больше нет, и забудет эту установку. Новый сервер запустится только после того, как вы подтвердите стоимость."))
+        }
         // Its header is the page's title in the content, so the bar keeps only Back.
         .sheetPageTitle(L("Get a server with DigitalOcean"))
         .toolbar {
