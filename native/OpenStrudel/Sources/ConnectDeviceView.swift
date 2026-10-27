@@ -246,14 +246,7 @@ private struct OwnServerSetupView: View {
             }
             if editing { addressForm }
             if flow.phase == .confirmIdentity, let target = flow.target, let identity = flow.hostKey {
-                Section {
-                    LabeledContent(L("Server address")) { Text(target.host).textSelection(.enabled) }
-                    Text(identity.fingerprint).font(AppTypography.code).textSelection(.enabled)
-                        .environment(\.layoutDirection, .leftToRight)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } footer: {
-                    Text(L("Compare this fingerprint with the one in your server provider's control panel."))
-                }
+                ServerFingerprintSection(host: target.host, identity: identity)
             }
             if flow.phase == .ready {
                 Section {
@@ -293,6 +286,9 @@ private struct OwnServerSetupView: View {
                         Text(L("This can take a few minutes. You can close this window; installation continues on the server."))
                     }
                 }
+            }
+            if flow.installation != nil, !busy, flow.phase != .connected {
+                Section { ForgetServerSetupButton(flow: flow) }
             }
         }
         .formStyle(.grouped)
@@ -416,6 +412,47 @@ private struct OwnServerSetupView: View {
         // The new device is not selected: that would replace this sheet's root before account setup.
         do { onConnected(try await library.adoptServer(connection, from: flow)) }
         catch { localError = error.localizedDescription }
+    }
+}
+
+/// The SSH key a person compares before anything runs on a new server.
+struct ServerFingerprintSection: View {
+    var host: String?
+    let identity: SSHHostKey
+    var body: some View {
+        Section {
+            if let host { LabeledContent(L("Server address")) { Text(host).textSelection(.enabled) } }
+            Text(identity.fingerprint).font(AppTypography.code).textSelection(.enabled)
+                .environment(\.layoutDirection, .leftToRight)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } footer: {
+            Text(L("Compare this fingerprint with the one in your server provider's control panel."))
+        }
+    }
+}
+
+/// Abandons a pending own-server setup on this Mac after the person confirms.
+/// Nothing is sent to the server.
+struct ForgetServerSetupButton: View {
+    @ObservedObject var flow: ServerSetupFlow
+    @State private var confirming = false
+    @State private var failure: String?
+    var body: some View {
+        if let pending = flow.installation {
+            Button(L("Забыть настройку сервера…"), role: .destructive) { confirming = true }
+                .foregroundStyle(AppTheme.destructive)
+                .accessibilityIdentifier("forgetServerSetup")
+                .confirmationDialog(L("Забыть настройку сервера?"), isPresented: $confirming, titleVisibility: .visible) {
+                    Button(L("Забыть настройку"), role: .destructive) {
+                        do { try flow.startOver() } catch { failure = error.localizedDescription }
+                    }
+                } message: {
+                    Text(L("Этот Mac забудет незавершённую настройку \(pending.target.host). Сам сервер не изменится. Чтобы установить OpenStrudel снова, используйте новый сервер Ubuntu."))
+                }
+                .alert("OpenStrudel", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                    Button(L("Понятно"), role: .cancel) {}
+                } message: { Text(failure ?? "") }
+        }
     }
 }
 #endif

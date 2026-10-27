@@ -99,11 +99,12 @@ if release_file is not None: files.insert(2, ("release.file", release_file.encod
 release_names = ["release.sha256", "release.file", "install.sh"]
 changed = [name for name, content, mode in files if (root / name).is_file() and (root / name).read_bytes() != content]
 replace_release = False
-if changed and payload.get("previousReleaseHash"):
-    previous = payload["previousReleaseHash"]
-    if not isinstance(previous, str) or not re.fullmatch(r"[a-f0-9]{64}", previous): raise ValueError("OPENSTRUDEL_EXISTING")
-    # An explicit retry may update a failed download, never a running service
-    # or an installed Home. Keep the same bootstrap, owner and host throughout.
+previous = payload.get("previousReleaseHash")
+if changed and (previous or changed == ["install.sh"]):
+    if previous is not None and (not isinstance(previous, str) or not re.fullmatch(r"[a-f0-9]{64}", previous)): raise ValueError("OPENSTRUDEL_EXISTING")
+    # An explicit retry may update a failed download, or the installer bundled
+    # with a newer app for the same release, never a running service or an
+    # installed Home. Keep the same bootstrap, owner and host throughout.
     attempt_lock = os.open(str(root / "attempt.lock"), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     fcntl.flock(attempt_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     state = subprocess.run(["systemctl", "show", "openstrudel-install.service", "--property=ActiveState", "--value"], capture_output=True, text=True, timeout=10)

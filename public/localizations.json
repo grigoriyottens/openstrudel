@@ -10386,5 +10386,33 @@
     "es": "Al agotar un límite, se usa el siguiente modelo. Se vuelve al principal cuando se restablece. Las claves API se facturan por separado.",
     "he": "כשהמכסה נגמרת, עוברים למודל הבא. חוזרים למודל הראשי כשהמכסה מתחדשת. השימוש במפתחות API מחויב בנפרד.",
     "ru": "При исчерпании лимита — следующая по порядку. Когда лимит вернётся — снова основная. Ключи API оплачиваются отдельно."
+  },
+  "Забыть настройку сервера…": {
+    "en": "Forget server setup…",
+    "ru": "Забыть настройку сервера…",
+    "fr": "Oublier la configuration du serveur…",
+    "es": "Olvidar la configuración del servidor…",
+    "he": "שכחת הגדרת השרת…"
+  },
+  "Забыть настройку сервера?": {
+    "en": "Forget server setup?",
+    "ru": "Забыть настройку сервера?",
+    "fr": "Oublier la configuration du serveur ?",
+    "es": "¿Olvidar la configuración del servidor?",
+    "he": "לשכוח את הגדרת השרת?"
+  },
+  "Забыть настройку": {
+    "en": "Forget setup",
+    "ru": "Забыть настройку",
+    "fr": "Oublier la configuration",
+    "es": "Olvidar la configuración",
+    "he": "שכחת ההגדרה"
+  },
+  "Этот Mac забудет незавершённую настройку {0}. Сам сервер не изменится. Чтобы установить OpenStrudel снова, используйте новый сервер Ubuntu.": {
+    "en": "This Mac will forget the unfinished setup of {0}. The server itself is not changed. To install OpenStrudel again, use a new Ubuntu server.",
+    "ru": "Этот Mac забудет незавершённую настройку {0}. Сам сервер не изменится. Чтобы установить OpenStrudel снова, используйте новый сервер Ubuntu.",
+    "fr": "Ce Mac oubliera la configuration inachevée de {0}. Le serveur lui-même n’est pas modifié. Pour réinstaller OpenStrudel, utilisez un nouveau serveur Ubuntu.",
+    "es": "Este Mac olvidará la configuración sin terminar de {0}. El servidor en sí no cambia. Para volver a instalar OpenStrudel, usa un servidor Ubuntu nuevo.",
+    "he": "ה-Mac הזה ישכח את ההגדרה שלא הושלמה של {0}. השרת עצמו לא משתנה. כדי להתקין את OpenStrudel שוב, יש להשתמש בשרת Ubuntu חדש."
   }
 }

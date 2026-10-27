@@ -89,6 +89,46 @@ describe("Server setup over SSH", () => {
     expect(readFileSync(join(root, "state/release.sha256"), "utf8")).toBe(payload.releaseHash);
     expect(readFileSync(join(root, "state/release.file"), "utf8")).toBe(pinned.releaseFile);
   });
+  it("lets a failed retry replace only the installer bundled with a newer app for the same release", () => {
+    const { root, payload } = fixture();
+    expect(shell(root, "stage_setup", payload).status).toBe(0);
+    writeFileSync(join(root, "bin/systemctl"), "#!/bin/sh\nprintf 'failed\\n'\n", { mode: 0o700 });
+    const original = readFileSync(join(root, "state/bootstrap.json"));
+    const installer = "#!/usr/bin/env bash\necho newer\n";
+    // The app sends no previous release when only its bundled installer changed.
+    const retry = { ...payload, installer: Buffer.from(installer).toString("base64") };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = shell(root, "stage_setup", retry);
+      expect(result.status, result.stderr).toBe(0);
+    }
+    expect(readFileSync(join(root, "state/install.sh"), "utf8")).toBe(installer);
+    expect(readFileSync(join(root, "state/release.sha256"), "utf8")).toBe(payload.releaseHash);
+    expect(readFileSync(join(root, "state/bootstrap.json"))).toEqual(original);
+    expect(readFileSync(join(root, "state/connection-host"), "utf8")).toBe(payload.host);
+    expect(readFileSync(join(root, "state/installation-id"), "utf8").trim()).toBe(payload.installationId);
+  });
+  it.each(["running", "installed", "completed", "wrong-owner", "wrong-host", "other-installation", "symlink"])("keeps a %s installation when only the bundled installer changed", kind => {
+    const { root, payload } = fixture();
+    expect(shell(root, "stage_setup", payload).status).toBe(0);
+    writeFileSync(join(root, "bin/systemctl"), `#!/bin/sh\nprintf '${kind === "running" ? "activating" : "failed"}\\n'\n`, { mode: 0o700 });
+    if (kind === "installed") mkdirSync(join(root, "home"));
+    if (kind === "completed") writeFileSync(join(root, "state/complete"), "complete");
+    const elsewhere = join(root, "elsewhere.sh");
+    if (kind === "symlink") {
+      writeFileSync(elsewhere, "#!/usr/bin/env bash\nkeep\n");
+      rmSync(join(root, "state/install.sh")); symlinkSync(elsewhere, join(root, "state/install.sh"));
+    }
+    const retry = { ...payload, installer: Buffer.from("#!/usr/bin/env bash\necho newer\n").toString("base64"),
+      ownerTokenHash: kind === "wrong-owner" ? "e".repeat(64) : payload.ownerTokenHash,
+      host: kind === "wrong-host" ? "other.example.com" : payload.host,
+      installationId: kind === "other-installation" ? "238425ea-61bb-4ac0-bb4e-1b556bf05bba" : payload.installationId };
+    const result = shell(root, "stage_setup", retry);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("OPENSTRUDEL_EXISTING");
+    if (kind === "symlink") expect(readFileSync(elsewhere, "utf8")).toBe("#!/usr/bin/env bash\nkeep\n");
+    else expect(readFileSync(join(root, "state/install.sh"), "utf8")).toBe("#!/usr/bin/env bash\ntrue\n");
+    expect(readFileSync(join(root, "state/connection-host"), "utf8")).toBe(payload.host);
+  });
   it("preserves an unrelated installation and does not adopt a public staging directory", () => {
     const { root, payload } = fixture();
     mkdirSync(join(root, "home")); writeFileSync(join(root, "home/user-data"), "keep");

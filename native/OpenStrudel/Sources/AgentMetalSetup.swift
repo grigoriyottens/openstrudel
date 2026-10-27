@@ -9,7 +9,8 @@ import Combine
 }
 
 /// Reuses the SSH installer, adding only the provider's instance identity and
-/// network-edge firewall. The first SSH key is pinned before any remote write.
+/// network-edge firewall. AgentMetal supplies no host key fingerprint, so the
+/// person confirms the scanned key; its first command pins it before any write.
 @MainActor final class AgentMetalSSHTransport: ServerSSHTransport {
     let client: AgentMetalClient
     let base: any ServerSSHTransport
@@ -25,10 +26,7 @@ import Combine
     func scan(_ target: ServerTarget) async throws -> SSHHostKey {
         _ = try server(for: target)
         if let saved = client.state.hostKey { return saved }
-        let key = try await base.scan(target)
-        try Task.checkCancellation()
-        try client.saveHostKey(key)
-        return key
+        return try await base.scan(target)
     }
     func run(target: ServerTarget, key: SSHHostKey, access: ServerAccess, input: Data, elevated: Bool) async throws -> Data {
         let server = try server(for: target)
@@ -80,6 +78,13 @@ import Combine
     var connection: HomeConnection? { installer?.connection ?? order.connection }
     var busy: Bool { loading || waiting || installing }
     var working: Bool { (order.intent != nil && order.connection == nil) || busy }
+    /// The scanned SSH key, waiting for the person to compare its fingerprint.
+    var identityToConfirm: SSHHostKey? { installing && installer?.phase == .confirmIdentity ? installer?.hostKey : nil }
+
+    func confirmIdentity() {
+        guard let installer, let provider, identityToConfirm != nil else { return }
+        installer.confirm(access: ServerAccess(privateKey: provider.state.privateKey))
+    }
 
     func load(days: Int) async {
         guard !loading, !erasing else { return }
@@ -155,8 +160,8 @@ import Combine
         guard let provider else { return }
         order = provider.state
         let access = ServerAccess(privateKey: order.privateKey)
+        // .confirmIdentity waits for the person: see confirmIdentity().
         switch phase {
-        case .confirmIdentity: flow.confirm(access: access)
         case .ready: flow.install(access: access)
         case .paused where resuming && flow.error == nil:
             resuming = false; flow.confirm(access: access)
