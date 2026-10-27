@@ -13,21 +13,29 @@ enum DigitalOceanBootstrap {
         }
     }
 
-    static func userData(installationID: String, privateKeyPEM: String, ownerTokenHash: String, releaseSHA256: String) throws -> String {
+    /// A versioned Home archive, such as OpenStrudel-Home-1.0-59.tar.gz: no path and
+    /// not the moving alias. The installers accept exactly this pattern.
+    static func isReleaseFile(_ name: String) -> Bool {
+        name.range(of: #"^OpenStrudel-Home-1\.0-[0-9]+(\.[0-9]+)?\.tar\.gz$"#, options: .regularExpression) != nil
+    }
+
+    static func userData(installationID: String, privateKeyPEM: String, ownerTokenHash: String,
+                         releaseSHA256: String, releaseFile: String) throws -> String {
         guard let url = Bundle.main.url(forResource: "cloud-init", withExtension: "sh")
                 ?? Bundle(for: ResourceBundle.self).url(forResource: "cloud-init", withExtension: "sh"),
               let installer = try? Data(contentsOf: url) else { throw Failure.missingInstaller }
-        return try userData(installationID: installationID, privateKeyPEM: privateKeyPEM,
-                            ownerTokenHash: ownerTokenHash, releaseSHA256: releaseSHA256, installer: installer)
+        return try userData(installationID: installationID, privateKeyPEM: privateKeyPEM, ownerTokenHash: ownerTokenHash,
+                            releaseSHA256: releaseSHA256, releaseFile: releaseFile, installer: installer)
     }
 
     // The shell file is bundled unchanged by both application targets; this
     // overload lets tests verify the exact shipped resource without duplication.
     static func userData(installationID: String, privateKeyPEM: String, ownerTokenHash: String,
-                         releaseSHA256: String, installer: Data) throws -> String {
+                         releaseSHA256: String, releaseFile: String, installer: Data) throws -> String {
         guard let id = UUID(uuidString: installationID),
               ownerTokenHash.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
               releaseSHA256.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
+              isReleaseFile(releaseFile),
               privateKeyPEM.utf8.count <= 4096,
               let key = try? P256.Signing.PrivateKey(pemRepresentation: privateKeyPEM) else { throw Failure.invalidIdentity }
         guard let script = String(data: installer, encoding: .utf8), script.hasPrefix("#!/usr/bin/env bash\n"),
@@ -49,6 +57,11 @@ enum DigitalOceanBootstrap {
             permissions: '0600'
             encoding: b64
             content: \(Data(releaseSHA256.utf8).base64EncodedString())
+          - path: /var/lib/openstrudel-cloud/release.file
+            owner: root:root
+            permissions: '0600'
+            encoding: b64
+            content: \(Data(releaseFile.utf8).base64EncodedString())
           - path: /var/lib/openstrudel-cloud/install.sh
             owner: root:root
             permissions: '0700'

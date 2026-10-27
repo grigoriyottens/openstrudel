@@ -63,6 +63,9 @@ host = payload["host"]
 if not isinstance(host, str) or len(host) > 253 or not all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", part) for part in host.split(".")): raise ValueError("Invalid host")
 if all(c in "0123456789." for c in host): ipaddress.IPv4Address(host)
 if not all(re.fullmatch(r"[a-f0-9]{64}", payload[k]) for k in ["ownerTokenHash", "releaseHash"]): raise ValueError("Invalid digest")
+# The versioned archive behind the hash. A recipe saved before it was pinned has none.
+release_file = payload.get("releaseFile")
+if release_file is not None and not (isinstance(release_file, str) and re.fullmatch(r"OpenStrudel-Home-1\.0-[0-9]+(\.[0-9]+)?\.tar\.gz", release_file)): raise ValueError("Invalid release file")
 installer = base64.b64decode(payload["installer"], validate=True)
 if len(installer) > 60000 or not installer.startswith(b"#!/usr/bin/env bash\n"): raise ValueError("Invalid installer")
 root = pathlib.Path(sys.argv[1])
@@ -92,6 +95,8 @@ else:
     temporary.unlink()
 bootstrap = json.dumps({k:payload[k] for k in ["installationId", "privateKeyPEM", "ownerTokenHash"]}, sort_keys=True).encode()
 files = [("bootstrap.json", bootstrap, 0o600), ("release.sha256", payload["releaseHash"].encode(), 0o600), ("connection-host", host.encode(), 0o600), ("install.sh", installer, 0o700)]
+if release_file is not None: files.insert(2, ("release.file", release_file.encode(), 0o600))
+release_names = ["release.sha256", "release.file", "install.sh"]
 changed = [name for name, content, mode in files if (root / name).is_file() and (root / name).read_bytes() != content]
 replace_release = False
 if changed and payload.get("previousReleaseHash"):
@@ -103,13 +108,13 @@ if changed and payload.get("previousReleaseHash"):
     fcntl.flock(attempt_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     state = subprocess.run(["systemctl", "show", "openstrudel-install.service", "--property=ActiveState", "--value"], capture_output=True, text=True, timeout=10)
     if state.returncode or state.stdout.strip() != "failed" or installation.exists() or installation.is_symlink() or (root / "complete").exists() or (root / "complete").is_symlink(): raise ValueError("OPENSTRUDEL_EXISTING")
-    if any(name not in ["release.sha256", "install.sh"] for name in changed): raise ValueError("OPENSTRUDEL_EXISTING")
+    if any(name not in release_names for name in changed): raise ValueError("OPENSTRUDEL_EXISTING")
     if (root / "release.sha256").read_text().strip() not in [previous, payload["releaseHash"]]: raise ValueError("OPENSTRUDEL_EXISTING")
     replace_release = True
 # Validate the entire recipe before completing any interrupted write.
 for name, content, mode in files:
     file = root / name
-    if file.is_symlink() or (file.exists() and file.read_bytes() != content and not (replace_release and name in ["release.sha256", "install.sh"])): raise ValueError("OPENSTRUDEL_EXISTING")
+    if file.is_symlink() or (file.exists() and file.read_bytes() != content and not (replace_release and name in release_names)): raise ValueError("OPENSTRUDEL_EXISTING")
 for name, content, mode in files:
     file = root / name
     if not file.exists() or (replace_release and name in changed):

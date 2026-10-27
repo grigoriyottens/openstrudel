@@ -209,7 +209,7 @@ struct AgentMetalTests {
         let ssh = MetalInstallationSSH()
         let first = AgentMetalSetupFlow(client: client) { client in
             ServerSetupFlow(store: MetalInstallationStore(client: client), probe: { _ in nil },
-                            transport: ssh, releaseHash: { String(repeating: "a", count: 64) })
+                            transport: ssh, release: { (String(repeating: "a", count: 64), "OpenStrudel-Home-1.0-59.tar.gz") })
         }
         await first.load(days: 1); await first.checkPayment()
         for _ in 0..<200 where ssh.installInputs.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
@@ -217,6 +217,8 @@ struct AgentMetalTests {
         #expect(first.error == nil, "A lost SSH acknowledgement keeps observing the saved installation")
         let saved = try #require(client.state.installation)
         #expect(saved.attempted)
+        #expect(saved.releaseFile == "OpenStrudel-Home-1.0-59.tar.gz")
+        #expect(ssh.installInputs.first?.contains(#""releaseFile":"OpenStrudel-Home-1.0-59.tar.gz""#) == true)
         first.pause()
         let requestCount = wire.requests.count
         let reopened = try AgentMetalClient(store: store, transport: wire)
@@ -228,7 +230,7 @@ struct AgentMetalTests {
                 #expect(pending.privateKeyPEM == saved.privateKeyPEM)
                 // Stay unavailable until the unstaged recipe has been replayed.
                 return ssh.installInputs.count < 2 ? nil : HomeConnection(url: "https://8.8.4.4:7789", token: pending.ownerToken, pin: "fixture", name: "Server")
-            }, transport: ssh, releaseHash: { Issue.record("Do not replace the pinned release"); return "" })
+            }, transport: ssh, release: { Issue.record("Do not replace the pinned release"); return ("", "") })
         }
         await second.load(days: 1); await second.checkPayment()
         for _ in 0..<200 where second.connection == nil { try await Task.sleep(for: .milliseconds(5)) }

@@ -33,6 +33,25 @@ describe("Server setup over SSH", () => {
     expect(readFileSync(join(root, "state/installation-id"), "utf8").trim()).toBe(payload.installationId);
     expect(JSON.parse(readFileSync(join(root, "state/bootstrap.json"), "utf8")).privateKeyPEM).toBe(payload.privateKeyPEM);
     expect(readFileSync(join(root, "state/connection-host"), "utf8")).toBe(payload.host);
+    // A recipe saved before the file was pinned keeps the installer's alias.
+    expect(existsSync(join(root, "state/release.file"))).toBe(false);
+  });
+  it("stages the pinned versioned release file with its hash", () => {
+    const { root, payload } = fixture();
+    const pinned = { ...payload, releaseFile: "OpenStrudel-Home-1.0-59.tar.gz" };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = shell(root, "stage_setup", pinned);
+      expect(result.status, result.stderr).toBe(0);
+    }
+    expect(readFileSync(join(root, "state/release.file"), "utf8")).toBe(pinned.releaseFile);
+    expect(readFileSync(join(root, "state/release.sha256"), "utf8")).toBe(pinned.releaseHash);
+    expect(shell(root, "stage_setup", { ...pinned, releaseFile: "OpenStrudel-Home-1.0-60.tar.gz" }).status).not.toBe(0);
+    expect(readFileSync(join(root, "state/release.file"), "utf8")).toBe(pinned.releaseFile);
+  });
+  it.each(["../OpenStrudel-Home-1.0-59.tar.gz", "OpenStrudel-Home-1.0-59.tar.gz\nx", "OpenStrudel-Home-1.0.tar.gz", "https://other.example/OpenStrudel-Home-1.0-59.tar.gz", "", 59])("rejects an unsafe release file %j before creating state", releaseFile => {
+    const { root, payload } = fixture();
+    expect(shell(root, "stage_setup", { ...payload, releaseFile }).status).not.toBe(0);
+    expect(existsSync(join(root, "state"))).toBe(false);
   });
   it("refuses a different installation or changed recipe before overwriting data", () => {
     const { root, payload } = fixture();
@@ -43,29 +62,32 @@ describe("Server setup over SSH", () => {
       expect(readFileSync(join(root, "state/bootstrap.json"))).toEqual(original);
     }
   });
-  it("updates a failed, not-yet-installed release without changing its owner or identity", () => {
+  it.each([undefined, "OpenStrudel-Home-1.0-59.tar.gz"])("updates a failed, not-yet-installed release pinned to %j without changing its owner or identity", releaseFile => {
     const { root, payload } = fixture();
-    expect(shell(root, "stage_setup", payload).status).toBe(0);
+    expect(shell(root, "stage_setup", { ...payload, releaseFile }).status).toBe(0);
     writeFileSync(join(root, "bin/systemctl"), "#!/bin/sh\nprintf 'failed\\n'\n", { mode: 0o700 });
     const original = readFileSync(join(root, "state/bootstrap.json"));
-    const retry = { ...payload, previousReleaseHash: payload.releaseHash, releaseHash: "c".repeat(64), installer: Buffer.from("#!/usr/bin/env bash\necho updated\n").toString("base64") };
+    const retry = { ...payload, previousReleaseHash: payload.releaseHash, releaseHash: "c".repeat(64), releaseFile: "OpenStrudel-Home-1.0-60.tar.gz", installer: Buffer.from("#!/usr/bin/env bash\necho updated\n").toString("base64") };
     for (let attempt = 0; attempt < 2; attempt++) {
       const result = shell(root, "stage_setup", retry);
       expect(result.status, result.stderr).toBe(0);
     }
     expect(readFileSync(join(root, "state/release.sha256"), "utf8")).toBe(retry.releaseHash);
+    expect(readFileSync(join(root, "state/release.file"), "utf8")).toBe(retry.releaseFile);
     expect(readFileSync(join(root, "state/bootstrap.json"))).toEqual(original);
     expect(readFileSync(join(root, "state/installation-id"), "utf8").trim()).toBe(payload.installationId);
   });
   it.each(["running", "installed", "completed", "wrong-owner", "wrong-release"])("does not replace a %s installation while updating a failed release", kind => {
     const { root, payload } = fixture();
-    expect(shell(root, "stage_setup", payload).status).toBe(0);
+    const pinned = { ...payload, releaseFile: "OpenStrudel-Home-1.0-59.tar.gz" };
+    expect(shell(root, "stage_setup", pinned).status).toBe(0);
     writeFileSync(join(root, "bin/systemctl"), `#!/bin/sh\nprintf '${kind === "running" ? "activating" : "failed"}\\n'\n`, { mode: 0o700 });
     if (kind === "installed") mkdirSync(join(root, "home"));
     if (kind === "completed") writeFileSync(join(root, "state/complete"), "complete");
-    const retry = { ...payload, previousReleaseHash: kind === "wrong-release" ? "d".repeat(64) : payload.releaseHash, releaseHash: "c".repeat(64), ownerTokenHash: kind === "wrong-owner" ? "e".repeat(64) : payload.ownerTokenHash };
+    const retry = { ...pinned, previousReleaseHash: kind === "wrong-release" ? "d".repeat(64) : payload.releaseHash, releaseHash: "c".repeat(64), releaseFile: "OpenStrudel-Home-1.0-60.tar.gz", ownerTokenHash: kind === "wrong-owner" ? "e".repeat(64) : payload.ownerTokenHash };
     expect(shell(root, "stage_setup", retry).status).not.toBe(0);
     expect(readFileSync(join(root, "state/release.sha256"), "utf8")).toBe(payload.releaseHash);
+    expect(readFileSync(join(root, "state/release.file"), "utf8")).toBe(pinned.releaseFile);
   });
   it("preserves an unrelated installation and does not adopt a public staging directory", () => {
     const { root, payload } = fixture();

@@ -199,6 +199,8 @@ struct ServerInstallation: Codable, Sendable {
     let target: ServerTarget
     let hostKey: SSHHostKey
     var releaseHash: String
+    /// The versioned archive with that hash; a recipe saved before it was pinned uses the alias.
+    var releaseFile: String?
     var previousReleaseHash: String?
     let privateKeyPEM: String
     let ownerToken: String
@@ -233,6 +235,7 @@ enum ServerSetupScripts {
             "releaseHash": saved.releaseHash, "installer": installer.base64EncodedString()
         ]
         if let previous = saved.previousReleaseHash { values["previousReleaseHash"] = previous }
+        if let file = saved.releaseFile { values["releaseFile"] = file }
         let payload = try JSONSerialization.data(withJSONObject: values, options: [.sortedKeys])
         // A JSON string cannot terminate the fixed heredoc. Secrets travel only
         // over the pinned SSH channel's stdin, never in command arguments.
@@ -429,16 +432,16 @@ extension ServerSetupStore {
     private let store: any ServerSetupStore
     private let probe: (ServerInstallation) async throws -> HomeConnection?
     private let transport: any ServerSSHTransport
-    private let currentReleaseHash: () async throws -> String
+    private let currentRelease: () async throws -> (sha256: String, file: String)
     private var operation: Task<Void, Never>?
     private var generation = UUID()
     private var unlocking = false
     init(store: any ServerSetupStore = ServerSetupKeychain(), probe: ((ServerInstallation) async throws -> HomeConnection?)? = nil,
-         transport: any ServerSSHTransport = SSHServerTransport(), releaseHash: (() async throws -> String)? = nil) {
+         transport: any ServerSSHTransport = SSHServerTransport(), release: (() async throws -> (sha256: String, file: String))? = nil) {
         self.store = store
         self.probe = probe ?? Self.connect
         self.transport = transport
-        self.currentReleaseHash = releaseHash ?? Self.releaseHash
+        self.currentRelease = release ?? Self.release
         reloadRecovery()
     }
     func reloadRecovery() {
@@ -544,16 +547,18 @@ extension ServerSetupStore {
                     return
                 }
                 if status.installationID == saved.id && status.canUpdateRelease == true {
-                    let latest = try await self.currentReleaseHash()
-                    if latest != saved.releaseHash {
+                    let latest = try await self.currentRelease()
+                    if latest.sha256 != saved.releaseHash {
                         saved.previousReleaseHash = saved.releaseHash
-                        saved.releaseHash = latest
+                        saved.releaseHash = latest.sha256
+                        saved.releaseFile = latest.file
                     }
                 }
             }
             else {
-                let hash = try await self.currentReleaseHash()
-                saved = try ServerInstallation(target: target, hostKey: key, releaseHash: hash)
+                let release = try await self.currentRelease()
+                saved = try ServerInstallation(target: target, hostKey: key, releaseHash: release.sha256)
+                saved.releaseFile = release.file
             }
             try Task.checkCancellation()
             saved.attempted = true
@@ -569,12 +574,12 @@ extension ServerSetupStore {
             try await self.waitForServer(saved, access: access)
         }
     }
-    private static func releaseHash() async throws -> String {
+    private static func release() async throws -> (sha256: String, file: String) {
         let session = DigitalOceanNoRedirects.session()
         defer { session.invalidateAndCancel() }
         let (data, response) = try await session.data(from: URL(string: "https://waiwai.is/openstrudel/downloads/SHA256SUMS")!)
         guard (response as? HTTPURLResponse)?.statusCode == 200, data.count < 16384 else { throw ServerSetupFailure.installer }
-        return try DigitalOceanQuote.releaseHash(from: String(decoding: data, as: UTF8.self))
+        return try DigitalOceanQuote.release(from: String(decoding: data, as: UTF8.self))
     }
     func pause() {
         generation = UUID(); operation?.cancel(); operation = nil
