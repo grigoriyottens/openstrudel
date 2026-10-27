@@ -46,6 +46,10 @@ changes only the image tag, keeping the volume, environment and proxy route.
    app → connect → open assistants → data consent → real reply → relaunch.
    Also test pasting the HTTPS page into the app's connection field.
 
+For simulator tests, keep code signing enabled. `CODE_SIGNING_ALLOWED=NO` omits
+the simulated Keychain entitlements and makes enrollment fail before the network
+request. Ad-hoc simulator signing is enough; use the normal release entitlements.
+
 Never reinstall this host or remove the proxy/network/volume as routine cleanup.
 Before a necessary host migration, restore the review deployment elsewhere,
 preserve its setup code and Home key, move DNS and prove the same URL and an
