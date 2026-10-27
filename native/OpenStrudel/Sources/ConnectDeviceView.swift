@@ -294,6 +294,9 @@ private struct OwnServerSetupView: View {
                     }
                 }
             }
+            if flow.installation != nil, !busy, flow.phase != .connected {
+                Section { ForgetServerSetupButton(flow: flow) }
+            }
         }
         .formStyle(.grouped)
         .sheetPageTitle(title)
@@ -416,6 +419,31 @@ private struct OwnServerSetupView: View {
         // The new device is not selected: that would replace this sheet's root before account setup.
         do { onConnected(try await library.adoptServer(connection, from: flow)) }
         catch { localError = error.localizedDescription }
+    }
+}
+
+/// Abandons a pending own-server setup on this Mac after the person confirms.
+/// Nothing is sent to the server.
+struct ForgetServerSetupButton: View {
+    @ObservedObject var flow: ServerSetupFlow
+    @State private var confirming = false
+    @State private var failure: String?
+    var body: some View {
+        if let pending = flow.installation {
+            Button(L("Забыть настройку сервера…"), role: .destructive) { confirming = true }
+                .foregroundStyle(AppTheme.destructive)
+                .accessibilityIdentifier("forgetServerSetup")
+                .confirmationDialog(L("Забыть настройку сервера?"), isPresented: $confirming, titleVisibility: .visible) {
+                    Button(L("Забыть настройку"), role: .destructive) {
+                        do { try flow.startOver() } catch { failure = error.localizedDescription }
+                    }
+                } message: {
+                    Text(L("Этот Mac забудет незавершённую настройку \(pending.target.host). Сам сервер не изменится. Чтобы установить OpenStrudel снова, используйте новый сервер Ubuntu."))
+                }
+                .alert("OpenStrudel", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                    Button(L("Понятно"), role: .cancel) {}
+                } message: { Text(failure ?? "") }
+        }
     }
 }
 #endif

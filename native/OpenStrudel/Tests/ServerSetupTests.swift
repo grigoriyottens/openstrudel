@@ -453,6 +453,32 @@ struct ServerSetupTests {
         #expect(store.installation == nil)
     }
 
+    @Test @MainActor func startingOverForgetsAPendingSetupOnThisMacWithoutContactingTheServer() async throws {
+        let saved = try pendingInstallation()
+        let store = ServerSetupMemoryStore(installation: saved)
+        let transport = ServerSetupTestTransport(status: Data())
+        var probes = 0
+        let flow = ServerSetupFlow(store: store, probe: { _ in probes += 1; try await Task.sleep(for: .milliseconds(30)); return nil }, transport: transport)
+        #expect(flow.phase == .paused)
+        store.failSave = true
+        #expect(throws: ServerSetupFailure.storage) { try flow.startOver() }
+        #expect(flow.installation?.id == saved.id, "Keychain still holds the setup, so this Mac keeps showing it")
+        #expect(store.installation?.id == saved.id)
+        store.failSave = false
+        flow.resume()
+        try flow.startOver()
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(store.installation == nil)
+        #expect(flow.installation == nil && flow.target == nil && flow.hostKey == nil && flow.error == nil)
+        #expect(flow.phase == .address, "A check that was under way does not bring the setup back")
+        #expect(probes == 1)
+        #expect(await transport.statusRequests == 0)
+        #expect(await transport.installInputs.isEmpty)
+        flow.inspect(try ServerTarget(host: "other.example.com", user: "root", port: 22))
+        for _ in 0..<200 where flow.phase != .failed { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(flow.target?.host == "other.example.com", "Another server can be set up next")
+    }
+
     private func pendingInstallation() throws -> ServerInstallation {
         let target = try ServerTarget(host: "server.example.com", user: "root", port: 22)
         let key = try SSHHostKey(line: "host ssh-ed25519 " + Data(repeating: 1, count: 51).base64EncodedString(), target: target)
@@ -500,9 +526,13 @@ private actor ServerSetupTestTransport: ServerSSHTransport {
 
 @MainActor private final class ServerSetupMemoryStore: ServerSetupStore {
     var installation: ServerInstallation?
+    var failSave = false
     init(installation: ServerInstallation?) { self.installation = installation }
     func load() throws -> ServerInstallation? { installation }
-    func save(_ installation: ServerInstallation?) throws { self.installation = installation }
+    func save(_ installation: ServerInstallation?) throws {
+        if failSave { throw ServerSetupFailure.storage }
+        self.installation = installation
+    }
 }
 
 @Suite("Real SSH setup", .serialized, .enabled(if: ProcessInfo.processInfo.environment["OPENSTRUDEL_SSH_INTEGRATION"] == "1"))

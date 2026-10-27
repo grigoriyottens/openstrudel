@@ -581,9 +581,13 @@ extension ServerSetupStore {
         phase = recoveryLoaded ? (installation != nil ? .paused : .address) : .failed
         if !recoveryLoaded { error = .storage }
     }
-    func startOver() {
-        guard recoveryLoaded, installation == nil else { return }
-        pause(); target = nil; hostKey = nil; preflight = nil; error = nil
+    /// Forgets a pending setup on this Mac only. The server is never contacted,
+    /// so anything already staged or installed there stays unchanged.
+    func startOver() throws {
+        guard recoveryLoaded else { return }
+        pause()
+        try finish()
+        error = nil
     }
     func finish() throws { try store.save(nil); installation = nil; connection = nil; target = nil; hostKey = nil; preflight = nil; phase = .address }
     func prepareForLocalErase() { pause() }
