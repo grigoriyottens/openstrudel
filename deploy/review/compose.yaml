@@ -1,0 +1,43 @@
+name: openstrudel-review
+services:
+  home:
+    image: ${OPENSTRUDEL_REVIEW_IMAGE:?Set an immutable image tag in .env}
+    init: true
+    restart: unless-stopped
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./seccomp.json
+      - apparmor=openstrudel-container
+      - systempaths=unconfined
+    env_file: runtime.env
+    ports:
+      - "27789:7789"
+      - "127.0.0.1:27788:8080"
+    volumes:
+      - data:/data
+    networks:
+      public:
+        aliases: [openstrudel-review]
+    mem_limit: 2g
+    cpus: 2
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+volumes:
+  data:
+    external: true
+    name: openstrudel-review-data
+networks:
+  public:
+    external: true
+    name: telegram-core_default
