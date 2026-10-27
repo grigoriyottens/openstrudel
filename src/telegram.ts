@@ -81,6 +81,7 @@ export class TelegramAdapter {
       CREATE TABLE IF NOT EXISTS telegram_outbox(key TEXT PRIMARY KEY,chat_id TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,message_id TEXT,error TEXT);
       CREATE TABLE IF NOT EXISTS telegram_links(hash TEXT PRIMARY KEY,payload TEXT NOT NULL,expires_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS telegram_interactions(bot_id TEXT NOT NULL,chat_id TEXT NOT NULL,message_id INTEGER NOT NULL,interaction_id TEXT NOT NULL,PRIMARY KEY(bot_id,chat_id,message_id));`);
+    if (!this.store.db.prepare("PRAGMA table_info(telegram_outbox)").all().some(row=>row.name === "media_group_id")) this.store.db.exec("ALTER TABLE telegram_outbox ADD COLUMN media_group_id TEXT");
     this.store.db.prepare("UPDATE telegram_outbox SET status='unknown',error='Перезапуск во время отправки; проверьте Telegram перед повтором' WHERE status='sending'").run();
     this.offset=Number(this.store.getSetting("telegram.offset") ?? 0);
     // Legacy private pairings remain owned by that Telegram user.
@@ -335,7 +336,7 @@ export class TelegramAdapter {
   }
 
   /** A requested cross-chat delivery uses the same durable outbox as ordinary replies. */
-  async sendToChat(input: {chatId:string;text:string;files:Array<{name:string;mimeType?:string;contentBase64:string}>;externalId:string;silent?:boolean;linkPreview?:boolean}) {
+  async sendToChat(input: {chatId:string;text:string;files:Array<{name:string;mimeType?:string;contentBase64:string}>;externalId:string;silent?:boolean;linkPreview?:boolean;album?:boolean}) {
     if (!this.token) throw new Error("Telegram не подключён");
     const chat = this.store.getTelegramChat(input.chatId);
     if (!chat || chat.enabled === false) throw new Error("Бот больше не подключён к этому чату.");
@@ -347,16 +348,23 @@ export class TelegramAdapter {
     const receipt = (messageId:string) => {
       const message = this.store.getMessage(conversation.id,messageId)!;
       const prefix=`${chat.chatId}:reply:${messageId}:`;
-      const deliveries=this.store.db.prepare("SELECT message_id,status FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix,prefix+"\uffff");
+      const deliveries=this.store.db.prepare("SELECT message_id,status,media_group_id FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix,prefix+"\uffff");
       const delivered=deliveries.filter(row=>row.status === "delivered");
+      const albums=[...new Set(delivered.filter(row=>row.media_group_id).map(row=>String(row.media_group_id)))];
       const status=message.status === "completed" ? "delivered" : message.status === "running" ? "pending"
         : deliveries.some(row=>row.status === "unknown" || row.status === "sending") ? "unknown" : delivered.length ? "partial" : "not_sent";
       return {sent:status === "delivered",status,chatId:chat.chatId,title:chat.title,messageId,
-        telegramMessageIds:delivered.map(row=>String(row.message_id)),...(message.error?{error:message.error}:{})};
+        telegramMessageIds:delivered.map(row=>String(row.message_id)),...(albums.length?{telegramMediaGroupIds:albums}:{}),...(message.error?{error:message.error}:{})};
     };
     if (previous) {
       if (previous.conversationId !== conversation.id) throw new Error("Подключение чата изменилось; проверьте предыдущую отправку.");
       return receipt(previous.id);
+    }
+    if (input.album) {
+      if (input.files.length < 2 || input.files.length > 10) throw new Error("Фотоальбом должен содержать 2–10 фотографий.");
+      if (input.text.length > 1024) throw new Error("Подпись фотоальбома — до 1024 символов.");
+      if (input.files.some(file=>!["image/jpeg","image/png"].includes(file.mimeType ?? ""))) throw new Error("Для фотоальбома нужны JPEG или PNG.");
+      if (input.files.some(file=>Buffer.from(file.contentBase64,"base64").length > 10*1024*1024)) throw new Error("Фотография в альбоме — до 10 МБ.");
     }
     const files=input.files.map(file=>this.messages.files.put(conversation.id,this.messages.contextFor(conversation.id),file));
     const message=this.store.addMessage({conversationId:conversation.id,channel:"telegram",direction:"outbound",text:input.text,
@@ -364,8 +372,11 @@ export class TelegramAdapter {
     this.store.setMessageStatus(message.id,"running");
     this.activeChats.set(chat.chatId,(this.activeChats.get(chat.chatId) ?? 0)+1);
     try {
-      await this.sendMessage(chat.chatId,input.text,"reply:"+message.id,undefined,input);
-      await this.sendFiles(chat.chatId,files,"reply:"+message.id,input);
+      if (input.album) await this.sendPhotoAlbum(chat.chatId,files,input.text,"reply:"+message.id,input);
+      else {
+        await this.sendMessage(chat.chatId,input.text,"reply:"+message.id,undefined,input);
+        await this.sendFiles(chat.chatId,files,"reply:"+message.id,input);
+      }
       this.store.setMessageStatus(message.id,"completed");
     } catch (error) {
       this.store.setMessageStatus(message.id,"failed",refused(error)?REFUSED:"Доставка не подтверждена. Проверьте Telegram перед новой отправкой.");
@@ -374,6 +385,47 @@ export class TelegramAdapter {
       if (remaining) this.activeChats.set(chat.chatId,remaining); else this.activeChats.delete(chat.chatId);
     }
     return receipt(message.id);
+  }
+
+  private async sendPhotoAlbum(chatId:string, files:Attachment[], text:string, deliveryKey:string, options:{silent?:boolean}):Promise<void> {
+    const form=new FormData();form.set("chat_id",chatId);
+    if (options.silent) form.set("disable_notification","true");
+    const caption=telegramText(text)[0];
+    const media=files.map((_file,index)=>({type:"photo",media:`attach://photo${index}`,
+      ...(index===0 && caption ? {caption:caption.text,caption_entities:caption.entities} : {})}));
+    form.set("media",JSON.stringify(media));
+    for (const [index,file] of files.entries()) {
+      const stored=this.messages.files.get(file.id);
+      if (!stored || stored.conversationId!==file.conversationId) throw new Error("Файл ответа не найден");
+      form.set(`photo${index}`,new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
+    }
+    const rows=files.map((file,index)=>({key:`${chatId}:${deliveryKey}:album:${index}`,
+      payload:JSON.stringify({chat_id:chatId,media,fileIds:files.map(f=>f.id),fileId:file.id,...(options.silent?{disable_notification:true}:{})})}));
+    // Reserve every photo together; a lost response must not replay the album.
+    this.store.db.exec("BEGIN IMMEDIATE");
+    try {
+      for (const row of rows) this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status) VALUES(?,?,?,'pending')").run(row.key,chatId,row.payload);
+      const saved=rows.map(row=>this.store.db.prepare("SELECT payload,status FROM telegram_outbox WHERE key=?").get(row.key)!);
+      if (saved.some((row,index)=>row.payload!==rows[index]!.payload)) throw new Error("Содержимое доставки изменилось");
+      if (saved.every(row=>row.status==="delivered")) {this.store.db.exec("COMMIT");return;}
+      if (saved.some(row=>row.status!=="pending")) throw new Error("Проверьте доставку фотоальбома в Telegram перед повтором");
+      for (const row of rows) this.store.db.prepare("UPDATE telegram_outbox SET status='sending' WHERE key=?").run(row.key);
+      this.store.db.exec("COMMIT");
+    } catch(error) {this.store.db.exec("ROLLBACK");throw error;}
+    try {
+      const sent=await this.call<Array<{message_id:number;media_group_id:string}>>("sendMediaGroup",form);
+      if (!Array.isArray(sent) || sent.length!==files.length || !sent[0]?.media_group_id
+        || sent.some(item=>!Number.isSafeInteger(item.message_id) || item.message_id<=0 || item.media_group_id!==sent[0]!.media_group_id)
+        || new Set(sent.map(item=>item.message_id)).size!==files.length) throw new Error("Telegram не подтвердил весь фотоальбом");
+      this.store.db.exec("BEGIN IMMEDIATE");
+      try {
+        for (const [index,item] of sent.entries()) this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=?,media_group_id=? WHERE key=?").run(String(item.message_id),item.media_group_id,rows[index]!.key);
+        this.store.db.exec("COMMIT");
+      } catch(error) {this.store.db.exec("ROLLBACK");throw error;}
+    } catch(error) {
+      for (const row of rows) this.store.db.prepare("UPDATE telegram_outbox SET status=?,error=? WHERE key=?").run(...(refused(error)?["not_sent",REFUSED]:["unknown","Доставка фотоальбома не подтверждена. Проверьте Telegram перед повтором."]),row.key);
+      throw error;
+    }
   }
 
   async sendFiles(chatId: string | number, files: Attachment[] = [], deliveryKey: string = randomUUID(), options: { silent?: boolean } = {}): Promise<void> {
