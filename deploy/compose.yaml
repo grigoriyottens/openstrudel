@@ -16,6 +16,8 @@ services:
     environment:
       OPENSTRUDEL_PUBLIC_HOST: ${OPENSTRUDEL_PUBLIC_HOST:?Set the public hostname or IPv4 address in deploy/.env}
       OPENSTRUDEL_PUBLIC_PORT: ${OPENSTRUDEL_PUBLIC_PORT:-7789}
+      OPENSTRUDEL_STT_URL: ${OPENSTRUDEL_STT_URL:-}
+      OPENSTRUDEL_STT_KEY: ${OPENSTRUDEL_STT_KEY:-}
       TZ: ${TZ:-UTC}
     ports:
       - "${OPENSTRUDEL_PUBLIC_PORT:-7789}:7789"

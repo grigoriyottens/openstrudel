@@ -36,7 +36,7 @@ OPENSTRUDEL_PUBLIC_PORT=7789
 TZ=Europe/Moscow
 ```
 
-Укажите действительный публичный домен или IPv4 вашего сервера. По умолчанию Home получает 2 процессора и 2 ГБ памяти. На более мощном сервере дайте больше, например `OPENSTRUDEL_CPUS=6` и `OPENSTRUDEL_MEMORY=8g`: так голосовые распознаются и ответы готовятся быстрее. Затем:
+Укажите действительный публичный домен или IPv4 вашего сервера. По умолчанию Home получает 2 процессора и 2 ГБ памяти. На более мощном сервере дайте больше, например `OPENSTRUDEL_CPUS=6` и `OPENSTRUDEL_MEMORY=8g`: так голосовые распознаются и ответы готовятся быстрее. Если у вас есть свой сервер распознавания OpenRamble, укажите `OPENSTRUDEL_STT_URL=https://stt.example.com` и `OPENSTRUDEL_STT_KEY=<ключ>`: Home будет отправлять туда все записи, а озвучивание останется в ElevenLabs. Затем:
 
 ```sh
 sudo install -m 0644 deploy/docker/openstrudel.apparmor /etc/apparmor.d/openstrudel-container
