@@ -14,6 +14,15 @@ export const readModelFallbacks = (store: Store): ModelSelection[] => JSON.parse
 export function followsDeviceModel(store: Store, agent?: string, conversationId?: string): boolean {
   return !(conversationId && readConversationModelSelection(store,conversationId).model) && !(agent && readModelSelection(store,agent).model);
 }
+/** On unless the owner turns it off. */
+export const directFast = (store: Store): boolean => store.getSetting('models.directFast') !== 'false';
+/** A direct chat on the device's model asks for Fast. Groups and a chosen chat or employee model keep their speed; schedules are the caller's. */
+export const fastChat = (store: Store, agent: string, conversationId: string, groupContext: boolean): boolean =>
+  !groupContext && directFast(store) && followsDeviceModel(store, agent, conversationId);
+/** Fast replaces only the ordinary speed, and only where the model offers it. */
+export const turnSpeed = (offersFast: boolean, serviceTier?: string | null): string =>
+  offersFast && (serviceTier ?? 'default') === 'default' ? 'priority' : serviceTier ?? 'default';
+export const offersFast = (model?: ModelChoice): boolean => model?.speeds.some(s => s.id === 'priority') === true;
 export function parseModelFallbacks(value: unknown, primary: ModelSelection, store: Store, models: ModelChoice[]): ModelSelection[] {
   if (!Array.isArray(value) || value.length > 12) throw new HomeError('Выберите резервные модели.');
   const seen = new Set([JSON.stringify([primary.provider,primary.model])]);

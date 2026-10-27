@@ -15,6 +15,7 @@ struct ModelSettingsView: View {
     @State private var speed = "default"
     @State private var reasoning = ""
     @State private var fallbacks: [ModelSelection] = []
+    @State private var directFast: Bool?
     @State private var loading = true
     @State private var saving = false
     @State private var error: (any Error)?
@@ -28,7 +29,7 @@ struct ModelSettingsView: View {
         return settings.model(ref) ?? (settings.recommended?.ref == ref ? settings.recommended : nil)
     }
     private var selection: ModelSelection { ModelSelection(provider: choice?.provider, model: choice?.model, serviceTier: choice == nil && inherits ? nil : speed, reasoningEffort: choice == nil && inherits || reasoning.isEmpty ? nil : reasoning) }
-    private var changed: Bool { selection != settings?.selection || !inherits && fallbacks != (settings?.fallbacks ?? []) }
+    private var changed: Bool { selection != settings?.selection || !inherits && (fallbacks != (settings?.fallbacks ?? []) || directFast != settings?.directFast) }
     /// One speed needs no choice; an unavailable saved speed stays visible so it can be changed.
     private var showsSpeed: Bool {
         guard let selected else { return false }
@@ -87,13 +88,20 @@ struct ModelSettingsView: View {
                     }
                     .accessibilityIdentifier("modelSpeed").disabled((choice == nil && inherits) || saving || !settings.canManage)
                 }
+                if !inherits, let fast = directFast {
+                    Toggle(isOn: Binding(get: { fast }, set: { directFast = $0; saved = false })) {
+                        Text(L("Fast в личных чатах"))
+                        Text(L("Личные чаты в Telegram и в приложении отвечают быстрее, если модель это поддерживает. Группы и расписания работают со скоростью устройства."))
+                    }
+                    .settingsSwitch().accessibilityIdentifier("directFast").disabled(saving || !settings.canManage)
+                }
                 if !inherits && settings.fallbacks != nil { reserves(settings) }
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         if choice == nil && !inherits, let recommended = settings.recommended {
                             Text(settings.recommendation(recommended))
                         }
-                        if speed != "default" { Text(L("Ускоренный режим может расходовать больше лимита аккаунта.")) }
+                        if speed != "default" || !inherits && directFast == true { Text(L("Ускоренный режим может расходовать больше лимита аккаунта.")) }
                         if !settings.canManage { Text(L("Настройки меняет владелец устройства.")) }
                         Text(saved && !changed ? L("Сохранено. Применится со следующего поручения.") : L("Начатая работа продолжится с прежними настройками."))
                     }
@@ -169,6 +177,7 @@ struct ModelSettingsView: View {
     private func apply(_ value: ModelSettings) {
         settings = value; choice = value.selection.ref
         fallbacks = value.fallbacks ?? []
+        directFast = value.directFast
         speed = value.selection.serviceTier ?? value.defaults.serviceTier ?? "default"
         reasoning = value.selection.reasoningEffort ?? (value.selection.model == nil && inherits ? value.defaults.reasoningEffort : nil) ?? ""
         onLoad(value)
@@ -189,6 +198,7 @@ struct ModelSettingsView: View {
             if !inherits && settings?.fallbacks != nil {
                 payload["fallbacks"] = fallbacks.map { ["provider": $0.provider as Any? ?? NSNull(), "model": $0.model as Any? ?? NSNull(), "serviceTier": $0.serviceTier ?? "default", "reasoningEffort": $0.reasoningEffort as Any? ?? NSNull()] }
             }
+            if !inherits, let directFast { payload["directFast"] = directFast }
             let result: ModelSettings = try await client.management(path, method: "POST", payload: payload)
             apply(result); saved = true
             // Another provider can open or close the chat's account gate.

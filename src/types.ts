@@ -85,6 +85,8 @@ export interface CodexEngine {
       provider?: string | null;
       model?: string | null;
       serviceTier?: string | null;
+      /** A direct chat on the device's model: the ordinary speed becomes Fast where the model offers it. */
+      fast?: boolean;
       reasoningEffort?: string | null;
       /** Permanent employees offered as native Codex roles on this device. */
       employees?: EmployeeProfile[];

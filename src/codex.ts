@@ -1,4 +1,4 @@
-import { normalizeModels, recommendedModel, validateModelSelection, modelReasoning, type ModelChoice } from "./model-settings.js";
+import { normalizeModels, recommendedModel, validateModelSelection, modelReasoning, offersFast, turnSpeed, type ModelChoice } from "./model-settings.js";
 import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { CodexRpc, type RpcMessage } from "./rpc.js";
@@ -140,11 +140,12 @@ export class CodexEngineAdapter implements CodexEngine {
     const selected = options.model ?? this.options.model ?? process.env.OPENSTRUDEL_CODEX_MODEL ?? null;
     const recommended = recommendedModel(models);
     const model = selected ?? recommended.id;
-    const effort = modelReasoning(selected ? models.find(m=>m.id === selected) : recommended,options.reasoningEffort);
+    const chosen = selected ? models.find(m=>m.id === selected) : recommended;
+    const effort = modelReasoning(chosen,options.reasoningEffort);
     if (options?.serviceTier) validateModelSelection({model:selected,serviceTier:options.serviceTier},models);
     const provider = this.options.provider?.info;
     // Speeds are OpenAI service tiers; other providers get none.
-    const tier = provider && provider.id !== "openai" ? {} : {serviceTier:options?.serviceTier ?? "default"};
+    const tier = provider && provider.id !== "openai" ? {} : {serviceTier:turnSpeed(options?.fast === true && offersFast(chosen),options?.serviceTier)};
     const cwd = this.options.workingDirectory ?? resolve(".data/workspace");
     mkdirSync(cwd, { recursive: true });
     const mode = options.approvalMode ?? "ask";

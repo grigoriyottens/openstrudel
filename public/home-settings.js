@@ -621,28 +621,30 @@ async function openModelSettings(agent, deviceId, conversationId) {
     model.value=ref(data.selection);
     const speedLabel=element('label',t("Скорость")), speed=element('select','','field');speed.id='model-speed';speed.setAttribute('aria-label',t("Скорость"));speedLabel.append(speed);page.content.append(speedLabel);
     const reasoningLabel=element('label',t("Обдумывание")), reasoning=element('select','','field');reasoning.id='model-reasoning';reasoning.setAttribute('aria-label',t("Обдумывание"));reasoningLabel.append(reasoning);page.content.append(reasoningLabel);
+    const fastLabel=!inherits&&typeof data.directFast==='boolean'?element('label','','check'):null, fast=element('input');fast.type='checkbox';fast.id='direct-fast';
+    if(fastLabel){fast.checked=data.directFast;fastLabel.append(fast,element('span',t("Fast в личных чатах")));page.content.append(fastLabel,element('p',t("Личные чаты в Telegram и в приложении отвечают быстрее, если модель это поддерживает. Группы и расписания работают со скоростью устройства."),'hint'));}
     const recommendation=element('p'),note=element('p');page.content.append(recommendation,note);
     let fallbacks=(data.fallbacks||[]).map(m=>({...m}));
     const reserves=!inherits&&Array.isArray(data.fallbacks)?element('div','','model-fallbacks'):null;
     if(reserves)page.content.append(reserves);
     let pending=false;
-    const value=()=>{const [provider,id]=model.value?JSON.parse(model.value):[null,null];return {provider,model:id,serviceTier:!model.value&&inherits?null:speed.value,...(model.value||!inherits)&&reasoning.value?{reasoningEffort:reasoning.value}:{},...(reserves?{fallbacks}:{})};};
+    const value=()=>{const [provider,id]=model.value?JSON.parse(model.value):[null,null];return {provider,model:id,serviceTier:!model.value&&inherits?null:speed.value,...(model.value||!inherits)&&reasoning.value?{reasoningEffort:reasoning.value}:{},...(reserves?{fallbacks}:{}),...(fastLabel?{directFast:fast.checked}:{})};};
     const chosenModel=()=>model.value?lookup(model.value):inherits?(lookup(ref(data.defaults))||data.recommended):data.recommended;
     const save=element('button',t("Применить"),'primary');save.type='button';save.dataset.main='true';page.actions.append(save);arrange(page);
     save.onclick=async()=>{
-      pending=true;save.disabled=true;page.error.textContent='';model.disabled=speed.disabled=reasoning.disabled=true;status.textContent=t("Сохраняем…");update();
+      pending=true;save.disabled=true;page.error.textContent='';model.disabled=speed.disabled=reasoning.disabled=fast.disabled=true;status.textContent=t("Сохраняем…");update();
       try {const result=await api(path,{method:'POST',body:JSON.stringify(value())});Object.assign(data,result); if(conversationId===state.conversationID) paintConversationModel(result); status.textContent=t("Сохранено. Применится со следующего поручения.");}
       catch(e){status.textContent=t("Не удалось сохранить.");page.report(e);}
       finally {pending=false;model.disabled=!data.canManage;update();}
     };
     function update(){
       speed.disabled=(!model.value&&inherits)||!data.canManage||pending;
-      reasoning.disabled=speed.disabled;
+      reasoning.disabled=speed.disabled;fast.disabled=!data.canManage||pending;
       recommendation.textContent=!model.value&&!inherits&&data.recommended?(data.recommended.isDefault?t("Рекомендует OpenAI"):t("Модель по умолчанию")):'';
-      note.textContent=speed.value&&speed.value!=='default'?t("Ускоренный режим может расходовать больше лимита аккаунта."):'';
+      note.textContent=speed.value&&speed.value!=='default'||fastLabel&&fast.checked?t("Ускоренный режим может расходовать больше лимита аккаунта."):'';
       const chosen=chosenModel();
       const selected=value(),saved=data.selection;
-      const unchanged=['provider','model','serviceTier','reasoningEffort'].every(k=>(selected[k]??null)===(saved[k]??null))&&(!reserves||JSON.stringify(fallbacks)===JSON.stringify(data.fallbacks));
+      const unchanged=['provider','model','serviceTier','reasoningEffort'].every(k=>(selected[k]??null)===(saved[k]??null))&&(!reserves||JSON.stringify(fallbacks)===JSON.stringify(data.fallbacks))&&(!fastLabel||fast.checked===data.directFast);
       save.disabled=!data.canManage||pending||unchanged||!chosen||(!model.value&&inherits?false:!chosen.speeds.some(s=>s.id===speed.value)||(reasoning.value&&!(chosen.reasoningEfforts||[]).some(e=>e.id===reasoning.value)));
       if(reserves)renderReserves();
     }
@@ -677,7 +679,7 @@ async function openModelSettings(agent, deviceId, conversationId) {
       speedLabel.hidden=(chosen?.speeds||[]).length<=1&&speed.value==='default';update();
     }
     speeds(data.selection.serviceTier||data.defaults.serviceTier,true);model.disabled=!data.canManage;
-    model.onchange=()=>{status.textContent='';fallbacks=fallbacks.filter(m=>ref(m)!==modelRef(chosenModel()||{}));speeds(!model.value&&inherits?data.defaults.serviceTier:speed.value);};speed.onchange=reasoning.onchange=()=>{status.textContent='';update();};
+    model.onchange=()=>{status.textContent='';fallbacks=fallbacks.filter(m=>ref(m)!==modelRef(chosenModel()||{}));speeds(!model.value&&inherits?data.defaults.serviceTier:speed.value);};speed.onchange=reasoning.onchange=fast.onchange=()=>{status.textContent='';update();};
   }catch(e){status.textContent='';page.report(e);action(page,t("Повторить"),()=>openModelSettings(agent,deviceId,conversationId));}
 }
 
