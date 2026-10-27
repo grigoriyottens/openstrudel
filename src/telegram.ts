@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { telegramText } from "./telegram-format.js";
+import { telegramText, type TelegramText } from "./telegram-format.js";
 import { isSpeechFile, transcribeRecording } from "./speech.js";
 import { errorProblem } from "./operations.js";
 import type { MessageService } from "./messages.js";
@@ -35,6 +35,33 @@ class TelegramRequestError extends Error {
 /** Telegram answered with a client error: it refused the request and sent nothing. */
 const refused = (error: unknown) => error instanceof TelegramRequestError && error.code !== undefined && error.code >= 400 && error.code < 500;
 const REFUSED = "Telegram отклонил сообщение, оно не отправлено. Проверьте, что бот остался в чате.";
+
+/** Telegram counts a caption's 1024 characters after formatting. Null: the text needs its own message. */
+function captionFor(text: string): TelegramText | null {
+  const chunks = telegramText(text);
+  return chunks.length > 1 || (chunks[0]?.text.length ?? 0) > 1024 ? null : chunks[0] ?? { text: "", entities: [] };
+}
+
+/** Pixel size from a JPEG, PNG or still WebP header; null for anything else. */
+function imageSize(bytes: Buffer): { width: number; height: number } | null {
+  if (bytes.length >= 24 && bytes.readUInt32BE(0) === 0x89504e47 && bytes.readUInt32BE(4) === 0x0d0a1a0a && bytes.toString("latin1", 12, 16) === "IHDR")
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  if (bytes.length >= 30 && bytes.toString("latin1", 0, 4) === "RIFF" && bytes.toString("latin1", 8, 12) === "WEBP") {
+    const chunk = bytes.toString("latin1", 12, 16), bits = bytes.readUInt32LE(21);
+    // An animated WebP would lose its motion as a photo.
+    return chunk === "VP8 " ? { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff }
+      : chunk === "VP8L" ? { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 }
+      : chunk === "VP8X" && !(bytes[20]! & 0x02) ? { width: bytes.readUIntLE(24, 3) + 1, height: bytes.readUIntLE(27, 3) + 1 } : null;
+  }
+  // A JPEG states its size in the frame header; 0xc4, 0xc8 and 0xcc share that marker range but are other segments.
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) for (let at = 2; at + 9 < bytes.length;) {
+    const marker = bytes[at + 1]!;
+    if (bytes[at] !== 0xff || marker === 0xd9 || marker === 0xda) return null;
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) return { width: bytes.readUInt16BE(at + 7), height: bytes.readUInt16BE(at + 5) };
+    at += marker === 0xff ? 1 : marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8) ? 2 : 2 + bytes.readUInt16BE(at + 2);
+  }
+  return null;
+}
 
 function telegramConnectionError(error: unknown): string {
   if (error instanceof TelegramRequestError) {
@@ -319,8 +346,7 @@ export class TelegramAdapter {
     this.store.setMessageStatus(reply.id, "running");
     this.activeChats.set(chat.chatId, (this.activeChats.get(chat.chatId) ?? 0) + 1);
     try {
-      await this.sendMessage(chat.chatId, text, "reply:" + reply.id, Number(origin![2]));
-      await this.sendFiles(chat.chatId, files, "reply:" + reply.id);
+      await this.sendAnswer(chat.chatId, text, files, "reply:" + reply.id, Number(origin![2]));
       this.store.setMessageStatus(reply.id, "completed");
     } catch (error) {
       // The durable receipt survives a lost HTTP acknowledgement. Repeating
@@ -356,6 +382,29 @@ export class TelegramAdapter {
         throw error;
       }
     }
+  }
+
+  /** An answer and its files. Photos Telegram accepts arrive as one captioned photo or album; other files keep their form. */
+  async sendAnswer(chatId: string | number, text: string, files: Attachment[] = [], deliveryKey: string, replyToMessageId?: number): Promise<void> {
+    const prefix = `${chatId}:${deliveryKey}:`;
+    const begun = new Set(this.store.db.prepare("SELECT key FROM telegram_outbox WHERE key>=? AND key<?").all(prefix, prefix + "\uffff").map(row => String(row.key)));
+    // A delivery begun as text and documents finishes that way; a receipt is never sent again in another form.
+    const photos: Attachment[] = [];
+    for (const file of files) if (!begun.has(prefix + "file:" + file.id) && await this.isPhoto(file)) photos.push(file);
+    const caption = photos.length && !begun.has(prefix + "0") ? captionFor(text) : null;
+    if (!caption) await this.sendMessage(chatId, text, deliveryKey, replyToMessageId);
+    for (let first = 0; first < photos.length; first += 10)
+      await this.sendPhotos(String(chatId), photos.slice(first, first + 10), deliveryKey, first, caption && !first ? { caption, replyTo: replyToMessageId } : {});
+    await this.sendFiles(chatId, files.filter(file => !photos.includes(file)), deliveryKey);
+  }
+
+  /** Telegram's photo limits: JPEG, PNG or still WebP up to 10 MB, width plus height at most 10000, sides within 1:20. */
+  private async isPhoto(file: Attachment): Promise<boolean> {
+    const stored = this.messages.files.get(file.id);
+    if (!stored || stored.conversationId !== file.conversationId || !["image/jpeg", "image/png", "image/webp"].includes(file.mimeType) || stored.size > 10*1024*1024) return false;
+    const bytes = await readFile(stored.path).catch(() => Buffer.alloc(0)), size = bytes.length <= 10*1024*1024 ? imageSize(bytes) : null;
+    const short = Math.min(size?.width ?? 0, size?.height ?? 0), long = Math.max(size?.width ?? 0, size?.height ?? 0);
+    return short > 0 && long <= 20 * short && short + long <= 10000;
   }
 
   /** Checks without sending that a chat can receive a requested delivery, so a caller can check several chats before sending to any. Album and file checks stay in sendToChat. */
@@ -394,7 +443,7 @@ export class TelegramAdapter {
     if (previous) return receipt(previous.id);
     if (input.album) {
       if (input.files.length < 2 || input.files.length > 10) throw new Error("Фотоальбом должен содержать 2–10 фотографий.");
-      if (input.text.length > 1024) throw new Error("Подпись фотоальбома — до 1024 символов.");
+      if (!captionFor(input.text)) throw new Error("Подпись фотоальбома — до 1024 символов.");
       if (input.files.some(file=>!["image/jpeg","image/png"].includes(file.mimeType ?? ""))) throw new Error("Для фотоальбома нужны JPEG или PNG.");
       if (input.files.some(file=>Buffer.from(file.contentBase64,"base64").length > 10*1024*1024)) throw new Error("Фотография в альбоме — до 10 МБ.");
     }
@@ -404,7 +453,7 @@ export class TelegramAdapter {
     this.store.setMessageStatus(message.id,"running");
     this.activeChats.set(chat.chatId,(this.activeChats.get(chat.chatId) ?? 0)+1);
     try {
-      if (input.album) await this.sendPhotoAlbum(chat.chatId,files,input.text,"reply:"+message.id,input);
+      if (input.album) await this.sendPhotos(chat.chatId,files,"reply:"+message.id,0,{silent:input.silent,caption:captionFor(input.text)!});
       else {
         await this.sendMessage(chat.chatId,input.text,"reply:"+message.id,undefined,input);
         await this.sendFiles(chat.chatId,files,"reply:"+message.id,input);
@@ -419,20 +468,23 @@ export class TelegramAdapter {
     return receipt(message.id);
   }
 
-  private async sendPhotoAlbum(chatId:string, files:Attachment[], text:string, deliveryKey:string, options:{silent?:boolean}):Promise<void> {
-    const form=new FormData();form.set("chat_id",chatId);
+  /** Up to ten photos in one request: sendPhoto for one, sendMediaGroup for an album. Each photo keeps an album receipt. */
+  private async sendPhotos(chatId:string, files:Attachment[], deliveryKey:string, first:number, options:{silent?:boolean;caption?:TelegramText;replyTo?:number}):Promise<void> {
+    const single=files.length===1, form=new FormData();form.set("chat_id",chatId);
     if (options.silent) form.set("disable_notification","true");
-    const caption=telegramText(text)[0];
-    const media=files.map((_file,index)=>({type:"photo",media:`attach://photo${index}`,
-      ...(index===0 && caption ? {caption:caption.text,caption_entities:caption.entities} : {})}));
-    form.set("media",JSON.stringify(media));
+    const reply=options.replyTo ? {message_id:options.replyTo,allow_sending_without_reply:true} : undefined;
+    if (reply) form.set("reply_parameters",JSON.stringify(reply));
+    const caption=options.caption?.text ? {caption:options.caption.text,caption_entities:options.caption.entities} : undefined;
+    const media=files.map((_file,index)=>({type:"photo",media:`attach://photo${first+index}`,...(index===0 ? caption : {})}));
+    if (!single) form.set("media",JSON.stringify(media));
+    else if (caption) {form.set("caption",caption.caption);form.set("caption_entities",JSON.stringify(caption.caption_entities));}
     for (const [index,file] of files.entries()) {
       const stored=this.messages.files.get(file.id);
       if (!stored || stored.conversationId!==file.conversationId) throw new Error("Файл ответа не найден");
-      form.set(`photo${index}`,new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
+      form.set(single ? "photo" : `photo${first+index}`,new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
     }
-    const rows=files.map((file,index)=>({key:`${chatId}:${deliveryKey}:album:${index}`,
-      payload:JSON.stringify({chat_id:chatId,media,fileIds:files.map(f=>f.id),fileId:file.id,...(options.silent?{disable_notification:true}:{})})}));
+    const rows=files.map((file,index)=>({key:`${chatId}:${deliveryKey}:album:${first+index}`,
+      payload:JSON.stringify({chat_id:chatId,media,fileIds:files.map(f=>f.id),fileId:file.id,...(options.silent?{disable_notification:true}:{}),...(reply?{reply_parameters:reply}:{})})}));
     // Reserve every photo together; a lost response must not replay the album.
     this.store.db.exec("BEGIN IMMEDIATE");
     try {
@@ -445,13 +497,14 @@ export class TelegramAdapter {
       this.store.db.exec("COMMIT");
     } catch(error) {this.store.db.exec("ROLLBACK");throw error;}
     try {
-      const sent=await this.call<Array<{message_id:number;media_group_id:string}>>("sendMediaGroup",form);
-      if (!Array.isArray(sent) || sent.length!==files.length || !sent[0]?.media_group_id
-        || sent.some(item=>!Number.isSafeInteger(item.message_id) || item.message_id<=0 || item.media_group_id!==sent[0]!.media_group_id)
+      const result=await this.call<unknown>(single?"sendPhoto":"sendMediaGroup",form);
+      const sent=(single?[result]:result) as Array<{message_id:number;media_group_id?:string}>;
+      if (!Array.isArray(sent) || sent.length!==files.length || !single && !sent[0]?.media_group_id
+        || sent.some(item=>!Number.isSafeInteger(item?.message_id) || item.message_id<=0 || item.media_group_id!==sent[0]!.media_group_id)
         || new Set(sent.map(item=>item.message_id)).size!==files.length) throw new Error("Telegram не подтвердил весь фотоальбом");
       this.store.db.exec("BEGIN IMMEDIATE");
       try {
-        for (const [index,item] of sent.entries()) this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=?,media_group_id=? WHERE key=?").run(String(item.message_id),item.media_group_id,rows[index]!.key);
+        for (const [index,item] of sent.entries()) this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=?,media_group_id=? WHERE key=?").run(String(item.message_id),item.media_group_id ?? null,rows[index]!.key);
         this.store.db.exec("COMMIT");
       } catch(error) {this.store.db.exec("ROLLBACK");throw error;}
     } catch(error) {
@@ -695,7 +748,7 @@ export class TelegramAdapter {
       // The chat changed hands during the turn. Record that nothing was sent.
       if (!currentBinding || currentBinding.profileId !== binding?.profileId) this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status,error) VALUES(?,?,'{}','not_sent',?)")
         .run(`${chatId}:reply:${result.messageId}:0`, chatId, "Подключение этого чата изменилось. Ответ не отправлен в Telegram.");
-      else if (Number(chatId) >= 0 || result.text.trim() !== "NO_REPLY") { await this.sendMessage(message.chat.id, result.text,`reply:${result.messageId}`, Number(chatId) < 0 ? message.message_id : undefined); await this.sendFiles(message.chat.id,result.attachments,`reply:${result.messageId}`); }
+      else if (Number(chatId) >= 0 || result.text.trim() !== "NO_REPLY") await this.sendAnswer(message.chat.id, result.text, result.attachments, `reply:${result.messageId}`, Number(chatId) < 0 ? message.message_id : undefined);
     }
     catch { this.lastError="Ответ сохранён в приложении; доставку в Telegram нужно проверить"; }
     } catch (error) {
