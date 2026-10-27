@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { Attachment, Channel, Conversation, EmployeeProfile, Message, TelegramChat, HistoryEntry } from "./types.js";
-import { id, jsonArray, nowIso } from "./util.js";
+import { id, jsonArray, jsonObject, nowIso } from "./util.js";
 import { defaultAppearance, parseAppearance, type AgentAppearance } from "./agent-appearance.js";
 
 type Row = Record<string, unknown>;
@@ -294,6 +294,10 @@ export class Store {
       }
       const legacy = jsonArray(this.getSetting("telegram.linked_chats"));
       if (legacy.includes(oldId)) this.setSetting("telegram.linked_chats", JSON.stringify([...new Set(legacy.map(id => id === oldId ? newId : id))]));
+      // The notification hook keeps relaying to the upgraded group.
+      const hook = jsonObject(this.getSetting("telegram.notification_hook")), rename = (chatId: unknown) => chatId === oldId ? newId : chatId;
+      if (hook.chatId === oldId || Array.isArray(hook.chatIds) && hook.chatIds.includes(oldId)) this.setSetting("telegram.notification_hook",
+        JSON.stringify({ ...hook, chatId: rename(hook.chatId), ...(Array.isArray(hook.chatIds) ? { chatIds: [...new Set(hook.chatIds.map(rename))] } : {}) }));
       this.db.exec("COMMIT");
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }

@@ -27,14 +27,17 @@ export async function receiveNotification(store: Store, telegram: TelegramAdapte
   const text = body.text.trim();
   // Each chat keeps its own identity, so repeating the request never sends to the same chat twice.
   const deliveries = chatIds.map(chatId => ({ chatId, text, files: [], externalId: "notification:" + digest(chatId + "\0" + key) }));
-  for (const { chatId, externalId } of deliveries) {
-    const previous = store.findMessageByExternal("telegram", externalId);
-    if (previous && previous.text !== text) throw new HomeError("Содержимое уведомления изменилось.", 409);
-    // Nothing is sent unless every chat can receive it.
-    telegram.deliveryTarget(chatId, externalId);
-  }
+  if (deliveries.some(({ externalId }) => (store.findMessageByExternal("telegram", externalId)?.text ?? text) !== text)) throw new HomeError("Содержимое уведомления изменилось.", 409);
+  // Nothing is sent unless every chat can receive it.
+  for (const { chatId, externalId } of deliveries) telegram.deliveryTarget(chatId, externalId);
   const receipts = [];
-  for (const delivery of deliveries) receipts.push(await telegram.sendToChat(delivery));
+  for (const delivery of deliveries) {
+    try { receipts.push(await telegram.sendToChat(delivery)); } catch (error) {
+      // A chat can stop being available while an earlier chat is sent. The earlier chat already has the text, so report both.
+      if (!receipts.length) throw error;
+      receipts.push({ sent: false, status: "not_sent", chatId: delivery.chatId, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
   if (receipts.length === 1) return receipts[0]!.sent ? [200, receipts[0]!] : [502, { error: UNCONFIRMED }];
   const sent = receipts.every(r => r.sent), statuses = receipts.map(r => r.status);
   const status = sent ? "delivered" : ["unknown", "pending"].find(state => statuses.includes(state)) ?? (statuses.every(state => state === "not_sent") ? "not_sent" : "partial");

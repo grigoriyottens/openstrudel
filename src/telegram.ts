@@ -335,7 +335,7 @@ export class TelegramAdapter {
     }
   }
 
-  /** Runs every check of a requested delivery without sending, so a caller can check several chats before sending to any. */
+  /** Checks without sending that a chat can receive a requested delivery, so a caller can check several chats before sending to any. Album and file checks stay in sendToChat. */
   deliveryTarget(chatId:string, externalId:string) {
     if (!this.token) throw new Error("Telegram не подключён");
     const chat = this.store.getTelegramChat(chatId);
