@@ -82,6 +82,63 @@ it("sends a real GIF as an animation and preserves a downloadable copy in its de
   expect(store.db.prepare("SELECT COUNT(*) n FROM conversation_files").get()?.n).toBe(1);
 });
 
+function albumFiles(messages:MessageService, context:TelegramToolContext) {
+  const workspace=messages.files.workspace(context.scope!);mkdirSync(workspace,{recursive:true});
+  return ["house.jpg","map.png"].map(name=>{const path=join(workspace,name);writeFileSync(path,"photo-fixture-"+name);return path;});
+}
+
+it("delivers requested photo albums once with one caption and a durable receipt for every photo",async()=>{
+  const {tools,messages,context,store}=setup(),paths=albumFiles(messages,context);
+  let form:FormData;
+  vi.mocked(fetch).mockImplementation(async(url,init)=>{
+    expect(String(url)).toMatch(/\/sendMediaGroup$/);
+    form=init!.body as FormData;
+    return Response.json({ok:true,result:[{message_id:201,media_group_id:"album-1"},{message_id:202,media_group_id:"album-1"}]});
+  });
+  const args={chatId:"-1001",text:"**Дом** · [источник](https://example.com/house)",paths,album:true,silent:true};
+  const first=await tools().call("send_telegram_message",args) as any;
+  expect(first).toMatchObject({sent:true,telegramMessageIds:["201","202"],telegramMediaGroupIds:["album-1"]});
+  expect(form!.get("chat_id")).toBe("-1001");expect(form!.get("disable_notification")).toBe("true");
+  const media=JSON.parse(String(form!.get("media")));
+  expect(media).toHaveLength(2);expect(media[0]).toMatchObject({type:"photo",media:"attach://photo0",caption:"Дом · источник"});
+  expect(media[0].caption_entities).toContainEqual({type:"text_link",offset:6,length:8,url:"https://example.com/house"});
+  expect(media[1]).toEqual({type:"photo",media:"attach://photo1"});
+  expect(await (form!.get("photo0") as Blob).text()).toBe("photo-fixture-house.jpg");
+  const replacement=new TelegramAdapter("1:fixture",store,messages);
+  expect(await tools({telegram:replacement}).call("send_telegram_message",args)).toEqual(first);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(store.db.prepare("SELECT status,message_id,media_group_id FROM telegram_outbox ORDER BY message_id").all()).toEqual([
+    {status:"delivered",message_id:"201",media_group_id:"album-1"},{status:"delivered",message_id:"202",media_group_id:"album-1"},
+  ]);
+  replacement.stop();
+});
+
+it.each(["network", "incomplete response"])("keeps an uncertain photo album from being resent after %s",async(failure)=>{
+  const {tools,messages,context,store}=setup(),paths=albumFiles(messages,context);
+  vi.mocked(fetch).mockImplementation(async()=>{
+    if(failure==="network")throw new TypeError("connection lost after upload");
+    return Response.json({ok:true,result:[{message_id:201,media_group_id:"album-1"}]});
+  });
+  const args={chatId:"-1001",text:"Дом",paths,album:true};
+  expect(await tools().call("send_telegram_message",args)).toMatchObject({sent:false,status:"unknown"});
+  const replacement=new TelegramAdapter("1:fixture",store,messages);
+  expect(await tools({telegram:replacement}).call("send_telegram_message",args)).toMatchObject({sent:false,status:"unknown"});
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(store.db.prepare("SELECT status FROM telegram_outbox").all()).toEqual([{status:"unknown"},{status:"unknown"}]);
+  replacement.stop();
+});
+
+it("rejects invalid photo albums before creating or sending a delivery",async()=>{
+  const {tools,messages,context,store}=setup(),paths=albumFiles(messages,context);
+  const args={chatId:"-1001",text:"Дом",paths,album:true};
+  await expect(tools().call("send_telegram_message",{...args,paths:paths.slice(0,1)})).rejects.toThrow("2–10");
+  await expect(tools().call("send_telegram_message",{...args,text:"x".repeat(1025)})).rejects.toThrow("1024");
+  const gif=join(messages.files.workspace(context.scope!),"animation.gif");writeFileSync(gif,"GIF89a");
+  await expect(tools().call("send_telegram_message",{...args,paths:[paths[0],gif]})).rejects.toThrow("JPEG");
+  expect(fetch).not.toHaveBeenCalled();
+  expect(store.db.prepare("SELECT COUNT(*) n FROM telegram_outbox").get()?.n).toBe(0);
+});
+
 it("keeps requested quiet delivery and link previews in the durable text and file outbox",async()=>{
   const {tools,messages,context,sent,store}=setup();
   const workspace=messages.files.workspace(context.scope!);mkdirSync(workspace,{recursive:true});
