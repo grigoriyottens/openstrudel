@@ -46,13 +46,17 @@ function telegramConnectionError(error: unknown): string {
 }
 
 /** A silent H.264 MP4 of a GIF, the form Telegram keeps animations in; null without the server's ffmpeg or when the GIF does not convert. */
-async function gifToMp4(path: string): Promise<Buffer<ArrayBuffer> | null> {
+async function gifToMp4(path: string, ffmpeg = "/usr/bin/ffmpeg"): Promise<Buffer<ArrayBuffer> | null> {
   let directory: string | undefined;
   try {
     directory = await mkdtemp(join(tmpdir(), "openstrudel-gif-"));
     const output = join(directory, "animation.mp4");
-    await promisify(execFile)("/usr/bin/ffmpeg", ["-nostdin", "-v", "error", "-protocol_whitelist", "file", "-f", "gif", "-i", path, "-an", "-c:v", "libx264",
-      "-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-movflags", "+faststart", output], { timeout: 60_000, maxBuffer: 65_536 });
+    // Bounded so one GIF cannot take the Home's memory: a canvas up to 4K, two encoder threads and at most 1280 px on the longer
+    // side, even and in proportion (without them a 2048×2048 GIF peaked at 1–1.5 GB). With no frame encoded, ffmpeg fails
+    // instead of writing an MP4 without video.
+    await promisify(execFile)(ffmpeg, ["-nostdin", "-v", "error", "-abort_on", "empty_output", "-protocol_whitelist", "file", "-max_pixels", String(3840*2160),
+      "-f", "gif", "-i", path, "-an", "-c:v", "libx264", "-threads", "2", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+      "-vf", "scale='min(iw,1280)':'min(ih,1280)':force_original_aspect_ratio=decrease:force_divisible_by=2", output], { timeout: 60_000, maxBuffer: 65_536 });
     return await readFile(output);
   } catch { return null; }
   finally { if (directory) await rm(directory, { recursive: true, force: true }); }
@@ -367,11 +371,14 @@ export class TelegramAdapter {
     const receipt = (messageId:string) => {
       const message = this.store.getMessage(conversation.id,messageId)!;
       const prefix=`${chat.chatId}:reply:${messageId}:`;
-      const deliveries=this.store.db.prepare("SELECT payload,message_id,status,media_group_id,kind FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix,prefix+"\uffff");
+      const deliveries=this.store.db.prepare("SELECT key,message_id,status,media_group_id,kind FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix,prefix+"\uffff");
       const delivered=deliveries.filter(row=>row.status === "delivered");
       const albums=[...new Set(delivered.filter(row=>row.media_group_id).map(row=>String(row.media_group_id)))];
-      // What Telegram made of each file, from its reply: a GIF sent as an animation can still arrive as a plain file.
-      const files=delivered.filter(row=>row.kind).map(row=>({name:String(JSON.parse(String(row.payload)).name),kind:String(row.kind)}));
+      // What Telegram made of each file, from its reply: a GIF sent as an animation can still arrive as a plain file. Listed in the
+      // requested order, not by outbox key (a random file id); each file's own message tells two files of the same name apart.
+      const rows=new Map(delivered.map(row=>[String(row.key),row]));
+      const files=(message.attachments ?? []).flatMap(file=>{const row=rows.get(prefix+"file:"+file.id);
+        return row?.kind ? [{name:file.name,kind:String(row.kind),telegramMessageId:String(row.message_id)}] : [];});
       const status=message.status === "completed" ? "delivered" : message.status === "running" ? "pending"
         : deliveries.some(row=>row.status === "unknown" || row.status === "sending") ? "unknown" : delivered.length ? "partial" : "not_sent";
       return {sent:status === "delivered",status,chatId:chat.chatId,title:chat.title,messageId,
@@ -465,14 +472,15 @@ export class TelegramAdapter {
         const form = new FormData();form.set("chat_id",String(chatId));
         if (options.silent) form.set("disable_notification","true");
         const animation=file.mimeType === "image/gif", audio=["audio/mpeg", "audio/mp4"].includes(file.mimeType);
-        // Telegram turns an uploaded GIF into an animation only below an undocumented size: 5.4 MB became one,
-        // 11.6 MB stayed a plain file. A larger GIF goes as our own MP4 when this Home has ffmpeg.
+        // Observed, not documented: a 5.4 MB GIF became an animation, an 11.6 MB one stayed a plain file. 8 MB is a cut between
+        // those two sends, not a known Telegram limit. A larger GIF goes as our own MP4 when this Home has ffmpeg.
         const video=animation && stored.size > 8*1024*1024 ? await this.convertGif(stored.path) : null;
         form.set(animation?"animation":audio?"audio":"document",new Blob([video ?? await readFile(stored.path)],{type:video?"video/mp4":file.mimeType}),video?file.name.replace(/\.gif$/i,"")+".mp4":file.name);
         this.store.db.prepare("UPDATE telegram_outbox SET status='sending' WHERE key=?").run(key);
         attempted=true;
         const sent = await this.call<{message_id:number}&Record<string,unknown>>(animation?"sendAnimation":audio?"sendAudio":"sendDocument",form);
-        // An animation also carries a document field for older clients, so it is checked first.
+        // The Bot API server writes an animation as both animation and document, and a file it kept plain as document only
+        // (tdlib/telegram-bot-api, Client::JsonMessage::store), so animation is checked first.
         const kind=["animation","video","audio","voice","photo","sticker","document"].find(field=>sent[field]) ?? null;
         this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=?,kind=? WHERE key=?").run(String(sent.message_id),kind,key);
       } catch (error) {

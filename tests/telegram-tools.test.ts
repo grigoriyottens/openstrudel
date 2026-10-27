@@ -1,7 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, symlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Store } from "../src/store.js";
 import { MessageService } from "../src/messages.js";
 import { TelegramAdapter } from "../src/telegram.js";
@@ -82,11 +83,11 @@ it("sends a real GIF as an animation and preserves a downloadable copy in its de
   expect(store.db.prepare("SELECT COUNT(*) n FROM conversation_files").get()?.n).toBe(1);
 });
 
-/** Telegram's reply to a file: an animation also carries a document field for older clients. */
-function telegramReplies(sent:Array<{method:string;body:any}>, media:Record<string,unknown>) {
+/** Telegram's reply to each file in turn, the last one repeating: an animation also carries a document field for older clients. */
+function telegramReplies(sent:Array<{method:string;body:any}>, ...media:Array<Record<string,unknown>>) {
   vi.mocked(fetch).mockImplementation(async(url,init)=>{
     sent.push({method:String(url).split("/").at(-1)!,body:init!.body});
-    return Response.json({ok:true,result:{message_id:100+sent.length,...media}});
+    return Response.json({ok:true,result:{message_id:100+sent.length,...media[Math.min(sent.length,media.length)-1]}});
   });
 }
 const largeGif=()=>Buffer.concat([Buffer.from("GIF89a"),Buffer.alloc(8*1024*1024)]);
@@ -118,6 +119,52 @@ it("reports a GIF that Telegram kept as a plain file instead of promising an ani
   expect(sent[0]!.method).toBe("sendAnimation");
   expect(Buffer.from(await (sent[0]!.body.get("animation") as Blob).arrayBuffer()).equals(bytes)).toBe(true);
   expect(await tools().call("send_telegram_message",args)).toEqual(result);expect(sent).toHaveLength(1);
+});
+
+it("lists what Telegram made of each file in the requested order, each with its own message",async()=>{
+  const {tools,messages,context,sent}=setup();
+  const workspace=messages.files.workspace(context.scope!);
+  const paths=[join(workspace,"b","clip.gif"),join(workspace,"a","clip.gif"),join(workspace,"notes.txt")];
+  for (const [index,path] of paths.entries()) {mkdirSync(dirname(path),{recursive:true});writeFileSync(path,index<2?"GIF89a-"+index:"notes");}
+  // File ids are random and order the outbox; here the first file gets the last one.
+  const put=messages.files.put.bind(messages.files),ids=["f","8","0"].map(digit=>digit.repeat(8)+"-0000-4000-8000-000000000000");
+  vi.spyOn(messages.files,"put").mockImplementation((conversationId,scope,input)=>put(conversationId,scope,{...input,id:ids.shift()}));
+  telegramReplies(sent,{animation:{file_id:"a"},document:{file_id:"a"}},{document:{file_id:"d",mime_type:"image/gif"}},{document:{file_id:"t"}});
+  expect(await tools().call("send_telegram_message",{chatId:"-1001",text:"",paths})).toMatchObject({sent:true,files:[
+    {name:"clip.gif",kind:"animation",telegramMessageId:"101"},{name:"clip.gif",kind:"document",telegramMessageId:"102"},
+    {name:"notes.txt",kind:"document",telegramMessageId:"103"}]});
+});
+
+const ffmpeg=(process.env.PATH ?? "").split(":").map(directory=>join(directory,"ffmpeg")).find(path=>existsSync(path));
+/** A GIF whose width×height canvas is drawn by 1×1 frames; with none it holds no image at all. */
+function canvasGif(width:number, height:number, frames:number) {
+  const screen=Buffer.alloc(7);screen.writeUInt16LE(width,0);screen.writeUInt16LE(height,2);screen[4]=0x80;
+  const frame=[0x21,0xf9,4,4,10,0,0,0, 0x2c,0,0,0,0,1,0,1,0,0, 2,2,0x44,1,0];
+  return Buffer.concat([Buffer.from("GIF89a"),screen,Buffer.from([0,0,0,255,255,255,...Array(frames).fill(frame).flat(),0x3b])]);
+}
+
+it.skipIf(!ffmpeg)("converts a GIF to an even H.264 MP4 at most 1280 px on its longer side, keeping its shape",async()=>{
+  const {adapter,root}=setup(),gif=join(root,"canvas.gif"),mp4=join(root,"canvas.mp4"),streams:string[]=[];
+  for (const [width,height] of [[2001,1001],[601,1999],[301,201]]) {
+    writeFileSync(gif,canvasGif(width!,height!,3));writeFileSync(mp4,(await adapter.convertGif(gif,ffmpeg))!);
+    streams.push(execFileSync(join(dirname(ffmpeg!),"ffprobe"),["-v","error","-show_entries","stream=codec_name,width,height,pix_fmt","-of","csv=p=0",mp4],{encoding:"utf8"}).trim());
+  }
+  expect(streams).toEqual(["h264,1280,640,yuv420p","h264,384,1280,yuv420p","h264,300,200,yuv420p"]);
+});
+
+it.skipIf(!ffmpeg)("sends the original of a large GIF without frames or with a canvas beyond 4K",async()=>{
+  const {tools,messages,context,adapter,sent}=setup();
+  const workspace=messages.files.workspace(context.scope!);mkdirSync(workspace,{recursive:true});
+  const convert=adapter.convertGif;adapter.convertGif=path=>convert(path,ffmpeg);
+  telegramReplies(sent,{document:{file_id:"d",mime_type:"image/gif"}});
+  // An 8 MB comment carries each GIF past the conversion threshold.
+  const comment=Buffer.alloc(2+32_768*256+1);comment.set([0x21,0xfe]);for (let block=0;block<32_768;block++) comment[2+block*256]=255;
+  for (const [index,[name,gif]] of ([["empty.gif",canvasGif(2,2,0)],["huge.gif",canvasGif(4000,2200,3)]] as const).entries()) {
+    const path=join(workspace,name),bytes=Buffer.concat([gif.subarray(0,-1),comment,gif.subarray(-1)]);writeFileSync(path,bytes);
+    expect(await tools().call("send_telegram_message",{chatId:"-1001",text:"",paths:[path]})).toMatchObject({sent:true});
+    const upload=sent[index]!.body.get("animation") as File;
+    expect(upload).toMatchObject({name,type:"image/gif"});expect(Buffer.from(await upload.arrayBuffer()).equals(bytes)).toBe(true);
+  }
 });
 
 function albumFiles(messages:MessageService, context:TelegramToolContext) {
