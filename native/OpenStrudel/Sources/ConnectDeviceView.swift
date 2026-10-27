@@ -246,14 +246,7 @@ private struct OwnServerSetupView: View {
             }
             if editing { addressForm }
             if flow.phase == .confirmIdentity, let target = flow.target, let identity = flow.hostKey {
-                Section {
-                    LabeledContent(L("Server address")) { Text(target.host).textSelection(.enabled) }
-                    Text(identity.fingerprint).font(AppTypography.code).textSelection(.enabled)
-                        .environment(\.layoutDirection, .leftToRight)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } footer: {
-                    Text(L("Compare this fingerprint with the one in your server provider's control panel."))
-                }
+                ServerFingerprintSection(host: target.host, identity: identity)
             }
             if flow.phase == .ready {
                 Section {
@@ -419,6 +412,22 @@ private struct OwnServerSetupView: View {
         // The new device is not selected: that would replace this sheet's root before account setup.
         do { onConnected(try await library.adoptServer(connection, from: flow)) }
         catch { localError = error.localizedDescription }
+    }
+}
+
+/// The SSH key a person compares before anything runs on a new server.
+struct ServerFingerprintSection: View {
+    var host: String?
+    let identity: SSHHostKey
+    var body: some View {
+        Section {
+            if let host { LabeledContent(L("Server address")) { Text(host).textSelection(.enabled) } }
+            Text(identity.fingerprint).font(AppTypography.code).textSelection(.enabled)
+                .environment(\.layoutDirection, .leftToRight)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } footer: {
+            Text(L("Compare this fingerprint with the one in your server provider's control panel."))
+        }
     }
 }
 

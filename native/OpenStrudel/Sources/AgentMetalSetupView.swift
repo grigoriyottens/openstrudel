@@ -49,6 +49,9 @@ struct AgentMetalSetupView: View {
 
             if setup.loading {
                 Section { ProgressView(L("Loading the offer…")) }
+            } else if let identity = setup.identityToConfirm {
+                // The address is in the section above.
+                ServerFingerprintSection(identity: identity)
             } else if setup.installing, let installer = setup.installer {
                 AgentMetalInstallationProgress(installer: installer)
             } else if setup.order.server != nil && setup.connection == nil {
@@ -87,6 +90,9 @@ struct AgentMetalSetupView: View {
                 if setup.connection != nil {
                     Button(L("Продолжить")) { Task { await finish() } }
                         .disabled(saving).accessibilityIdentifier("agentMetalOpenServer")
+                } else if setup.identityToConfirm != nil {
+                    Button(L("Confirm and connect")) { setup.confirmIdentity() }
+                        .accessibilityIdentifier("confirmSSHIdentity")
                 } else if setup.order.checkout != nil {
                     Button(setup.order.server == nil ? L("Check payment") : L("Continue setup")) { paymentCheck += 1 }
                         .disabled(setup.busy).accessibilityIdentifier("agentMetalCheckPayment")
