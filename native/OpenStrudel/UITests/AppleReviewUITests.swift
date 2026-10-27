@@ -11,12 +11,19 @@ import XCTest
 
     private func connectAndAnswer(pastingPage: Bool) async throws {
         continueAfterFailure = false
-        guard let fixture = ProcessInfo.processInfo.environment["OPENSTRUDEL_REVIEW_PAGE_FIXTURE"],
-              let endpoint = URL(string: fixture) else { throw XCTSkip("Provide the private review page fixture.") }
-        let (data, response) = try await URLSession.shared.data(from: endpoint)
-        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
-        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let page = try XCTUnwrap(URL(string: XCTUnwrap(payload["url"] as? String)))
+        let environment = ProcessInfo.processInfo.environment
+        let page: URL
+        if let privatePage = environment["OPENSTRUDEL_REVIEW_PAGE"] {
+            // A physical device cannot reach the Mac's loopback fixture.
+            page = try XCTUnwrap(URL(string: privatePage))
+        } else {
+            guard let fixture = environment["OPENSTRUDEL_REVIEW_PAGE_FIXTURE"],
+                  let endpoint = URL(string: fixture) else { throw XCTSkip("Provide the private review page fixture.") }
+            let (data, response) = try await URLSession.shared.data(from: endpoint)
+            XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            page = try XCTUnwrap(URL(string: XCTUnwrap(payload["url"] as? String)))
+        }
         let app = XCUIApplication()
         app.launchArguments = ["-openstrudel.language", "en", "-AppleLanguages", "(en)"]
         app.launch()

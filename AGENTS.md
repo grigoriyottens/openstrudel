@@ -13,3 +13,8 @@
 - WaiWeb shares one 40 GB disk with PostgreSQL and the meeting pipeline. On 23 October 2026 old OpenStrudel installers filled it and PostgreSQL crashed.
 - Keep only the latest build there: its versioned DMG and Home archive, the stable `OpenStrudel-1.0-arm64.dmg` and `OpenStrudel-Home-1.0.tar.gz` as hard links to them, the latest APK, `SHA256SUMS` listing only those files, and the signed `updates/appcast.xml`.
 - Every release ends by deleting the previous build's installers and every staging and backup directory it created on WaiWeb (step 8 of [docs/mac-release.md](docs/mac-release.md)). Rollback packages stay on the release Mac.
+
+# App Review access
+
+- The active App Store submission depends on the isolated review Home and HTTPS route at `magic.mikwiseman.com/openstrudel-review/`. A host reinstall removed them once while review was pending.
+- Preserve its external data volume, setup code, Home TLS key and proxy route across updates. Follow [the review deployment runbook](deploy/review/README.md); check the original URL externally and an already paired device before considering an update complete.
