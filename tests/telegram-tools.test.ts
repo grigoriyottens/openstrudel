@@ -82,6 +82,44 @@ it("sends a real GIF as an animation and preserves a downloadable copy in its de
   expect(store.db.prepare("SELECT COUNT(*) n FROM conversation_files").get()?.n).toBe(1);
 });
 
+/** Telegram's reply to a file: an animation also carries a document field for older clients. */
+function telegramReplies(sent:Array<{method:string;body:any}>, media:Record<string,unknown>) {
+  vi.mocked(fetch).mockImplementation(async(url,init)=>{
+    sent.push({method:String(url).split("/").at(-1)!,body:init!.body});
+    return Response.json({ok:true,result:{message_id:100+sent.length,...media}});
+  });
+}
+const largeGif=()=>Buffer.concat([Buffer.from("GIF89a"),Buffer.alloc(8*1024*1024)]);
+
+it("sends a GIF above 8 MB as a silent MP4 and reports what Telegram made of it",async()=>{
+  const {tools,messages,context,adapter,sent}=setup();
+  const workspace=messages.files.workspace(context.scope!);mkdirSync(workspace,{recursive:true});
+  const small=join(workspace,"small.gif"),large=join(workspace,"large.gif");
+  writeFileSync(small,"GIF89a-fixture");writeFileSync(large,largeGif());
+  const convert=vi.fn(async(_path:string)=>Buffer.from("mp4-fixture"));adapter.convertGif=convert;
+  telegramReplies(sent,{animation:{file_id:"a"},document:{file_id:"a"}});
+  expect(await tools().call("send_telegram_message",{chatId:"-1001",text:"",paths:[small]})).toMatchObject({sent:true,files:[{name:"small.gif",kind:"animation"}]});
+  expect(convert).not.toHaveBeenCalled();expect(await (sent[0]!.body.get("animation") as File).text()).toBe("GIF89a-fixture");
+  expect(await tools().call("send_telegram_message",{chatId:"-1001",text:"",paths:[large]})).toMatchObject({sent:true,files:[{name:"large.gif",kind:"animation"}]});
+  expect(convert).toHaveBeenCalledTimes(1);expect(convert.mock.calls[0]![0]).toMatch(/-large\.gif$/);
+  const video=sent[1]!.body.get("animation") as File;
+  expect(sent[1]!.method).toBe("sendAnimation");expect(video).toMatchObject({name:"large.mp4",type:"video/mp4"});expect(await video.text()).toBe("mp4-fixture");
+});
+
+it("reports a GIF that Telegram kept as a plain file instead of promising an animation",async()=>{
+  const {tools,messages,context,adapter,sent}=setup();
+  const workspace=messages.files.workspace(context.scope!);mkdirSync(workspace,{recursive:true});
+  const path=join(workspace,"large.gif"),bytes=largeGif();writeFileSync(path,bytes);
+  adapter.convertGif=async()=>null; // a Home without ffmpeg sends the original
+  telegramReplies(sent,{document:{file_id:"d",mime_type:"image/gif"}});
+  const args={chatId:"-1001",text:"",paths:[path]};
+  const result=await tools().call("send_telegram_message",args);
+  expect(result).toMatchObject({sent:true,status:"delivered",files:[{name:"large.gif",kind:"document"}]});
+  expect(sent[0]!.method).toBe("sendAnimation");
+  expect(Buffer.from(await (sent[0]!.body.get("animation") as Blob).arrayBuffer()).equals(bytes)).toBe(true);
+  expect(await tools().call("send_telegram_message",args)).toEqual(result);expect(sent).toHaveLength(1);
+});
+
 function albumFiles(messages:MessageService, context:TelegramToolContext) {
   const workspace=messages.files.workspace(context.scope!);mkdirSync(workspace,{recursive:true});
   return ["house.jpg","map.png"].map(name=>{const path=join(workspace,name);writeFileSync(path,"photo-fixture-"+name);return path;});
