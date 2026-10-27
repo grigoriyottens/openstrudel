@@ -2,7 +2,11 @@ import { recordDiagnostic } from "./diagnostics.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import { sha256, sleep } from "./util.js";
 import type { Attachment, Interaction, MessageInput, MessageResult, TelegramChat } from "./types.js";
-import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { telegramText } from "./telegram-format.js";
 import { isSpeechFile, transcribeRecording } from "./speech.js";
 import { errorProblem } from "./operations.js";
@@ -41,6 +45,23 @@ function telegramConnectionError(error: unknown): string {
   return "Нет связи с Telegram. Подключимся автоматически, когда связь восстановится.";
 }
 
+/** A silent H.264 MP4 of a GIF, the form Telegram keeps animations in; null without the server's ffmpeg or when the GIF does not convert. */
+async function gifToMp4(path: string, ffmpeg = "/usr/bin/ffmpeg"): Promise<Buffer<ArrayBuffer> | null> {
+  let directory: string | undefined;
+  try {
+    directory = await mkdtemp(join(tmpdir(), "openstrudel-gif-"));
+    const output = join(directory, "animation.mp4");
+    // Bounded so one GIF cannot take the Home's memory: a canvas up to 4K, two encoder threads and at most 1280 px on the longer
+    // side, even and in proportion (without them a 2048×2048 GIF peaked at 1–1.5 GB). With no frame encoded, ffmpeg fails
+    // instead of writing an MP4 without video.
+    await promisify(execFile)(ffmpeg, ["-nostdin", "-v", "error", "-abort_on", "empty_output", "-protocol_whitelist", "file", "-max_pixels", String(3840*2160),
+      "-f", "gif", "-i", path, "-an", "-c:v", "libx264", "-threads", "2", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+      "-vf", "scale='min(iw,1280)':'min(ih,1280)':force_original_aspect_ratio=decrease:force_divisible_by=2", output], { timeout: 60_000, maxBuffer: 65_536 });
+    return await readFile(output);
+  } catch { return null; }
+  finally { if (directory) await rm(directory, { recursive: true, force: true }); }
+}
+
 export interface TelegramLink { code: string; expiresAt: string; url: string | null }
 type PendingLink = { kind: "private" | "group"; profileId?: string; expiresAt: string; tokenHash: string; chatId?: string; error?: string };
 
@@ -74,6 +95,7 @@ export class TelegramAdapter {
   private readonly activeChats = new Map<string, number>();
   private readonly typing = new Map<string, { users: number; timer: ReturnType<typeof setInterval> }>();
   transcribe = (bytes: Uint8Array, extension = "ogg") => transcribeRecording(this.store, bytes, "voice." + extension);
+  convertGif = gifToMp4;
 
   constructor(token: string | undefined, private readonly store: Store, private readonly messages: MessageService) {
     this.token = token?.trim() || undefined;
@@ -81,7 +103,8 @@ export class TelegramAdapter {
       CREATE TABLE IF NOT EXISTS telegram_outbox(key TEXT PRIMARY KEY,chat_id TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,message_id TEXT,error TEXT);
       CREATE TABLE IF NOT EXISTS telegram_links(hash TEXT PRIMARY KEY,payload TEXT NOT NULL,expires_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS telegram_interactions(bot_id TEXT NOT NULL,chat_id TEXT NOT NULL,message_id INTEGER NOT NULL,interaction_id TEXT NOT NULL,PRIMARY KEY(bot_id,chat_id,message_id));`);
-    if (!this.store.db.prepare("PRAGMA table_info(telegram_outbox)").all().some(row=>row.name === "media_group_id")) this.store.db.exec("ALTER TABLE telegram_outbox ADD COLUMN media_group_id TEXT");
+    const outbox=this.store.db.prepare("PRAGMA table_info(telegram_outbox)").all().map(row=>row.name);
+    for (const column of ["media_group_id","kind"]) if (!outbox.includes(column)) this.store.db.exec(`ALTER TABLE telegram_outbox ADD COLUMN ${column} TEXT`);
     this.store.db.prepare("UPDATE telegram_outbox SET status='unknown',error='Перезапуск во время отправки; проверьте Telegram перед повтором' WHERE status='sending'").run();
     this.offset=Number(this.store.getSetting("telegram.offset") ?? 0);
     // Legacy private pairings remain owned by that Telegram user.
@@ -355,13 +378,18 @@ export class TelegramAdapter {
     const receipt = (messageId:string) => {
       const message = this.store.getMessage(conversation.id,messageId)!;
       const prefix=`${chat.chatId}:reply:${messageId}:`;
-      const deliveries=this.store.db.prepare("SELECT message_id,status,media_group_id FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix,prefix+"\uffff");
+      const deliveries=this.store.db.prepare("SELECT key,message_id,status,media_group_id,kind FROM telegram_outbox WHERE key>=? AND key<? ORDER BY key").all(prefix,prefix+"\uffff");
       const delivered=deliveries.filter(row=>row.status === "delivered");
       const albums=[...new Set(delivered.filter(row=>row.media_group_id).map(row=>String(row.media_group_id)))];
+      // What Telegram made of each file, from its reply: a GIF sent as an animation can still arrive as a plain file. Listed in the
+      // requested order, not by outbox key (a random file id); each file's own message tells two files of the same name apart.
+      const rows=new Map(delivered.map(row=>[String(row.key),row]));
+      const files=(message.attachments ?? []).flatMap(file=>{const row=rows.get(prefix+"file:"+file.id);
+        return row?.kind ? [{name:file.name,kind:String(row.kind),telegramMessageId:String(row.message_id)}] : [];});
       const status=message.status === "completed" ? "delivered" : message.status === "running" ? "pending"
         : deliveries.some(row=>row.status === "unknown" || row.status === "sending") ? "unknown" : delivered.length ? "partial" : "not_sent";
       return {sent:status === "delivered",status,chatId:chat.chatId,title:chat.title,messageId,
-        telegramMessageIds:delivered.map(row=>String(row.message_id)),...(albums.length?{telegramMediaGroupIds:albums}:{}),...(message.error?{error:message.error}:{})};
+        telegramMessageIds:delivered.map(row=>String(row.message_id)),...(files.length?{files}:{}),...(albums.length?{telegramMediaGroupIds:albums}:{}),...(message.error?{error:message.error}:{})};
     };
     if (previous) return receipt(previous.id);
     if (input.album) {
@@ -448,11 +476,17 @@ export class TelegramAdapter {
         const form = new FormData();form.set("chat_id",String(chatId));
         if (options.silent) form.set("disable_notification","true");
         const animation=file.mimeType === "image/gif", audio=["audio/mpeg", "audio/mp4"].includes(file.mimeType);
-        form.set(animation?"animation":audio?"audio":"document",new Blob([await readFile(stored.path)],{type:file.mimeType}),file.name);
+        // Observed, not documented: a 5.4 MB GIF became an animation, an 11.6 MB one stayed a plain file. 8 MB is a cut between
+        // those two sends, not a known Telegram limit. A larger GIF goes as our own MP4 when this Home has ffmpeg.
+        const video=animation && stored.size > 8*1024*1024 ? await this.convertGif(stored.path) : null;
+        form.set(animation?"animation":audio?"audio":"document",new Blob([video ?? await readFile(stored.path)],{type:video?"video/mp4":file.mimeType}),video?file.name.replace(/\.gif$/i,"")+".mp4":file.name);
         this.store.db.prepare("UPDATE telegram_outbox SET status='sending' WHERE key=?").run(key);
         attempted=true;
-        const sent = await this.call<{message_id:number}>(animation?"sendAnimation":audio?"sendAudio":"sendDocument",form);
-        this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=? WHERE key=?").run(String(sent.message_id),key);
+        const sent = await this.call<{message_id:number}&Record<string,unknown>>(animation?"sendAnimation":audio?"sendAudio":"sendDocument",form);
+        // The Bot API server writes an animation as both animation and document, and a file it kept plain as document only
+        // (tdlib/telegram-bot-api, Client::JsonMessage::store), so animation is checked first.
+        const kind=["animation","video","audio","voice","photo","sticker","document"].find(field=>sent[field]) ?? null;
+        this.store.db.prepare("UPDATE telegram_outbox SET status='delivered',message_id=?,kind=? WHERE key=?").run(String(sent.message_id),kind,key);
       } catch (error) {
         this.store.db.prepare("UPDATE telegram_outbox SET status=?,error=? WHERE key=?").run(...(!attempted ? ["not_sent","Файл недоступен. Он не отправлен."] : refused(error) ? ["not_sent", REFUSED] : ["unknown", "Доставка файла не подтверждена. Проверьте Telegram перед повтором."]), key);
         throw error;
