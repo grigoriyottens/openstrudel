@@ -335,16 +335,23 @@ export class TelegramAdapter {
     }
   }
 
-  /** A requested cross-chat delivery uses the same durable outbox as ordinary replies. */
-  async sendToChat(input: {chatId:string;text:string;files:Array<{name:string;mimeType?:string;contentBase64:string}>;externalId:string;silent?:boolean;linkPreview?:boolean;album?:boolean}) {
+  /** Runs every check of a requested delivery without sending, so a caller can check several chats before sending to any. */
+  deliveryTarget(chatId:string, externalId:string) {
     if (!this.token) throw new Error("Telegram не подключён");
-    const chat = this.store.getTelegramChat(input.chatId);
+    const chat = this.store.getTelegramChat(chatId);
     if (!chat || chat.enabled === false) throw new Error("Бот больше не подключён к этому чату.");
     assertAgentWritable(this.store,chat.profileId ?? "main");
-    const previous = this.store.findMessageByExternal("telegram",input.externalId);
+    const previous = this.store.findMessageByExternal("telegram",externalId);
     const conversation = chat.conversationId ? this.store.getConversation(chat.conversationId)
       : Number(chat.chatId)>0 ? this.store.getOrCreateConversation({channel:"telegram",externalId:chat.chatId,title:chat.title}) : null;
     if (!conversation) throw new Error("Чат бота недоступен.");
+    if (previous && previous.conversationId !== conversation.id) throw new Error("Подключение чата изменилось; проверьте предыдущую отправку.");
+    return {chat,conversation,previous};
+  }
+
+  /** A requested cross-chat delivery uses the same durable outbox as ordinary replies. */
+  async sendToChat(input: {chatId:string;text:string;files:Array<{name:string;mimeType?:string;contentBase64:string}>;externalId:string;silent?:boolean;linkPreview?:boolean;album?:boolean}) {
+    const {chat,conversation,previous} = this.deliveryTarget(input.chatId,input.externalId);
     const receipt = (messageId:string) => {
       const message = this.store.getMessage(conversation.id,messageId)!;
       const prefix=`${chat.chatId}:reply:${messageId}:`;
@@ -356,10 +363,7 @@ export class TelegramAdapter {
       return {sent:status === "delivered",status,chatId:chat.chatId,title:chat.title,messageId,
         telegramMessageIds:delivered.map(row=>String(row.message_id)),...(albums.length?{telegramMediaGroupIds:albums}:{}),...(message.error?{error:message.error}:{})};
     };
-    if (previous) {
-      if (previous.conversationId !== conversation.id) throw new Error("Подключение чата изменилось; проверьте предыдущую отправку.");
-      return receipt(previous.id);
-    }
+    if (previous) return receipt(previous.id);
     if (input.album) {
       if (input.files.length < 2 || input.files.length > 10) throw new Error("Фотоальбом должен содержать 2–10 фотографий.");
       if (input.text.length > 1024) throw new Error("Подпись фотоальбома — до 1024 символов.");

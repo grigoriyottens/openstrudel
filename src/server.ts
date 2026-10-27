@@ -24,7 +24,7 @@ import { hostingOrigin } from "./hosting-origin.js";
 import { approvalSetting, isApprovalMode, readApprovalMode } from "./approval-mode.js";
 import { accessOwners, accessPeople } from "./telegram-tools.js";
 import { ownerTimezone, saveOwnerTimezone } from "./timezone.js";
-import { notificationDestination, receiveNotification } from "./notification-hook.js";
+import { notificationDestinations, receiveNotification } from "./notification-hook.js";
 import { SERVICE_SIGN_IN_SECONDS } from "./service-oauth.js";
 import { sharedWithAllChats, shareWithAllChats } from "./extensions.js";
 import type { ServiceSignIn } from "./types.js";
@@ -188,12 +188,12 @@ export class HttpApi {
     let counted = false;
     try {
       if (path === "/hooks/telegram") {
-        const chatId = notificationDestination(this.store, request.headers.authorization);
+        const chatIds = notificationDestinations(this.store, request.headers.authorization);
         if (request.method !== "POST") throw new HomeError("method_not_allowed", 405);
         if (this.store.getSetting("home.transfer")) throw new HomeError("Передаём управление. Повторите после завершения.", 409);
         this.activeWrites++; counted = true;
-        const receipt = await receiveNotification(this.store, this.telegram, chatId, request.headers["idempotency-key"], await this.body(request, 128 * 1024));
-        this.send(response, 200, receipt); return;
+        const [status, receipt] = await receiveNotification(this.store, this.telegram, chatIds, request.headers["idempotency-key"], await this.body(request, 128 * 1024));
+        this.send(response, status, receipt); return;
       }
       if (await this.web.handle(request, response)) return;
       const webSession = this.web.authenticate(request);
