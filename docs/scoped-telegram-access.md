@@ -10,6 +10,23 @@ the current `revision` and an idle message queue. It increments the revision.
 Existing subjects/chats cannot be removed: revoke them with `enabled: false` so
 that an old owner grant cannot silently become effective again.
 
+PUT atomically provisions missing private and group registry entries, including
+disabled entries, and sets their legacy transport to `access: approved` with
+an empty `allowedSenders`. No pairing link, message or Bot API polling is needed.
+A new group gets a generic `Telegram <chatId>` title (renamed on its next real
+update), `replies: mentions`, and its canonical restricted conversation. The
+bot must already be a member of that Telegram group. Existing titles, employee
+bindings, conversations, reply rules and history stay in place. Repeated PUTs
+reuse the same registry entry and conversation. Existing paused groups stay
+paused; policy `enabled: false` always prevents responses.
+
+The current adapter admits real Telegram senders to enabled protected audiences
+through the scoped policy, independently of the empty legacy sender list.
+Globally disabled subjects remain denied in a protected group. Link, bind,
+discovery and restored group snapshots cannot recreate legacy grants while a
+policy is configured. Ordinary unconfigured groups and owner DMs keep their
+existing behavior.
+
 Example with synthetic IDs and tool names:
 
 ```json
@@ -72,7 +89,10 @@ supported by this route yet; ordinary text and transcribed voice are supported.
 Messages persist verified sender, chat, source message ID and policy fingerprint.
 Queued work and final delivery are rechecked. Completed requests cannot replay
 old private output. Telegram group migration preserves a disabled policy for
-the new address until its business binding is configured and enabled.
+the new address until its business binding is configured and enabled. Policy,
+legacy transport protection and registry migration commit together. A target
+already discovered with member access is closed even when the source registry
+row is missing.
 
 Deployment does not enable any policy automatically. Configure and test the
 business transport first, then the Home policy, then the group. Test allowed
@@ -80,7 +100,12 @@ and denied reads/writes, current assignment revocation, private/group audience
 boundaries, queued/replayed work and owner regression. No automatic report
 approval, publication or delivery is introduced by this change.
 
-Before rollback to a version without this feature, disable all protected
-Telegram chats and limited DMs and remove any old broad grants. The previous
-runtime does not understand these policies. Keep the additive identity audit
-table and preserved conversation history.
+Older Homes reject the provisioned protected chats through their existing
+`approved`/empty-senders predicate. Private registry rows also prevent their
+legacy `telegram.linked_chats` migration from recreating owner access. This is
+defense for existing bindings, not support for administering scoped access in
+an old Home: an old pairing or remove/re-add flow can overwrite those rows, and
+old Homes cannot enforce a person's policy in other unconfigured groups.
+Before rollback, still disable protected Telegram chats and limited DMs, remove
+old broad grants, and do not re-pair or re-register them on the old version.
+Keep the additive identity audit table and preserved conversation history.

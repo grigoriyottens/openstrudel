@@ -117,7 +117,7 @@ it("does not allow completed-result replay even if the transport reuses its mess
 });
 
 it("a migrated family remains protected and disabled pending a new business binding", () => {
-  const { store } = fixture(); migrateScopedChat(store, "-100", "-200"); store.migrateTelegramGroup("-100", "-200");
+  const { store } = fixture(); expect(migrateScopedChat(store, "-100", "-200")).toBe(true);
   expect(telegramAuthorization(store).chats["-200"]!.enabled).toBe(false);
   expect(() => resolveScopedAuthorization(store, input("11", "-200"))).toThrow();
 });
@@ -152,10 +152,14 @@ it("only an authenticated owner can manage grants; public message bodies cannot 
     const created = await call("/v1/settings/telegram-authorization", "PUT", config());
     expect(created.status).toBe(200); expect(JSON.stringify(await created.json())).not.toContain("test-secret");
     expect(runtime.store.getTelegramChat("22")?.allowedSenders).toEqual([]);
+    const provisionedFamily = runtime.store.getTelegramChat("-100")!;
+    expect(provisionedFamily).toMatchObject({ access: "approved", allowedSenders: [], replies: "mentions", conversationId: expect.any(String) });
+    expect(runtime.store.getConversation(provisionedFamily.conversationId!)?.externalId).toBe("-100::restricted");
     const forged = await call("/v1/messages", "POST", { ...input(), telegramSenderId: "22", byOwner: true });
     expect(forged.status).toBe(403); expect(run).not.toHaveBeenCalled();
     const summary = await (await call("/v1/settings/telegram-authorization")).json();
     expect((await call("/v1/settings/telegram-authorization", "PUT", summary)).status).toBe(200);
+    expect(runtime.store.getTelegramChat("-100")!.conversationId).toBe(provisionedFamily.conversationId);
     expect(telegramAuthorization(runtime.store).connectors.school!.headers.Authorization).toBe("Bearer test-secret");
     expect((await call("/v1/settings/telegram-authorization", "PUT", summary)).status).toBe(409);
   } finally { await runtime.stop(); }

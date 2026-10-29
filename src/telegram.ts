@@ -13,7 +13,7 @@ import { errorProblem, quietReply } from "./operations.js";
 import type { MessageService } from "./messages.js";
 import type { Store } from "./store.js";
 import { agentTransfer, assertAgentWritable } from "./agent-move.js";
-import { isRestrictedSubject, telegramAuthorization, migrateScopedChat } from "./authorization.js";
+import { isRestrictedSubject, telegramAuthorization, migrateScopedChat, protectScopedTelegramTransport } from "./authorization.js";
 
 export interface TelegramUpdate {
   update_id: number;
@@ -257,7 +257,7 @@ export class TelegramAdapter {
     // Only groups pause; a private chat always answers.
     if (profileId || Number(chatId) > 0) this.store.deleteSetting("telegram.paused." + chatId);
     else this.store.setSetting("telegram.paused." + chatId, "true");
-    if (Number(chatId) < 0 && profileId && !previous?.profileId && !previous?.conversationId) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='instructions' WHERE chat_id=?").run(chatId);
+    if (Number(chatId) < 0 && profileId && !previous?.profileId && !previous?.conversationId && !protectScopedTelegramTransport(this.store, chatId)) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='instructions' WHERE chat_id=?").run(chatId);
   }
 
   setGroupEnabled(chatId: string, enabled: boolean): void {
@@ -630,8 +630,7 @@ export class TelegramAdapter {
     if (message?.migrate_to_chat_id || message?.migrate_from_chat_id) {
       const oldId = String(message.migrate_from_chat_id ?? message.chat.id);
       const newId = String(message.migrate_to_chat_id ?? message.chat.id);
-      migrateScopedChat(this.store, oldId, newId);
-      this.store.migrateTelegramGroup(oldId, newId);
+      if (!migrateScopedChat(this.store, oldId, newId)) this.store.migrateTelegramGroup(oldId, newId);
       this.store.markTelegramUpdate(update.update_id); return;
     }
     if (message?.chat.title) this.store.renameTelegramGroup(String(message.chat.id), message.chat.title);
@@ -921,7 +920,7 @@ export class TelegramAdapter {
       // Reconnecting an established private chat never changes its employee.
       if (link.profileId && (link.kind === "group" || !existing)) this.store.bindTelegramChat(chatId, link.profileId);
       if (link.kind === "group" && !link.profileId && !existing?.profileId) this.store.connectTelegramGroup(chatId);
-      if (link.kind === "group" && !existing?.profileId && !existing?.conversationId) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='instructions' WHERE chat_id=?").run(chatId);
+      if (link.kind === "group" && !existing?.profileId && !existing?.conversationId && !protectScopedTelegramTransport(this.store, chatId)) this.store.db.prepare("UPDATE telegram_chats SET access='members',replies='instructions' WHERE chat_id=?").run(chatId);
       this.store.db.prepare("UPDATE telegram_links SET payload=? WHERE hash=?").run(JSON.stringify({ ...link, chatId, error: undefined }), sha256(code));
       this.store.db.exec("COMMIT");
     } catch (error) { this.store.db.exec("ROLLBACK"); throw error; }
@@ -950,8 +949,9 @@ export class TelegramAdapter {
     const previous = removed ? JSON.parse(removed) as TelegramChat : null;
     const conversation = previous?.conversationId ? this.store.getConversation(previous.conversationId) : null;
     if (previous && conversation && conversation.channel === "telegram" && conversation.externalId?.split("::")[0] === chatId && (!previous.profileId || this.store.getProfile(previous.profileId))) {
+      const scoped = protectScopedTelegramTransport(this.store, chatId);
       this.store.db.prepare("UPDATE telegram_chats SET conversation_id=?,profile_id=?,allowed_senders_json=?,access=?,replies=? WHERE chat_id=?")
-        .run(conversation.id, previous.profileId, JSON.stringify([...new Set([...previous.allowedSenders,String(sender)])]),previous.access,previous.replies,chatId);
+        .run(conversation.id, previous.profileId, JSON.stringify(scoped ? [] : [...new Set([...previous.allowedSenders,String(sender)])]),scoped ? "approved" : previous.access,previous.replies,chatId);
     } else this.store.connectTelegramGroup(chatId);
     this.store.deleteSetting("telegram.removed." + chatId);
     // Membership alone starts no model run and sends no unsolicited group post.
@@ -974,7 +974,12 @@ export class TelegramAdapter {
     const config = telegramAuthorization(this.store);
     const subject = actual ? config.subjects[String(actual)] : undefined;
     if (subject?.enabled === false || config.chats[chatId]?.enabled === false) return false;
-    if (subject && Number(chatId) > 0) return String(actual) === chatId && subject.enabled && Boolean(chat && chat.enabled !== false);
+    // Policy is the authority for protected audiences. The legacy transport is
+    // deliberately empty for rollback safety; never infer a scoped sender from
+    // a private chat id when Telegram did not supply an actual human sender.
+    const realSender = sender !== undefined && Number.isSafeInteger(sender) && sender > 0;
+    if (config.chats[chatId]) return realSender && Boolean(chat && chat.enabled !== false);
+    if (subject && Number(chatId) > 0) return realSender && String(sender) === chatId && subject.enabled && Boolean(chat && chat.enabled !== false);
     if (subject && Number(chatId) < 0 && !config.chats[chatId]) return false;
     return actual !== undefined && actual > 0 && Boolean(chat && (chat.allowedSenders.includes(String(actual)) || Number(chatId) < 0 && chat.access === "members"));
   }

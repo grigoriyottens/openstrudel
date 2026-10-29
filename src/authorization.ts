@@ -70,8 +70,31 @@ export function saveTelegramAuthorization(store: Store, input: unknown): Telegra
   for (const id of Object.keys(current.subjects)) if (!Object.hasOwn(next.subjects, id)) throw new HomeError("Отозванного участника сохраните с enabled:false.", 400);
   for (const id of Object.keys(current.chats)) if (!Object.hasOwn(next.chats, id)) throw new HomeError("Отозванный чат сохраните с enabled:false.", 400);
   next.revision++;
-  store.setSetting(authorizationSetting, JSON.stringify(next));
+  // Commit the policy and its legacy deny transport together. Old Homes ignore
+  // the policy, but still reject approved chats with no allowed senders.
+  store.db.exec("SAVEPOINT scoped_telegram_authorization");
+  try {
+    store.setSetting(authorizationSetting, JSON.stringify(next));
+    for (const id of [...Object.keys(next.subjects), ...Object.keys(next.chats)]) {
+      if (!store.getTelegramChat(id)) store.linkTelegramChat({ chatId: id, title: `Telegram ${id}`, allowedSenders: [] });
+      protectScopedTelegramTransport(store, id);
+      if (Object.hasOwn(next.chats, id)) store.connectTelegramGroup(id);
+    }
+    store.db.exec("RELEASE scoped_telegram_authorization");
+  } catch (error) {
+    store.db.exec("ROLLBACK TO scoped_telegram_authorization; RELEASE scoped_telegram_authorization");
+    throw error;
+  }
   return next;
+}
+
+/** Keep older runtimes' admission predicate closed, including revoked records.
+ * Call before ordinary discovery/link/bind writes that could restore grants. */
+export function protectScopedTelegramTransport(store: Store, chatId: string): boolean {
+  const config = telegramAuthorization(store);
+  if (!Object.hasOwn(config.subjects, chatId) && !Object.hasOwn(config.chats, chatId)) return false;
+  store.db.prepare("UPDATE telegram_chats SET allowed_senders_json='[]',access='approved' WHERE chat_id=?").run(chatId);
+  return true;
 }
 
 export function isRestrictedSubject(store: Store, userId?: string): boolean {
@@ -88,15 +111,29 @@ export function assertNativeAccess(store: Store, conversationId: string, userId?
   if (isRestrictedSubject(store, userId) || isRestrictedSubject(store, chatId) || isRestrictedChat(store, chatId)) throw denied();
 }
 
-export function migrateScopedChat(store: Store, oldId: string, newId: string): void {
+/** Returns true when the protected policy and registry migration were handled
+ * together. A missing old registry row must still close a discovered target. */
+export function migrateScopedChat(store: Store, oldId: string, newId: string): boolean {
+  if (!/^-[1-9]\d*$/.test(oldId) || !/^-[1-9]\d*$/.test(newId) || oldId === newId) return false;
   const config = telegramAuthorization(store);
   const previous = config.chats[oldId];
-  if (!previous) return;
+  if (!previous) return false;
   // The business service must bind the new address before it can be enabled.
   config.chats[oldId] = { ...previous, enabled: false };
   config.chats[newId] = { ...previous, enabled: false };
   config.revision++;
-  store.setSetting(authorizationSetting, JSON.stringify(config));
+  store.db.exec("SAVEPOINT scoped_telegram_migration");
+  try {
+    store.setSetting(authorizationSetting, JSON.stringify(config));
+    protectScopedTelegramTransport(store, oldId);
+    protectScopedTelegramTransport(store, newId);
+    store.migrateTelegramGroup(oldId, newId);
+    store.db.exec("RELEASE scoped_telegram_migration");
+  } catch (error) {
+    store.db.exec("ROLLBACK TO scoped_telegram_migration; RELEASE scoped_telegram_migration");
+    throw error;
+  }
+  return true;
 }
 
 /** Authenticated Telegram metadata only. A protected audience cannot be entered through the app or scheduler. */

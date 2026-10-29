@@ -228,9 +228,6 @@ export class HttpApi {
         // Reading the HTTP body yields to incoming Telegram turns.
         if (this.messages.hasActiveRuns) throw new HomeError("Дождитесь завершения текущих ответов, затем измените права.", 409);
         const saved = saveTelegramAuthorization(this.store, body);
-        for (const [id, subject] of Object.entries(saved.subjects)) {
-          if (subject.enabled && !this.store.getTelegramChat(id)) this.store.linkTelegramChat({ chatId: id, title: `Telegram ${id}`, allowedSenders: [] });
-        }
         this.send(response, 200, authorizationSummary(saved)); return;
       }
       const employeeTransfer = path.match(/^\/v1\/employee-transfer\/(prepare|stage|release|activate|cancel|finish)$/);
