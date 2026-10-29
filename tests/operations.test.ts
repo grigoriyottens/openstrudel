@@ -47,10 +47,10 @@ it("lets Codex recover a connector in the same turn and ignores declined actions
 it("opens a connector incident only where no owner read the answer",async()=>{
  const store=new Store(":memory:");stores.push(store);
  store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
- let status="failed";
+ let status="failed",response="done";
  const messages=new MessageService(store,{async run(_text,options){
   options!.onEvent!({type:"item/completed",payload:{item:{type:"mcpToolCall",server:"calendar",tool:"list_events",status,error:null}}});
-  return{threadId:"t",response:"done",events:[]};
+  return{threadId:"t",response,events:[]};
  }});
  try{
   // The owner asked in the app, in his private chat or in a group: he reads the answer.
@@ -58,11 +58,12 @@ it("opens a connector incident only where no owner read the answer",async()=>{
   await messages.handle({channel:"telegram",externalChatId:"42",externalId:"42:1",telegramSenderId:"42",byOwner:true,text:"private"});
   await messages.handle({channel:"telegram",externalChatId:"-100",externalId:"-100:1",telegramSenderId:"42",text:"group"});
   expect(runtimeIssues(store)).toEqual([]);
-  // His unattended pipeline is not his reading.
-  await messages.handle({channel:"api",text:"batch",byOwner:true,externalId:"operations:news"});
-  expect(runtimeIssues(store)[0]?.tools).toEqual(["calendar.list_events"]);
+  // A quiet answer in the group is hidden, and his unattended pipeline is not his reading.
+  response="NO_REPLY";await messages.handle({channel:"telegram",externalChatId:"-100",externalId:"-100:2",telegramSenderId:"42",text:"quiet"});
+  response="done";await messages.handle({channel:"api",text:"batch",byOwner:true,externalId:"operations:news"});
+  expect(runtimeIssues(store)).toHaveLength(2);
   status="completed";await messages.handle({channel:"api",text:"retry",byOwner:true});
-  expect(runtimeIssues(store)).toEqual([]);
+  expect(runtimeIssues(store)).toHaveLength(1);
  }finally{await messages.close();}
 });
 

@@ -228,10 +228,11 @@ export class MessageService {
         if(problem)throw new Error(problemText[problem]);
         if (text !== "/help") this.store.advanceContextCheckpoint(current.id, inbound.id);
         const outbound = this.store.addMessage({ conversationId: current.id, channel: input.channel, direction: "outbound", replyToId: inbound.id, text: result.response,attachments:tools.attachments });
-        if ((input.scheduled || groupContext && input.channel === "telegram") && quietReply(result.response) || input.scheduled && failedRun(result.response)) this.store.db.prepare("UPDATE messages SET hidden=1 WHERE id=?").run(outbound.id);
+        const hidden = (input.scheduled || groupContext && input.channel === "telegram") && quietReply(result.response) || input.scheduled && failedRun(result.response);
+        if (hidden) this.store.db.prepare("UPDATE messages SET hidden=1 WHERE id=?").run(outbound.id);
         this.store.setMessageStatus(inbound.id, "completed");
-        // The owner reads the answer to his own request; only a failure no owner saw opens an incident.
-        const seen=ownerTurn(this.store,{conversationId:current.id,messageId:inbound.id,channel:input.channel,scheduled,byOwner:input.byOwner,telegramSenderId:input.telegramSenderId});
+        // The owner reads the shown answer to his own request; only a failure no owner saw opens an incident.
+        const seen=!hidden && ownerTurn(this.store,{conversationId:current.id,messageId:inbound.id,channel:input.channel,scheduled,byOwner:input.byOwner,telegramSenderId:input.telegramSenderId});
         const connectorNotice=reportConnectorIssues(this.store,current.id,inbound.id,seen?new Map([...connectors].filter(([,failed])=>!failed)):connectors);
         if(connectorNotice)await this.telegram?.notifyOwner(connectorNotice);
         if(text!=="/help" && !(input.scheduled && failedRun(result.response))) {
