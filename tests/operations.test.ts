@@ -44,6 +44,45 @@ it("lets Codex recover a connector in the same turn and ignores declined actions
  try{await messages.handle({channel:"api",text:"check"});expect(runtimeIssues(store)).toEqual([]);}finally{await messages.close();}
 });
 
+it("opens a connector incident only where no owner read the answer",async()=>{
+ const store=new Store(":memory:");stores.push(store);
+ store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
+ let status="failed",response="done";
+ const messages=new MessageService(store,{async run(_text,options){
+  options!.onEvent!({type:"item/completed",payload:{item:{type:"mcpToolCall",server:"calendar",tool:"list_events",status,error:null}}});
+  return{threadId:"t",response,events:[]};
+ }});
+ try{
+  // The owner asked in the app, in his private chat or in a group: he reads the answer.
+  await messages.handle({channel:"api",text:"app",byOwner:true});
+  await messages.handle({channel:"telegram",externalChatId:"42",externalId:"42:1",telegramSenderId:"42",byOwner:true,text:"private"});
+  await messages.handle({channel:"telegram",externalChatId:"-100",externalId:"-100:1",telegramSenderId:"42",text:"group"});
+  expect(runtimeIssues(store)).toEqual([]);
+  // A quiet answer in the group is hidden, and his unattended pipeline is not his reading.
+  response="NO_REPLY";await messages.handle({channel:"telegram",externalChatId:"-100",externalId:"-100:2",telegramSenderId:"42",text:"quiet"});
+  response="done";await messages.handle({channel:"api",text:"batch",byOwner:true,externalId:"operations:news"});
+  expect(runtimeIssues(store)).toHaveLength(2);
+  status="completed";await messages.handle({channel:"api",text:"retry",byOwner:true});
+  expect(runtimeIssues(store)).toHaveLength(1);
+ }finally{await messages.close();}
+});
+
+it("narrows a connector incident silently when one of its tools recovers",async()=>{
+ const store=new Store(":memory:");stores.push(store);const root=store.primaryConversation();
+ let turn:string[][]=[];
+ const messages=new MessageService(store,{async run(_text,options){
+  for(const [tool,status] of turn)options!.onEvent!({type:"item/completed",payload:{item:{type:"mcpToolCall",server:"calendar",tool,status,error:null}}});
+  return{threadId:"t",response:"done",events:[]};
+ }});
+ const notices=()=>store.listMessages(root.id).filter(m=>m.kind==="notice").length;
+ try{
+  turn=[["list_events","failed"],["create_event","failed"]];await messages.handle({channel:"api",text:"a"});expect(notices()).toBe(1);
+  turn=[["list_events","completed"]];await messages.handle({channel:"api",text:"b"});
+  expect(notices()).toBe(1);expect(runtimeIssues(store)[0]?.tools).toEqual(["calendar.create_event"]);
+  turn=[["delete_event","failed"]];await messages.handle({channel:"api",text:"c"});expect(notices()).toBe(2);
+ }finally{await messages.close();}
+});
+
 it("retries an operational notice after Telegram recovers without replaying ordinary messages",async()=>{
  const store=new Store(":memory:");stores.push(store);
  store.linkTelegramChat({chatId:"42",title:"Owner",allowedSenders:["42"]});
