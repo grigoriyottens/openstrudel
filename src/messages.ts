@@ -19,7 +19,7 @@ import { readFile } from "node:fs/promises";
 import { isSpeechFile, transcribeRecording } from "./speech.js";
 import { connectorOutcome, reportConnectorIssues, errorProblem, failedRun, quietReply, problemText, reportIssue, resolveIssue, runtimeIssues, toolProblem, toolRecovered, type ProblemCode } from "./operations.js";
 import { ownerKnowledge } from "./knowledge.js";
-import { hasAccess } from "./telegram-tools.js";
+import { hasAccess, ownerTurn } from "./telegram-tools.js";
 
 type QueuedMessage = { id: string; channel: string; run: () => Promise<MessageResult>; resolve: (result: MessageResult) => void; reject: (error: unknown) => void };
 
@@ -230,7 +230,9 @@ export class MessageService {
         const outbound = this.store.addMessage({ conversationId: current.id, channel: input.channel, direction: "outbound", replyToId: inbound.id, text: result.response,attachments:tools.attachments });
         if ((input.scheduled || groupContext && input.channel === "telegram") && quietReply(result.response) || input.scheduled && failedRun(result.response)) this.store.db.prepare("UPDATE messages SET hidden=1 WHERE id=?").run(outbound.id);
         this.store.setMessageStatus(inbound.id, "completed");
-        const connectorNotice=reportConnectorIssues(this.store,current.id,inbound.id,connectors);
+        // The owner reads the answer to his own request; only a failure no owner saw opens an incident.
+        const seen=ownerTurn(this.store,{conversationId:current.id,messageId:inbound.id,channel:input.channel,scheduled,byOwner:input.byOwner,telegramSenderId:input.telegramSenderId});
+        const connectorNotice=reportConnectorIssues(this.store,current.id,inbound.id,seen?new Map([...connectors].filter(([,failed])=>!failed)):connectors);
         if(connectorNotice)await this.telegram?.notifyOwner(connectorNotice);
         if(text!=="/help" && !(input.scheduled && failedRun(result.response))) {
           const notice=resolveIssue(this.store,current.id);
