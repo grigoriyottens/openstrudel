@@ -34,8 +34,9 @@ export function reportConnectorIssues(store:Store,conversationId:string,messageI
   const names=[...tools].sort();
   if(JSON.stringify(names)===JSON.stringify(previous?.tools ?? []))return;
   const title=store.getConversation(conversationId)?.title ?? "Чат",root=store.primaryConversation();
-  // A recovery is not news; the incident closes silently.
+  // A recovery is not news; the incident narrows or closes silently.
   if(!names.length){ store.deleteSetting(key); return; }
+  if(previous && names.every(name=>previous.tools?.includes(name))){ store.setSetting(key,JSON.stringify({...previous,tools:names})); return; }
   store.setSetting(key,JSON.stringify({conversationId,messageId,title,code:"connector",tools:names,time:new Date().toISOString()}));
   return store.addMessage({conversationId:root.id,channel:"api",direction:"outbound",kind:"notice",text:`Требует внимания · ${title}\n${problemText.connector}\n${names.join(", ")}`});
 }
