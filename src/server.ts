@@ -23,7 +23,7 @@ import type { Accounts } from "./accounts.js";
 import { hostingOrigin } from "./hosting-origin.js";
 import { approvalSetting, isApprovalMode, readApprovalMode } from "./approval-mode.js";
 import { accessOwners, accessPeople } from "./telegram-tools.js";
-import { authorizationSummary, telegramAuthorization, saveTelegramAuthorization } from "./authorization.js";
+import { authorizationSummary, onlyDisablesScopedAccess, preserveConnectorHeaders, telegramAuthorization, saveTelegramAuthorization } from "./authorization.js";
 import { ownerTimezone, saveOwnerTimezone } from "./timezone.js";
 import { notificationDestinations, receiveNotification } from "./notification-hook.js";
 import { SERVICE_SIGN_IN_SECONDS } from "./service-oauth.js";
@@ -218,15 +218,14 @@ export class HttpApi {
         if (!canManageAccount) throw new HomeError("Ограниченные права настраивает владелец устройства.", 403);
         if (request.method === "GET") { this.send(response, 200, authorizationSummary(telegramAuthorization(this.store))); return; }
         if (request.method !== "PUT") throw new HomeError("Метод недоступен.", 405);
-        if (this.messages.hasActiveRuns) throw new HomeError("Дождитесь завершения текущих ответов, затем измените права.", 409);
         const body = await this.body(request);
-        // GET redacts secrets; omitting headers on a known connector preserves them.
+        // GET redacts secrets; omitting headers on an unchanged connector preserves them.
         const current = telegramAuthorization(this.store);
-        if (body.connectors && typeof body.connectors === "object") for (const [id, value] of Object.entries(body.connectors)) {
-          if (value && typeof value === "object" && !("headers" in value) && current.connectors[id]) (value as any).headers = current.connectors[id]!.headers;
-        }
-        // Reading the HTTP body yields to incoming Telegram turns.
-        if (this.messages.hasActiveRuns) throw new HomeError("Дождитесь завершения текущих ответов, затем измените права.", 409);
+        preserveConnectorHeaders(current, body);
+        // Running turns recheck the policy before every step and before delivery, so
+        // switching access off never waits for participants to stop writing.
+        // Reading the HTTP body yields to incoming Telegram turns: decide only now.
+        if (this.messages.hasActiveRuns && !onlyDisablesScopedAccess(current, body)) throw new HomeError("Дождитесь завершения текущих ответов, затем измените права.", 409);
         const saved = saveTelegramAuthorization(this.store, body);
         this.send(response, 200, authorizationSummary(saved)); return;
       }

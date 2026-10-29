@@ -13,7 +13,7 @@ import { errorProblem, quietReply } from "./operations.js";
 import type { MessageService } from "./messages.js";
 import type { Store } from "./store.js";
 import { agentTransfer, assertAgentWritable } from "./agent-move.js";
-import { isRestrictedSubject, telegramAuthorization, migrateScopedChat, protectScopedTelegramTransport } from "./authorization.js";
+import { isProtectedTelegramAudience, isRestrictedChat, isRestrictedSubject, telegramAuthorization, migrateScopedChat, protectScopedTelegramTransport } from "./authorization.js";
 
 export interface TelegramUpdate {
   update_id: number;
@@ -262,7 +262,8 @@ export class TelegramAdapter {
 
   setGroupEnabled(chatId: string, enabled: boolean): void {
     if (Number(chatId) >= 0 || !this.store.getTelegramChat(chatId)) throw new Error("Группа Telegram не найдена");
-    if (this.activeChats.has(chatId)) throw new Error("Дождитесь текущего ответа и повторите.");
+    // Pausing a protected group revokes its running turns at their next check; it never waits for participants.
+    if (this.activeChats.has(chatId) && (enabled || !isRestrictedChat(this.store, chatId))) throw new Error("Дождитесь текущего ответа и повторите.");
     if (enabled) { this.store.connectTelegramGroup(chatId); this.store.deleteSetting("telegram.paused." + chatId); }
     else this.store.setSetting("telegram.paused." + chatId, "true");
   }
@@ -398,15 +399,16 @@ export class TelegramAdapter {
     if (!caption) await this.sendMessage(chatId, text, deliveryKey, replyToMessageId, { assertCurrent });
     for (let first = 0; first < photos.length; first += 10) {
       const batch = photos.slice(first, first + 10), captioned = Boolean(caption && !first);
+      assertCurrent?.();
       try { await this.sendPhotos(String(chatId), batch, deliveryKey, first, captioned ? { caption: caption!, replyTo: replyToMessageId } : {}); }
       catch (error) {
         // Telegram refused the photos, so nothing went out: the answer still arrives as text and files.
         if (!refused(error)) throw error;
-        if (captioned) await this.sendMessage(chatId, text, deliveryKey, replyToMessageId);
-        await this.sendFiles(chatId, batch, deliveryKey);
+        if (captioned) await this.sendMessage(chatId, text, deliveryKey, replyToMessageId, { assertCurrent });
+        await this.sendFiles(chatId, batch, deliveryKey, { assertCurrent });
       }
     }
-    await this.sendFiles(chatId, files.filter(file => !photos.includes(file)), deliveryKey);
+    await this.sendFiles(chatId, files.filter(file => !photos.includes(file)), deliveryKey, { assertCurrent });
   }
 
   /** Telegram's photo limits: JPEG, PNG or still WebP up to 10 MB, width plus height at most 10000, sides within 1:20. */
@@ -421,6 +423,9 @@ export class TelegramAdapter {
   /** Checks without sending that a chat can receive a requested delivery, so a caller can check several chats before sending to any. Album and file checks stay in sendToChat. */
   deliveryTarget(chatId:string, externalId:string) {
     if (!this.token) throw new Error("Telegram не подключён");
+    // Model turns and the notification hook never post to a protected audience, as the scheduler already refuses.
+    // Restricted answers use sendAnswer for their own verified request and are not affected.
+    if (isProtectedTelegramAudience(this.store, chatId)) throw new Error("Отправка в чат с ограниченным доступом недоступна.");
     const chat = this.store.getTelegramChat(chatId);
     if (!chat || chat.enabled === false) throw new Error("Бот больше не подключён к этому чату.");
     assertAgentWritable(this.store,chat.profileId ?? "main");
@@ -524,8 +529,9 @@ export class TelegramAdapter {
     }
   }
 
-  async sendFiles(chatId: string | number, files: Attachment[] = [], deliveryKey: string = randomUUID(), options: { silent?: boolean } = {}): Promise<void> {
+  async sendFiles(chatId: string | number, files: Attachment[] = [], deliveryKey: string = randomUUID(), options: { silent?: boolean; assertCurrent?: () => void } = {}): Promise<void> {
     for (const file of files) {
+      options.assertCurrent?.();
       const stored = this.messages.files.get(file.id);
       if (!stored || stored.conversationId !== file.conversationId) throw new Error("Файл ответа не найден");
       const key = `${chatId}:${deliveryKey}:file:${file.id}`;
@@ -681,7 +687,12 @@ export class TelegramAdapter {
     if (Number(chatId) < 0 && replyAuthor?.is_bot && !replyToBot && !mentioned) {
       this.store.markTelegramUpdate(update.update_id); return;
     }
-    const contextOnly = Number(chatId) < 0 && binding?.replies === "mentions" && !replyToBot && !mentioned;
+    const protectedAudience = isProtectedTelegramAudience(this.store, chatId);
+    // A protected group never runs a turn for ordinary discussion, whatever its stored reply mode.
+    const mentionsOnly = binding?.replies === "mentions" || protectedAudience;
+    // Participants cannot keep a protected queue busy indefinitely: beyond the backlog, a message stays as context.
+    const saturated = protectedAudience && Boolean(binding?.conversationId) && this.messages.restrictedSaturated(binding!.conversationId!);
+    const contextOnly = Number(chatId) < 0 && mentionsOnly && !replyToBot && !mentioned || saturated;
     const replyKey = chatId + ":" + message.reply_to_message?.message_id;
     const cardId = this.questionMessages.get(replyKey);
     const card = cardId ? this.messages.interactions.get(cardId) : undefined;
@@ -702,6 +713,9 @@ export class TelegramAdapter {
       const media=message.voice ?? message.audio ?? message.video_note ?? message.video ?? message.document ?? message.photo?.at(-1);
       if(!media) return {text};
       const speech = Boolean(message.voice || message.audio || message.video_note || message.video || message.document && isSpeechFile(message.document.file_name ?? "", message.document.mime_type));
+      // A restricted turn reads text and speech only. In a protected audience nothing is downloaded or
+      // transcribed unless the message addresses the bot, and photos or other files are never fetched.
+      if (protectedAudience && (contextOnly || !speech)) return {text};
       const cached = speech ? this.store.getSetting("telegram.transcript." + update.update_id) : null;
       if (cached) return { text: [text, cached].filter(Boolean).join("\n"), transcript: cached };
       if((media.file_size ?? 0)>20_000_000) throw new Error("Отправьте файл до 20 МБ.");
@@ -717,7 +731,8 @@ export class TelegramAdapter {
         return { text: [text, transcript].filter(Boolean).join("\n"), transcript };
       } catch (error) {
         // A video is a file first: when its speech cannot be heard, the employee opens it like any other attachment.
-        if (!message.video && !/^video\//i.test(message.document?.mime_type ?? "")) throw error;
+        // A protected audience has no file handling, so its unheard video stays a failed request.
+        if (protectedAudience || !message.video && !/^video\//i.test(message.document?.mime_type ?? "")) throw error;
       }
       const hex=sha256(`${chatId}:${message.message_id}:${media.file_id}`).slice(0,32);
       const id=`${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
@@ -735,6 +750,8 @@ export class TelegramAdapter {
     this.preparations.set(chatId,prepared);
     try {
     const input = await prepared;text=input.text;received=true;
+    // A protected message without words or speech carries nothing a restricted turn could use.
+    if (protectedAudience && !text.trim() && !input.uploads?.length) { this.store.markTelegramUpdate(update.update_id); return; }
     const replyToAssistant = Boolean(replyConversation || replyAuthor && (replyAuthor.id === this.bot?.id || replyAuthor.is_bot && replyAuthor.username?.toLowerCase() === (this.bot?.username ?? this.store.getSetting("telegram.bot_username"))?.toLowerCase()));
     // The exact message answered, from Telegram itself: the bot's own posts may never have passed through Home.
     const target = message.reply_to_message;
@@ -797,6 +814,8 @@ export class TelegramAdapter {
 
   private ownsInteraction(chatId: string, card: Interaction): boolean {
     if (!this.linkedChats().includes(chatId)) return false;
+    // Restricted turns never ask for approval. No card, button or reply may cross into a protected audience.
+    if (isProtectedTelegramAudience(this.store, chatId)) return false;
     const origin = this.interactionOrigin(card);
     if (origin) return origin === chatId;
     const conversation = this.store.getConversation(card.conversationId);
@@ -951,7 +970,7 @@ export class TelegramAdapter {
     if (previous && conversation && conversation.channel === "telegram" && conversation.externalId?.split("::")[0] === chatId && (!previous.profileId || this.store.getProfile(previous.profileId))) {
       const scoped = protectScopedTelegramTransport(this.store, chatId);
       this.store.db.prepare("UPDATE telegram_chats SET conversation_id=?,profile_id=?,allowed_senders_json=?,access=?,replies=? WHERE chat_id=?")
-        .run(conversation.id, previous.profileId, JSON.stringify(scoped ? [] : [...new Set([...previous.allowedSenders,String(sender)])]),scoped ? "approved" : previous.access,previous.replies,chatId);
+        .run(conversation.id, previous.profileId, JSON.stringify(scoped ? [] : [...new Set([...previous.allowedSenders,String(sender)])]),scoped ? "approved" : previous.access,scoped ? "mentions" : previous.replies,chatId);
     } else this.store.connectTelegramGroup(chatId);
     this.store.deleteSetting("telegram.removed." + chatId);
     // Membership alone starts no model run and sends no unsolicited group post.

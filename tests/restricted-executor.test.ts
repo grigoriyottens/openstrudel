@@ -71,7 +71,7 @@ it("exposes only granted business tools and sends verified transport outside the
   expect(accounts.choose).toHaveBeenCalledExactlyOnceWith("main", false);
   expect(calls.map(c => c.body.method)).toEqual(["initialize", "notifications/initialized", "tools/list", "tools/call"]);
   for (const { headers, init } of calls) {
-    expect(Object.fromEntries(headers)).toMatchObject({ authorization: "Bearer " + secret, "x-hermes-platform": "telegram", "x-hermes-user-id": "123", "x-hermes-chat-id": "123", "x-hermes-message-id": "123:4", "x-hermes-session-id": "openstrudel:" + options.conversationId });
+    expect(Object.fromEntries(headers)).toMatchObject({ authorization: "Bearer " + secret, "x-hermes-platform": "telegram", "x-hermes-user-id": "123", "x-hermes-chat-id": "123", "x-hermes-message-id": "123:4", "x-hermes-session-id": `openstrudel:${options.conversationId}:123` });
     expect(init.redirect).toBe("error");
   }
   expect(calls[2]!.headers.get("mcp-session-id")).toBe("synthetic-session");
@@ -238,4 +238,55 @@ it("close revokes outstanding tool handles and prevents subsequent runs", async 
   });
   await expect(executor.run("test", options)).rejects.toThrow("Права доступа изменились");
   await expect(executor.run("again", options)).rejects.toThrow("Права доступа изменились");
+});
+
+it("relays business refusals with their code and safe text, never raw JSON or control characters", async () => {
+  const { executor, options } = fixture();
+  const standard = respond;
+  let reply: unknown;
+  respond = (body, headers) => body.method === "tools/call" ? result(body.id, reply) : standard(body, headers);
+  runtime.run.mockImplementation(async (_text, turn) => {
+    // School refuses with HTTP 200 ok:false; the gateway marks it isError with a structured code and text.
+    reply = { isError: true, structuredContent: { ok: false, code: "schedule_editor_required", text: "Изменить занятие может только назначенный ментор.‮\u0007 " + "x".repeat(600) }, content: [{ type: "text", text: "{}" }] };
+    const refusal = await turn.tools.call(allowed.name, {});
+    expect(refusal).toMatchObject({ ok: false, code: "schedule_editor_required" });
+    expect(refusal.text.startsWith("Изменить занятие может только назначенный ментор.")).toBe(true);
+    expect(refusal.text).not.toMatch(/[\u0000-\u001f‮]/);
+    expect(refusal.text.length).toBeLessThanOrEqual(500);
+    // The gateway's own argument validation nests an uppercase code with issues.
+    reply = { isError: true, content: [{ type: "text", text: "Проверьте параметры: lessonId" }], structuredContent: { error: { code: "INVALID_ARGUMENTS", issues: Array.from({ length: 7 }, (_, i) => ({ path: "items." + i, message: "Неверное значение" })) } } };
+    const invalid = await turn.tools.call(allowed.name, {});
+    expect(invalid).toMatchObject({ ok: false, code: "invalid_arguments", text: "Проверьте параметры: lessonId" });
+    expect(invalid.issues).toHaveLength(5);
+    expect(invalid.issues[0]).toEqual({ path: "items.0", message: "Неверное значение" });
+    // A failure without a code keeps the service's plain sentence but stays "unavailable".
+    reply = { isError: true, content: [{ type: "text", text: "Школа не ответила." }] };
+    expect(await turn.tools.call(allowed.name, {})).toEqual({ ok: false, code: "unavailable", text: "Школа не ответила." });
+    // Prototype names never become text; malformed codes and JSON payload text fail closed.
+    reply = { isError: true, structuredContent: { code: "constructor" } };
+    const proto = await turn.tools.call(allowed.name, {});
+    expect(proto.code).toBe("constructor"); expect(typeof proto.text).toBe("string");
+    reply = { isError: true, structuredContent: { code: "Bad-Code!" }, content: [{ type: "text", text: JSON.stringify({ text: "internal detail" }) }] };
+    expect(await turn.tools.call(allowed.name, {})).toEqual({ ok: false, code: "unavailable", text: "Сервис временно недоступен. Повторите запрос позже." });
+    return { response: "OK" };
+  });
+  await executor.run("test", options);
+});
+
+it.each([
+  ["base64", { Authorization: "Bearer " + secret }, Buffer.from(secret).toString("base64")],
+  ["base64url", { Authorization: "Bearer tok/en+with=special?chars" }, Buffer.from("tok/en+with=special?chars").toString("base64url")],
+  ["URI-encoded", { Authorization: "Bearer tok/en+with=special?chars" }, encodeURIComponent("tok/en+with=special?chars")],
+  ["JSON-escaped", { Authorization: 'Bearer quote"and\\slash-token' }, JSON.stringify('quote"and\\slash-token').slice(1, -1)],
+  ["custom header name", { "X-Auth": "custom-credential-value" }, "custom-credential-value"],
+])("treats an echoed %s credential as a leak", async (_name, headers, echoed) => {
+  const auth = authorization(); auth.connector.headers = headers as Record<string, string>;
+  const { executor, options } = fixture(auth);
+  const standard = respond;
+  respond = (body, requestHeaders) => body.method === "tools/call" ? result(body.id, { content: [{ type: "text", text: "echo " + echoed }] }) : standard(body, requestHeaders);
+  runtime.run.mockImplementation(async (_text, turn) => {
+    await expect(turn.tools.call(allowed.name, {})).rejects.toThrow("недоступен");
+    return { response: "OK" };
+  });
+  await executor.run("test", options);
 });

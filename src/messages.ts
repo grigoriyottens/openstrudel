@@ -25,6 +25,10 @@ import type { RestrictedExecutor } from "./restricted-executor.js";
 
 type QueuedMessage = { id: string; channel: string; run: () => Promise<MessageResult>; resolve: (result: MessageResult) => void; reject: (error: unknown) => void };
 
+/** Queued and running restricted turns per conversation. Beyond it a new message stays as
+ * context; far beyond it (a burst the adapter could not see) the request is refused. */
+export const RESTRICTED_BACKLOG = 5;
+
 /** One FIFO per conversation, shared by every client. No second agent loop. */
 export class MessageService {
   private readonly queues = new Map<string, QueuedMessage[]>();
@@ -42,6 +46,10 @@ export class MessageService {
   get hasActiveRuns(): boolean { return this.inflight.size > 0; }
   /** A queued or running turn in this conversation. */
   isRunning(conversationId: string): boolean { return this.drains.has(conversationId); }
+  /** Participants cannot occupy a protected conversation (and the owner's quota) without limit. */
+  restrictedSaturated(conversationId: string, limit = RESTRICTED_BACKLOG): boolean {
+    return (this.queues.get(conversationId)?.length ?? 0) + (this.drains.has(conversationId) ? 1 : 0) >= limit;
+  }
 
   constructor(private readonly store: Store, private readonly engine: CodexEngine, private readonly root = process.cwd()) { this.files = new ConversationFiles(store,root); }
 
@@ -298,6 +306,7 @@ export class MessageService {
       if (input.contextOnly) return { receipt, completion: Promise.resolve(receipt) };
       throw new HomeError("Это сообщение уже обработано. При необходимости отправьте новый запрос.", 409);
     }
+    if (!input.contextOnly && this.restrictedSaturated(conversation.id, RESTRICTED_BACKLOG * 2)) throw new HomeError("Слишком много запросов в этом чате. Повторите позже.", 429);
     const inbound = this.store.addMessage({ conversationId: conversation.id, channel: "telegram", direction: "inbound", text: input.text, externalId: authorization.actor.messageId, author: input.author });
     this.store.db.prepare("INSERT INTO message_authorizations(message_id,user_id,chat_id,external_message_id,fingerprint) VALUES(?,?,?,?,?)")
       .run(inbound.id, authorization.actor.userId, authorization.actor.chatId, authorization.actor.messageId, authorization.fingerprint);
@@ -334,9 +343,15 @@ export class MessageService {
         assertCurrent();
         const outbound = this.store.addMessage({ conversationId: conversation.id, channel: "telegram", direction: "outbound", replyToId: inbound.id, text: result.response });
         this.store.setMessageStatus(inbound.id, "completed");
+        // A later answer closes an earlier incident silently, so the next failure is reported again.
+        resolveIssue(this.store, conversation.id);
         return { conversationId: conversation.id, messageId: outbound.id, text: outbound.text };
       } catch (error) {
         this.store.setMessageStatus(inbound.id, "failed", "Запрос с ограниченным доступом не завершён.");
+        // The audience never sees technical failures and the adapter stays silent for a recorded failure,
+        // so the owner hears of it privately. A revoked or changed grant is expected and stays quiet.
+        const revoked = error instanceof HomeError && error.status === 403 || error instanceof Error && /^(Права доступа изменились|Запрос остановлен)/.test(error.message);
+        if (!revoked && !this.closing) void this.reportProblem(conversation.id, inbound.id, errorProblem(error), authorization.actor.chatId).catch(() => undefined);
         throw error;
       }
     });

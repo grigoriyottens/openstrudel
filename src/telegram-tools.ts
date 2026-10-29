@@ -3,7 +3,7 @@ import type { Store } from "./store.js";
 import type { ConversationFiles } from "./files.js";
 import type { TelegramAdapter } from "./telegram.js";
 import type { DynamicTool } from "./types.js";
-import { assertNativeAccess, isRestrictedSubject } from "./authorization.js";
+import { assertNativeAccess, isProtectedTelegramAudience, isRestrictedSubject } from "./authorization.js";
 
 export interface TelegramToolContext {
   conversationId: string;
@@ -50,7 +50,8 @@ export function telegramTools(store: Store, context: TelegramToolContext) {
   ] : [];
   const chats = () => {
     const owner = ownerTurn(store, context);
-    return store.telegramChats().filter(chat => chat.enabled !== false && (context.scheduled
+    // A model turn never posts to a protected audience, even the owner's: only its own verified answers reach it.
+    return store.telegramChats().filter(chat => chat.enabled !== false && !isProtectedTelegramAudience(store, chat.chatId) && (context.scheduled
       ? chat.chatId === context.scheduleTelegramChatId
       : owner || chat.conversationId === context.conversationId));
   };

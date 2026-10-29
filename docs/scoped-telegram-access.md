@@ -5,8 +5,12 @@ Home owners can restrict Telegram participants independently of the broad
 policy. A paired owner is still subject to a protected group's policy.
 
 `GET/PUT /v1/settings/telegram-authorization` is owner-only. GET omits connector
-headers; PUT preserves omitted headers on existing connector IDs. PUT requires
-the current `revision` and an idle message queue. It increments the revision.
+headers; PUT preserves omitted headers on an existing connector ID only while its
+URL is unchanged. A new URL needs its own `headers` (400 otherwise). PUT requires
+the current `revision` and an idle message queue, except a change that only
+switches existing subjects or chats to `enabled: false`: revocation is accepted
+while turns run, and those turns are revoked at their next policy check. PUT
+increments the revision.
 Existing subjects/chats cannot be removed: revoke them with `enabled: false` so
 that an old owner grant cannot silently become effective again.
 
@@ -16,9 +20,12 @@ an empty `allowedSenders`. No pairing link, message or Bot API polling is needed
 A new group gets a generic `Telegram <chatId>` title (renamed on its next real
 update), `replies: mentions`, and its canonical restricted conversation. The
 bot must already be a member of that Telegram group. Existing titles, employee
-bindings, conversations, reply rules and history stay in place. Repeated PUTs
-reuse the same registry entry and conversation. Existing paused groups stay
-paused; policy `enabled: false` always prevents responses.
+bindings, conversations and history stay in place. A protected group always
+answers only an `@mention` or a reply to the bot: its stored reply mode becomes
+`mentions`, and the adapter applies this even if an older row says otherwise.
+Repeated PUTs reuse the same registry entry and conversation. Existing paused
+groups stay paused; policy `enabled: false` always prevents responses. Pausing
+a protected group is accepted while it is answering.
 
 The current adapter admits real Telegram senders to enabled protected audiences
 through the scoped policy, independently of the empty legacy sender list.
@@ -85,10 +92,32 @@ and Telegram's quoted reply; previous assistant/tool output is not replayed.
 This avoids disclosing an old draft after a pupil changes mentors. Ask for the
 current schedule/report again when context is missing. File attachments are not
 supported by this route yet; ordinary text and transcribed voice are supported.
+In a protected audience nothing is downloaded or transcribed unless the message
+addresses the bot, and photos or other files are never downloaded: an
+unaddressed voice note is not stored at all, an attachment's caption is.
+
+Business refusals reach the model as `{ok:false, code, text}`: a lower-case
+service code and the service's own short plain text (control characters
+removed, at most 500 characters; JSON payloads are never relayed as text).
+`invalid_arguments` may include up to five short issues. Anything else becomes
+`unavailable`. Every configured connector header value (and its Base64,
+Base64url, URI- and JSON-escaped forms) is treated as a credential: a response
+containing one fails closed. The service session header names both the audience
+and the verified sender (`openstrudel:<conversation>:<user>`), so a service never
+shares state between participants of one group.
 
 Messages persist verified sender, chat, source message ID and policy fingerprint.
-Queued work and final delivery are rechecked. Completed requests cannot replay
-old private output. Telegram group migration preserves a disabled policy for
+Queued work and final delivery are rechecked, including each photo batch and file.
+Completed requests cannot replay old private output. A Telegram message ID names
+its chat: no app/API message may claim a protected chat's or a limited person's
+message ID, and approval cards are never posted to a protected audience. Model
+turns (including the owner's) and the notification hook cannot send to a
+protected audience; only its own verified answers reach it, and the owner can
+still reply manually from the app. Scheduled delivery is refused there too.
+A protected conversation holds at most five queued or running turns: a further
+message is kept as context without a turn, and a burst beyond ten is refused.
+A failed protected turn is never explained in the group; the owner gets one
+private notice per incident. Telegram group migration preserves a disabled policy for
 the new address until its business binding is configured and enabled. Policy,
 legacy transport protection and registry migration commit together. A target
 already discovered with member access is closed even when the source registry

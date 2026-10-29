@@ -277,7 +277,7 @@ export class Store {
     if (!chat || Number(chatId) >= 0) throw new Error("Группа Telegram не найдена");
     if (chat.conversationId || chat.profileId) return chat;
     const conversation = this.getOrCreateConversation({ channel: "telegram", externalId: scoped ? `${chatId}::restricted` : chatId, title: chat.title });
-    this.db.prepare("UPDATE telegram_chats SET conversation_id=?,access=?,replies=? WHERE chat_id=?").run(conversation.id, scoped ? "approved" : "members", scoped ? chat.replies : "instructions", chatId);
+    this.db.prepare("UPDATE telegram_chats SET conversation_id=?,access=?,replies=? WHERE chat_id=?").run(conversation.id, scoped ? "approved" : "members", scoped ? "mentions" : "instructions", chatId);
     return this.getTelegramChat(chatId)!;
   }
 

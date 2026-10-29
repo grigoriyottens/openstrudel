@@ -24,6 +24,46 @@ const safeBusinessErrors: Record<string, string> = {
   in_progress: "Действие уже выполняется. Проверьте результат перед повтором.",
 };
 
+/** A business refusal is shown to the participant: the service's own short text,
+ * never raw JSON, markup or invisible control characters. */
+const businessCode = /^[a-z][a-z0-9_]{0,63}$/;
+function plainText(value: unknown, max: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/g, " ").replace(/\s+/g, " ").trim();
+  return text ? text.slice(0, max) : undefined;
+}
+function businessFailure(result: Record<string, any>): { ok: false; code: string; text: string; issues?: Array<{ path: string; message: string }> } {
+  const structured = record(result.structuredContent) ? result.structuredContent : {};
+  const first = Array.isArray(result.content) ? result.content.find((item: unknown) => record(item) && item.type === "text" && typeof item.text === "string") : undefined;
+  let parsed: Record<string, any> | undefined;
+  if (first) try { const value = JSON.parse(first.text); if (record(value)) parsed = value; } catch { /* Plain service text. */ }
+  const raw = [structured.code, record(structured.error) ? structured.error.code : undefined, parsed?.code, record(parsed?.error) ? parsed.error.code : undefined]
+    .find((value): value is string => typeof value === "string");
+  const lowered = raw?.toLowerCase();
+  const code = lowered && businessCode.test(lowered) ? lowered : "unavailable";
+  // JSON is data for code extraction only; its other fields are never relayed as text.
+  const text = plainText(structured.text, 500) ?? (first && !parsed ? plainText(first.text, 500) : undefined)
+    ?? (Object.hasOwn(safeBusinessErrors, code) ? safeBusinessErrors[code] : undefined) ?? "Действие сейчас недоступно. Проверьте запрос или повторите позже.";
+  const source = record(structured.error) && Array.isArray(structured.error.issues) ? structured.error.issues
+    : Array.isArray(structured.issues) ? structured.issues : record(parsed?.error) && Array.isArray(parsed.error.issues) ? parsed.error.issues : [];
+  const issues = code === "invalid_arguments" ? source.filter(record).slice(0, 5).flatMap((issue: Record<string, unknown>) => {
+    const message = plainText(issue.message, 200);
+    return message ? [{ path: plainText(issue.path, 100) ?? "", message }] : [];
+  }) : [];
+  return { ok: false, code, text, ...(issues.length ? { issues } : {}) };
+}
+
+/** Every configured header is a transport credential. Also catch the forms an
+ * echoing service would most likely produce: encoded or JSON-escaped copies. */
+function credentialForms(headers: Record<string, string>): string[] {
+  const forms = new Set<string>();
+  for (const value of Object.values(headers)) for (const secret of [value, value.replace(/^Bearer\s+/i, "")]) {
+    if (secret.length < 8) continue;
+    for (const form of [secret, Buffer.from(secret).toString("base64"), Buffer.from(secret).toString("base64url"), encodeURIComponent(secret), JSON.stringify(secret).slice(1, -1)]) forms.add(form);
+  }
+  return [...forms];
+}
+
 export interface RestrictedRunOptions {
   authorization: ScopedAuthorization;
   conversationId: string;
@@ -125,14 +165,12 @@ class RestrictedMcpProxy {
     const actor = authorization.actor;
     if (!/^[1-9][0-9]{0,19}$/.test(actor.userId) || !/^-?[1-9][0-9]{0,19}$/.test(actor.chatId)
       || !new RegExp(`^${actor.chatId}:[1-9][0-9]*$`).test(actor.messageId)
-      || !/^[A-Za-z0-9_.:-]{1,180}$/.test(conversationId)) throw unavailable();
+      || !/^[A-Za-z0-9_.:-]{1,160}$/.test(conversationId)) throw unavailable();
     if (authorization.tools.length > 100 || authorization.tools.some(t => !/^[A-Za-z][A-Za-z0-9_.-]{0,95}$/.test(t.name))) throw unavailable();
     this.allowed = new Set(authorization.tools.map(t => t.name));
     if (this.allowed.size !== authorization.tools.length) throw unavailable();
     this.headers = new Headers(authorization.connector.headers);
-    this.secrets = Object.entries(authorization.connector.headers)
-      .filter(([key]) => /authorization|token|key|secret|cookie/i.test(key))
-      .flatMap(([, value]) => [value, value.replace(/^Bearer\s+/i, "")]).filter(value => value.length >= 8);
+    this.secrets = credentialForms(authorization.connector.headers);
     for (const key of [...this.headers.keys()]) if (/^x-hermes-|^mcp-|^host$|^content-length$|^connection$/i.test(key)) this.headers.delete(key);
     this.headers.set("content-type", "application/json");
     this.headers.set("accept", "application/json, text/event-stream");
@@ -140,7 +178,8 @@ class RestrictedMcpProxy {
     this.headers.set("x-hermes-user-id", actor.userId);
     this.headers.set("x-hermes-chat-id", actor.chatId);
     this.headers.set("x-hermes-message-id", actor.messageId);
-    this.headers.set("x-hermes-session-id", "openstrudel:" + conversationId);
+    // One audience may hold several participants: the service never shares state between them.
+    this.headers.set("x-hermes-session-id", `openstrudel:${conversationId}:${actor.userId}`);
   }
 
   async discover(): Promise<DynamicTool[]> {
@@ -175,15 +214,23 @@ class RestrictedMcpProxy {
     this.current();
     if (!this.allowed.has(name) || !this.exposed.has(name) || !record(args)) throw new Error("Действие недоступно для этого участника.");
     const result = await this.request("tools/call", { name, arguments: args });
-    if (result.isError) {
-      let code = result.structuredContent?.code;
-      for (const item of result.content ?? []) if (!code && item?.type === "text") {
-        try { code = JSON.parse(item.text)?.code; } catch { /* Never return raw service errors. */ }
-      }
-      const safeCode = typeof code === "string" && Object.hasOwn(safeBusinessErrors, code) ? code : "unavailable";
-      return { ok: false, code: safeCode, text: safeBusinessErrors[safeCode] };
-    }
+    // The model learns why the service refused, so it neither invents an outage nor repeats the request.
+    if (result.isError) return businessFailure(result);
     return result;
+  }
+
+  /** Decoded strings are checked as well as the serialized result: escaping must not hide an echoed credential. */
+  private leaks(result: unknown): boolean {
+    const serialized = JSON.stringify(result);
+    if (this.secrets.some(secret => serialized.includes(secret))) return true;
+    const strings: string[] = [];
+    const visit = (value: unknown, depth: number): void => {
+      if (typeof value === "string") strings.push(value);
+      else if (depth < 64 && Array.isArray(value)) for (const item of value) visit(item, depth + 1);
+      else if (depth < 64 && record(value)) for (const [key, item] of Object.entries(value)) { strings.push(key); visit(item, depth + 1); }
+    };
+    visit(result, 0);
+    return strings.some(text => this.secrets.some(secret => text.includes(secret)));
   }
 
   private async request(method: string, params: Record<string, unknown>, notification = false): Promise<Record<string, any>> {
@@ -206,7 +253,7 @@ class RestrictedMcpProxy {
       const body = await boundedResponse(response, id);
       this.current();
       if (!record(body) || body.jsonrpc !== "2.0" || body.id !== id || body.error || !record(body.result)) throw unavailable();
-      if (this.secrets.some(secret => JSON.stringify(body.result).includes(secret))) throw unavailable();
+      if (this.leaks(body.result)) throw unavailable();
       return body.result;
     } catch {
       this.current();

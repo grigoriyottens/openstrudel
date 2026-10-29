@@ -93,7 +93,8 @@ export function saveTelegramAuthorization(store: Store, input: unknown): Telegra
 export function protectScopedTelegramTransport(store: Store, chatId: string): boolean {
   const config = telegramAuthorization(store);
   if (!Object.hasOwn(config.subjects, chatId) && !Object.hasOwn(config.chats, chatId)) return false;
-  store.db.prepare("UPDATE telegram_chats SET allowed_senders_json='[]',access='approved' WHERE chat_id=?").run(chatId);
+  // A protected group answers only an explicit mention or a reply to the bot.
+  store.db.prepare("UPDATE telegram_chats SET allowed_senders_json='[]',access='approved',replies=CASE WHEN chat_id LIKE '-%' THEN 'mentions' ELSE replies END WHERE chat_id=?").run(chatId);
   return true;
 }
 
@@ -102,6 +103,11 @@ export function isRestrictedSubject(store: Store, userId?: string): boolean {
 }
 export function isRestrictedChat(store: Store, chatId?: string): boolean {
   return Boolean(chatId && Object.hasOwn(telegramAuthorization(store).chats, chatId));
+}
+/** A protected group or a limited participant's private chat, enabled or not. */
+export function isProtectedTelegramAudience(store: Store, chatId?: string | number): boolean {
+  const id = chatId === undefined ? undefined : String(chatId);
+  return isRestrictedChat(store, id) || isRestrictedSubject(store, id);
 }
 
 export function assertNativeAccess(store: Store, conversationId: string, userId?: string): void {
@@ -148,7 +154,11 @@ export function resolveScopedAuthorization(store: Store, input: MessageInput): S
   // A private conversation of a limited subject is protected even without actor metadata.
   const privateSubject = chatId && user.test(chatId) ? config.subjects[chatId] : undefined;
   const protectedStored = storedChat && (config.chats[storedChat] || config.subjects[storedChat]);
-  if (!subject && !chat && !privateSubject && !protectedStored) return null;
+  // A Telegram message id names its chat. No other client may claim a protected
+  // chat's numbering, its replay slot or its approval cards.
+  const claimedChat = input.externalId?.split(":")[0];
+  const protectedClaim = claimedChat && (Object.hasOwn(config.chats, claimedChat) || Object.hasOwn(config.subjects, claimedChat));
+  if (!subject && !chat && !privateSubject && !protectedStored && !protectedClaim) return null;
   if (input.channel !== "telegram" || input.scheduled || !input.telegramSenderId || !user.test(input.telegramSenderId) || !chatId || !input.externalId) throw denied();
   if (storedChat && storedChat !== chatId) throw denied();
   if (!new RegExp(`^${chatId}:[1-9][0-9]*$`).test(input.externalId)) throw denied();
@@ -176,6 +186,40 @@ export function resolveScopedAuthorization(store: Store, input: MessageInput): S
 export function assertScopedAuthorization(store: Store, input: MessageInput, expected: ScopedAuthorization): void {
   const current = resolveScopedAuthorization(store, input);
   if (!current || current.fingerprint !== expected.fingerprint) throw denied();
+}
+
+/** GET redacts credentials, so a PUT may omit headers for an unchanged connector.
+ * A new address never inherits the old address's credentials. */
+export function preserveConnectorHeaders(current: TelegramAuthorization, body: unknown): void {
+  if (!record(body) || !record(body.connectors)) return;
+  for (const [id, value] of Object.entries(body.connectors)) {
+    if (!record(value) || "headers" in value || !Object.hasOwn(current.connectors, id)) continue;
+    if (value.url !== current.connectors[id]!.url) throw new HomeError("Для нового адреса подключения укажите headers.", 400);
+    value.headers = current.connectors[id]!.headers;
+  }
+}
+
+/** Revocation must stay possible while participants keep the Home busy: a change
+ * that only switches existing subjects or chats off may be saved during turns. */
+export function onlyDisablesScopedAccess(current: TelegramAuthorization, body: unknown): boolean {
+  let next: TelegramAuthorization;
+  try { next = validateTelegramAuthorization(body); } catch { return false; }
+  const canonical = (value: unknown): string => JSON.stringify(value, (_key, item) => record(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : item);
+  const connectors = (config: TelegramAuthorization) => Object.fromEntries(Object.entries(config.connectors).map(([id, c]) => [id, { url: c.url, headers: c.headers }]));
+  const policies = (config: TelegramAuthorization) => Object.fromEntries(Object.entries(config.policies).map(([id, p]) => [id, { connectorId: p.connectorId, tools: p.tools.map(t => ({ name: t.name, capability: t.capability })) }]));
+  if (next.revision !== current.revision || canonical(connectors(next)) !== canonical(connectors(current)) || canonical(policies(next)) !== canonical(policies(current))) return false;
+  const sameKeys = (a: Record<string, unknown>, b: Record<string, unknown>) => canonical(Object.keys(a).sort()) === canonical(Object.keys(b).sort());
+  if (!sameKeys(next.subjects, current.subjects) || !sameKeys(next.chats, current.chats)) return false;
+  const narrowed = (before: { enabled: boolean }, after: { enabled: boolean }) => after.enabled === before.enabled || before.enabled && !after.enabled;
+  for (const [id, before] of Object.entries(current.subjects)) {
+    const after = next.subjects[id]!;
+    if (!narrowed(before, after) || canonical({ capabilities: after.capabilities, privatePolicyId: after.privatePolicyId }) !== canonical({ capabilities: before.capabilities, privatePolicyId: before.privatePolicyId })) return false;
+  }
+  for (const [id, before] of Object.entries(current.chats)) {
+    const after = next.chats[id]!;
+    if (!narrowed(before, after) || canonical({ policyId: after.policyId, defaultCapabilities: after.defaultCapabilities, members: after.members }) !== canonical({ policyId: before.policyId, defaultCapabilities: before.defaultCapabilities, members: before.members })) return false;
+  }
+  return true;
 }
 
 /** Public management reads omit transport credentials entirely. */

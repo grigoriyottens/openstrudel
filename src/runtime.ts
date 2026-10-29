@@ -13,6 +13,7 @@ import {mkdirSync,writeFileSync,renameSync} from "node:fs";
 import { createSetupServer } from "./setup.js";
 import { Accounts, AccountEngines } from "./accounts.js";
 import { RestrictedExecutor } from "./restricted-executor.js";
+import { isProtectedTelegramAudience } from "./authorization.js";
 
 export interface RuntimeOptions {
   dbPath?: string;
@@ -57,7 +58,10 @@ export class OpenStrudelRuntime {
     this.messages.telegram=this.telegram;
     this.scheduler = new Scheduler(this.store,this.messages);
     this.messages.scheduler=this.scheduler;
-    this.scheduler.deliver=(chat,text,key,attachments)=>this.telegram.sendAnswer(chat,text,attachments,key);
+    // The scheduler checks its destination before generating; a policy saved meanwhile still stops every chunk and file.
+    this.scheduler.deliver=(chat,text,key,attachments)=>this.telegram.sendAnswer(chat,text,attachments,key,undefined,()=>{
+      if (isProtectedTelegramAudience(this.store, chat)) throw new Error("Фоновая доставка в чат с ограниченным доступом недоступна.");
+    });
     this.api = new HttpApi(this.store, this.messages, this.telegram, options.apiToken ?? (options.engine ? null : process.env.OPENSTRUDEL_API_TOKEN), this.account, this.engine, { mobileDirectory: resolve(options.rootDirectory ?? process.cwd(), ".data/mobile"), mobilePort: options.mobilePort }, this.accounts);
     this.startTelegram = options.startTelegram ?? true;
   }

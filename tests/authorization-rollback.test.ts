@@ -53,7 +53,9 @@ it("atomically closes old owner/member grants while preserving existing bindings
   store.addMessage({ channel: "telegram", conversationId: original.conversationId!, direction: "inbound", text: "Keep existing history" });
   expect(legacyAllowed(store, "-100", 33)).toBe(true); expect(legacyOwner(store, "22")).toBe(true);
   saveTelegramAuthorization(store, config());
-  expect(store.getTelegramChat("-100")).toMatchObject({ conversationId: original.conversationId, profileId: original.profileId, title: original.title, replies: original.replies, access: "approved", allowedSenders: [] });
+  // A protected group answers only mentions and replies to the bot, whatever mode it had before.
+  expect(original.replies).toBe("instructions");
+  expect(store.getTelegramChat("-100")).toMatchObject({ conversationId: original.conversationId, profileId: original.profileId, title: original.title, replies: "mentions", access: "approved", allowedSenders: [] });
   expect(store.listMessages(original.conversationId!)[0]?.text).toBe("Keep existing history");
   for (const sender of [11, 22, 33]) expect(legacyAllowed(store, "-100", sender)).toBe(false);
   for (const sender of ["22", "44"]) { expect(legacyOwner(store, sender)).toBe(false); expect(legacyAllowed(store, sender, Number(sender))).toBe(false); }
