@@ -13,6 +13,7 @@ import { errorProblem, quietReply } from "./operations.js";
 import type { MessageService } from "./messages.js";
 import type { Store } from "./store.js";
 import { agentTransfer, assertAgentWritable } from "./agent-move.js";
+import { isRestrictedSubject, telegramAuthorization, migrateScopedChat } from "./authorization.js";
 
 export interface TelegramUpdate {
   update_id: number;
@@ -359,10 +360,11 @@ export class TelegramAdapter {
     return { messageId: reply.id };
   }
 
-  async sendMessage(chatId: string | number, text: string, deliveryKey: string = randomUUID(), replyToMessageId?: number, options: { silent?: boolean; linkPreview?: boolean } = {}): Promise<void> {
+  async sendMessage(chatId: string | number, text: string, deliveryKey: string = randomUUID(), replyToMessageId?: number, options: { silent?: boolean; linkPreview?: boolean; assertCurrent?: () => void } = {}): Promise<void> {
     if (!this.token) throw new Error("Telegram не подключён");
     const chunks=telegramText(text);
     for (const [index,chunk] of chunks.entries()) {
+      options.assertCurrent?.();
       const key=`${chatId}:${deliveryKey}:${index}`;
       const payload=JSON.stringify({chat_id:chatId,...chunk,link_preview_options:{is_disabled:options.linkPreview !== true},
         ...(options.silent ? { disable_notification:true } : {}),
@@ -385,14 +387,15 @@ export class TelegramAdapter {
   }
 
   /** An answer and its files. Photos Telegram accepts arrive as one captioned photo or album; other files keep their form. */
-  async sendAnswer(chatId: string | number, text: string, files: Attachment[] = [], deliveryKey: string, replyToMessageId?: number): Promise<void> {
+  async sendAnswer(chatId: string | number, text: string, files: Attachment[] = [], deliveryKey: string, replyToMessageId?: number, assertCurrent?: () => void): Promise<void> {
+    assertCurrent?.();
     const prefix = `${chatId}:${deliveryKey}:`;
     const begun = new Set(this.store.db.prepare("SELECT key FROM telegram_outbox WHERE key>=? AND key<?").all(prefix, prefix + "\uffff").map(row => String(row.key)));
     // A delivery begun as text and documents finishes that way; a receipt is never sent again in another form.
     const photos: Attachment[] = [];
     for (const file of files) if (!begun.has(prefix + "file:" + file.id) && await this.isPhoto(file)) photos.push(file);
     const caption = photos.length && !begun.has(prefix + "0") ? captionFor(text) : null;
-    if (!caption) await this.sendMessage(chatId, text, deliveryKey, replyToMessageId);
+    if (!caption) await this.sendMessage(chatId, text, deliveryKey, replyToMessageId, { assertCurrent });
     for (let first = 0; first < photos.length; first += 10) {
       const batch = photos.slice(first, first + 10), captioned = Boolean(caption && !first);
       try { await this.sendPhotos(String(chatId), batch, deliveryKey, first, captioned ? { caption: caption!, replyTo: replyToMessageId } : {}); }
@@ -627,6 +630,7 @@ export class TelegramAdapter {
     if (message?.migrate_to_chat_id || message?.migrate_from_chat_id) {
       const oldId = String(message.migrate_from_chat_id ?? message.chat.id);
       const newId = String(message.migrate_to_chat_id ?? message.chat.id);
+      migrateScopedChat(this.store, oldId, newId);
       this.store.migrateTelegramGroup(oldId, newId);
       this.store.markTelegramUpdate(update.update_id); return;
     }
@@ -683,7 +687,7 @@ export class TelegramAdapter {
     const cardId = this.questionMessages.get(replyKey);
     const card = cardId ? this.messages.interactions.get(cardId) : undefined;
     if (card && this.ownsInteraction(chatId, card)) {
-      const question = card.questions.find(q => q.options.length === 0);
+      const question = (!card.requestedBy || card.requestedBy === String(message.from?.id)) ? card.questions.find(q => q.options.length === 0) : undefined;
       if (question) {
         await this.messages.interactions.answer(card.id, card.conversationId, { [question.id]: text });
         this.store.markTelegramUpdate(update.update_id); return;
@@ -753,10 +757,11 @@ export class TelegramAdapter {
     const result: MessageResult = await this.messages.handle(submission);
     const currentBinding = this.store.getTelegramChat(chatId);
     try {
+      this.messages.assertDelivery(submission, result.messageId);
       // The chat changed hands during the turn. Record that nothing was sent.
       if (!currentBinding || currentBinding.profileId !== binding?.profileId) this.store.db.prepare("INSERT OR IGNORE INTO telegram_outbox(key,chat_id,payload,status,error) VALUES(?,?,'{}','not_sent',?)")
         .run(`${chatId}:reply:${result.messageId}:0`, chatId, "Подключение этого чата изменилось. Ответ не отправлен в Telegram.");
-      else if (Number(chatId) >= 0 || !quietReply(result.text)) await this.sendAnswer(message.chat.id, result.text, result.attachments, `reply:${result.messageId}`, Number(chatId) < 0 ? message.message_id : undefined);
+      else if (Number(chatId) >= 0 || !quietReply(result.text)) await this.sendAnswer(message.chat.id, result.text, result.attachments, `reply:${result.messageId}`, Number(chatId) < 0 ? message.message_id : undefined, () => this.messages.assertDelivery(submission, result.messageId));
     }
     catch { this.lastError="Ответ сохранён в приложении; доставку в Telegram нужно проверить"; }
     } catch (error) {
@@ -877,7 +882,7 @@ export class TelegramAdapter {
   }
 
   private isOwner(sender?: number): boolean {
-    return sender !== undefined && sender > 0 && this.store.getTelegramChat(String(sender))?.allowedSenders.includes(String(sender)) === true;
+    return sender !== undefined && sender > 0 && !isRestrictedSubject(this.store, String(sender)) && this.store.getTelegramChat(String(sender))?.allowedSenders.includes(String(sender)) === true;
   }
 
   private async acceptLink(code: string, update: TelegramUpdate): Promise<void> {
@@ -885,6 +890,8 @@ export class TelegramAdapter {
     const chatId = String(message.chat.id);
     const sender = message.from?.id ?? (Number(chatId) > 0 ? Number(chatId) : undefined);
     if (!sender || message.sender_chat || message.from?.is_bot) return;
+    // Owner pairing is never a way for a scoped participant to upgrade themselves.
+    if (isRestrictedSubject(this.store, String(sender))) return;
     const row = this.store.db.prepare("SELECT payload FROM telegram_links WHERE hash=?").get(sha256(code));
     const link = row ? JSON.parse(String(row.payload)) as PendingLink : null;
     const fail = async (text: string) => {
@@ -964,6 +971,11 @@ export class TelegramAdapter {
   private authorizedSender(chatId:string, sender?:number):boolean {
     const actual=sender ?? (Number(chatId)>0 ? Number(chatId) : undefined);
     const chat = this.store.getTelegramChat(chatId);
+    const config = telegramAuthorization(this.store);
+    const subject = actual ? config.subjects[String(actual)] : undefined;
+    if (subject?.enabled === false || config.chats[chatId]?.enabled === false) return false;
+    if (subject && Number(chatId) > 0) return String(actual) === chatId && subject.enabled && Boolean(chat && chat.enabled !== false);
+    if (subject && Number(chatId) < 0 && !config.chats[chatId]) return false;
     return actual !== undefined && actual > 0 && Boolean(chat && (chat.allowedSenders.includes(String(actual)) || Number(chatId) < 0 && chat.access === "members"));
   }
   private replyConversation(chatId:string,messageId:number) {

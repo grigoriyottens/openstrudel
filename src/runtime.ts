@@ -12,6 +12,7 @@ import {homedir} from "node:os";
 import {mkdirSync,writeFileSync,renameSync} from "node:fs";
 import { createSetupServer } from "./setup.js";
 import { Accounts, AccountEngines } from "./accounts.js";
+import { RestrictedExecutor } from "./restricted-executor.js";
 
 export interface RuntimeOptions {
   dbPath?: string;
@@ -50,6 +51,7 @@ export class OpenStrudelRuntime {
       if (identityChanged) this.store.clearConversationThreads();
     });
     this.messages = new MessageService(this.store, this.engine,options.rootDirectory);
+    if (!options.engine) this.messages.restrictedExecutor = new RestrictedExecutor(this.accounts);
     if (!(this.engine instanceof AccountEngines)) this.messages.onAuthenticationError = () => this.account.invalidate();
     this.telegram = new TelegramAdapter(telegramToken, this.store, this.messages);
     this.messages.telegram=this.telegram;

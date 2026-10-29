@@ -116,6 +116,11 @@ export class Store {
     if (!columns.has("attachments_json")) this.db.exec("ALTER TABLE messages ADD COLUMN attachments_json TEXT NOT NULL DEFAULT '[]'");
     if (!columns.has("hidden")) this.db.exec("ALTER TABLE messages ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0");
     if (!columns.has("context_only")) this.db.exec("ALTER TABLE messages ADD COLUMN context_only INTEGER NOT NULL DEFAULT 0");
+    // Historical messages deliberately have no verified identity. Never infer it from display names.
+    this.db.exec(`CREATE TABLE IF NOT EXISTS message_authorizations (
+      message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE, user_id TEXT NOT NULL,
+      chat_id TEXT NOT NULL, external_message_id TEXT NOT NULL, fingerprint TEXT NOT NULL
+    )`);
     this.db.exec("CREATE INDEX IF NOT EXISTS messages_page_idx ON messages(conversation_id, hidden, created_at)");
     const conversationColumns = new Set((this.db.prepare("PRAGMA table_info(conversations)").all() as Row[]).map(r => String(r.name)));
     if (!conversationColumns.has("profile_id")) this.db.exec("ALTER TABLE conversations ADD COLUMN profile_id TEXT REFERENCES employee_profiles(id)");
@@ -281,7 +286,7 @@ export class Store {
       // Keep the established binding, participants, threads and file workspace.
       this.db.prepare("DELETE FROM telegram_chats WHERE chat_id=?").run(newId);
       this.db.prepare("UPDATE telegram_chats SET chat_id=? WHERE chat_id=?").run(newId, oldId);
-      const conversations = this.db.prepare("SELECT id,external_id FROM conversations WHERE channel='telegram' AND (external_id=? OR external_id LIKE ?)").all(oldId, oldId + "::employee::%") as Row[];
+      const conversations = this.db.prepare("SELECT id,external_id FROM conversations WHERE channel='telegram' AND (external_id=? OR external_id=? OR external_id LIKE ?)").all(oldId, oldId + "::restricted", oldId + "::employee::%") as Row[];
       for (const row of conversations) {
         const externalId = newId + String(row.external_id).slice(oldId.length);
         // Preserve any already-created destination history rather than delete it.
