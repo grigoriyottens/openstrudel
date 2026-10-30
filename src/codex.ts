@@ -66,6 +66,7 @@ export class CodexEngineAdapter implements CodexEngine {
   private modelReading?: Promise<ModelChoice[]>;
   private rpc?: CodexRpc;
   private initializing?: Promise<CodexRpc>;
+  private readonly processes = new Set<Promise<void>>();
   private readonly loaded = new Map<string, string>();
   private readonly loadedConfig = new Map<string,string>();
   private readonly active = new Map<string, ActiveTurn>();
@@ -105,6 +106,8 @@ export class CodexEngineAdapter implements CodexEngine {
   }
 
   setCodexHome(home?: string): void { this.close(); this.codexHome = home; }
+  /** After close: every app-server this engine started has exited and stopped writing its home. */
+  async settled(): Promise<void> { await Promise.all(this.processes); }
   close(): void { for (const cancel of this.signingIn.values()) cancel(); this.signingIn.clear(); this.rpc?.close(); this.rpc = undefined; this.initializing = undefined; this.loaded.clear(); this.loadedConfig.clear(); this.parents.clear(); this.connectionCache = undefined; this.connectionLoading = undefined; this.appCatalog = undefined; this.modelCache = undefined; this.modelReading = undefined; }
 
   private async client(): Promise<CodexRpc> {
@@ -115,6 +118,7 @@ export class CodexEngineAdapter implements CodexEngine {
         for (const turn of this.active.values()) turn.reject(error);
         this.active.clear(); this.loaded.clear(); this.loadedConfig.clear(); this.parents.clear(); this.rpc = undefined; this.initializing = undefined;
       }, this.options.scoped && !this.options.restricted ? this.options.workingDirectory : undefined, {}, this.options.restricted ? this.options.workingDirectory : undefined);
+      const exited = rpc.exited; this.processes.add(exited); void exited.then(() => this.processes.delete(exited));
       try {
         await rpc.initialize();
         if (this.options.authTokens) await rpc.request("account/login/start", { type: "chatgptAuthTokens", ...await this.options.authTokens() });

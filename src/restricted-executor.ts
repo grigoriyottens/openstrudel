@@ -1,18 +1,39 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { stringify } from "smol-toml";
+import { AccountUnavailableError } from "./account-errors.js";
 import type { Accounts } from "./accounts.js";
 import type { ScopedAuthorization } from "./authorization.js";
 import { CodexEngineAdapter, restrictedCodexConfig } from "./codex.js";
+import { recordDiagnostic, type DiagnosticReason, type RestrictedStage } from "./diagnostics.js";
 import { resolveModelSelection } from "./model-settings.js";
 import type { DynamicTool } from "./types.js";
 import { ownerTimezone } from "./timezone.js";
 
 const supportedCodexVersion = "0.156.1";
-const unavailable = () => new Error("Ограниченный доступ сейчас недоступен. Повторите запрос позже.");
+/** The reason and status are diagnostics for the owner's journal, never shown to participants. */
+const unavailable = (reason: DiagnosticReason = "service_protocol", status?: number) => Object.assign(new Error("Ограниченный доступ сейчас недоступен. Повторите запрос позже."), { reason, status });
 const accessChanged = () => new Error("Права доступа изменились. Отправьте запрос заново.");
+/** Codex refuses its sandbox helper aliases under the system temp folder, and a restricted
+ * thread reads AGENTS.md through that helper, so every turn runs in a private Home folder. */
+export const restrictedRunsDirectory = (root: string) => join(root, ".data", "restricted");
+const staleRunMs = 24 * 60 * 60 * 1000;
+
+/** A fixed vocabulary: Codex, account and HTTP messages can contain request details. */
+function failureReason(error: unknown): DiagnosticReason {
+  if (error instanceof AccountUnavailableError) return error.reason === "limits" ? "account_limits" : error.reason === "unavailable" ? "account_unavailable" : "account_sign_in";
+  const tagged = error instanceof Error ? (error as Error & { reason?: unknown }).reason : undefined;
+  if (typeof tagged === "string") return tagged as DiagnosticReason;
+  const message = error instanceof Error ? error.message : "";
+  if (/sandbox|bwrap|landlock|seccomp/i.test(message)) return "sandbox";
+  if (error instanceof Error && error.name === "TimeoutError" || /не ответил на|timed out/i.test(message)) return "timeout";
+  return "codex";
+}
+const errorClass = (error: unknown) => {
+  const name = error instanceof Error ? (error.name !== "Error" ? error.name : error.constructor.name) : typeof error;
+  return /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) ? name : "Unknown";
+};
 const record = (value: unknown): value is Record<string, any> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const maxResponseBytes = 1024 * 1024;
 const safeBusinessErrors: Record<string, string> = {
@@ -77,12 +98,20 @@ export interface RestrictedRunOptions {
 export class RestrictedExecutor {
   private readonly running = new Set<{ controller: AbortController; engine?: CodexEngineAdapter }>();
   private closed = false;
-  constructor(private readonly accounts: Accounts) {}
+  constructor(private readonly accounts: Accounts) {
+    // A Home stopped mid-turn leaves its turn folder behind; a live turn is never this old.
+    try {
+      const parent = restrictedRunsDirectory(accounts.root);
+      for (const name of readdirSync(parent)) if (name.startsWith("turn-") && Date.now() - statSync(join(parent, name)).mtimeMs > staleRunMs) rmSync(join(parent, name), { recursive: true, force: true });
+    } catch { /* No folder yet. */ }
+  }
 
   async run(text: string, options: RestrictedRunOptions): Promise<{ response: string }> {
     const run: { controller: AbortController; engine?: CodexEngineAdapter } = { controller: new AbortController() };
     const signal = AbortSignal.any([run.controller.signal, ...(options.signal ? [options.signal] : [])]);
     let finished = false, root: string | undefined, accountId: string | undefined;
+    let stage: RestrictedStage = "prepare";
+    const started = Date.now();
     const current = () => {
       if (this.closed || finished || signal.aborted) throw accessChanged();
       try { options.assertCurrent(); } catch { throw accessChanged(); }
@@ -91,19 +120,24 @@ export class RestrictedExecutor {
     try {
       current();
       const version = JSON.parse(readFileSync(createRequire(import.meta.url).resolve("@openai/codex/package.json"), "utf8")).version;
-      if (version !== supportedCodexVersion) throw unavailable();
+      if (version !== supportedCodexVersion) throw unavailable("runtime_version");
       const selection = resolveModelSelection(this.accounts.store, "main", undefined, options.conversationId);
-      if (selection.provider !== "chatgpt") throw unavailable();
+      if (selection.provider !== "chatgpt") throw unavailable("model_provider");
+      stage = "account";
       // Deliberately no provider or quota fallback and no retry of a partial turn.
       const chosen = await this.accounts.choose("main", false);
       current();
       accountId = chosen.id;
       this.accounts.active.set(accountId, (this.accounts.active.get(accountId) ?? 0) + 1);
+      stage = "discovery";
       const authorization = structuredClone(options.authorization);
       const proxy = new RestrictedMcpProxy(authorization, options.conversationId, signal, current);
       const definitions = await proxy.discover();
       current();
-      root = mkdtempSync(join(tmpdir(), "openstrudel-restricted-"));
+      stage = "runtime";
+      const parent = restrictedRunsDirectory(this.accounts.root);
+      mkdirSync(parent, { recursive: true, mode: 0o700 });
+      root = mkdtempSync(join(parent, "turn-"));
       const cwd = join(root, "workspace"), codexHome = join(root, "codex");
       mkdirSync(cwd, { mode: 0o500 });
       mkdirSync(codexHome, { mode: 0o700 });
@@ -123,10 +157,16 @@ export class RestrictedExecutor {
         authTokens: async refresh => { current(); const tokens = await chosen.service.authTokens(refresh); current(); return tokens; } });
       run.engine = engine;
       const result = await engine.run(text, { ...selection, conversationId: options.conversationId, messageId: options.messageId,
-        signal, employees: [], approvalMode: "approve_all", tools: { definitions, call: (name, args) => proxy.call(name, args) } });
+        signal, employees: [], approvalMode: "approve_all", tools: { definitions, call: (name, args) => proxy.call(name, args) },
+        onEvent: event => { if (event.type === "thread.started") stage = "turn"; } });
       current();
       return { response: result.response };
     } catch (error) {
+      // A changed grant is expected. Any other failure leaves only its stage, class and a fixed reason.
+      if (!(error instanceof Error && error.message === accessChanged().message)) {
+        const reason = failureReason(error), status = reason === "service_http" ? (error as { status?: number }).status : undefined;
+        recordDiagnostic(this.accounts.store, "restricted.failed", { stage, errorClass: errorClass(error), reason, durationMs: Date.now() - started, status });
+      }
       // Account/provider/HTTP exceptions can contain request details or headers.
       if (error instanceof Error && [accessChanged().message, unavailable().message].includes(error.message)) throw error;
       throw unavailable();
@@ -134,6 +174,8 @@ export class RestrictedExecutor {
       finished = true;
       run.controller.abort();
       run.engine?.close();
+      // Codex writes thread locks while it exits; removing the folder earlier lets it recreate one.
+      if (run.engine) await Promise.race([run.engine.settled(), new Promise(resolve => setTimeout(resolve, 5_000).unref())]);
       this.running.delete(run);
       if (accountId) {
         const remaining = (this.accounts.active.get(accountId) ?? 1) - 1;
@@ -243,7 +285,7 @@ class RestrictedMcpProxy {
         signal: AbortSignal.any([this.signal, AbortSignal.timeout(30_000)]),
         body: JSON.stringify({ jsonrpc: "2.0", ...(notification ? {} : { id }), method, params }) });
       this.current();
-      if (!response.ok) { await response.body?.cancel(); throw unavailable(); }
+      if (!response.ok) { await response.body?.cancel(); throw unavailable("service_http", response.status); }
       const session = response.headers.get("mcp-session-id");
       if (session) {
         if (!/^[\x21-\x7e]{1,512}$/.test(session) || this.sessionId && session !== this.sessionId) throw unavailable();
@@ -253,11 +295,13 @@ class RestrictedMcpProxy {
       const body = await boundedResponse(response, id);
       this.current();
       if (!record(body) || body.jsonrpc !== "2.0" || body.id !== id || body.error || !record(body.result)) throw unavailable();
-      if (this.leaks(body.result)) throw unavailable();
+      if (this.leaks(body.result)) throw unavailable("credential_echo");
       return body.result;
-    } catch {
+    } catch (error) {
       this.current();
-      throw unavailable();
+      // Only a classified refusal leaves this method; the original error may hold request details.
+      if (error instanceof Error && error.message === unavailable().message) throw error;
+      throw unavailable(error instanceof Error && error.name === "TimeoutError" ? "timeout" : error instanceof TypeError && error.message === "fetch failed" ? "network" : "service_protocol");
     }
   }
 }

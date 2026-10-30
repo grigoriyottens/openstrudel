@@ -1,26 +1,30 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { parse } from "smol-toml";
 import type { Accounts } from "../src/accounts.js";
 import type { ScopedAuthorization } from "../src/authorization.js";
+import { AccountUnavailableError } from "../src/account-errors.js";
+import { diagnosticReport } from "../src/diagnostics.js";
 import { Store } from "../src/store.js";
 import { saveConversationModelSelection, saveModelSelection } from "../src/model-settings.js";
 
-const runtime = vi.hoisted(() => ({ options: [] as any[], run: vi.fn(), close: vi.fn() }));
+const runtime = vi.hoisted(() => ({ options: [] as any[], run: vi.fn(), close: vi.fn(), settled: vi.fn() }));
 vi.mock("../src/codex.js", async original => ({ ...await original<object>(), CodexEngineAdapter: class {
   constructor(options: unknown) { runtime.options.push(options); }
   run = runtime.run;
   close = runtime.close;
+  settled = runtime.settled;
 } }));
-import { RestrictedExecutor } from "../src/restricted-executor.js";
+import { RestrictedExecutor, restrictedRunsDirectory } from "../src/restricted-executor.js";
 
 const secret = "synthetic-restricted-connector-token";
 const allowed = { name: "school_mentor_schedule", capability: "schedule.read" };
 const definition = (name = allowed.name) => ({ name, description: "Current permitted lessons", inputSchema: { type: "object", properties: {}, additionalProperties: false } });
 const authorization = (): ScopedAuthorization => ({ fingerprint: "a".repeat(64), actor: { userId: "123", chatId: "123", messageId: "123:4" },
   connector: { url: "https://school.invalid/api/mcp/company", headers: { Authorization: "Bearer " + secret } }, tools: [allowed] });
-const stores: Store[] = [], executors: RestrictedExecutor[] = [];
+const stores: Store[] = [], executors: RestrictedExecutor[] = [], homes: string[] = [];
 const calls: Array<{ body: any; headers: Headers; init: RequestInit }> = [];
 let respond: (body: any, headers: Headers) => Response | Promise<Response>;
 const result = (id: number, value: unknown, headers: Record<string, string> = {}) => Response.json({ jsonrpc: "2.0", id, result: value }, { headers });
@@ -29,14 +33,15 @@ function fixture(auth = authorization()) {
   const store = new Store(":memory:"); stores.push(store);
   saveModelSelection(store, { provider: "chatgpt", model: "pinned-model", serviceTier: "default" });
   const service = { authTokens: vi.fn().mockResolvedValue({ accessToken: "synthetic-account-token", chatgptAccountId: "account" }) };
-  const accounts = { store, active: new Map<string, number>(), choose: vi.fn().mockResolvedValue({ id: "default", service }) } as unknown as Accounts;
+  const root = mkdtempSync(join(tmpdir(), "restricted-home-")); homes.push(root);
+  const accounts = { store, root, active: new Map<string, number>(), choose: vi.fn().mockResolvedValue({ id: "default", service }) } as unknown as Accounts;
   const executor = new RestrictedExecutor(accounts); executors.push(executor);
   const options = { authorization: auth, conversationId: store.primaryConversation().id, messageId: "stored-message", assertCurrent: vi.fn() };
-  return { store, service, accounts, executor, options };
+  return { store, root, service, accounts, executor, options };
 }
 
 beforeEach(() => {
-  calls.length = 0; runtime.options.length = 0; runtime.run.mockReset(); runtime.close.mockReset();
+  calls.length = 0; runtime.options.length = 0; runtime.run.mockReset(); runtime.close.mockReset(); runtime.settled.mockReset().mockResolvedValue(undefined);
   respond = body => {
     if (body.method === "initialize") return result(body.id, { protocolVersion: "2025-03-26", capabilities: { tools: {} } }, { "mcp-session-id": "synthetic-session" });
     if (body.method === "notifications/initialized") return new Response(null, { status: 202 });
@@ -51,7 +56,7 @@ beforeEach(() => {
   }));
   runtime.run.mockResolvedValue({ response: "Готово", threadId: "ephemeral", events: [] });
 });
-afterEach(() => { for (const executor of executors.splice(0)) executor.close(); for (const store of stores.splice(0)) store.close(); vi.unstubAllGlobals(); });
+afterEach(() => { for (const executor of executors.splice(0)) executor.close(); for (const store of stores.splice(0)) store.close(); for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true }); vi.unstubAllGlobals(); });
 
 it("exposes only granted business tools and sends verified transport outside the model", async () => {
   const { executor, options, accounts } = fixture();
@@ -82,11 +87,14 @@ it("exposes only granted business tools and sends verified transport outside the
 });
 
 it("creates fresh empty isolated homes every turn and removes them even on failure", async () => {
-  const { executor, options } = fixture();
+  const { executor, options, root } = fixture();
   const roots: string[] = [];
   runtime.run.mockImplementation(async () => {
     const config = runtime.options.at(-1);
     roots.push(dirname(config.codexHome));
+    // Codex creates its sandbox helper only outside the system temp folder.
+    expect(dirname(dirname(config.codexHome))).toBe(restrictedRunsDirectory(root));
+    expect(statSync(restrictedRunsDirectory(root)).mode & 0o777).toBe(0o700);
     expect(config.restricted).toBe(true);
     expect(config.provider).toBeUndefined(); expect(config.sharedExtensionsPath).toBeUndefined(); expect(config.telegramServers).toBeUndefined();
     expect(readdirSync(config.workingDirectory)).toEqual([]);
@@ -289,4 +297,56 @@ it.each([
     return { response: "OK" };
   });
   await executor.run("test", options);
+});
+
+it("records where a turn failed with a fixed reason and never the error text", async () => {
+  const { executor, options, store, accounts } = fixture();
+  const events = () => diagnosticReport(store).events.filter(event => event.event === "restricted.failed");
+  // The Wolf failure: Codex could not start a thread because its sandbox helper was missing.
+  runtime.run.mockRejectedValueOnce(Error("error creating thread: failed to load AGENTS.md instructions: fs sandbox helper failed: bwrap: execvp codex-linux-sandbox: No such file or directory " + secret));
+  await expect(executor.run("test", options)).rejects.toThrow("сейчас недоступен");
+  expect(events()[0]).toMatchObject({ stage: "runtime", errorClass: "Error", reason: "sandbox" });
+  expect(events()[0]!.durationMs).toBeGreaterThanOrEqual(0);
+  runtime.run.mockImplementationOnce(async (_text, turn) => { turn.onEvent({ type: "thread.started", payload: { threadId: "t" } }); throw Error("model said " + secret); });
+  await expect(executor.run("test", options)).rejects.toThrow("сейчас недоступен");
+  expect(events()[0]).toMatchObject({ stage: "turn", errorClass: "Error", reason: "codex" });
+  const standard = respond;
+  respond = (body, headers) => body.method === "tools/list" ? new Response("Bearer " + secret, { status: 502 }) : standard(body, headers);
+  await expect(executor.run("test", options)).rejects.toThrow("сейчас недоступен");
+  expect(events()[0]).toMatchObject({ stage: "discovery", reason: "service_http", status: 502 });
+  respond = (body, headers) => body.method === "tools/list" ? result(body.id, { tools: [], note: secret }) : standard(body, headers);
+  await expect(executor.run("test", options)).rejects.toThrow("сейчас недоступен");
+  expect(events()[0]).toMatchObject({ stage: "discovery", reason: "credential_echo" });
+  expect(events()[0]!.status).toBeUndefined();
+  respond = standard;
+  vi.mocked(accounts.choose).mockRejectedValueOnce(new AccountUnavailableError("limits"));
+  await expect(executor.run("test", options)).rejects.toThrow();
+  expect(events()[0]).toMatchObject({ stage: "account", errorClass: "AccountUnavailableError", reason: "account_limits" });
+  expect(events()).toHaveLength(5);
+  expect(JSON.stringify(diagnosticReport(store))).not.toMatch(new RegExp(`${secret}|AGENTS|bwrap|model said|test`));
+  // A revoked grant is expected and stays out of the journal.
+  options.assertCurrent.mockImplementation(() => { throw Error("revoked"); });
+  await expect(executor.run("test", options)).rejects.toThrow("Права доступа изменились");
+  expect(events()).toHaveLength(5);
+});
+
+it("removes only turn folders a stopped Home left behind", () => {
+  const root = mkdtempSync(join(tmpdir(), "restricted-home-")); homes.push(root);
+  const parent = restrictedRunsDirectory(root), old = join(parent, "turn-old"), live = join(parent, "turn-live"), other = join(parent, "keep");
+  for (const path of [old, live, other]) mkdirSync(join(path, "codex"), { recursive: true });
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  utimesSync(old, twoDaysAgo, twoDaysAgo); utimesSync(other, twoDaysAgo, twoDaysAgo);
+  const store = new Store(":memory:"); stores.push(store);
+  executors.push(new RestrictedExecutor({ store, root, active: new Map(), choose: vi.fn() } as unknown as Accounts));
+  expect(existsSync(old)).toBe(false); expect(existsSync(live)).toBe(true); expect(existsSync(other)).toBe(true);
+});
+
+it("removes the turn folder only after Codex has exited, because it writes thread locks while exiting", async () => {
+  const { executor, options } = fixture();
+  let folder = "", existedAtExit = false;
+  runtime.run.mockImplementation(async () => { folder = dirname(runtime.options.at(-1).codexHome); return { response: "OK" }; });
+  runtime.settled.mockImplementation(async () => { expect(runtime.close).toHaveBeenCalledOnce(); existedAtExit = existsSync(folder); });
+  await executor.run("test", options);
+  expect(existedAtExit).toBe(true);
+  expect(existsSync(folder)).toBe(false);
 });

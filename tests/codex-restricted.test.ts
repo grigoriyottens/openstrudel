@@ -6,6 +6,7 @@ import { join } from "node:path";
 const wire = vi.hoisted(() => ({ request: vi.fn(), constructors: [] as any[], notify: undefined as undefined | ((message: any) => void), serverRequest: undefined as undefined | ((method: string, params: any) => Promise<unknown>) }));
 vi.mock("../src/rpc.js", () => ({ CodexRpc: class {
   closed = false;
+  exited = Promise.resolve();
   constructor(...args: any[]) { wire.constructors.push(args); wire.notify = args[1]; wire.serverRequest = args[2]; }
   initialize = async () => undefined;
   request = wire.request;
