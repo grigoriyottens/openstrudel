@@ -174,6 +174,8 @@ export class RestrictedExecutor {
       finished = true;
       run.controller.abort();
       run.engine?.close();
+      // Codex writes thread locks while it exits; removing the folder earlier lets it recreate one.
+      if (run.engine) await Promise.race([run.engine.settled(), new Promise(resolve => setTimeout(resolve, 5_000).unref())]);
       this.running.delete(run);
       if (accountId) {
         const remaining = (this.accounts.active.get(accountId) ?? 1) - 1;

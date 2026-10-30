@@ -10,11 +10,12 @@ import { diagnosticReport } from "../src/diagnostics.js";
 import { Store } from "../src/store.js";
 import { saveConversationModelSelection, saveModelSelection } from "../src/model-settings.js";
 
-const runtime = vi.hoisted(() => ({ options: [] as any[], run: vi.fn(), close: vi.fn() }));
+const runtime = vi.hoisted(() => ({ options: [] as any[], run: vi.fn(), close: vi.fn(), settled: vi.fn() }));
 vi.mock("../src/codex.js", async original => ({ ...await original<object>(), CodexEngineAdapter: class {
   constructor(options: unknown) { runtime.options.push(options); }
   run = runtime.run;
   close = runtime.close;
+  settled = runtime.settled;
 } }));
 import { RestrictedExecutor, restrictedRunsDirectory } from "../src/restricted-executor.js";
 
@@ -40,7 +41,7 @@ function fixture(auth = authorization()) {
 }
 
 beforeEach(() => {
-  calls.length = 0; runtime.options.length = 0; runtime.run.mockReset(); runtime.close.mockReset();
+  calls.length = 0; runtime.options.length = 0; runtime.run.mockReset(); runtime.close.mockReset(); runtime.settled.mockReset().mockResolvedValue(undefined);
   respond = body => {
     if (body.method === "initialize") return result(body.id, { protocolVersion: "2025-03-26", capabilities: { tools: {} } }, { "mcp-session-id": "synthetic-session" });
     if (body.method === "notifications/initialized") return new Response(null, { status: 202 });
@@ -338,4 +339,14 @@ it("removes only turn folders a stopped Home left behind", () => {
   const store = new Store(":memory:"); stores.push(store);
   executors.push(new RestrictedExecutor({ store, root, active: new Map(), choose: vi.fn() } as unknown as Accounts));
   expect(existsSync(old)).toBe(false); expect(existsSync(live)).toBe(true); expect(existsSync(other)).toBe(true);
+});
+
+it("removes the turn folder only after Codex has exited, because it writes thread locks while exiting", async () => {
+  const { executor, options } = fixture();
+  let folder = "", existedAtExit = false;
+  runtime.run.mockImplementation(async () => { folder = dirname(runtime.options.at(-1).codexHome); return { response: "OK" }; });
+  runtime.settled.mockImplementation(async () => { expect(runtime.close).toHaveBeenCalledOnce(); existedAtExit = existsSync(folder); });
+  await executor.run("test", options);
+  expect(existedAtExit).toBe(true);
+  expect(existsSync(folder)).toBe(false);
 });
